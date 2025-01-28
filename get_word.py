@@ -1,8 +1,10 @@
 import requests
 import os
 import json
+from time import sleep
 
 API_KEY = 'Token your_api_token'
+
 
 def get_verses(passage, format='text'):
     url = f'https://api.esv.org/v3/passage/{format}/'
@@ -23,7 +25,7 @@ def get_verses(passage, format='text'):
     if resp.status_code == 200:
         if format == 'text':
             json_resp = resp.json()
-            print("response text:\n", resp.text)
+            # print("response text:\n", resp.text)
             return json_resp if json_resp['passages'] else 'Passage not found'
         elif format == 'search':
             return resp.json()
@@ -60,39 +62,60 @@ def search_bible(text, get_audio=False):
 
 
 def get_bible_chapters_and_verses():
-    with open('bible_chapters.json', 'r') as file:
-        bible_data = json.load(file)
+    with open('esv_bible_chapters.json', 'r') as file:
+        bible = json.load(file)
+    current_book_number = 1
+    for book, book_info in bible.items():
+        next_chapter_number = None
+        current_book_number_str = str(current_book_number).zfill(3)
+        print(f"\n\nNow processing {book}...")
+        print(f"current_book_number_str: {current_book_number_str}")
 
-    for book, book_info in bible_data.items():
-        print(f"Now processing {book}...")
-        chapters = book_info.get('chapters', {})
-        if not chapters:
+        if 'chapters' not in book_info:
             print(f"  {book} has no chapters.")
-            continue  # Skip to the next book
+            book_info.update({
+                'book_number': current_book_number_str,
+                'chapters': {
+                    "001": {
+                        "verse_count": "0"
+                    }
+                }
+            })
 
-        # Get the last chapter number (since chapters are numbered)
-        last_chapter = max(chapters.keys(), key=int)
-        print(f"searching for {book} {last_chapter}")
-        passage = get_verses(f"{book} {last_chapter}")
-        print("Chapter end:\n", passage['passage_meta'][0]['chapter_end'])
-        print("Next chapter:\n", passage['passage_meta'][0]['next_chapter'])
-        last_verse = passage['passage_meta'][0]['chapter_end'][1]
-        next_book = passage['passage_meta'][0]['next_chapter'][0]
+        chapters = book_info.get('chapters', {})
+        current_book_number += 1
 
-        last_verse_number = str(last_verse)[-3:]
+        for _ in range(151):
+            last_chapter = max(chapters.keys(), key=int)
+            if next_chapter_number:
+                last_chapter = next_chapter_number
 
-        next_book_number = str(next_book)[:-6]
+            print(f"\n\nsearching for {book} {last_chapter}")
+            passage = get_verses(f"{book} {last_chapter}")
+            last_verse = passage['passage_meta'][0]['chapter_end'][1]
+            last_verse_number = str(last_verse)[-3:].zfill(3)
+            next_book = passage['passage_meta'][0]['next_chapter'][1]
+            next_book_number = str(next_book)[:-6].zfill(3)
+            next_chapter_number = str(next_book)[-6:][:-3].zfill(3)
+            next_chapter_last_verse = str(next_book)[-3:]
 
-        # Print the results
-        print("last_verse_number:", last_verse_number)
-        print("next_book_number:", next_book_number)
+            print("last_verse_number:", last_verse_number)
+            print("next_book_number:", next_book_number)
+            print("next_chapter_number:", next_chapter_number)
+            print("next_chapter_last_verse:", next_chapter_last_verse)
+            print("book[book_number] is", book_info.get('book_number', {}))
 
-        # Get the content of the last chapter
-        last_chapter_content = chapters[str(last_chapter)]
+            sleep(2)
 
-        print(f"Last Chapter {last_chapter}: {last_chapter_content}")
+            book_info['chapters'][last_chapter] = {'verse_count': last_verse_number}
+            if next_book_number == str(book_info.get('book_number', {})):
+                book_info['chapters'][next_chapter_number] = {'verse_count': next_chapter_last_verse}
+                print(f"Added chapter {next_chapter_number} with verse count {next_chapter_last_verse} to {book}")
+                with open('esv_bible_chapters.json', 'w') as file:
+                    json.dump(bible, file, indent=4)
 
-        break
+            else:
+                break
 
 
 get_bible_chapters_and_verses()
