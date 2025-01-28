@@ -147,11 +147,11 @@ def get_ratings(query, content_type=None):
 def fetch_tv_program_details():
     channels = {
         "filmzone_hd": "filmzone_hd",
+        "ltv7_hd": "ltv7_hd",
+        "ltv1_hd": "ltv1_hd",
         "tv6_hd": "tv6_hd",
         "tv3_hd": "tv3_hd",
         "viasat_kino": "viasat_kino",
-        "ltv7_hd": "ltv7_hd",
-        "ltv1_hd": "ltv1_hd",
         }
     oldest_date = (datetime.now() - timedelta(days=6))
 
@@ -262,4 +262,4 @@ def fetch_tv_program_details():
                     logger.info(f"No data found for {title_lv}")
     return programs
 
-# programs = fetch_tv_program_details()
+programs = fetch_tv_program_details()
