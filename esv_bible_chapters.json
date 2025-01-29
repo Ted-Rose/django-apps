@@ -2813,40 +2813,1087 @@
             }
         }
     },
-    "Obadiah": {},
-    "Jonah": {},
-    "Micah": {},
-    "Nahum": {},
-    "Habakkuk": {},
-    "Zephaniah": {},
-    "Haggai": {},
-    "Zechariah": {},
-    "Malachi": {},
-    "Matthew": {},
-    "Mark": {},
-    "Luke": {},
-    "John": {},
-    "Acts": {},
-    "Romans": {},
-    "1 Corinthians": {},
-    "2 Corinthians": {},
-    "Galatians": {},
-    "Ephesians": {},
-    "Philippians": {},
-    "Colossians": {},
-    "1 Thessalonians": {},
-    "2 Thessalonians": {},
-    "1 Timothy": {},
-    "2 Timothy": {},
-    "Titus": {},
-    "Philemon": {},
-    "Hebrews": {},
-    "James": {},
-    "1 Peter": {},
-    "2 Peter": {},
-    "1 John": {},
-    "2 John": {},
-    "3 John": {},
-    "Jude": {},
-    "Revelation": {}
+    "Obadiah": {
+        "book_number": "031",
+        "chapters": {
+            "001": {
+                "verse_count": "021"
+            }
+        }
+    },
+    "Jonah": {
+        "book_number": "032",
+        "chapters": {
+            "001": {
+                "verse_count": "017"
+            },
+            "002": {
+                "verse_count": "010"
+            },
+            "003": {
+                "verse_count": "010"
+            },
+            "004": {
+                "verse_count": "011"
+            }
+        }
+    },
+    "Micah": {
+        "book_number": "033",
+        "chapters": {
+            "001": {
+                "verse_count": "016"
+            },
+            "002": {
+                "verse_count": "013"
+            },
+            "003": {
+                "verse_count": "012"
+            },
+            "004": {
+                "verse_count": "013"
+            },
+            "005": {
+                "verse_count": "015"
+            },
+            "006": {
+                "verse_count": "016"
+            },
+            "007": {
+                "verse_count": "020"
+            }
+        }
+    },
+    "Nahum": {
+        "book_number": "034",
+        "chapters": {
+            "001": {
+                "verse_count": "015"
+            },
+            "002": {
+                "verse_count": "013"
+            },
+            "003": {
+                "verse_count": "019"
+            }
+        }
+    },
+    "Habakkuk": {
+        "book_number": "035",
+        "chapters": {
+            "001": {
+                "verse_count": "017"
+            },
+            "002": {
+                "verse_count": "020"
+            },
+            "003": {
+                "verse_count": "019"
+            }
+        }
+    },
+    "Zephaniah": {
+        "book_number": "036",
+        "chapters": {
+            "001": {
+                "verse_count": "018"
+            },
+            "002": {
+                "verse_count": "015"
+            },
+            "003": {
+                "verse_count": "020"
+            }
+        }
+    },
+    "Haggai": {
+        "book_number": "037",
+        "chapters": {
+            "001": {
+                "verse_count": "015"
+            },
+            "002": {
+                "verse_count": "023"
+            }
+        }
+    },
+    "Zechariah": {
+        "book_number": "038",
+        "chapters": {
+            "001": {
+                "verse_count": "021"
+            },
+            "002": {
+                "verse_count": "013"
+            },
+            "003": {
+                "verse_count": "010"
+            },
+            "004": {
+                "verse_count": "014"
+            },
+            "005": {
+                "verse_count": "011"
+            },
+            "006": {
+                "verse_count": "015"
+            },
+            "007": {
+                "verse_count": "014"
+            },
+            "008": {
+                "verse_count": "023"
+            },
+            "009": {
+                "verse_count": "017"
+            },
+            "010": {
+                "verse_count": "012"
+            },
+            "011": {
+                "verse_count": "017"
+            },
+            "012": {
+                "verse_count": "014"
+            },
+            "013": {
+                "verse_count": "009"
+            },
+            "014": {
+                "verse_count": "021"
+            }
+        }
+    },
+    "Malachi": {
+        "book_number": "039",
+        "chapters": {
+            "001": {
+                "verse_count": "014"
+            },
+            "002": {
+                "verse_count": "017"
+            },
+            "003": {
+                "verse_count": "018"
+            },
+            "004": {
+                "verse_count": "006"
+            }
+        }
+    },
+    "Matthew": {
+        "book_number": "040",
+        "chapters": {
+            "001": {
+                "verse_count": "025"
+            },
+            "002": {
+                "verse_count": "023"
+            },
+            "003": {
+                "verse_count": "017"
+            },
+            "004": {
+                "verse_count": "025"
+            },
+            "005": {
+                "verse_count": "048"
+            },
+            "006": {
+                "verse_count": "034"
+            },
+            "007": {
+                "verse_count": "029"
+            },
+            "008": {
+                "verse_count": "034"
+            },
+            "009": {
+                "verse_count": "038"
+            },
+            "010": {
+                "verse_count": "042"
+            },
+            "011": {
+                "verse_count": "030"
+            },
+            "012": {
+                "verse_count": "050"
+            },
+            "013": {
+                "verse_count": "058"
+            },
+            "014": {
+                "verse_count": "036"
+            },
+            "015": {
+                "verse_count": "039"
+            },
+            "016": {
+                "verse_count": "028"
+            },
+            "017": {
+                "verse_count": "027"
+            },
+            "018": {
+                "verse_count": "035"
+            },
+            "019": {
+                "verse_count": "030"
+            },
+            "020": {
+                "verse_count": "034"
+            },
+            "021": {
+                "verse_count": "046"
+            },
+            "022": {
+                "verse_count": "046"
+            },
+            "023": {
+                "verse_count": "039"
+            },
+            "024": {
+                "verse_count": "051"
+            },
+            "025": {
+                "verse_count": "046"
+            },
+            "026": {
+                "verse_count": "075"
+            },
+            "027": {
+                "verse_count": "066"
+            },
+            "028": {
+                "verse_count": "020"
+            }
+        }
+    },
+    "Mark": {
+        "book_number": "041",
+        "chapters": {
+            "001": {
+                "verse_count": "045"
+            },
+            "002": {
+                "verse_count": "028"
+            },
+            "003": {
+                "verse_count": "035"
+            },
+            "004": {
+                "verse_count": "041"
+            },
+            "005": {
+                "verse_count": "043"
+            },
+            "006": {
+                "verse_count": "056"
+            },
+            "007": {
+                "verse_count": "037"
+            },
+            "008": {
+                "verse_count": "038"
+            },
+            "009": {
+                "verse_count": "050"
+            },
+            "010": {
+                "verse_count": "052"
+            },
+            "011": {
+                "verse_count": "033"
+            },
+            "012": {
+                "verse_count": "044"
+            },
+            "013": {
+                "verse_count": "037"
+            },
+            "014": {
+                "verse_count": "072"
+            },
+            "015": {
+                "verse_count": "047"
+            },
+            "016": {
+                "verse_count": "020"
+            }
+        }
+    },
+    "Luke": {
+        "book_number": "042",
+        "chapters": {
+            "001": {
+                "verse_count": "080"
+            },
+            "002": {
+                "verse_count": "052"
+            },
+            "003": {
+                "verse_count": "038"
+            },
+            "004": {
+                "verse_count": "044"
+            },
+            "005": {
+                "verse_count": "039"
+            },
+            "006": {
+                "verse_count": "049"
+            },
+            "007": {
+                "verse_count": "050"
+            },
+            "008": {
+                "verse_count": "056"
+            },
+            "009": {
+                "verse_count": "062"
+            },
+            "010": {
+                "verse_count": "042"
+            },
+            "011": {
+                "verse_count": "054"
+            },
+            "012": {
+                "verse_count": "059"
+            },
+            "013": {
+                "verse_count": "035"
+            },
+            "014": {
+                "verse_count": "035"
+            },
+            "015": {
+                "verse_count": "032"
+            },
+            "016": {
+                "verse_count": "031"
+            },
+            "017": {
+                "verse_count": "037"
+            },
+            "018": {
+                "verse_count": "043"
+            },
+            "019": {
+                "verse_count": "048"
+            },
+            "020": {
+                "verse_count": "047"
+            },
+            "021": {
+                "verse_count": "038"
+            },
+            "022": {
+                "verse_count": "071"
+            },
+            "023": {
+                "verse_count": "056"
+            },
+            "024": {
+                "verse_count": "053"
+            }
+        }
+    },
+    "John": {
+        "book_number": "043",
+        "chapters": {
+            "001": {
+                "verse_count": "051"
+            },
+            "002": {
+                "verse_count": "025"
+            },
+            "003": {
+                "verse_count": "036"
+            },
+            "004": {
+                "verse_count": "054"
+            },
+            "005": {
+                "verse_count": "047"
+            },
+            "006": {
+                "verse_count": "071"
+            },
+            "007": {
+                "verse_count": "053"
+            },
+            "008": {
+                "verse_count": "059"
+            },
+            "009": {
+                "verse_count": "041"
+            },
+            "010": {
+                "verse_count": "042"
+            },
+            "011": {
+                "verse_count": "057"
+            },
+            "012": {
+                "verse_count": "050"
+            },
+            "013": {
+                "verse_count": "038"
+            },
+            "014": {
+                "verse_count": "031"
+            },
+            "015": {
+                "verse_count": "027"
+            },
+            "016": {
+                "verse_count": "033"
+            },
+            "017": {
+                "verse_count": "026"
+            },
+            "018": {
+                "verse_count": "040"
+            },
+            "019": {
+                "verse_count": "042"
+            },
+            "020": {
+                "verse_count": "031"
+            },
+            "021": {
+                "verse_count": "025"
+            }
+        }
+    },
+    "Acts": {
+        "book_number": "044",
+        "chapters": {
+            "001": {
+                "verse_count": "026"
+            },
+            "002": {
+                "verse_count": "047"
+            },
+            "003": {
+                "verse_count": "026"
+            },
+            "004": {
+                "verse_count": "037"
+            },
+            "005": {
+                "verse_count": "042"
+            },
+            "006": {
+                "verse_count": "015"
+            },
+            "007": {
+                "verse_count": "060"
+            },
+            "008": {
+                "verse_count": "040"
+            },
+            "009": {
+                "verse_count": "043"
+            },
+            "010": {
+                "verse_count": "048"
+            },
+            "011": {
+                "verse_count": "030"
+            },
+            "012": {
+                "verse_count": "025"
+            },
+            "013": {
+                "verse_count": "052"
+            },
+            "014": {
+                "verse_count": "028"
+            },
+            "015": {
+                "verse_count": "041"
+            },
+            "016": {
+                "verse_count": "040"
+            },
+            "017": {
+                "verse_count": "034"
+            },
+            "018": {
+                "verse_count": "028"
+            },
+            "019": {
+                "verse_count": "041"
+            },
+            "020": {
+                "verse_count": "038"
+            },
+            "021": {
+                "verse_count": "040"
+            },
+            "022": {
+                "verse_count": "030"
+            },
+            "023": {
+                "verse_count": "035"
+            },
+            "024": {
+                "verse_count": "027"
+            },
+            "025": {
+                "verse_count": "027"
+            },
+            "026": {
+                "verse_count": "032"
+            },
+            "027": {
+                "verse_count": "044"
+            },
+            "028": {
+                "verse_count": "031"
+            }
+        }
+    },
+    "Romans": {
+        "book_number": "045",
+        "chapters": {
+            "001": {
+                "verse_count": "032"
+            },
+            "002": {
+                "verse_count": "029"
+            },
+            "003": {
+                "verse_count": "031"
+            },
+            "004": {
+                "verse_count": "025"
+            },
+            "005": {
+                "verse_count": "021"
+            },
+            "006": {
+                "verse_count": "023"
+            },
+            "007": {
+                "verse_count": "025"
+            },
+            "008": {
+                "verse_count": "039"
+            },
+            "009": {
+                "verse_count": "033"
+            },
+            "010": {
+                "verse_count": "021"
+            },
+            "011": {
+                "verse_count": "036"
+            },
+            "012": {
+                "verse_count": "021"
+            },
+            "013": {
+                "verse_count": "014"
+            },
+            "014": {
+                "verse_count": "023"
+            },
+            "015": {
+                "verse_count": "033"
+            },
+            "016": {
+                "verse_count": "027"
+            }
+        }
+    },
+    "1 Corinthians": {
+        "book_number": "046",
+        "chapters": {
+            "001": {
+                "verse_count": "031"
+            },
+            "002": {
+                "verse_count": "016"
+            },
+            "003": {
+                "verse_count": "023"
+            },
+            "004": {
+                "verse_count": "021"
+            },
+            "005": {
+                "verse_count": "013"
+            },
+            "006": {
+                "verse_count": "020"
+            },
+            "007": {
+                "verse_count": "040"
+            },
+            "008": {
+                "verse_count": "013"
+            },
+            "009": {
+                "verse_count": "027"
+            },
+            "010": {
+                "verse_count": "033"
+            },
+            "011": {
+                "verse_count": "034"
+            },
+            "012": {
+                "verse_count": "031"
+            },
+            "013": {
+                "verse_count": "013"
+            },
+            "014": {
+                "verse_count": "040"
+            },
+            "015": {
+                "verse_count": "058"
+            },
+            "016": {
+                "verse_count": "024"
+            }
+        }
+    },
+    "2 Corinthians": {
+        "book_number": "047",
+        "chapters": {
+            "001": {
+                "verse_count": "024"
+            },
+            "002": {
+                "verse_count": "017"
+            },
+            "003": {
+                "verse_count": "018"
+            },
+            "004": {
+                "verse_count": "018"
+            },
+            "005": {
+                "verse_count": "021"
+            },
+            "006": {
+                "verse_count": "018"
+            },
+            "007": {
+                "verse_count": "016"
+            },
+            "008": {
+                "verse_count": "024"
+            },
+            "009": {
+                "verse_count": "015"
+            },
+            "010": {
+                "verse_count": "018"
+            },
+            "011": {
+                "verse_count": "033"
+            },
+            "012": {
+                "verse_count": "021"
+            },
+            "013": {
+                "verse_count": "014"
+            }
+        }
+    },
+    "Galatians": {
+        "book_number": "048",
+        "chapters": {
+            "001": {
+                "verse_count": "024"
+            },
+            "002": {
+                "verse_count": "021"
+            },
+            "003": {
+                "verse_count": "029"
+            },
+            "004": {
+                "verse_count": "031"
+            },
+            "005": {
+                "verse_count": "026"
+            },
+            "006": {
+                "verse_count": "018"
+            }
+        }
+    },
+    "Ephesians": {
+        "book_number": "049",
+        "chapters": {
+            "001": {
+                "verse_count": "023"
+            },
+            "002": {
+                "verse_count": "022"
+            },
+            "003": {
+                "verse_count": "021"
+            },
+            "004": {
+                "verse_count": "032"
+            },
+            "005": {
+                "verse_count": "033"
+            },
+            "006": {
+                "verse_count": "024"
+            }
+        }
+    },
+    "Philippians": {
+        "book_number": "050",
+        "chapters": {
+            "001": {
+                "verse_count": "030"
+            },
+            "002": {
+                "verse_count": "030"
+            },
+            "003": {
+                "verse_count": "021"
+            },
+            "004": {
+                "verse_count": "023"
+            }
+        }
+    },
+    "Colossians": {
+        "book_number": "051",
+        "chapters": {
+            "001": {
+                "verse_count": "029"
+            },
+            "002": {
+                "verse_count": "023"
+            },
+            "003": {
+                "verse_count": "025"
+            },
+            "004": {
+                "verse_count": "018"
+            }
+        }
+    },
+    "1 Thessalonians": {
+        "book_number": "052",
+        "chapters": {
+            "001": {
+                "verse_count": "010"
+            },
+            "002": {
+                "verse_count": "020"
+            },
+            "003": {
+                "verse_count": "013"
+            },
+            "004": {
+                "verse_count": "018"
+            },
+            "005": {
+                "verse_count": "028"
+            }
+        }
+    },
+    "2 Thessalonians": {
+        "book_number": "053",
+        "chapters": {
+            "001": {
+                "verse_count": "012"
+            },
+            "002": {
+                "verse_count": "017"
+            },
+            "003": {
+                "verse_count": "018"
+            }
+        }
+    },
+    "1 Timothy": {
+        "book_number": "054",
+        "chapters": {
+            "001": {
+                "verse_count": "020"
+            },
+            "002": {
+                "verse_count": "015"
+            },
+            "003": {
+                "verse_count": "016"
+            },
+            "004": {
+                "verse_count": "016"
+            },
+            "005": {
+                "verse_count": "025"
+            },
+            "006": {
+                "verse_count": "021"
+            }
+        }
+    },
+    "2 Timothy": {
+        "book_number": "055",
+        "chapters": {
+            "001": {
+                "verse_count": "018"
+            },
+            "002": {
+                "verse_count": "026"
+            },
+            "003": {
+                "verse_count": "017"
+            },
+            "004": {
+                "verse_count": "022"
+            }
+        }
+    },
+    "Titus": {
+        "book_number": "056",
+        "chapters": {
+            "001": {
+                "verse_count": "016"
+            },
+            "002": {
+                "verse_count": "015"
+            },
+            "003": {
+                "verse_count": "015"
+            }
+        }
+    },
+    "Philemon": {
+        "book_number": "057",
+        "chapters": {
+            "001": {
+                "verse_count": "025"
+            }
+        }
+    },
+    "Hebrews": {
+        "book_number": "058",
+        "chapters": {
+            "001": {
+                "verse_count": "014"
+            },
+            "002": {
+                "verse_count": "018"
+            },
+            "003": {
+                "verse_count": "019"
+            },
+            "004": {
+                "verse_count": "016"
+            },
+            "005": {
+                "verse_count": "014"
+            },
+            "006": {
+                "verse_count": "020"
+            },
+            "007": {
+                "verse_count": "028"
+            },
+            "008": {
+                "verse_count": "013"
+            },
+            "009": {
+                "verse_count": "028"
+            },
+            "010": {
+                "verse_count": "039"
+            },
+            "011": {
+                "verse_count": "040"
+            },
+            "012": {
+                "verse_count": "029"
+            },
+            "013": {
+                "verse_count": "025"
+            }
+        }
+    },
+    "James": {
+        "book_number": "059",
+        "chapters": {
+            "001": {
+                "verse_count": "027"
+            },
+            "002": {
+                "verse_count": "026"
+            },
+            "003": {
+                "verse_count": "018"
+            },
+            "004": {
+                "verse_count": "017"
+            },
+            "005": {
+                "verse_count": "020"
+            }
+        }
+    },
+    "1 Peter": {
+        "book_number": "060",
+        "chapters": {
+            "001": {
+                "verse_count": "025"
+            },
+            "002": {
+                "verse_count": "025"
+            },
+            "003": {
+                "verse_count": "022"
+            },
+            "004": {
+                "verse_count": "019"
+            },
+            "005": {
+                "verse_count": "014"
+            }
+        }
+    },
+    "2 Peter": {
+        "book_number": "061",
+        "chapters": {
+            "001": {
+                "verse_count": "021"
+            },
+            "002": {
+                "verse_count": "022"
+            },
+            "003": {
+                "verse_count": "018"
+            }
+        }
+    },
+    "1 John": {
+        "book_number": "062",
+        "chapters": {
+            "001": {
+                "verse_count": "010"
+            },
+            "002": {
+                "verse_count": "029"
+            },
+            "003": {
+                "verse_count": "024"
+            },
+            "004": {
+                "verse_count": "021"
+            },
+            "005": {
+                "verse_count": "021"
+            }
+        }
+    },
+    "2 John": {
+        "book_number": "063",
+        "chapters": {
+            "001": {
+                "verse_count": "013"
+            }
+        }
+    },
+    "3 John": {
+        "book_number": "064",
+        "chapters": {
+            "001": {
+                "verse_count": "015"
+            }
+        }
+    },
+    "Jude": {
+        "book_number": "065",
+        "chapters": {
+            "001": {
+                "verse_count": "025"
+            }
+        }
+    },
+    "Revelation": {
+        "book_number": "066",
+        "chapters": {
+            "001": {
+                "verse_count": "020"
+            },
+            "002": {
+                "verse_count": "029"
+            },
+            "003": {
+                "verse_count": "022"
+            },
+            "004": {
+                "verse_count": "011"
+            },
+            "005": {
+                "verse_count": "014"
+            },
+            "006": {
+                "verse_count": "017"
+            },
+            "007": {
+                "verse_count": "017"
+            },
+            "008": {
+                "verse_count": "013"
+            },
+            "009": {
+                "verse_count": "021"
+            },
+            "010": {
+                "verse_count": "011"
+            },
+            "011": {
+                "verse_count": "019"
+            },
+            "012": {
+                "verse_count": "017"
+            },
+            "013": {
+                "verse_count": "018"
+            },
+            "014": {
+                "verse_count": "020"
+            },
+            "015": {
+                "verse_count": "008"
+            },
+            "016": {
+                "verse_count": "021"
+            },
+            "017": {
+                "verse_count": "018"
+            },
+            "018": {
+                "verse_count": "024"
+            },
+            "019": {
+                "verse_count": "021"
+            },
+            "020": {
+                "verse_count": "015"
+            },
+            "021": {
+                "verse_count": "027"
+            },
+            "022": {
+                "verse_count": "021"
+            }
+        }
+    }
 }
