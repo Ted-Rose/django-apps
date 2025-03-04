@@ -149,9 +149,6 @@ def fetch_tv_program_details():
         "filmzone_hd": "filmzone_hd",
         "ltv7_hd": "ltv7_hd",
         "ltv1_hd": "ltv1_hd",
-        "tv6_hd": "tv6_hd",
-        "tv3_hd": "tv3_hd",
-        "viasat_kino": "viasat_kino",
         }
     oldest_date = (datetime.now() - timedelta(days=6))
 
