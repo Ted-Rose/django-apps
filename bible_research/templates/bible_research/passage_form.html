@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Bible Passage Audio Generator</title>
+</head>
+
+<body>
+    <h1>Enter a Bible Passage</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form }}
+        <button type="submit">Submit</button>
+    </form>
+</body>
+
+</html>

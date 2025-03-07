@@ -2,8 +2,7 @@ import requests
 import os
 import json
 from time import sleep
-
-API_KEY = 'Token your_api_token'
+from django.conf import settings
 
 
 def get_verses(passage, format='text'):
@@ -12,13 +11,13 @@ def get_verses(passage, format='text'):
         'q': passage,
         'include-headings': False,
         'include-footnotes': False,
-        'include-verse-numbers': True,
+    'include-verse-numbers': True,
         'include-short-copyright': False,
         'include-passage-references': False
     }
 
     headers = {
-        'Authorization': 'Token %s' % API_KEY
+        'Authorization': 'Token %s' % settings.ESV_KEY
     }
 
     resp = requests.get(url, params=params, headers=headers)
@@ -118,4 +117,10 @@ def get_bible_chapters_and_verses():
                 break
 
 
-get_bible_chapters_and_verses()
+# get_bible_chapters_and_verses()
+
+# Genesis 1:1-5
+# Genesis 1:1-2:5
+# Genesis 1
+# Genesis 1:99 - returns last verse
+print(get_verses("Genesis 1:99")['passages'])
