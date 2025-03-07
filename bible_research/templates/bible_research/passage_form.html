@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Player</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <form method="post">
+            {% csrf_token %}
+            {{ form }}
+            <button type="submit">Submit</button>
+        </form>
+        {% if audio_url %}
+            <audio id="audioPlayer" controls>
+                <source src="{{ audio_url }}" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
+            <div class="btn-group mt-3">
+                <button onclick="playAudio()" class="btn btn-primary">Play</button>
+                <button onclick="pauseAudio()" class="btn btn-secondary">Pause</button>
+                <button onclick="jumpBack()" class="btn btn-info">Jump 5s Back</button>
+                <button onclick="jumpForward()" class="btn btn-info">Jump 5s Forward</button>
+                <button onclick="toggleRepeat()" class="btn btn-warning">Toggle Repeat</button>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        var audioPlayer = document.getElementById('audioPlayer');
+
+        function playAudio() {
+            audioPlayer.play();
+        }
+
+        function pauseAudio() {
+            audioPlayer.pause();
+        }
+
+        function jumpBack() {
+            audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
+        }
+
+        function jumpForward() {
+            audioPlayer.currentTime = Math.min(audioPlayer.duration, audioPlayer.currentTime + 5);
+        }
+
+        function toggleRepeat() {
+            audioPlayer.loop = !audioPlayer.loop;
+        }
+    </script>
+</body>
+
+</html>

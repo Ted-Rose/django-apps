@@ -11,5 +11,6 @@ urlpatterns = [
     path('', include('google_api.urls', namespace='google_api')),
     path('', include('single_pages.urls', namespace='single_pages')),
     path('', include('tv_archive.urls', namespace='tv_archive')),
+    path('', include('bible_research.urls', namespace='bible_research')),
     path('', views.home),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

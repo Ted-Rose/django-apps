@@ -26,6 +26,7 @@ if os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
         DEBUG = private_settings.get('debug')
         BASE_URL = private_settings.get('base_url')
         DATABASES = private_settings.get('DATABASES')
+        ESV_KEY = private_settings.get('ESV_KEY')
 else:
   raise FileNotFoundError(f'Private settings do not exist. Please provide private settings.')
 
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
     'google_api',
     'single_pages',
     'tv_archive',
+    'bible_research',
 ]
 
 MIDDLEWARE = [
