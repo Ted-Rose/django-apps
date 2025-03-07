@@ -11,7 +11,7 @@ def get_verses(passage, format='text'):
         'q': passage,
         'include-headings': False,
         'include-footnotes': False,
-    'include-verse-numbers': True,
+        'include-verse-numbers': True,
         'include-short-copyright': False,
         'include-passage-references': False
     }
@@ -30,14 +30,15 @@ def get_verses(passage, format='text'):
             return resp.json()
         elif format == 'audio':
             print(f"Saving '{passage}' as an audio file...")
-            file_name = f"{passage.replace(' ', '_').replace(':', '-')}.mp3"
-            file_path = os.path.join(os.getcwd(), file_name)
-            with open(file_path, 'wb') as audio_file:
+            filename = f"{passage.replace(' ', '_').replace(':', '-')}.mp3"
+            audio_file_path = os.path.join(settings.MEDIA_ROOT, "bible_research", filename)
+            with open(audio_file_path, 'wb') as audio_file:
                 for chunk in resp.iter_content(chunk_size=1024):
                     if chunk:
                         audio_file.write(chunk)
-            print(f'Audio file saved as {file_name}')
-            return file_name
+
+            audio_url = settings.MEDIA_URL + 'bible_research/' + filename
+            return audio_url
         else:
             raise ValueError(f'Unsupported format: {format}')
     else:
@@ -123,4 +124,4 @@ def get_bible_chapters_and_verses():
 # Genesis 1:1-2:5
 # Genesis 1
 # Genesis 1:99 - returns last verse
-print(get_verses("Genesis 1:99")['passages'])
+# print(get_verses("Genesis 1:99")['passages'])
