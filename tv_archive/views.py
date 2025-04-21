@@ -160,13 +160,13 @@ def fetch_tv_program_details():
             date_string = date.strftime('%d-%m-%Y')
             logger.info(f"Date: {date}")
             url = f"https://www.tet.lv/televizija/tv-programma?tv-type=interactive&view-type=list&date={date_string}&channel={channel}"
-            print("url:", url)
 
             response = http.request("GET", url)
             html_content = response.data
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            contents = soup.find_all('div', class_="expander-description")
+            contents = soup.find_all('div', class_="show-expander-content")
+            logger.info(f"Found {len(contents)} programs.")
             programs = []
 
             for program in contents:
@@ -259,4 +259,4 @@ def fetch_tv_program_details():
                     logger.info(f"No data found for {title_lv}")
     return programs
 
-# programs = fetch_tv_program_details()
+programs = fetch_tv_program_details()
