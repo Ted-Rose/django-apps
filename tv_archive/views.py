@@ -170,7 +170,7 @@ def fetch_tv_program_details():
             programs = []
 
             for program in contents:
-                title_lv = program.find('div', class_="tet-font__headline--s")
+                title_lv = program.find(class_="tet-font__headline--s")
                 if title_lv:
                     title_lv = title_lv.text.strip()
 
@@ -206,7 +206,7 @@ def fetch_tv_program_details():
                     ]:
                         continue
 
-                    description_lv = program.find('div', class_="text tet-font__body--s")
+                    description_lv = program.find(class_="text tet-font__body--s")
                     if description_lv:
                         description_lv = re.sub(r"&\w+;", "", description_lv.text.strip())
 
