@@ -143,13 +143,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Create logs directory if it doesn't exist
-logs_dir = os.path.join(BASE_DIR, 'logs')
-if not os.path.exists(logs_dir):
-    os.makedirs(logs_dir)
 
 def create_log_handler(handler_name, level, filename=None, max_bytes=10485760, backup_count=10):
     if DEBUG and filename:
+        # Create logs directory if it doesn't exist
+        logs_dir = os.path.join(BASE_DIR, 'logs')
+        if not os.path.exists(logs_dir):
+            os.makedirs(logs_dir)
+
         return {
             'level': level,
             'class': 'logging.handlers.RotatingFileHandler',
@@ -163,6 +164,7 @@ def create_log_handler(handler_name, level, filename=None, max_bytes=10485760, b
             'level': level,
             'class': 'logging.NullHandler',
         }
+
 
 LOGGING = {
     'version': 1,
