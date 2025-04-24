@@ -30,8 +30,6 @@ if os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
 else:
   raise FileNotFoundError(f'Private settings do not exist. Please provide private settings.')
 
-print(f"Debug is set to {DEBUG}")
-
 ALLOWED_HOSTS = [
   'tedisrozenfelds.pythonanywhere.com',
   '127.0.0.1',
@@ -150,6 +148,22 @@ logs_dir = os.path.join(BASE_DIR, 'logs')
 if not os.path.exists(logs_dir):
     os.makedirs(logs_dir)
 
+def create_log_handler(handler_name, level, filename=None, max_bytes=10485760, backup_count=10):
+    if DEBUG and filename:
+        return {
+            'level': level,
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', filename),
+            'maxBytes': max_bytes,  # 10MB
+            'backupCount': backup_count,
+            'formatter': 'verbose',
+        }
+    else:
+        return {
+            'level': level,
+            'class': 'logging.NullHandler',
+        }
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -169,22 +183,8 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
-        'file_debug': {
-            'level': 'DEBUG',
-            'class': 'logging.NullHandler' if not DEBUG else 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'debug.log') if DEBUG else None,
-            'maxBytes': 10485760 if DEBUG else 0,  # 10MB
-            'backupCount': 10 if DEBUG else 0,
-            'formatter': 'verbose',
-        },
-        'file_error': {
-            'level': 'ERROR',
-            'class': 'logging.NullHandler' if not DEBUG else 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'error.log') if DEBUG else None,
-            'maxBytes': 10485760 if DEBUG else 0,  # 10MB
-            'backupCount': 10 if DEBUG else 0,
-            'formatter': 'verbose',
-        },
+        'file_debug': create_log_handler('file_debug', 'DEBUG', 'debug.log'),
+        'file_error': create_log_handler('file_error', 'ERROR', 'error.log'),
     },
     'loggers': {
         'django': {
