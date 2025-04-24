@@ -54,12 +54,6 @@ INSTALLED_APPS = [
     'bible_research',
 ]
 
-if DEBUG:
-    try:
-        INSTALLED_APPS += ['sslserver']
-    except ImportError:
-        pass  # sslserver not installed, that's fine in production
-
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
