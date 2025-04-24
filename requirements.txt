@@ -9,3 +9,4 @@ beautifulsoup4==4.12.3
 googletrans==4.0.0-rc1
 psycopg2-binary==2.9.9
 debugpy
+django-sslserver; python_version >= "3.6"
