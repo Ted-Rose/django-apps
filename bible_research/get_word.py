@@ -29,16 +29,16 @@ def get_verses(passage, format='text'):
         elif format == 'search':
             return resp.json()
         elif format == 'audio':
-            print(f"Saving '{passage}' as an audio file...")
-            filename = f"{passage.replace(' ', '_').replace(':', '-')}.mp3"
-            audio_file_path = os.path.join(settings.MEDIA_ROOT, "bible_research", filename)
-            with open(audio_file_path, 'wb') as audio_file:
+            audio_content = b''
+            try:
                 for chunk in resp.iter_content(chunk_size=1024):
                     if chunk:
-                        audio_file.write(chunk)
+                        audio_content += chunk
+                return audio_content
+            except Exception as e:
+                print(f"An error occurred while processing the audio file: {e}")
+                raise e
 
-            audio_url = settings.MEDIA_URL + 'bible_research/' + filename
-            return audio_url
         else:
             raise ValueError(f'Unsupported format: {format}')
     else:

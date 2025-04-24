@@ -23,8 +23,8 @@ if os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
     with open(PRIVATE_SETTINGS_JSON_PATH, 'r') as file:
         private_settings = json.load(file)
         SECRET_KEY = private_settings.get('SECRET_KEY')
-        DEBUG = private_settings.get('debug')
-        BASE_URL = private_settings.get('base_url')
+        DEBUG = private_settings.get('DEBUG')
+        BASE_URL = private_settings.get('BASE_URL')
         DATABASES = private_settings.get('DATABASES')
         ESV_KEY = private_settings.get('ESV_KEY')
 else:
@@ -142,31 +142,63 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+print("MEDIA_ROOT: ", MEDIA_ROOT)
+
+
+def create_log_handler(handler_name, level, filename=None, max_bytes=10485760, backup_count=10):
+    if DEBUG and filename:
+        # Create logs directory if it doesn't exist
+        logs_dir = os.path.join(BASE_DIR, 'logs')
+        if not os.path.exists(logs_dir):
+            os.makedirs(logs_dir)
+
+        return {
+            'level': level,
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', filename),
+            'maxBytes': max_bytes,  # 10MB
+            'backupCount': backup_count,
+            'formatter': 'verbose',
+        }
+    else:
+        return {
+            'level': level,
+            'class': 'logging.NullHandler',
+        }
+
 
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
+            'formatter': 'simple',
         },
+        'file_debug': create_log_handler('file_debug', 'DEBUG', 'debug.log'),
+        'file_error': create_log_handler('file_error', 'ERROR', 'error.log'),
     },
     'loggers': {
         'django': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file_debug'],
             'level': 'INFO',
             'propagate': True,
         },
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'ERROR',
-            'propagate': False,
-        },
-        'django.security': {
-            'handlers': ['console'],
+        'tv_archive': {
+            'handlers': ['console', 'file_debug'],
             'level': 'DEBUG',
-            'propagate': False,
-        },
+            'propagate': True,
+        }
     },
 }

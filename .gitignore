@@ -1,6 +1,6 @@
 __pycache__
 db.sqlite3
-django.log
+logs/*
 media/recordings/*
 media/bible_research/*
 !media/recordings/.gitkeep

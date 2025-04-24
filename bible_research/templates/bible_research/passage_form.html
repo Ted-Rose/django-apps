@@ -10,27 +10,55 @@
 
 <body>
     <div class="container mt-5">
-        <form method="post">
+        <form method="post" id="form">
             {% csrf_token %}
             {{ form }}
             <button type="submit">Submit</button>
         </form>
-        {% if audio_url %}
-            <audio id="audioPlayer" controls>
-                <source src="{{ audio_url }}" type="audio/mpeg">
-                Your browser does not support the audio element.
-            </audio>
-            <div class="btn-group mt-3">
-                <button onclick="playAudio()" class="btn btn-primary">Play</button>
-                <button onclick="pauseAudio()" class="btn btn-secondary">Pause</button>
-                <button onclick="jumpBack()" class="btn btn-info">Jump 5s Back</button>
-                <button onclick="jumpForward()" class="btn btn-info">Jump 5s Forward</button>
-                <button onclick="toggleRepeat()" class="btn btn-warning">Toggle Repeat</button>
-            </div>
-        {% endif %}
+        <audio id="audioPlayer" controls>
+            Your browser does not support the audio element.
+        </audio>
+        <div class="btn-group mt-3">
+            <button onclick="playAudio()" class="btn btn-primary">Play</button>
+            <button onclick="pauseAudio()" class="btn btn-secondary">Pause</button>
+            <!-- <button onclick="jumpBack()" class="btn btn-info">Jump 5s Back</button>
+            <button onclick="jumpForward()" class="btn btn-info">Jump 5s Forward</button> -->
+            <button onclick="toggleRepeat()" class="btn btn-warning">Toggle Repeat</button>
+        </div>
     </div>
 
     <script>
+        document.getElementById('form').addEventListener('submit', function (event) {
+            event.preventDefault(); // Prevent the default form submission
+            var formData = new FormData(this);
+
+            fetch('{% url "bible_research:generate_audio" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // Decode the Base64 audio content and create a blob URL
+                    var audioContent = atob(data.audio_content);
+                    var byteArray = new Uint8Array(audioContent.length);
+                    for (var i = 0; i < audioContent.length; i++) {
+                        byteArray[i] = audioContent.charCodeAt(i);
+                    }
+                    var blob = new Blob([byteArray], { type: 'audio/mpeg' });
+                    var audioUrl = URL.createObjectURL(blob);
+
+                    // Update the audio player source and play the audio
+                    var audioPlayer = document.getElementById('audioPlayer');
+                    audioPlayer.src = audioUrl;
+                })
+                .catch(error => {
+                    console.error('Error fetching audio:', error);
+                });
+        });
+
         var audioPlayer = document.getElementById('audioPlayer');
 
         function playAudio() {
