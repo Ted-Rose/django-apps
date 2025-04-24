@@ -259,4 +259,4 @@ def fetch_tv_program_details():
                     logger.info(f"No data found for {title_lv}")
     return programs
 
-programs = fetch_tv_program_details()
+# programs = fetch_tv_program_details()

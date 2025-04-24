@@ -23,8 +23,8 @@ if os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
     with open(PRIVATE_SETTINGS_JSON_PATH, 'r') as file:
         private_settings = json.load(file)
         SECRET_KEY = private_settings.get('SECRET_KEY')
-        DEBUG = private_settings.get('debug')
-        BASE_URL = private_settings.get('base_url')
+        DEBUG = private_settings.get('DEBUG')
+        BASE_URL = private_settings.get('BASE_URL')
         DATABASES = private_settings.get('DATABASES')
         ESV_KEY = private_settings.get('ESV_KEY')
 else:
@@ -53,6 +53,12 @@ INSTALLED_APPS = [
     'tv_archive',
     'bible_research',
 ]
+
+if DEBUG:
+    try:
+        INSTALLED_APPS += ['sslserver']
+    except ImportError:
+        pass  # sslserver not installed, that's fine in production
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
