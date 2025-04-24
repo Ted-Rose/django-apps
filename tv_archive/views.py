@@ -149,9 +149,6 @@ def fetch_tv_program_details():
         "filmzone_hd": "filmzone_hd",
         "ltv7_hd": "ltv7_hd",
         "ltv1_hd": "ltv1_hd",
-        "tv6_hd": "tv6_hd",
-        "tv3_hd": "tv3_hd",
-        "viasat_kino": "viasat_kino",
         }
     oldest_date = (datetime.now() - timedelta(days=6))
 
@@ -163,17 +160,17 @@ def fetch_tv_program_details():
             date_string = date.strftime('%d-%m-%Y')
             logger.info(f"Date: {date}")
             url = f"https://www.tet.lv/televizija/tv-programma?tv-type=interactive&view-type=list&date={date_string}&channel={channel}"
-            print("url:", url)
 
             response = http.request("GET", url)
             html_content = response.data
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            contents = soup.find_all('div', class_="expander-description")
+            contents = soup.find_all('div', class_="show-expander-content")
+            logger.info(f"Found {len(contents)} programs.")
             programs = []
 
             for program in contents:
-                title_lv = program.find('div', class_="tet-font__headline--s")
+                title_lv = program.find(class_="tet-font__headline--s")
                 if title_lv:
                     title_lv = title_lv.text.strip()
 
@@ -209,7 +206,7 @@ def fetch_tv_program_details():
                     ]:
                         continue
 
-                    description_lv = program.find('div', class_="text tet-font__body--s")
+                    description_lv = program.find(class_="text tet-font__body--s")
                     if description_lv:
                         description_lv = re.sub(r"&\w+;", "", description_lv.text.strip())
 

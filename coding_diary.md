@@ -1,7 +1,9 @@
 # Development logs
-8. SOP windows terminal
-    - `.\projects\django-apps\venv\Scripts\activate`
-    - `python projects\django-apps\manage.py runserver`
+8. Local startup runbook:
+  - Windows terminal:
+    - `.\projects\django-apps\venv\Scripts\activate && python projects\django-apps\manage.py runserver`
+  - Linux terminal:
+    - `source projects/django-apps/venv/bin/activate && python projects/django-apps/manage.py runserver`
 7. Creating venv localy on ubuntu:
   - `pip install virtualenv`
   - `virtualenv -p /usr/bin/python3.10 venv`
