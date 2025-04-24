@@ -30,6 +30,8 @@ if os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
 else:
   raise FileNotFoundError(f'Private settings do not exist. Please provide private settings.')
 
+print(f"Debug is set to {DEBUG}")
+
 ALLOWED_HOSTS = [
   'tedisrozenfelds.pythonanywhere.com',
   '127.0.0.1',
