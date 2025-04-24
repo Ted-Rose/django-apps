@@ -169,18 +169,18 @@ LOGGING = {
         },
         'file_debug': {
             'level': 'DEBUG',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'debug.log'),
-            'maxBytes': 10485760,  # 10MB
-            'backupCount': 10,
+            'class': 'logging.NullHandler' if not DEBUG else 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'debug.log') if DEBUG else None,
+            'maxBytes': 10485760 if DEBUG else 0,  # 10MB
+            'backupCount': 10 if DEBUG else 0,
             'formatter': 'verbose',
         },
         'file_error': {
             'level': 'ERROR',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'error.log'),
-            'maxBytes': 10485760,  # 10MB
-            'backupCount': 10,
+            'class': 'logging.NullHandler' if not DEBUG else 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'error.log') if DEBUG else None,
+            'maxBytes': 10485760 if DEBUG else 0,  # 10MB
+            'backupCount': 10 if DEBUG else 0,
             'formatter': 'verbose',
         },
     },
