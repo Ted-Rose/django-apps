@@ -142,6 +142,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+print("MEDIA_ROOT: ", MEDIA_ROOT)
 
 
 def create_log_handler(handler_name, level, filename=None, max_bytes=10485760, backup_count=10):
