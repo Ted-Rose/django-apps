@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Player</title>
+    <title>Bible Passage Audio Player</title>
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
 </head>
 
@@ -12,8 +12,24 @@
     <div class="container mt-5">
         <form method="post" id="form">
             {% csrf_token %}
-            {{ form }}
-            <button type="submit">Submit</button>
+            <div class="form-group">
+                <label for="book">{{ form.book.label_tag }}</label>
+                {{ form.book }}
+            </div>
+            
+            <div class="form-group">
+                <label for="chapter">Chapter:</label>
+                {{ form.chapter }}
+            </div>
+            
+            <div class="form-group">
+                <label for="verse">Verse:</label>
+                {{ form.verse }}
+            </div>
+            
+            {{ form.passage }}
+            
+            <button type="submit" class="btn btn-primary">Submit</button>
         </form>
         <audio id="audioPlayer" controls>
             Your browser does not support the audio element.
@@ -28,6 +44,89 @@
     </div>
 
     <script>
+        // Make sure the Bible data is correctly loaded from your form
+        const bibleData = JSON.parse('{{ form.bible_data_json|escapejs }}');
+
+        // Check the structure of the data
+        console.log("Bible data loaded:", bibleData);
+
+        // DOM elements
+        const bookSelect = document.getElementById('book');
+        const chapterSelect = document.getElementById('chapter');
+        const verseSelect = document.getElementById('verse');
+
+        // Populate chapters based on selected book
+        function populateChapters() {
+            console.log("Book selected:", bookSelect.value);
+
+            // Clear existing options
+            chapterSelect.innerHTML = '<option value="">Select a chapter</option>';
+            verseSelect.innerHTML = '<option value="">Select a verse</option>';
+
+            const selectedBook = bookSelect.value;
+            console.log("Selected book:", selectedBook);
+            console.log("Book data:", bibleData[selectedBook]);
+
+            if (selectedBook && bibleData[selectedBook] && bibleData[selectedBook].chapters) {
+                const chapters = bibleData[selectedBook].chapters;
+                console.log("Chapters:", chapters);
+
+                // Add chapter options
+                Object.keys(chapters).forEach(chapter => {
+                    const option = document.createElement('option');
+                    option.value = chapter;
+                    // Remove leading zeros for display
+                    option.textContent = parseInt(chapter, 10);
+                    chapterSelect.appendChild(option);
+                });
+
+                chapterSelect.disabled = false;
+                verseSelect.disabled = true;
+            } else {
+                console.error("No chapters found for book:", selectedBook);
+                chapterSelect.disabled = true;
+                verseSelect.disabled = true;
+            }
+        }
+
+        // Populate verses based on selected chapter
+        function populateVerses() {
+            console.log("Chapter selected:", chapterSelect.value);
+
+            // Clear existing options
+            verseSelect.innerHTML = '<option value="">Select a verse</option>';
+
+            const selectedBook = bookSelect.value;
+            const selectedChapter = chapterSelect.value;
+
+            if (selectedBook && selectedChapter &&
+                bibleData[selectedBook] &&
+                bibleData[selectedBook].chapters[selectedChapter]) {
+
+                const verseCount = parseInt(bibleData[selectedBook].chapters[selectedChapter].verse_count, 10);
+                console.log("Verse count:", verseCount);
+
+                for (let i = 1; i <= verseCount; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = i;
+                    verseSelect.appendChild(option);
+                }
+
+                verseSelect.disabled = false;
+            } else {
+                verseSelect.disabled = true;
+            }
+        }
+
+        // Add the event listeners explicitly
+        bookSelect.addEventListener('change', populateChapters);
+        chapterSelect.addEventListener('change', populateVerses);
+
+        // Log to verify event listeners are attached
+        console.log("Event listeners attached to:", bookSelect, chapterSelect);
+
+
         document.getElementById('form').addEventListener('submit', function (event) {
             event.preventDefault(); // Prevent the default form submission
             var formData = new FormData(this);
