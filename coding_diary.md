@@ -1,4 +1,6 @@
 # Development logs
+9. https://ted-rose.atlassian.net/browse/BR-1
+    - Maybe something wrong with forms.py?
 8. Local startup runbook:
   - Windows terminal:
     - `.\projects\django-apps\venv\Scripts\activate && python projects\django-apps\manage.py runserver`
