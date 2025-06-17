@@ -5,6 +5,21 @@ import base64
 from .get_word import get_verses
 
 
+def verses(request):
+    if request.method == 'GET':
+        passage = request.GET.get('passage')
+        if passage:
+            try:
+                verses = get_verses(passage, format='text')
+                return JsonResponse({'verses': verses})
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=400)
+        else:
+            return JsonResponse({'error': 'Passage is required'}, status=400)
+    else:
+        return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+
+
 def generate_audio(request):
     if request.method == 'POST':
         form = PassageForm(request.POST)

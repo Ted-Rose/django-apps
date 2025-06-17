@@ -5,4 +5,5 @@ app_name = 'bible_research'
 
 urlpatterns = [
     path('bible/', views.generate_audio, name='generate_audio'),
+    path('bible/verses', views.verses, name='verses'),
 ]
