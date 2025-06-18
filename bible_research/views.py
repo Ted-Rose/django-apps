@@ -8,9 +8,14 @@ from .get_word import get_verses
 def verses(request):
     if request.method == 'GET':
         passage = request.GET.get('passage')
+        passages_format = request.GET.get('passages_format', 'json')
         if passage:
             try:
-                verses = get_verses(passage, format='text')
+                verses = get_verses(
+                    passage,
+                    response_format='text',
+                    passages_format=passages_format
+                )
                 return JsonResponse({'verses': verses})
             except Exception as e:
                 return JsonResponse({'error': str(e)}, status=400)
@@ -25,7 +30,7 @@ def generate_audio(request):
         form = PassageForm(request.POST)
         if form.is_valid():
             passage = form.cleaned_data['passage']
-            audio_content = get_verses(passage, format='audio')
+            audio_content = get_verses(passage, response_format='audio')
             if audio_content:
                 response_data = {
                     "audio_content": base64.b64encode(audio_content).decode('ascii')

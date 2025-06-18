@@ -1,12 +1,12 @@
 import requests
-import os
 import json
 from time import sleep
 from django.conf import settings
+from .serializers import esv_passages_to_json
 
 
-def get_verses(passage, format='text'):
-    url = f'https://api.esv.org/v3/passage/{format}/'
+def get_verses(passage, passages_format, response_format='text'):
+    url = f'https://api.esv.org/v3/passage/{response_format}/'
     params = {
         'q': passage,
         'include-headings': False,
@@ -22,13 +22,15 @@ def get_verses(passage, format='text'):
 
     resp = requests.get(url, params=params, headers=headers)
     if resp.status_code == 200:
-        if format == 'text':
+        if response_format == 'text':
             json_resp = resp.json()
-            # print("response text:\n", resp.text)
+            if passages_format == 'json':
+                return esv_passages_to_json(json_resp['passages'][0])
             return json_resp if json_resp['passages'] else 'Passage not found'
-        elif format == 'search':
+
+        elif response_format == 'search':
             return resp.json()
-        elif format == 'audio':
+        elif response_format == 'audio':
             audio_content = b''
             try:
                 for chunk in resp.iter_content(chunk_size=1024):
@@ -40,18 +42,18 @@ def get_verses(passage, format='text'):
                 raise e
 
         else:
-            raise ValueError(f'Unsupported format: {format}')
+            raise ValueError(f'Unsupported response_format: {response_format}')
     else:
         raise Exception(f'API resp: {resp.status_code} {resp.text}')
 
 
 def search_bible(text, get_audio=False):
-    format = "search"
-    search_results = get_verses(text, format)
+    response_format = "search"
+    search_results = get_verses(text, response_format)
     if get_audio:
         for passage in search_results['results']:
             print("Passage:\n", passage)
-            get_verses(passage['reference'], format='audio')
+            get_verses(passage['reference'], response_format='audio')
     return search_results
 
 
