@@ -68,11 +68,12 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "https://reactive-bible.vercel.app/",
+    "https://reactive-bible.vercel.app",
 ]
 
 CORS_ALLOW_METHODS = (
     "GET",
+    "POST",
 )
 
 ROOT_URLCONF = 'django_apps.urls'
