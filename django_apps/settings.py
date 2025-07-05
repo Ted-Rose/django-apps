@@ -34,6 +34,7 @@ ALLOWED_HOSTS = [
   'tedisrozenfelds.pythonanywhere.com',
   '127.0.0.1',
   '*.vercel.app',
+  'tedisrozenfelds.vercel.app'
 ]
 
 # WSGI_APPLICATION = 'django_apps.wsgi.app'
