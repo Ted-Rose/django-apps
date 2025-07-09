@@ -73,6 +73,12 @@ CORS_ALLOWED_ORIGINS = [
     "https://tedisrozenfelds.vercel.app",
 ]
 
+
+# Allow all Vercel automatically deployed PR preview origins
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*-vincent-uches-projects\.vercel\.app$",
+]
+
 CORS_ALLOW_METHODS = (
     "GET",
     "POST",
