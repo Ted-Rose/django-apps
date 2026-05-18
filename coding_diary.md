@@ -1,4 +1,16 @@
 # Development logs
+9. GCP
+```
+gcloud projects create django-apps-7345 --name="Django Apps"
+
+gcloud config set project django-apps-7345
+
+# You can find your account ID using: gcloud billing accounts list
+gcloud billing projects link django-apps-7345 --billing-account=0X0X0X-0X0X0X-0X0X0X
+
+# 5. Enable the required APIs for Terraform and Cloud Run
+gcloud services enable compute.googleapis.com run.googleapis.com iam.googleapis.com --project=django-apps-7345
+```
 8. Local startup runbook:
   - Windows terminal:
     - `.\projects\django-apps\venv\Scripts\activate && python projects\django-apps\manage.py runserver`
