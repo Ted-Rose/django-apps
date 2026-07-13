@@ -30,6 +30,7 @@ locals {
     "storage.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
+    "tasks.googleapis.com",
   ]
 }
 
