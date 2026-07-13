@@ -9,6 +9,7 @@ app_name = 'main'
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('google_api.urls', namespace='google_api')),
+    path('tasks/', include('google_tasks.urls', namespace='google_tasks')),
     path('', include('single_pages.urls', namespace='single_pages')),
     path('', include('tv_archive.urls', namespace='tv_archive')),
     path('', include('bible_research.urls', namespace='bible_research')),

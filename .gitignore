@@ -11,3 +11,8 @@ ca.pem
 data/
 staticfiles
 private_settings.json
+
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup

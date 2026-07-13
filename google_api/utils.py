@@ -60,9 +60,13 @@ def extract_text_from_html(html_content):
     return clean_text.strip()
 
 
-def google_auth(creds=None):
-    scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
-    client_secrets_path = os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json')
+def google_auth(creds=None, scopes=None):
+    if scopes is None:
+        scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
+    client_secrets_path = getattr(
+        settings, 'GOOGLE_APP_SECRETS_PATH',
+        os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),
+    )
     with open(client_secrets_path, 'r') as file:
         data = json.load(file)
     
@@ -191,9 +195,30 @@ def get_messages(query, creds):
     return message_details
 
 
-def callback(request):
-    scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
-    client_secrets_path = os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json')
+def build_google_service(service_name, version, creds, scopes=None):
+    """
+    Generic service builder for Google APIs.
+    Args:
+        service_name: e.g., 'gmail', 'tasks'
+        version: e.g., 'v1'
+        creds: credentials dict or Credentials object
+        scopes: list of OAuth scopes
+    Returns:
+        Google API service object or auth dict if reauth needed
+    """
+    service = google_auth(creds, scopes)
+    if isinstance(service, dict) and 'authorization_url' in service:
+        return service
+    return build(service_name, version, credentials=service.credentials)
+
+
+def callback(request, scopes=None):
+    if scopes is None:
+        scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
+    client_secrets_path = getattr(
+        settings, 'GOOGLE_APP_SECRETS_PATH',
+        os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),
+    )
 
     flow = InstalledAppFlow.from_client_secrets_file(
                 client_secrets_path,

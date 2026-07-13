@@ -19,7 +19,38 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 PRIVATE_SETTINGS_JSON_PATH = os.path.join(BASE_DIR, 'private_settings.json')
 
-if os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
+IS_GCP_ENVIRONMENT = (
+    os.environ.get('GAE_APPLICATION') is not None
+    or os.environ.get('K_SERVICE') is not None
+)
+
+if IS_GCP_ENVIRONMENT:
+    from .gcp import get_secret
+    import dj_database_url
+
+    SECRET_KEY = get_secret('DJANGO_SECRET_KEY')
+    DEBUG = False
+    BASE_URL = get_secret('APP_BASE_URL')
+    ESV_KEY = get_secret('ESV_KEY')
+
+    db_config = dj_database_url.parse(get_secret('DATABASE_URL'))
+    db_ssl_cert_content = get_secret('DB_SSL_CERT')
+    if db_ssl_cert_content:
+        CA_PEM_PATH = '/tmp/ca.pem'
+        if not os.path.exists(CA_PEM_PATH):
+            with open(CA_PEM_PATH, 'w') as f:
+                f.write(db_ssl_cert_content)
+        db_config.setdefault('OPTIONS', {})
+        db_config['OPTIONS']['sslmode'] = 'verify-full'
+        db_config['OPTIONS']['sslrootcert'] = CA_PEM_PATH
+    DATABASES = {'default': db_config}
+
+    GOOGLE_APP_SECRETS_PATH = '/tmp/app_secrets.json'
+    if not os.path.exists(GOOGLE_APP_SECRETS_PATH):
+        with open(GOOGLE_APP_SECRETS_PATH, 'w') as f:
+            f.write(get_secret('GOOGLE_OAUTH_CLIENT_JSON'))
+
+elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
     with open(PRIVATE_SETTINGS_JSON_PATH, 'r') as file:
         private_settings = json.load(file)
         SECRET_KEY = private_settings.get('SECRET_KEY')
@@ -27,14 +58,17 @@ if os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
         BASE_URL = private_settings.get('BASE_URL')
         DATABASES = private_settings.get('DATABASES')
         ESV_KEY = private_settings.get('ESV_KEY')
+    GOOGLE_APP_SECRETS_PATH = os.path.join(BASE_DIR, 'google_api', 'app_secrets.json')
 else:
-  raise FileNotFoundError(f'Private settings do not exist. Please provide private settings.')
+    raise FileNotFoundError('Private settings do not exist. Please provide private settings.')
 
 ALLOWED_HOSTS = [
-  'tedisrozenfelds.pythonanywhere.com',
-  '127.0.0.1',
-  '*.vercel.app',
-  'tedisrozenfelds.vercel.app'
+    'tedisrozenfelds.pythonanywhere.com',
+    '127.0.0.1',
+    '*.vercel.app',
+    'tedisrozenfelds.vercel.app',
+    '*.appspot.com',
+    '*.run.app',
 ]
 
 # WSGI_APPLICATION = 'django_apps.wsgi.app'
@@ -51,6 +85,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django.contrib.staticfiles',
     'google_api',
+    'google_tasks',
     'single_pages',
     'tv_archive',
     'bible_research',
@@ -104,18 +139,6 @@ TEMPLATES = [
         },
     },
 ]
-
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
-DATABASES = private_settings.get('DATABASES')
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
