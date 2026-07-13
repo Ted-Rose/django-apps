@@ -102,16 +102,9 @@ def google_auth(creds=None, scopes=None):
                 access_type='offline',
                 include_granted_scopes='true'
             )
-            return {"authorization_url": authorization_url, "state": state}
+            return {"authorization_url": authorization_url, "state": state, "scopes": scopes}
   
-    try:
-        # Call the Gmail API
-        service = build("gmail", "v1", credentials=creds)
-
-    except HttpError as error:
-        # Handle errors from Gmail API.
-        print(f"An error occurred: {error}")
-    return service
+    return creds
 
 
 def get_messages(query, creds):
@@ -119,11 +112,11 @@ def get_messages(query, creds):
     Returns a list of Gmail messages / emails that match the query.
     """
     try:
-        service = google_auth(creds)
-        # google_auth returns authorization_url if user has to authorize
-        if isinstance(service, dict) and 'authorization_url' in service:
-          return service
+        credentials = google_auth(creds)
+        if isinstance(credentials, dict) and 'authorization_url' in credentials:
+          return credentials
 
+        service = build("gmail", "v1", credentials=credentials)
         results = service.users().messages().list(userId="me", q=query, maxResults=100).execute()
         messages = results.get("messages", [])
         
@@ -206,10 +199,10 @@ def build_google_service(service_name, version, creds, scopes=None):
     Returns:
         Google API service object or auth dict if reauth needed
     """
-    service = google_auth(creds, scopes)
-    if isinstance(service, dict) and 'authorization_url' in service:
-        return service
-    return build(service_name, version, credentials=service.credentials)
+    credentials = google_auth(creds, scopes)
+    if isinstance(credentials, dict) and 'authorization_url' in credentials:
+        return credentials
+    return build(service_name, version, credentials=credentials)
 
 
 def callback(request, scopes=None):
@@ -233,4 +226,5 @@ def callback(request, scopes=None):
         'expiry': credentials.expiry.isoformat()
     }
 
-    return redirect('google_api:gmail')
+    redirect_url = request.session.pop('oauth_redirect_url', 'google_api:gmail')
+    return redirect(redirect_url)

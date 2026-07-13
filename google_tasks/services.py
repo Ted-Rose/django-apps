@@ -17,12 +17,12 @@ def get_tasks_service(creds):
     Returns service object or auth dict if reauth is needed.
     """
     scopes = [TASKS_SCOPE]
-    auth_result = google_auth(creds, scopes)
+    credentials = google_auth(creds, scopes)
 
-    if isinstance(auth_result, dict) and 'authorization_url' in auth_result:
-        return auth_result
+    if isinstance(credentials, dict) and 'authorization_url' in credentials:
+        return credentials
 
-    return build('tasks', 'v1', credentials=auth_result.credentials)
+    return build('tasks', 'v1', credentials=credentials)
 
 
 def parse_datetime(date_string):
