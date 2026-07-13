@@ -21,7 +21,7 @@ permissions:
 env:
   GCP_PROJECT_ID: gmail-vercel
   TF_VAR_region: europe-west3
-  WIF_PROVIDER: projects/PROJECT_NUMBER_PLACEHOLDER/locations/global/workloadIdentityPools/github-actions/providers/github
+  WIF_PROVIDER: projects/383533976302/locations/global/workloadIdentityPools/github-actions/providers/github
   DEPLOY_SA: github-deployer@gmail-vercel.iam.gserviceaccount.com
 
 jobs:

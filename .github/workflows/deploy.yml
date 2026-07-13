@@ -12,7 +12,7 @@ permissions:
 env:
   GCP_PROJECT_ID: gmail-vercel
   GCP_REGION: europe-west3
-  WIF_PROVIDER: projects/PROJECT_NUMBER_PLACEHOLDER/locations/global/workloadIdentityPools/github-actions/providers/github
+  WIF_PROVIDER: projects/383533976302/locations/global/workloadIdentityPools/github-actions/providers/github
   DEPLOY_SA: github-deployer@gmail-vercel.iam.gserviceaccount.com
   SERVICE_NAME: django-apps
   ARTIFACT_REGISTRY: europe-west3-docker.pkg.dev/gmail-vercel/gae-standard
