@@ -75,15 +75,20 @@ def google_auth(creds=None, scopes=None):
     token_uri = data.get('web', {}).get('token_uri')
     
     if creds:
-      creds = Credentials(
-          token=creds['token'],
-          refresh_token=creds['refresh_token'],
-          client_secret=client_secret,
-          client_id=client_id,
-          token_uri=token_uri,
-          scopes=scopes,
-          expiry=datetime.fromisoformat(creds['expiry']),
-      )
+        granted_scopes = set(creds.get('scopes', []))
+        required_scopes = set(scopes)
+        if not required_scopes.issubset(granted_scopes):
+            creds = None
+        else:
+            creds = Credentials(
+                token=creds['token'],
+                refresh_token=creds['refresh_token'],
+                client_secret=client_secret,
+                client_id=client_id,
+                token_uri=token_uri,
+                scopes=scopes,
+                expiry=datetime.fromisoformat(creds['expiry']),
+            )
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -223,7 +228,8 @@ def callback(request, scopes=None):
     request.session['google_credentials'] = {
         'token': credentials.token,
         'refresh_token': credentials.refresh_token,
-        'expiry': credentials.expiry.isoformat()
+        'expiry': credentials.expiry.isoformat(),
+        'scopes': list(credentials.scopes or []),
     }
 
     redirect_url = request.session.pop('oauth_redirect_url', 'google_api:gmail')
