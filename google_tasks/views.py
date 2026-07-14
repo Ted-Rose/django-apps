@@ -33,11 +33,18 @@ def dashboard(request):
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
 
+    selected_list_title = None
+    if task_list_filter:
+        selected_list_title = task_lists.filter(
+            list_id=task_list_filter
+        ).values_list('title', flat=True).first()
+
     context = {
         'tasks': tasks,
         'task_lists': task_lists,
         'labels': labels,
         'selected_list': task_list_filter,
+        'selected_list_title': selected_list_title,
         'selected_label': label_filter,
         'has_credentials': bool(creds),
     }

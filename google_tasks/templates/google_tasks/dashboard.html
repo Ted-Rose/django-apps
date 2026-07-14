@@ -103,7 +103,7 @@
             <div class="col-md-9 p-4">
                 <h2 class="mb-4">
                     {% if selected_list %}
-                        Tasks in {{ task_lists|first.title }}
+                        Tasks in {{ selected_list_title }}
                     {% elif selected_label %}
                         Tasks with label
                     {% else %}
