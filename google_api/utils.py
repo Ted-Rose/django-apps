@@ -21,6 +21,12 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger('django')
 
+BASE_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+]
+
+
 def text_to_audio(text: str, lang: str = None, filename: str = None) -> str:
     DetectorFactory.seed = 0
     if lang is None:
@@ -64,6 +70,7 @@ def extract_text_from_html(html_content):
 def google_auth(creds=None, scopes=None):
     if scopes is None:
         scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
+    scopes = list(set(scopes) | set(BASE_SCOPES))
     client_secrets_path = getattr(
         settings, 'GOOGLE_APP_SECRETS_PATH',
         os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),
