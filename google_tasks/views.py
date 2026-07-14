@@ -16,6 +16,7 @@ def dashboard(request):
 
         if isinstance(result, dict) and 'authorization_url' in result:
             request.session['state'] = result['state']
+            request.session['oauth_scopes'] = result.get('scopes', [])
             request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
             return redirect(result['authorization_url'])
 
@@ -159,6 +160,7 @@ def sync_view(request):
 
     if isinstance(result, dict) and 'authorization_url' in result:
         request.session['state'] = result['state']
+        request.session['oauth_scopes'] = result.get('scopes', [])
         request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
         return JsonResponse({
             'success': False,

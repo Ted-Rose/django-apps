@@ -21,6 +21,7 @@ def gmail(request):
         else:
             auth = google_auth()
             request.session['state'] = auth['state']
+            request.session['oauth_scopes'] = auth.get('scopes', [])
             return redirect(auth['authorization_url'])
 
     return render(request, 'gmail.html')
