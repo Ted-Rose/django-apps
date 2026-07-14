@@ -62,6 +62,8 @@ elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
 else:
     raise FileNotFoundError('Private settings do not exist. Please provide private settings.')
 
+LOGIN_URL = '/login/'
+
 ALLOWED_HOSTS = [
     'tedisrozenfelds.pythonanywhere.com',
     '127.0.0.1',

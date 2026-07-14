@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from google_api.utils import get_messages, text_to_audio, google_auth
 from django.http import JsonResponse
+from django.conf import settings
 
 
 def gmail(request):
@@ -23,6 +24,18 @@ def gmail(request):
             return redirect(auth['authorization_url'])
 
     return render(request, 'gmail.html')
+
+
+def login_view(request):
+    next_url = request.GET.get('next', 'google_api:gmail')
+    request.session['oauth_redirect_url'] = next_url
+    scopes = [
+        'https://www.googleapis.com/auth/userinfo.email',
+        'openid',
+    ]
+    auth = google_auth(scopes=scopes)
+    request.session['state'] = auth['state']
+    return redirect(auth['authorization_url'])
 
 
 def audio(request):

@@ -7,6 +7,8 @@ from django.conf import settings
 from django.shortcuts import redirect
 import logging
 import os
+import requests as http_requests
+from django.contrib.auth import get_user_model, login as auth_login
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -14,7 +16,6 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import re
 from datetime import datetime
-from google_api import views
 from langdetect import detect, DetectorFactory
 from bs4 import BeautifulSoup
 
@@ -231,6 +232,28 @@ def callback(request, scopes=None):
         'expiry': credentials.expiry.isoformat(),
         'scopes': list(credentials.scopes or []),
     }
+
+    try:
+        userinfo = http_requests.get(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            headers={'Authorization': f'Bearer {credentials.token}'},
+            timeout=5,
+        ).json()
+        email = userinfo.get('email', '')
+        if email:
+            User = get_user_model()
+            username = email.split('@')[0][:150]
+            user, _ = User.objects.get_or_create(
+                email=email,
+                defaults={'username': username},
+            )
+            auth_login(
+                request,
+                user,
+                backend='django.contrib.auth.backends.ModelBackend',
+            )
+    except Exception:
+        logger.exception('Failed to fetch Google userinfo in callback')
 
     redirect_url = request.session.pop('oauth_redirect_url', 'google_api:gmail')
     return redirect(redirect_url)
