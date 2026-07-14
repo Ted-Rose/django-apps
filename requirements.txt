@@ -13,3 +13,4 @@ debugpy
 google-cloud-secret-manager
 dj-database-url
 gunicorn
+django-sslserver

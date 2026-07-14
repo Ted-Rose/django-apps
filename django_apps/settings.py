@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'corsheaders',
     'django.contrib.staticfiles',
+    'sslserver',
     'google_api',
     'google_tasks',
     'single_pages',
