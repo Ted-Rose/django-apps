@@ -213,7 +213,10 @@ def build_google_service(service_name, version, creds, scopes=None):
 
 def callback(request, scopes=None):
     if scopes is None:
-        scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
+        scopes = request.session.pop(
+            'oauth_scopes',
+            ["https://www.googleapis.com/auth/gmail.readonly"]
+        )
     client_secrets_path = getattr(
         settings, 'GOOGLE_APP_SECRETS_PATH',
         os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),

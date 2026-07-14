@@ -35,6 +35,7 @@ def login_view(request):
     ]
     auth = google_auth(scopes=scopes)
     request.session['state'] = auth['state']
+    request.session['oauth_scopes'] = scopes
     return redirect(auth['authorization_url'])
 
 
