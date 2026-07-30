@@ -6,6 +6,7 @@ app_name = 'google_tasks'
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('starred/', views.starred_tasks, name='starred'),
+    path('starred/reorder/', views.reorder_starred, name='reorder_starred'),
     path('sync/', views.sync_view, name='sync'),
     path(
         'task/<str:task_id>/toggle-star/',

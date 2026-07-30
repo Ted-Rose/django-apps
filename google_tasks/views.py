@@ -1,5 +1,7 @@
+import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.db.models import F
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
@@ -56,7 +58,9 @@ def dashboard(request):
 @login_required
 def starred_tasks(request):
     """View showing only starred tasks."""
-    tasks = GoogleTask.objects.filter(user=request.user, is_starred=True)
+    tasks = GoogleTask.objects.filter(
+        user=request.user, is_starred=True
+    ).order_by(F('starred_order').asc(nulls_last=True), '-updated')
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
 
@@ -68,6 +72,26 @@ def starred_tasks(request):
     }
 
     return render(request, 'google_tasks/starred.html', context)
+
+
+@login_required
+@require_POST
+def reorder_starred(request):
+    """Save local ordering of starred tasks."""
+    try:
+        data = json.loads(request.body)
+        ordered_ids = data.get('order', [])
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse(
+            {'success': False, 'error': 'Invalid JSON'}, status=400
+        )
+
+    for position, task_id in enumerate(ordered_ids):
+        GoogleTask.objects.filter(
+            task_id=task_id, user=request.user
+        ).update(starred_order=position)
+
+    return JsonResponse({'success': True})
 
 
 @login_required

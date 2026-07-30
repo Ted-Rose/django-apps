@@ -8,10 +8,21 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         .task-card {
-            transition: all 0.2s ease;
+            transition: box-shadow 0.2s ease;
+            cursor: grab;
+        }
+        .task-card:active {
+            cursor: grabbing;
         }
         .task-card:hover {
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .task-card.sortable-ghost {
+            opacity: 0.4;
+            background: #e9ecef;
+        }
+        .task-card.sortable-chosen {
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
         }
         .star-btn {
             cursor: pointer;
@@ -21,6 +32,22 @@
         .label-badge {
             font-size: 0.75rem;
             margin-right: 0.25rem;
+        }
+        .drag-handle {
+            color: #adb5bd;
+            cursor: grab;
+            margin-right: 0.5rem;
+            font-size: 1.1rem;
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        #save-indicator {
+            display: none;
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 1000;
         }
     </style>
 </head>
@@ -43,58 +70,77 @@
             <h2>
                 <i class="bi bi-star-fill text-warning"></i> Starred Tasks
             </h2>
-            <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-outline-primary">
-                <i class="bi bi-arrow-left"></i> Back to Dashboard
-            </a>
+            <div class="d-flex gap-2 align-items-center">
+                <small class="text-muted">
+                    <i class="bi bi-grip-vertical"></i> Drag to reorder
+                </small>
+                <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
         </div>
 
         {% if tasks %}
-            {% for task in tasks %}
-            <div class="card task-card mb-3" data-task-id="{{ task.task_id }}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <h5 class="card-title">
-                                <span class="star-btn" onclick="toggleStar('{{ task.task_id }}')">
-                                    <i class="bi bi-star-fill"></i>
+            <div id="task-list">
+                {% for task in tasks %}
+                <div class="card task-card mb-3" data-task-id="{{ task.task_id }}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="d-flex align-items-start flex-grow-1">
+                                <span class="drag-handle mt-1">
+                                    <i class="bi bi-grip-vertical"></i>
                                 </span>
-                                {{ task.title }}
-                            </h5>
-                            {% if task.notes %}
-                            <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
-                            {% endif %}
-                            <div class="mb-2">
-                                {% for label in task.local_labels.all %}
-                                <span class="badge label-badge" style="background-color: {{ label.color }};">
-                                    {{ label.name }}
-                                </span>
-                                {% endfor %}
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title mb-1">
+                                        <span class="star-btn me-1" onclick="toggleStar('{{ task.task_id }}')">
+                                            <i class="bi bi-star-fill"></i>
+                                        </span>
+                                        {{ task.title }}
+                                    </h5>
+                                    {% if task.notes %}
+                                    <p class="card-text text-muted mb-1">{{ task.notes|truncatewords:20 }}</p>
+                                    {% endif %}
+                                    <div class="mb-1">
+                                        {% for label in task.local_labels.all %}
+                                        <span class="badge label-badge" style="background-color: {{ label.color }};">
+                                            {{ label.name }}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
+                                    <small class="text-muted">
+                                        <i class="bi bi-folder"></i> {{ task.task_list.title }}
+                                        {% if task.due_date %}
+                                        | <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
+                                        {% endif %}
+                                    </small>
+                                </div>
                             </div>
-                            <small class="text-muted">
-                                <i class="bi bi-folder"></i> {{ task.task_list.title }}
-                                {% if task.due_date %}
-                                | <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
-                                {% endif %}
-                            </small>
-                        </div>
-                        <div>
-                            <span class="badge {% if task.status == 'completed' %}bg-success{% else %}bg-secondary{% endif %}">
-                                {{ task.get_status_display }}
-                            </span>
+                            <div class="ms-2">
+                                <span class="badge {% if task.status == 'completed' %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {{ task.get_status_display }}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
         {% else %}
             <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i> No starred tasks yet. 
+                <i class="bi bi-info-circle"></i> No starred tasks yet.
                 Star tasks from the main dashboard to see them here.
             </div>
         {% endif %}
     </div>
 
+    <div id="save-indicator">
+        <span class="badge bg-success fs-6 px-3 py-2">
+            <i class="bi bi-check-circle"></i> Order saved
+        </span>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     <script>
         function getCookie(name) {
             let cookieValue = null;
@@ -103,12 +149,50 @@
                 for (let i = 0; i < cookies.length; i++) {
                     const cookie = cookies[i].trim();
                     if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        cookieValue = decodeURIComponent(
+                            cookie.substring(name.length + 1)
+                        );
                         break;
                     }
                 }
             }
             return cookieValue;
+        }
+
+        const taskList = document.getElementById('task-list');
+        if (taskList) {
+            Sortable.create(taskList, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                handle: '.drag-handle',
+                onEnd: function () {
+                    const order = Array.from(
+                        taskList.querySelectorAll('[data-task-id]')
+                    ).map(el => el.dataset.taskId);
+
+                    fetch('{% url "google_tasks:reorder_starred" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ order: order })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const indicator = document.getElementById(
+                                'save-indicator'
+                            );
+                            indicator.style.display = 'block';
+                            setTimeout(() => {
+                                indicator.style.display = 'none';
+                            }, 2000);
+                        }
+                    });
+                }
+            });
         }
 
         function toggleStar(taskId) {
@@ -122,10 +206,8 @@
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    if (!data.is_starred) {
-                        location.reload();
-                    }
+                if (data.success && !data.is_starred) {
+                    location.reload();
                 }
             });
         }
