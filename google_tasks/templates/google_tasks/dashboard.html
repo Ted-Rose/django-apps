@@ -24,9 +24,13 @@
             font-size: 0.75rem;
             margin-right: 0.25rem;
         }
-        .sidebar {
+        .filter-bar {
             background-color: #f8f9fa;
-            min-height: calc(100vh - 56px);
+            border-bottom: 1px solid #dee2e6;
+        }
+        .dropdown-item.active {
+            background-color: #0d6efd;
+            color: #fff;
         }
     </style>
 </head>
@@ -51,117 +55,123 @@
         </div>
     </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-3 sidebar p-3">
-                <h5 class="mb-3">Views</h5>
-                <ul class="list-group mb-4">
-                    <li class="list-group-item {% if not selected_list and not selected_label %}active{% endif %}">
-                        <a href="{% url 'google_tasks:dashboard' %}" class="text-decoration-none">
-                            <i class="bi bi-list-task"></i> All Tasks
-                        </a>
-                    </li>
-                    <li class="list-group-item">
-                        <a href="{% url 'google_tasks:starred' %}" class="text-decoration-none">
-                            <i class="bi bi-star-fill text-warning"></i> Starred
-                        </a>
-                    </li>
-                </ul>
+    <div class="filter-bar py-2 px-3 d-flex align-items-center gap-2 flex-wrap">
+        <!-- View dropdown: All Tasks + Starred + Task Lists -->
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                {% if selected_list %}
+                    <i class="bi bi-folder"></i> {{ selected_list_title }}
+                {% else %}
+                    <i class="bi bi-list-task"></i> All Tasks
+                {% endif %}
+            </button>
+            <ul class="dropdown-menu">
+                <li>
+                    <a class="dropdown-item {% if not selected_list %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}{% if selected_label %}?label={{ selected_label }}{% endif %}">
+                        <i class="bi bi-list-task"></i> All Tasks
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="{% url 'google_tasks:starred' %}">
+                        <i class="bi bi-star-fill text-warning"></i> Starred
+                    </a>
+                </li>
+                {% if task_lists %}
+                <li><hr class="dropdown-divider"></li>
+                {% for list in task_lists %}
+                <li>
+                    <a class="dropdown-item {% if selected_list == list.list_id %}active{% endif %}" href="?list={{ list.list_id }}{% if selected_label %}&label={{ selected_label }}{% endif %}">
+                        <i class="bi bi-folder"></i> {{ list.title }}
+                    </a>
+                </li>
+                {% endfor %}
+                {% endif %}
+            </ul>
+        </div>
 
-                <h5 class="mb-3">Task Lists</h5>
-                <ul class="list-group mb-4">
-                    {% for list in task_lists %}
-                    <li class="list-group-item {% if selected_list == list.list_id %}active{% endif %}">
-                        <a href="?list={{ list.list_id }}" class="text-decoration-none">
-                            <i class="bi bi-folder"></i> {{ list.title }}
-                        </a>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-muted">No lists yet</li>
-                    {% endfor %}
-                </ul>
+        <!-- Label dropdown -->
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                {% if selected_label %}
+                    {% for label in labels %}{% if label.id|stringformat:'s' == selected_label %}<span class="badge me-1" style="background-color:{{ label.color }};">{{ label.name }}</span>{% endif %}{% endfor %}
+                {% else %}
+                    <i class="bi bi-tag"></i> All Labels
+                {% endif %}
+            </button>
+            <ul class="dropdown-menu">
+                <li>
+                    <a class="dropdown-item {% if not selected_label %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}{% if selected_list %}?list={{ selected_list }}{% endif %}">
+                        <i class="bi bi-tag"></i> All Labels
+                    </a>
+                </li>
+                {% if labels %}
+                <li><hr class="dropdown-divider"></li>
+                {% for label in labels %}
+                <li>
+                    <a class="dropdown-item {% if selected_label == label.id|stringformat:'s' %}active{% endif %}" href="?label={{ label.id }}{% if selected_list %}&list={{ selected_list }}{% endif %}">
+                        <span class="badge me-1" style="background-color: {{ label.color }};">{{ label.name }}</span>
+                    </a>
+                </li>
+                {% endfor %}
+                {% endif %}
+            </ul>
+        </div>
 
-                <h5 class="mb-3">Custom Labels</h5>
-                <ul class="list-group mb-3">
-                    {% for label in labels %}
-                    <li class="list-group-item {% if selected_label == label.id|stringformat:'s' %}active{% endif %}">
-                        <a href="?label={{ label.id }}" class="text-decoration-none">
-                            <span class="badge" style="background-color: {{ label.color }};">
-                                {{ label.name }}
-                            </span>
-                        </a>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-muted">No labels yet</li>
-                    {% endfor %}
-                </ul>
-                <button class="btn btn-sm btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#createLabelModal">
-                    <i class="bi bi-plus-circle"></i> Create Label
-                </button>
-            </div>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#createLabelModal">
+            <i class="bi bi-plus-circle"></i> Label
+        </button>
+    </div>
 
-            <div class="col-md-9 p-4">
-                <h2 class="mb-4">
-                    {% if selected_list %}
-                        Tasks in {{ selected_list_title }}
-                    {% elif selected_label %}
-                        Tasks with label
-                    {% else %}
-                        All Tasks
-                    {% endif %}
-                </h2>
-
-                {% if tasks %}
-                    {% for task in tasks %}
-                    <div class="card task-card mb-3" data-task-id="{{ task.task_id }}">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="flex-grow-1">
-                                    <h5 class="card-title">
-                                        <span class="star-btn {% if task.is_starred %}starred{% endif %}" onclick="toggleStar('{{ task.task_id }}')">
-                                            <i class="bi bi-star{% if task.is_starred %}-fill{% endif %}"></i>
-                                        </span>
-                                        {{ task.title }}
-                                    </h5>
-                                    {% if task.notes %}
-                                    <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
-                                    {% endif %}
-                                    <div class="mb-2">
-                                        {% for label in task.local_labels.all %}
-                                        <span class="badge label-badge" style="background-color: {{ label.color }};">
-                                            {{ label.name }}
-                                            <i class="bi bi-x" onclick="removeLabel('{{ task.task_id }}', {{ label.id }})" style="cursor: pointer;"></i>
-                                        </span>
-                                        {% endfor %}
-                                    </div>
-                                    <small class="text-muted">
-                                        <i class="bi bi-folder"></i> {{ task.task_list.title }}
-                                        {% if task.due_date %}
-                                        | <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
-                                        {% endif %}
-                                    </small>
-                                </div>
-                                <div>
-                                    <span class="badge {% if task.status == 'completed' %}bg-success{% else %}bg-secondary{% endif %}">
-                                        {{ task.get_status_display }}
-                                    </span>
-                                </div>
+    <div class="container-fluid p-4">
+        {% if tasks %}
+            {% for task in tasks %}
+            <div class="card task-card mb-3" data-task-id="{{ task.task_id }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title">
+                                <span class="star-btn {% if task.is_starred %}starred{% endif %}" onclick="toggleStar('{{ task.task_id }}')">
+                                    <i class="bi bi-star{% if task.is_starred %}-fill{% endif %}"></i>
+                                </span>
+                                {{ task.title }}
+                            </h5>
+                            {% if task.notes %}
+                            <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
+                            {% endif %}
+                            <div class="mb-2">
+                                {% for label in task.local_labels.all %}
+                                <span class="badge label-badge" style="background-color: {{ label.color }};">
+                                    {{ label.name }}
+                                    <i class="bi bi-x" onclick="removeLabel('{{ task.task_id }}', {{ label.id }})" style="cursor: pointer;"></i>
+                                </span>
+                                {% endfor %}
                             </div>
+                            <small class="text-muted">
+                                <i class="bi bi-folder"></i> {{ task.task_list.title }}
+                                {% if task.due_date %}
+                                | <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div>
+                            <span class="badge {% if task.status == 'completed' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ task.get_status_display }}
+                            </span>
                         </div>
                     </div>
-                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> No tasks found.
+                {% if has_credentials %}
+                Click "Sync Now" to fetch your tasks.
                 {% else %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> No tasks found. 
-                        {% if has_credentials %}
-                        Click "Sync Now" to fetch your tasks.
-                        {% else %}
-                        Please authenticate with Google to sync your tasks.
-                        {% endif %}
-                    </div>
+                Please authenticate with Google to sync your tasks.
                 {% endif %}
             </div>
-        </div>
+        {% endif %}
     </div>
 
     <div class="modal fade" id="createLabelModal" tabindex="-1">
