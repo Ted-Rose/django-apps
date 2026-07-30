@@ -163,6 +163,7 @@
             </div>
             {% endfor %}
         {% else %}
+            {% if not completed_tasks %}
             <div class="alert alert-info">
                 <i class="bi bi-info-circle"></i> No tasks found.
                 {% if has_credentials %}
@@ -171,6 +172,56 @@
                 Please authenticate with Google to sync your tasks.
                 {% endif %}
             </div>
+            {% endif %}
+        {% endif %}
+
+        {% if completed_tasks %}
+        <div class="mt-2">
+            <button class="btn btn-link text-muted text-decoration-none ps-0"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#completedTasksCollapse"
+                    aria-expanded="false">
+                <i class="bi bi-chevron-right" id="completedChevron"></i>
+                Completed tasks ({{ completed_tasks.count }})
+            </button>
+            <div class="collapse" id="completedTasksCollapse">
+                <div class="mt-2">
+                    {% for task in completed_tasks %}
+                    <div class="card task-card mb-2 border-0 bg-light" data-task-id="{{ task.task_id }}">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="flex-grow-1">
+                                    <span class="text-decoration-line-through text-muted">
+                                        <span class="star-btn {% if task.is_starred %}starred{% endif %} me-1" onclick="toggleStar('{{ task.task_id }}')">
+                                            <i class="bi bi-star{% if task.is_starred %}-fill{% endif %}"></i>
+                                        </span>
+                                        {{ task.title }}
+                                    </span>
+                                    {% if task.local_labels.exists %}
+                                    <span class="ms-2">
+                                        {% for label in task.local_labels.all %}
+                                        <span class="badge label-badge" style="background-color: {{ label.color }}; opacity: 0.7;">
+                                            {{ label.name }}
+                                        </span>
+                                        {% endfor %}
+                                    </span>
+                                    {% endif %}
+                                    <small class="text-muted ms-2">
+                                        <i class="bi bi-folder"></i> {{ task.task_list.title }}
+                                        {% if task.completed %}
+                                        · {{ task.completed|date:"M d" }}
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <span class="badge bg-success ms-2">Completed</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
         {% endif %}
     </div>
 
@@ -259,6 +310,20 @@
                 if (data.success) {
                     location.reload();
                 }
+            });
+        }
+
+        const completedCollapse = document.getElementById('completedTasksCollapse');
+        if (completedCollapse) {
+            completedCollapse.addEventListener('show.bs.collapse', () => {
+                document.getElementById('completedChevron').classList.replace(
+                    'bi-chevron-right', 'bi-chevron-down'
+                );
+            });
+            completedCollapse.addEventListener('hide.bs.collapse', () => {
+                document.getElementById('completedChevron').classList.replace(
+                    'bi-chevron-down', 'bi-chevron-right'
+                );
             });
         }
 

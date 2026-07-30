@@ -33,6 +33,9 @@ def dashboard(request):
     if label_filter:
         tasks = tasks.filter(local_labels__id=label_filter)
 
+    active_tasks = tasks.filter(status='needsAction')
+    completed_tasks = tasks.filter(status='completed')
+
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
 
@@ -43,7 +46,8 @@ def dashboard(request):
         ).values_list('title', flat=True).first()
 
     context = {
-        'tasks': tasks,
+        'tasks': active_tasks,
+        'completed_tasks': completed_tasks,
         'task_lists': task_lists,
         'labels': labels,
         'selected_list': task_list_filter,
