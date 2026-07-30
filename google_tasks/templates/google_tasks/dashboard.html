@@ -67,7 +67,7 @@
             </button>
             <ul class="dropdown-menu">
                 <li>
-                    <a class="dropdown-item {% if not selected_list %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}{% if selected_label %}?label={{ selected_label }}{% endif %}">
+                    <a class="dropdown-item {% if not selected_list %}active{% endif %}" href="#" onclick="selectList(null); return false;">
                         <i class="bi bi-list-task"></i> All Tasks
                     </a>
                 </li>
@@ -80,7 +80,7 @@
                 <li><hr class="dropdown-divider"></li>
                 {% for list in task_lists %}
                 <li>
-                    <a class="dropdown-item {% if selected_list == list.list_id %}active{% endif %}" href="?list={{ list.list_id }}{% if selected_label %}&label={{ selected_label }}{% endif %}">
+                    <a class="dropdown-item {% if selected_list == list.list_id %}active{% endif %}" href="#" onclick="selectList('{{ list.list_id }}'); return false;">
                         <i class="bi bi-folder"></i> {{ list.title }}
                     </a>
                 </li>
@@ -89,18 +89,21 @@
             </ul>
         </div>
 
-        <!-- Label dropdown -->
+        <!-- Label dropdown (multi-select, stays open) -->
         <div class="dropdown">
-            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                {% if selected_label %}
-                    {% for label in labels %}{% if label.id|stringformat:'s' == selected_label %}<span class="badge me-1" style="background-color:{{ label.color }};">{{ label.name }}</span>{% endif %}{% endfor %}
+            <button class="btn btn-sm dropdown-toggle {% if selected_labels %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                    type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                {% if selected_labels|length == 1 %}
+                    {% for label in labels %}{% if label.id|stringformat:'s' in selected_labels %}<span class="badge me-1" style="background-color:{{ label.color }}; color:#fff;">{{ label.name }}</span>{% endif %}{% endfor %}
+                {% elif selected_labels|length > 1 %}
+                    <i class="bi bi-tags"></i> {{ selected_labels|length }} labels
                 {% else %}
                     <i class="bi bi-tag"></i> All Labels
                 {% endif %}
             </button>
             <ul class="dropdown-menu">
                 <li>
-                    <a class="dropdown-item {% if not selected_label %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}{% if selected_list %}?list={{ selected_list }}{% endif %}">
+                    <a class="dropdown-item {% if not selected_labels %}active{% endif %}" href="#" onclick="clearLabels(); return false;">
                         <i class="bi bi-tag"></i> All Labels
                     </a>
                 </li>
@@ -108,8 +111,10 @@
                 <li><hr class="dropdown-divider"></li>
                 {% for label in labels %}
                 <li>
-                    <a class="dropdown-item {% if selected_label == label.id|stringformat:'s' %}active{% endif %}" href="?label={{ label.id }}{% if selected_list %}&list={{ selected_list }}{% endif %}">
-                        <span class="badge me-1" style="background-color: {{ label.color }};">{{ label.name }}</span>
+                    <a class="dropdown-item d-flex align-items-center gap-2 {% if label.id|stringformat:'s' in selected_labels %}active{% endif %}"
+                       href="#" onclick="toggleLabel({{ label.id }}); return false;">
+                        <i class="bi {% if label.id|stringformat:'s' in selected_labels %}bi-check-square-fill{% else %}bi-square{% endif %}"></i>
+                        <span class="badge" style="background-color: {{ label.color }};">{{ label.name }}</span>
                     </a>
                 </li>
                 {% endfor %}
@@ -311,6 +316,34 @@
                     location.reload();
                 }
             });
+        }
+
+        function toggleLabel(labelId) {
+            const params = new URLSearchParams(window.location.search);
+            const labels = params.getAll('label');
+            params.delete('label');
+            const idx = labels.indexOf(String(labelId));
+            if (idx > -1) {
+                labels.splice(idx, 1);
+            } else {
+                labels.push(String(labelId));
+            }
+            labels.forEach(id => params.append('label', id));
+            window.location.href = '?' + params.toString();
+        }
+
+        function selectList(listId) {
+            const params = new URLSearchParams(window.location.search);
+            params.delete('list');
+            params.delete('sync');
+            if (listId) params.set('list', listId);
+            window.location.href = '?' + params.toString();
+        }
+
+        function clearLabels() {
+            const params = new URLSearchParams(window.location.search);
+            params.delete('label');
+            window.location.href = '?' + params.toString();
         }
 
         const completedCollapse = document.getElementById('completedTasksCollapse');

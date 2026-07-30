@@ -23,7 +23,7 @@ def dashboard(request):
             return redirect(result['authorization_url'])
 
     task_list_filter = request.GET.get('list')
-    label_filter = request.GET.get('label')
+    label_filter = request.GET.getlist('label')
 
     tasks = GoogleTask.objects.filter(user=request.user)
 
@@ -31,7 +31,9 @@ def dashboard(request):
         tasks = tasks.filter(task_list__list_id=task_list_filter)
 
     if label_filter:
-        tasks = tasks.filter(local_labels__id=label_filter)
+        tasks = tasks.filter(
+            local_labels__id__in=label_filter
+        ).distinct()
 
     active_tasks = tasks.filter(status='needsAction')
     completed_tasks = tasks.filter(status='completed')
@@ -52,7 +54,7 @@ def dashboard(request):
         'labels': labels,
         'selected_list': task_list_filter,
         'selected_list_title': selected_list_title,
-        'selected_label': label_filter,
+        'selected_labels': label_filter,
         'has_credentials': bool(creds),
     }
 
