@@ -13,6 +13,11 @@ urlpatterns = [
         views.toggle_star,
         name='toggle_star'
     ),
+    path(
+        'task/<str:task_id>/complete/',
+        views.complete_task_view,
+        name='complete_task'
+    ),
     path('task/<str:task_id>/add-label/', views.add_label, name='add_label'),
     path(
         'task/<str:task_id>/remove-label/<int:label_id>/',

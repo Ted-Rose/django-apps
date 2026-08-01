@@ -162,3 +162,46 @@ def sync_all(user, creds):
         return tasks_result
 
     return tasks_result
+
+
+def complete_task(user, creds, task_id):
+    """
+    Mark a task as completed in Google Tasks API.
+    Returns True on success, or auth dict if reauth needed.
+    """
+    try:
+        service = get_tasks_service(creds)
+
+        if isinstance(service, dict) and 'authorization_url' in service:
+            return service
+
+        task = GoogleTask.objects.get(user=user, task_id=task_id)
+
+        task_body = {
+            'id': task.task_id,
+            'status': 'completed'
+        }
+
+        service.tasks().patch(
+            tasklist=task.task_list.list_id,
+            task=task.task_id,
+            body=task_body
+        ).execute()
+
+        task.status = 'completed'
+        task.completed = timezone.now()
+        task.save()
+
+        logger.info(
+            f'Completed task {task_id} for user {user.username}'
+        )
+        return True
+
+    except HttpError as error:
+        logger.error(f'Error completing task: {error}')
+        return False
+    except GoogleTask.DoesNotExist:
+        logger.error(
+            f'Task {task_id} not found for user {user.username}'
+        )
+        return False
