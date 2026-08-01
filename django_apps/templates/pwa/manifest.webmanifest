@@ -1,0 +1,38 @@
+{% load static %}{
+  "name": "Tedis Tools",
+  "short_name": "Tedis Tools",
+  "description": "A collection of useful tools: Google Tasks, Gmail, TV archive, Bible audio and more.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#007bff",
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "{% static 'pwa/icons/icon.svg' %}",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "{% static 'pwa/icons/icon-192.png' %}",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "{% static 'pwa/icons/icon-512.png' %}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "{% static 'pwa/icons/icon-maskable-512.png' %}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
