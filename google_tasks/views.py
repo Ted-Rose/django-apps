@@ -209,13 +209,26 @@ def sync_view(request):
 @require_POST
 def complete_task_view(request, task_id):
     """Mark a task as completed."""
+    import logging
+    logger = logging.getLogger('django')
+
+    logger.info(
+        f'complete_task_view called by user {request.user.username} '
+        f'for task {task_id}'
+    )
+
     creds = request.session.get('google_credentials')
 
     if not creds:
+        logger.error(
+            f'No credentials found for user {request.user.username}'
+        )
         return JsonResponse({
             'success': False,
             'error': 'No credentials found'
         }, status=401)
+
+    logger.info(f'Credentials found: {bool(creds)}')
 
     get_object_or_404(
         GoogleTask,
@@ -226,6 +239,7 @@ def complete_task_view(request, task_id):
     result = complete_task(request.user, creds, task_id)
 
     if isinstance(result, dict) and 'authorization_url' in result:
+        logger.warning('Reauth required, returning authorization URL')
         request.session['state'] = result['state']
         request.session['oauth_scopes'] = result.get('scopes', [])
         request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
@@ -236,11 +250,13 @@ def complete_task_view(request, task_id):
         })
 
     if result:
+        logger.info(f'Task {task_id} completed successfully')
         return JsonResponse({
             'success': True,
             'task_id': task_id
         })
     else:
+        logger.error(f'Failed to complete task {task_id}')
         return JsonResponse({
             'success': False,
             'error': 'Failed to complete task'
@@ -251,13 +267,26 @@ def complete_task_view(request, task_id):
 @require_POST
 def uncomplete_task_view(request, task_id):
     """Mark a task as not completed (needsAction)."""
+    import logging
+    logger = logging.getLogger('django')
+
+    logger.info(
+        f'uncomplete_task_view called by user {request.user.username} '
+        f'for task {task_id}'
+    )
+
     creds = request.session.get('google_credentials')
 
     if not creds:
+        logger.error(
+            f'No credentials found for user {request.user.username}'
+        )
         return JsonResponse({
             'success': False,
             'error': 'No credentials found'
         }, status=401)
+
+    logger.info(f'Credentials found: {bool(creds)}')
 
     get_object_or_404(
         GoogleTask,
@@ -268,6 +297,7 @@ def uncomplete_task_view(request, task_id):
     result = uncomplete_task(request.user, creds, task_id)
 
     if isinstance(result, dict) and 'authorization_url' in result:
+        logger.warning('Reauth required, returning authorization URL')
         request.session['state'] = result['state']
         request.session['oauth_scopes'] = result.get('scopes', [])
         request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
@@ -278,11 +308,13 @@ def uncomplete_task_view(request, task_id):
         })
 
     if result:
+        logger.info(f'Task {task_id} uncompleted successfully')
         return JsonResponse({
             'success': True,
             'task_id': task_id
         })
     else:
+        logger.error(f'Failed to uncomplete task {task_id}')
         return JsonResponse({
             'success': False,
             'error': 'Failed to uncomplete task'

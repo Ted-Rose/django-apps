@@ -512,6 +512,9 @@
                             location.reload();
                         }, 300);
                     }
+                } else if (data.reauth_required) {
+                    completeTaskModalInstance.hide();
+                    window.location.href = data.authorization_url;
                 } else {
                     alert('Failed to complete task: ' + 
                         (data.error || 'Unknown error'));
@@ -554,6 +557,9 @@
                             location.reload();
                         }, 300);
                     }
+                } else if (data.reauth_required) {
+                    uncompleteTaskModalInstance.hide();
+                    window.location.href = data.authorization_url;
                 } else {
                     alert('Failed to uncomplete task: ' + 
                         (data.error || 'Unknown error'));

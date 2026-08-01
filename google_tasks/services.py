@@ -16,12 +16,19 @@ def get_tasks_service(creds):
     Build Google Tasks API service with proper authentication.
     Returns service object or auth dict if reauth is needed.
     """
+    logger.info(f'get_tasks_service called with creds type: {type(creds)}')
     scopes = [TASKS_SCOPE]
+    logger.info(f'Requesting scopes: {scopes}')
+
     credentials = google_auth(creds, scopes)
 
     if isinstance(credentials, dict) and 'authorization_url' in credentials:
+        logger.warning(
+            'google_auth returned authorization_url, reauth needed'
+        )
         return credentials
 
+    logger.info('Successfully obtained credentials, building service')
     return build('tasks', 'v1', credentials=credentials)
 
 
@@ -169,40 +176,67 @@ def complete_task(user, creds, task_id):
     Mark a task as completed in Google Tasks API.
     Returns True on success, or auth dict if reauth needed.
     """
+    logger.info(
+        f'Attempting to complete task {task_id} for user {user.username}'
+    )
     try:
         service = get_tasks_service(creds)
 
         if isinstance(service, dict) and 'authorization_url' in service:
+            logger.warning(
+                f'Reauth required for user {user.username} '
+                f'when completing task {task_id}'
+            )
             return service
 
         task = GoogleTask.objects.get(user=user, task_id=task_id)
+        logger.info(
+            f'Found task: {task.title} in list {task.task_list.list_id}'
+        )
 
         task_body = {
             'id': task.task_id,
             'status': 'completed'
         }
 
-        service.tasks().patch(
+        logger.info(
+            f'Calling Google API to complete task {task_id} '
+            f'in tasklist {task.task_list.list_id}'
+        )
+        response = service.tasks().patch(
             tasklist=task.task_list.list_id,
             task=task.task_id,
             body=task_body
         ).execute()
+        logger.info(f'Google API response: {response}')
 
         task.status = 'completed'
         task.completed = timezone.now()
         task.save()
 
         logger.info(
-            f'Completed task {task_id} for user {user.username}'
+            f'Successfully completed task {task_id} '
+            f'for user {user.username}'
         )
         return True
 
     except HttpError as error:
-        logger.error(f'Error completing task: {error}')
+        logger.error(
+            f'HttpError completing task {task_id}: '
+            f'Status={error.resp.status}, '
+            f'Reason={error.resp.reason}, '
+            f'Content={error.content}'
+        )
         return False
     except GoogleTask.DoesNotExist:
         logger.error(
             f'Task {task_id} not found for user {user.username}'
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f'Unexpected error completing task {task_id}: '
+            f'{type(e).__name__}: {str(e)}'
         )
         return False
 
@@ -212,39 +246,67 @@ def uncomplete_task(user, creds, task_id):
     Mark a task as not completed (needsAction) in Google Tasks API.
     Returns True on success, or auth dict if reauth needed.
     """
+    logger.info(
+        f'Attempting to uncomplete task {task_id} '
+        f'for user {user.username}'
+    )
     try:
         service = get_tasks_service(creds)
 
         if isinstance(service, dict) and 'authorization_url' in service:
+            logger.warning(
+                f'Reauth required for user {user.username} '
+                f'when uncompleting task {task_id}'
+            )
             return service
 
         task = GoogleTask.objects.get(user=user, task_id=task_id)
+        logger.info(
+            f'Found task: {task.title} in list {task.task_list.list_id}'
+        )
 
         task_body = {
             'id': task.task_id,
             'status': 'needsAction'
         }
 
-        service.tasks().patch(
+        logger.info(
+            f'Calling Google API to uncomplete task {task_id} '
+            f'in tasklist {task.task_list.list_id}'
+        )
+        response = service.tasks().patch(
             tasklist=task.task_list.list_id,
             task=task.task_id,
             body=task_body
         ).execute()
+        logger.info(f'Google API response: {response}')
 
         task.status = 'needsAction'
         task.completed = None
         task.save()
 
         logger.info(
-            f'Uncompleted task {task_id} for user {user.username}'
+            f'Successfully uncompleted task {task_id} '
+            f'for user {user.username}'
         )
         return True
 
     except HttpError as error:
-        logger.error(f'Error uncompleting task: {error}')
+        logger.error(
+            f'HttpError uncompleting task {task_id}: '
+            f'Status={error.resp.status}, '
+            f'Reason={error.resp.reason}, '
+            f'Content={error.content}'
+        )
         return False
     except GoogleTask.DoesNotExist:
         logger.error(
             f'Task {task_id} not found for user {user.username}'
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f'Unexpected error uncompleting task {task_id}: '
+            f'{type(e).__name__}: {str(e)}'
         )
         return False

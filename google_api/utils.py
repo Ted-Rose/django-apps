@@ -71,6 +71,8 @@ def google_auth(creds=None, scopes=None):
     if scopes is None:
         scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
     scopes = list(set(scopes) | set(BASE_SCOPES))
+    logger.info(f'google_auth called with scopes: {scopes}')
+
     client_secrets_path = getattr(
         settings, 'GOOGLE_APP_SECRETS_PATH',
         os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),
@@ -85,9 +87,18 @@ def google_auth(creds=None, scopes=None):
     if creds:
         granted_scopes = set(creds.get('scopes', []))
         required_scopes = set(scopes)
+        logger.info(f'Granted scopes: {granted_scopes}')
+        logger.info(f'Required scopes: {required_scopes}')
+
         if not required_scopes.issubset(granted_scopes):
+            logger.warning(
+                f'Missing scopes: '
+                f'{required_scopes - granted_scopes}. '
+                f'Reauth required.'
+            )
             creds = None
         else:
+            logger.info('All required scopes are granted')
             creds = Credentials(
                 token=creds['token'],
                 refresh_token=creds['refresh_token'],
