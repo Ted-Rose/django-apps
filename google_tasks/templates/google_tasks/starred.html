@@ -58,6 +58,15 @@
         .complete-btn:hover {
             color: #28a745;
         }
+        .uncomplete-btn {
+            cursor: pointer;
+            font-size: 1rem;
+            color: #6c757d;
+            transition: color 0.2s ease;
+        }
+        .uncomplete-btn:hover {
+            color: #007bff;
+        }
     </style>
 </head>
 <body>
@@ -127,7 +136,12 @@
                                     </small>
                                 </div>
                             </div>
-                            <div class="ms-2">
+                            <div class="ms-2 d-flex align-items-center gap-2">
+                                {% if task.status == 'completed' %}
+                                <span class="uncomplete-btn" onclick="showUncompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')" title="Mark as not completed">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </span>
+                                {% endif %}
                                 <span class="badge {% if task.status == 'completed' %}bg-success{% else %}bg-secondary{% endif %}">
                                     {{ task.get_status_display }}
                                 </span>
@@ -166,6 +180,27 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-success" onclick="completeTask()">
                         <i class="bi bi-check-circle"></i> Complete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="uncompleteTaskModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Mark as Not Completed</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to mark this task as not completed?</p>
+                    <p class="fw-bold" id="uncompleteTaskTitle"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="uncompleteTask()">
+                        <i class="bi bi-arrow-counterclockwise"></i> Mark as Not Completed
                     </button>
                 </div>
             </div>
@@ -247,6 +282,7 @@
 
         let currentTaskId = null;
         let completeTaskModalInstance = null;
+        let uncompleteTaskModalInstance = null;
 
         function showCompleteModal(taskId, taskTitle) {
             currentTaskId = taskId;
@@ -262,6 +298,22 @@
                 );
             }
             completeTaskModalInstance.show();
+        }
+
+        function showUncompleteModal(taskId, taskTitle) {
+            currentTaskId = taskId;
+            document.getElementById('uncompleteTaskTitle').textContent = 
+                taskTitle;
+            
+            const modalElement = document.getElementById(
+                'uncompleteTaskModal'
+            );
+            if (!uncompleteTaskModalInstance) {
+                uncompleteTaskModalInstance = new bootstrap.Modal(
+                    modalElement
+                );
+            }
+            uncompleteTaskModalInstance.show();
         }
 
         function completeTask() {
@@ -303,6 +355,50 @@
                 console.error('Error:', error);
                 alert('An error occurred while completing the task');
                 completeTaskModalInstance.hide();
+            });
+        }
+
+        function uncompleteTask() {
+            if (!currentTaskId) return;
+            
+            const csrftoken = getCookie('csrftoken');
+            const taskId = currentTaskId;
+            
+            fetch(`/tasks/task/${taskId}/uncomplete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    uncompleteTaskModalInstance.hide();
+                    
+                    const taskCard = document.querySelector(
+                        `[data-task-id="${taskId}"]`
+                    );
+                    if (taskCard) {
+                        taskCard.style.transition = 
+                            'opacity 0.3s ease';
+                        taskCard.style.opacity = '0';
+                        setTimeout(() => {
+                            location.reload();
+                        }, 300);
+                    }
+                } else {
+                    alert('Failed to uncomplete task: ' + 
+                        (data.error || 'Unknown error'));
+                    uncompleteTaskModalInstance.hide();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(
+                    'An error occurred while uncompleting the task'
+                );
+                uncompleteTaskModalInstance.hide();
             });
         }
     </script>

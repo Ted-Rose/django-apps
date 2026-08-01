@@ -5,7 +5,11 @@ from django.db.models import F
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
-from google_tasks.services import sync_all, complete_task
+from google_tasks.services import (
+    sync_all,
+    complete_task,
+    uncomplete_task
+)
 
 
 @login_required
@@ -240,4 +244,46 @@ def complete_task_view(request, task_id):
         return JsonResponse({
             'success': False,
             'error': 'Failed to complete task'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def uncomplete_task_view(request, task_id):
+    """Mark a task as not completed (needsAction)."""
+    creds = request.session.get('google_credentials')
+
+    if not creds:
+        return JsonResponse({
+            'success': False,
+            'error': 'No credentials found'
+        }, status=401)
+
+    get_object_or_404(
+        GoogleTask,
+        task_id=task_id,
+        user=request.user
+    )
+
+    result = uncomplete_task(request.user, creds, task_id)
+
+    if isinstance(result, dict) and 'authorization_url' in result:
+        request.session['state'] = result['state']
+        request.session['oauth_scopes'] = result.get('scopes', [])
+        request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
+        return JsonResponse({
+            'success': False,
+            'reauth_required': True,
+            'authorization_url': result['authorization_url']
+        })
+
+    if result:
+        return JsonResponse({
+            'success': True,
+            'task_id': task_id
+        })
+    else:
+        return JsonResponse({
+            'success': False,
+            'error': 'Failed to uncomplete task'
         }, status=500)

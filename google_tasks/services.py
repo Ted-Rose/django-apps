@@ -205,3 +205,46 @@ def complete_task(user, creds, task_id):
             f'Task {task_id} not found for user {user.username}'
         )
         return False
+
+
+def uncomplete_task(user, creds, task_id):
+    """
+    Mark a task as not completed (needsAction) in Google Tasks API.
+    Returns True on success, or auth dict if reauth needed.
+    """
+    try:
+        service = get_tasks_service(creds)
+
+        if isinstance(service, dict) and 'authorization_url' in service:
+            return service
+
+        task = GoogleTask.objects.get(user=user, task_id=task_id)
+
+        task_body = {
+            'id': task.task_id,
+            'status': 'needsAction'
+        }
+
+        service.tasks().patch(
+            tasklist=task.task_list.list_id,
+            task=task.task_id,
+            body=task_body
+        ).execute()
+
+        task.status = 'needsAction'
+        task.completed = None
+        task.save()
+
+        logger.info(
+            f'Uncompleted task {task_id} for user {user.username}'
+        )
+        return True
+
+    except HttpError as error:
+        logger.error(f'Error uncompleting task: {error}')
+        return False
+    except GoogleTask.DoesNotExist:
+        logger.error(
+            f'Task {task_id} not found for user {user.username}'
+        )
+        return False
