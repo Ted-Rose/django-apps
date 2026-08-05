@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import F
 
 
 class GoogleTaskList(models.Model):
@@ -47,9 +48,17 @@ class GoogleTask(models.Model):
     updated = models.DateTimeField(null=True, blank=True)
     is_starred = models.BooleanField(default=False)
     starred_order = models.PositiveIntegerField(null=True, blank=True)
+    task_order = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Manual ordering within task list'
+    )
 
     class Meta:
-        ordering = ['-updated']
+        ordering = [
+            F('task_order').asc(nulls_last=True),
+            '-updated'
+        ]
         unique_together = ['user', 'task_id']
 
     def __str__(self):

@@ -168,6 +168,44 @@ def reorder_starred(request):
 
 @login_required
 @require_POST
+def reorder_tasks(request):
+    """Save manual ordering of tasks."""
+    try:
+        data = json.loads(request.body)
+        ordered_ids = data.get('order', [])
+        task_list_id = data.get('task_list_id')
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse(
+            {'success': False, 'error': 'Invalid JSON'}, status=400
+        )
+
+    # Validate all tasks belong to user
+    tasks = GoogleTask.objects.filter(
+        task_id__in=ordered_ids,
+        user=request.user
+    )
+
+    if task_list_id:
+        tasks = tasks.filter(task_list__list_id=task_list_id)
+
+    if tasks.count() != len(ordered_ids):
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid task IDs'
+        }, status=400)
+
+    # Update order
+    for position, task_id in enumerate(ordered_ids):
+        GoogleTask.objects.filter(
+            task_id=task_id,
+            user=request.user
+        ).update(task_order=position)
+
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
 def toggle_star(request, task_id):
     """Toggle the starred status of a task."""
     task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
