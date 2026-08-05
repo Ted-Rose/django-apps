@@ -9,13 +9,13 @@ def copy_starred_order_to_task_order(apps, schema_editor):
     starred_order but no task_order.
     """
     GoogleTask = apps.get_model('google_tasks', 'GoogleTask')
-    
+
     # Update tasks that have starred_order but no task_order
     tasks_to_update = GoogleTask.objects.filter(
         starred_order__isnull=False,
         task_order__isnull=True
     )
-    
+
     for task in tasks_to_update:
         task.task_order = task.starred_order
         task.save(update_fields=['task_order'])
@@ -26,12 +26,12 @@ def reverse_copy(apps, schema_editor):
     Reverse migration: copy task_order back to starred_order.
     """
     GoogleTask = apps.get_model('google_tasks', 'GoogleTask')
-    
+
     tasks_to_update = GoogleTask.objects.filter(
         task_order__isnull=False,
         starred_order__isnull=True
     )
-    
+
     for task in tasks_to_update:
         task.starred_order = task.task_order
         task.save(update_fields=['starred_order'])
@@ -40,7 +40,10 @@ def reverse_copy(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('google_tasks', '0004_alter_googletask_options_googletask_task_order'),
+        (
+            'google_tasks',
+            '0004_alter_googletask_options_googletask_task_order'
+        ),
     ]
 
     operations = [
@@ -57,7 +60,9 @@ class Migration(migrations.Migration):
             name='task_order',
             field=models.PositiveIntegerField(
                 blank=True,
-                help_text='Manual ordering for tasks (replaces starred_order)',
+                help_text=(
+                    'Manual ordering for tasks (replaces starred_order)'
+                ),
                 null=True
             ),
         ),
