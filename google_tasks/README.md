@@ -83,7 +83,8 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 ### Task Synchronization
 **Sync Process** (`sync_all` in services.py):
 1. Sync task lists from Google (up to 100 lists)
-2. For each list, sync all tasks (up to 100 per list)
+2. For each list, sync all tasks using pagination (fetches all tasks
+   regardless of count)
 3. Updates existing tasks or creates new ones
 4. Preserves local-only fields (is_starred, starred_order)
 

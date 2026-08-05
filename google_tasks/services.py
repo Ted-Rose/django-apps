@@ -104,36 +104,45 @@ def sync_tasks(user, creds, task_list_id=None):
         total_synced = 0
 
         for task_list in task_lists:
-            results = service.tasks().list(
-                tasklist=task_list.list_id,
-                maxResults=100,
-                showCompleted=True,
-                showHidden=True
-            ).execute()
+            page_token = None
+            while True:
+                results = service.tasks().list(
+                    tasklist=task_list.list_id,
+                    maxResults=100,
+                    showCompleted=True,
+                    showHidden=True,
+                    pageToken=page_token
+                ).execute()
 
-            tasks = results.get('items', [])
+                tasks = results.get('items', [])
 
-            for task_data in tasks:
-                task, created = GoogleTask.objects.update_or_create(
-                    user=user,
-                    task_id=task_data['id'],
-                    defaults={
-                        'task_list': task_list,
-                        'title': task_data.get('title', 'Untitled'),
-                        'notes': task_data.get('notes', ''),
-                        'due_date': parse_datetime(
-                            task_data.get('due')
-                        ),
-                        'status': task_data.get('status', 'needsAction'),
-                        'completed': parse_datetime(
-                            task_data.get('completed')
-                        ),
-                        'updated': parse_datetime(
-                            task_data.get('updated')
-                        ),
-                    }
-                )
-                total_synced += 1
+                for task_data in tasks:
+                    task, created = GoogleTask.objects.update_or_create(
+                        user=user,
+                        task_id=task_data['id'],
+                        defaults={
+                            'task_list': task_list,
+                            'title': task_data.get('title', 'Untitled'),
+                            'notes': task_data.get('notes', ''),
+                            'due_date': parse_datetime(
+                                task_data.get('due')
+                            ),
+                            'status': task_data.get(
+                                'status', 'needsAction'
+                            ),
+                            'completed': parse_datetime(
+                                task_data.get('completed')
+                            ),
+                            'updated': parse_datetime(
+                                task_data.get('updated')
+                            ),
+                        }
+                    )
+                    total_synced += 1
+
+                page_token = results.get('nextPageToken')
+                if not page_token:
+                    break
 
         logger.info(
             f'Synced {total_synced} tasks for user {user.username}'
