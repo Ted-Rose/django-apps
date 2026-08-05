@@ -40,11 +40,11 @@ def dashboard(request):
     # Apply ordering
     if order_by == 'order_desc':
         active_tasks = active_tasks.order_by(
-            F('starred_order').desc(nulls_last=True), '-updated'
+            F('task_order').desc(nulls_last=True), '-updated'
         )
     elif order_by == 'order_asc':
         active_tasks = active_tasks.order_by(
-            F('starred_order').asc(nulls_last=True), 'updated'
+            F('task_order').asc(nulls_last=True), 'updated'
         )
     elif order_by == 'created_desc':
         active_tasks = active_tasks.order_by('-updated')
@@ -103,11 +103,11 @@ def starred_tasks(request):
     # Apply ordering
     if order_by == 'order_desc':
         active_tasks = active_tasks.order_by(
-            F('starred_order').desc(nulls_last=True), '-updated'
+            F('task_order').desc(nulls_last=True), '-updated'
         )
     elif order_by == 'order_asc':
         active_tasks = active_tasks.order_by(
-            F('starred_order').asc(nulls_last=True), 'updated'
+            F('task_order').asc(nulls_last=True), 'updated'
         )
     elif order_by == 'created_desc':
         active_tasks = active_tasks.order_by('-updated')
@@ -162,6 +162,44 @@ def reorder_starred(request):
         GoogleTask.objects.filter(
             task_id=task_id, user=request.user
         ).update(starred_order=position)
+
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def reorder_tasks(request):
+    """Save manual ordering of tasks."""
+    try:
+        data = json.loads(request.body)
+        ordered_ids = data.get('order', [])
+        task_list_id = data.get('task_list_id')
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse(
+            {'success': False, 'error': 'Invalid JSON'}, status=400
+        )
+
+    # Validate all tasks belong to user
+    tasks = GoogleTask.objects.filter(
+        task_id__in=ordered_ids,
+        user=request.user
+    )
+
+    if task_list_id:
+        tasks = tasks.filter(task_list__list_id=task_list_id)
+
+    if tasks.count() != len(ordered_ids):
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid task IDs'
+        }, status=400)
+
+    # Update order
+    for position, task_id in enumerate(ordered_ids):
+        GoogleTask.objects.filter(
+            task_id=task_id,
+            user=request.user
+        ).update(task_order=position)
 
     return JsonResponse({'success': True})
 
