@@ -50,7 +50,7 @@ class GoogleTask(models.Model):
     task_order = models.PositiveIntegerField(
         null=True,
         blank=True,
-        help_text='Manual ordering within task list'
+        help_text='Manual ordering for tasks (replaces starred_order)'
     )
 
     class Meta:
