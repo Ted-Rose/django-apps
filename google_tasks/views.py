@@ -40,11 +40,11 @@ def dashboard(request):
     # Apply ordering
     if order_by == 'order_desc':
         active_tasks = active_tasks.order_by(
-            F('starred_order').desc(nulls_last=True), '-updated'
+            F('task_order').desc(nulls_last=True), '-updated'
         )
     elif order_by == 'order_asc':
         active_tasks = active_tasks.order_by(
-            F('starred_order').asc(nulls_last=True), 'updated'
+            F('task_order').asc(nulls_last=True), 'updated'
         )
     elif order_by == 'created_desc':
         active_tasks = active_tasks.order_by('-updated')
@@ -103,11 +103,11 @@ def starred_tasks(request):
     # Apply ordering
     if order_by == 'order_desc':
         active_tasks = active_tasks.order_by(
-            F('starred_order').desc(nulls_last=True), '-updated'
+            F('task_order').desc(nulls_last=True), '-updated'
         )
     elif order_by == 'order_asc':
         active_tasks = active_tasks.order_by(
-            F('starred_order').asc(nulls_last=True), 'updated'
+            F('task_order').asc(nulls_last=True), 'updated'
         )
     elif order_by == 'created_desc':
         active_tasks = active_tasks.order_by('-updated')
