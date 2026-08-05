@@ -68,6 +68,8 @@ def dashboard(request):
 @login_required
 def starred_tasks(request):
     """View showing only starred tasks."""
+    creds = request.session.get('google_credentials')
+
     tasks = GoogleTask.objects.filter(
         user=request.user, is_starred=True
     ).order_by(F('starred_order').asc(nulls_last=True), '-updated')
@@ -76,12 +78,17 @@ def starred_tasks(request):
 
     context = {
         'tasks': tasks,
+        'completed_tasks': [],
         'task_lists': task_lists,
         'labels': labels,
+        'selected_list': None,
+        'selected_list_title': None,
+        'selected_labels': [],
+        'has_credentials': bool(creds),
         'is_starred_view': True,
     }
 
-    return render(request, 'google_tasks/starred.html', context)
+    return render(request, 'google_tasks/dashboard.html', context)
 
 
 @login_required

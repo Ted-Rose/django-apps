@@ -78,7 +78,9 @@
         <!-- View dropdown: All Tasks + Starred + Task Lists -->
         <div class="dropdown">
             <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                {% if selected_list %}
+                {% if is_starred_view %}
+                    <i class="bi bi-star-fill text-warning"></i> Starred
+                {% elif selected_list %}
                     <i class="bi bi-folder"></i> {{ selected_list_title }}
                 {% else %}
                     <i class="bi bi-list-task"></i> All Tasks
@@ -86,12 +88,12 @@
             </button>
             <ul class="dropdown-menu">
                 <li>
-                    <a class="dropdown-item {% if not selected_list %}active{% endif %}" href="#" onclick="selectList(null); return false;">
+                    <a class="dropdown-item {% if not selected_list and not is_starred_view %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}">
                         <i class="bi bi-list-task"></i> All Tasks
                     </a>
                 </li>
                 <li>
-                    <a class="dropdown-item" href="{% url 'google_tasks:starred' %}">
+                    <a class="dropdown-item {% if is_starred_view %}active{% endif %}" href="{% url 'google_tasks:starred' %}">
                         <i class="bi bi-star-fill text-warning"></i> Starred
                     </a>
                 </li>
@@ -192,11 +194,16 @@
         {% else %}
             {% if not completed_tasks %}
             <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i> No tasks found.
+                <i class="bi bi-info-circle"></i> 
+                {% if is_starred_view %}
+                No starred tasks yet. Star tasks from the main dashboard to see them here.
+                {% else %}
+                No tasks found.
                 {% if has_credentials %}
                 Click "Sync Now" to fetch your tasks.
                 {% else %}
                 Please authenticate with Google to sync your tasks.
+                {% endif %}
                 {% endif %}
             </div>
             {% endif %}
