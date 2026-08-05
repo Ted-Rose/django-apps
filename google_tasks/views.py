@@ -161,7 +161,7 @@ def reorder_starred(request):
     for position, task_id in enumerate(ordered_ids):
         GoogleTask.objects.filter(
             task_id=task_id, user=request.user
-        ).update(starred_order=position)
+        ).update(task_order=position)
 
     return JsonResponse({'success': True})
 
