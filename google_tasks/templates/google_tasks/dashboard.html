@@ -395,6 +395,13 @@
         }
 
         function toggleLabel(labelId) {
+            {% if is_starred_view %}
+            // Navigate to dashboard with label filter
+            const params = new URLSearchParams();
+            params.set('label', labelId);
+            window.location.href = 
+                '{% url "google_tasks:dashboard" %}?' + params.toString();
+            {% else %}
             const params = new URLSearchParams(window.location.search);
             const labels = params.getAll('label');
             params.delete('label');
@@ -406,20 +413,34 @@
             }
             labels.forEach(id => params.append('label', id));
             window.location.href = '?' + params.toString();
+            {% endif %}
         }
 
         function selectList(listId) {
+            {% if is_starred_view %}
+            // Navigate to dashboard with list filter
+            const params = new URLSearchParams();
+            if (listId) params.set('list', listId);
+            window.location.href = 
+                '{% url "google_tasks:dashboard" %}?' + params.toString();
+            {% else %}
             const params = new URLSearchParams(window.location.search);
             params.delete('list');
             params.delete('sync');
             if (listId) params.set('list', listId);
             window.location.href = '?' + params.toString();
+            {% endif %}
         }
 
         function clearLabels() {
+            {% if is_starred_view %}
+            // Navigate to dashboard
+            window.location.href = '{% url "google_tasks:dashboard" %}';
+            {% else %}
             const params = new URLSearchParams(window.location.search);
             params.delete('label');
             window.location.href = '?' + params.toString();
+            {% endif %}
         }
 
         const completedCollapse = document.getElementById('completedTasksCollapse');

@@ -70,15 +70,22 @@ def starred_tasks(request):
     """View showing only starred tasks."""
     creds = request.session.get('google_credentials')
 
-    tasks = GoogleTask.objects.filter(
+    starred_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_starred=True
+    )
+    active_tasks = starred_tasks_qs.filter(
+        status='needsAction'
     ).order_by(F('starred_order').asc(nulls_last=True), '-updated')
+    completed_tasks = starred_tasks_qs.filter(
+        status='completed'
+    ).order_by('-updated')
+
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
 
     context = {
-        'tasks': tasks,
-        'completed_tasks': [],
+        'tasks': active_tasks,
+        'completed_tasks': completed_tasks,
         'task_lists': task_lists,
         'labels': labels,
         'selected_list': None,
