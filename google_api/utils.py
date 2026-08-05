@@ -21,6 +21,12 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger('django')
 
+# We request tokens with include_granted_scopes='true' (incremental
+# authorization), so Google may return more scopes than this flow asked
+# for (e.g. a previously granted tasks scope). Without this, oauthlib
+# raises a Warning on the scope change and the callback fails.
+os.environ.setdefault('OAUTHLIB_RELAX_TOKEN_SCOPE', '1')
+
 BASE_SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
