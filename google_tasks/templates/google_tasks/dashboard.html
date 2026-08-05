@@ -52,10 +52,6 @@
         .star-btn.starred {
             color: #ffc107;
         }
-        .label-badge {
-            font-size: 0.75rem;
-            margin-right: 0.25rem;
-        }
         .filter-bar {
             background-color: #f8f9fa;
             border-bottom: 1px solid #dee2e6;
@@ -140,43 +136,6 @@
                 {% endif %}
             </ul>
         </div>
-
-        <!-- Label dropdown (multi-select, stays open) -->
-        <div class="dropdown">
-            <button class="btn btn-sm dropdown-toggle {% if selected_labels %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-                    type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                {% if selected_labels|length == 1 %}
-                    {% for label in labels %}{% if label.id|stringformat:'s' in selected_labels %}<span class="badge me-1" style="background-color:{{ label.color }}; color:#fff;">{{ label.name }}</span>{% endif %}{% endfor %}
-                {% elif selected_labels|length > 1 %}
-                    <i class="bi bi-tags"></i> {{ selected_labels|length }} labels
-                {% else %}
-                    <i class="bi bi-tag"></i> All Labels
-                {% endif %}
-            </button>
-            <ul class="dropdown-menu">
-                <li>
-                    <a class="dropdown-item {% if not selected_labels %}active{% endif %}" href="#" onclick="clearLabels(); return false;">
-                        <i class="bi bi-tag"></i> All Labels
-                    </a>
-                </li>
-                {% if labels %}
-                <li><hr class="dropdown-divider"></li>
-                {% for label in labels %}
-                <li>
-                    <a class="dropdown-item d-flex align-items-center gap-2 {% if label.id|stringformat:'s' in selected_labels %}active{% endif %}"
-                       href="#" onclick="toggleLabel({{ label.id }}); return false;">
-                        <i class="bi {% if label.id|stringformat:'s' in selected_labels %}bi-check-square-fill{% else %}bi-square{% endif %}"></i>
-                        <span class="badge" style="background-color: {{ label.color }};">{{ label.name }}</span>
-                    </a>
-                </li>
-                {% endfor %}
-                {% endif %}
-            </ul>
-        </div>
-
-        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#createLabelModal">
-            <i class="bi bi-plus-circle"></i> Label
-        </button>
     </div>
 
     <div class="container-fluid p-4">
@@ -216,14 +175,6 @@
                             {% if task.notes %}
                             <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
                             {% endif %}
-                            <div class="mb-2">
-                                {% for label in task.local_labels.all %}
-                                <span class="badge label-badge" style="background-color: {{ label.color }};">
-                                    {{ label.name }}
-                                    <i class="bi bi-x" onclick="removeLabel('{{ task.task_id }}', {{ label.id }})" style="cursor: pointer;"></i>
-                                </span>
-                                {% endfor %}
-                            </div>
                             <small class="text-muted">
                                 <i class="bi bi-folder"></i> {{ task.task_list.title }}
                                 {% if task.due_date %}
@@ -285,15 +236,6 @@
                                         </span>
                                         {{ task.title }}
                                     </span>
-                                    {% if task.local_labels.exists %}
-                                    <span class="ms-2">
-                                        {% for label in task.local_labels.all %}
-                                        <span class="badge label-badge" style="background-color: {{ label.color }}; opacity: 0.7;">
-                                            {{ label.name }}
-                                        </span>
-                                        {% endfor %}
-                                    </span>
-                                    {% endif %}
                                     <small class="text-muted ms-2">
                                         <i class="bi bi-folder"></i> {{ task.task_list.title }}
                                         {% if task.completed %}
@@ -315,34 +257,6 @@
             </div>
         </div>
         {% endif %}
-    </div>
-
-    <div class="modal fade" id="createLabelModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Create New Label</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="createLabelForm">
-                        {% csrf_token %}
-                        <div class="mb-3">
-                            <label for="labelName" class="form-label">Label Name</label>
-                            <input type="text" class="form-control" id="labelName" name="name" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="labelColor" class="form-label">Color</label>
-                            <input type="color" class="form-control form-control-color" id="labelColor" name="color" value="#007bff">
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="createLabel()">Create</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     {% if is_starred_view %}
@@ -442,44 +356,6 @@
             });
         }
 
-        function removeLabel(taskId, labelId) {
-            const csrftoken = getCookie('csrftoken');
-            fetch(`/tasks/task/${taskId}/remove-label/${labelId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrftoken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                }
-            });
-        }
-
-        function toggleLabel(labelId) {
-            {% if is_starred_view %}
-            // Navigate to dashboard with label filter
-            const params = new URLSearchParams();
-            params.set('label', labelId);
-            window.location.href = 
-                '{% url "google_tasks:dashboard" %}?' + params.toString();
-            {% else %}
-            const params = new URLSearchParams(window.location.search);
-            const labels = params.getAll('label');
-            params.delete('label');
-            const idx = labels.indexOf(String(labelId));
-            if (idx > -1) {
-                labels.splice(idx, 1);
-            } else {
-                labels.push(String(labelId));
-            }
-            labels.forEach(id => params.append('label', id));
-            window.location.href = '?' + params.toString();
-            {% endif %}
-        }
-
         function selectList(listId) {
             {% if is_starred_view %}
             // Navigate to dashboard with list filter
@@ -496,17 +372,6 @@
             {% endif %}
         }
 
-        function clearLabels() {
-            {% if is_starred_view %}
-            // Navigate to dashboard
-            window.location.href = '{% url "google_tasks:dashboard" %}';
-            {% else %}
-            const params = new URLSearchParams(window.location.search);
-            params.delete('label');
-            window.location.href = '?' + params.toString();
-            {% endif %}
-        }
-
         const completedCollapse = document.getElementById('completedTasksCollapse');
         if (completedCollapse) {
             completedCollapse.addEventListener('show.bs.collapse', () => {
@@ -518,25 +383,6 @@
                 document.getElementById('completedChevron').classList.replace(
                     'bi-chevron-down', 'bi-chevron-right'
                 );
-            });
-        }
-
-        function createLabel() {
-            const csrftoken = getCookie('csrftoken');
-            const formData = new FormData(document.getElementById('createLabelForm'));
-            
-            fetch('/tasks/label/create/', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrftoken
-                },
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                }
             });
         }
 

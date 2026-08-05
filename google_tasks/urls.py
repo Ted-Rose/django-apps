@@ -23,11 +23,4 @@ urlpatterns = [
         views.uncomplete_task_view,
         name='uncomplete_task'
     ),
-    path('task/<str:task_id>/add-label/', views.add_label, name='add_label'),
-    path(
-        'task/<str:task_id>/remove-label/<int:label_id>/',
-        views.remove_label,
-        name='remove_label'
-    ),
-    path('label/create/', views.create_label, name='create_label'),
 ]

@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import F
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
+from google_tasks.models import GoogleTask, GoogleTaskList
 from google_tasks.services import (
     sync_all,
     complete_task,
@@ -27,23 +27,16 @@ def dashboard(request):
             return redirect(result['authorization_url'])
 
     task_list_filter = request.GET.get('list')
-    label_filter = request.GET.getlist('label')
 
     tasks = GoogleTask.objects.filter(user=request.user)
 
     if task_list_filter:
         tasks = tasks.filter(task_list__list_id=task_list_filter)
 
-    if label_filter:
-        tasks = tasks.filter(
-            local_labels__id__in=label_filter
-        ).distinct()
-
     active_tasks = tasks.filter(status='needsAction')
     completed_tasks = tasks.filter(status='completed')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
-    labels = TaskLabel.objects.filter(user=request.user)
 
     selected_list_title = None
     if task_list_filter:
@@ -55,10 +48,8 @@ def dashboard(request):
         'tasks': active_tasks,
         'completed_tasks': completed_tasks,
         'task_lists': task_lists,
-        'labels': labels,
         'selected_list': task_list_filter,
         'selected_list_title': selected_list_title,
-        'selected_labels': label_filter,
         'has_credentials': bool(creds),
     }
 
@@ -81,16 +72,13 @@ def starred_tasks(request):
     ).order_by('-updated')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
-    labels = TaskLabel.objects.filter(user=request.user)
 
     context = {
         'tasks': active_tasks,
         'completed_tasks': completed_tasks,
         'task_lists': task_lists,
-        'labels': labels,
         'selected_list': None,
         'selected_list_title': None,
-        'selected_labels': [],
         'has_credentials': bool(creds),
         'is_starred_view': True,
     }
@@ -130,67 +118,6 @@ def toggle_star(request, task_id):
         'success': True,
         'is_starred': task.is_starred
     })
-
-
-@login_required
-@require_POST
-def add_label(request, task_id):
-    """Add a label to a task."""
-    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
-    label_id = request.POST.get('label_id')
-
-    if label_id:
-        label = get_object_or_404(
-            TaskLabel,
-            id=label_id,
-            user=request.user
-        )
-        task.local_labels.add(label)
-
-        return JsonResponse({
-            'success': True,
-            'label_name': label.name,
-            'label_color': label.color
-        })
-
-    return JsonResponse({'success': False, 'error': 'No label specified'})
-
-
-@login_required
-@require_POST
-def remove_label(request, task_id, label_id):
-    """Remove a label from a task."""
-    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
-    label = get_object_or_404(TaskLabel, id=label_id, user=request.user)
-
-    task.local_labels.remove(label)
-
-    return JsonResponse({'success': True})
-
-
-@login_required
-@require_POST
-def create_label(request):
-    """Create a new custom label."""
-    name = request.POST.get('name')
-    color = request.POST.get('color', '#007bff')
-
-    if name:
-        label, created = TaskLabel.objects.get_or_create(
-            user=request.user,
-            name=name,
-            defaults={'color': color}
-        )
-
-        return JsonResponse({
-            'success': True,
-            'label_id': label.id,
-            'label_name': label.name,
-            'label_color': label.color,
-            'created': created
-        })
-
-    return JsonResponse({'success': False, 'error': 'Name is required'})
 
 
 @login_required

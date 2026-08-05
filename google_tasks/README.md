@@ -1,51 +1,190 @@
 # Google Tasks Integration
 
-This Django app provides integration with Google Tasks API, allowing users to sync, view, and manage their Google Tasks with additional local features like starring and custom labels.
+This Django app provides integration with Google Tasks API, allowing
+users to sync, view, and manage their Google Tasks with additional
+local features like starring.
 
 ## Features
 
-- **Task Synchronization**: Sync task lists and tasks from Google Tasks API
-- **Starred Tasks**: Mark tasks as starred for quick access (local-only feature)
-- **Custom Labels**: Create and assign custom labels to tasks (local-only feature)
-- **Task Lists**: View and filter tasks by their native Google Task Lists
+- **Task Synchronization**: Sync task lists and tasks from Google
+  Tasks API
+- **Starred Tasks**: Mark tasks as starred for quick access
+  (local-only feature)
+- **Task Lists**: View and filter tasks by their native Google Task
+  Lists
 - **Bootstrap UI**: Modern, responsive interface using Bootstrap 5
+- **Drag & Drop Reordering**: Reorder starred tasks with drag-and-drop
+- **Task Completion**: Mark tasks as complete/incomplete with sync to
+  Google
 
 ## Architecture
 
 This app follows a decoupled architecture:
-- **google_api**: Handles OAuth2 authentication and provides reusable utilities
+- **google_api**: Handles OAuth2 authentication and provides reusable
+  utilities
 - **google_tasks**: Manages task-specific logic, models, and UI
+
+### Key Components
+
+- **Models** (`models.py`): Data models for task lists and tasks
+- **Services** (`services.py`): Business logic for Google Tasks API
+  integration
+- **Views** (`views.py`): Request handlers for all user interactions
+- **Templates**: Bootstrap 5-based responsive UI with AJAX
+  functionality
 
 ## Models
 
 ### GoogleTaskList
 Caches user's Google Task Lists locally.
-- `list_id`: Google's unique identifier
+- `user`: ForeignKey to User model
+- `list_id`: Google's unique identifier (unique)
 - `title`: List name
 - `updated`: Last update timestamp
-
-### TaskLabel
-Local-only custom labels/tags.
-- `name`: Label name
-- `color`: Hex color code for visual distinction
+- **Ordering**: By title alphabetically
+- **Unique constraint**: (user, list_id)
 
 ### GoogleTask
-Mirrors individual tasks from Google Tasks.
-- `task_id`: Google's unique identifier
-- `title`, `notes`: Task content
-- `due_date`, `status`, `completed`: Task metadata
-- `is_starred`: Local-only starred status
-- `local_labels`: Many-to-many relationship with TaskLabel
+Mirrors individual tasks from Google Tasks with local enhancements.
+- `user`: ForeignKey to User model
+- `task_id`: Google's unique identifier (unique)
+- `task_list`: ForeignKey to GoogleTaskList
+- `title`: Task title (max 500 chars)
+- `notes`: Task notes/description (optional)
+- `due_date`: Due date/time (optional)
+- `status`: 'needsAction' or 'completed'
+- `completed`: Completion timestamp (optional)
+- `updated`: Last update timestamp
+- `is_starred`: Local-only starred status (default: False)
+- `starred_order`: Custom ordering for starred tasks (optional)
+- **Ordering**: By updated timestamp (descending)
+- **Unique constraint**: (user, task_id)
 
 ## URL Structure
 
-- `/tasks/` - Main dashboard
-- `/tasks/starred/` - Starred tasks view
-- `/tasks/sync/` - Manual sync endpoint
-- `/tasks/task/<task_id>/toggle-star/` - Toggle star status
-- `/tasks/task/<task_id>/add-label/` - Add label to task
-- `/tasks/task/<task_id>/remove-label/<label_id>/` - Remove label
-- `/tasks/label/create/` - Create new label
+| URL Pattern | View | Method | Description |
+|------------|------|--------|-------------|
+| `/tasks/` | `dashboard` | GET | Main dashboard with all tasks |
+| `/tasks/starred/` | `starred_tasks` | GET | Starred tasks view |
+| `/tasks/starred/reorder/` | `reorder_starred` | POST | Save drag-drop order |
+| `/tasks/sync/` | `sync_view` | GET | Manual sync endpoint |
+| `/tasks/task/<task_id>/toggle-star/` | `toggle_star` | POST | Toggle star status |
+| `/tasks/task/<task_id>/complete/` | `complete_task_view` | POST | Mark task complete |
+| `/tasks/task/<task_id>/uncomplete/` | `uncomplete_task_view` | POST | Mark task incomplete |
+
+## Behavior Details
+
+### Authentication & Authorization
+- All views require login (`@login_required`)
+- OAuth2 credentials stored in session as `google_credentials`
+- Automatic re-authentication flow when credentials expire
+- Required scope: `https://www.googleapis.com/auth/tasks`
+
+### Task Synchronization
+**Sync Process** (`sync_all` in services.py):
+1. Sync task lists from Google (up to 100 lists)
+2. For each list, sync all tasks (up to 100 per list)
+3. Updates existing tasks or creates new ones
+4. Preserves local-only fields (is_starred, starred_order)
+
+**Triggered by**:
+- Clicking "Sync Now" button (adds `?sync=true` to URL)
+- Manual call to `/tasks/sync/` endpoint
+
+**Data Flow**:
+- Google API → `sync_task_lists()` → GoogleTaskList model
+- Google API → `sync_tasks()` → GoogleTask model
+- Uses `update_or_create()` to prevent duplicates
+
+### Task Filtering
+**Dashboard View** supports task list filtering:
+- **Task List Filter**: `?list=<list_id>` - Show tasks from specific
+  list
+- Active and completed tasks shown separately
+
+### Starred Tasks
+**Special Features**:
+- Dedicated view at `/tasks/starred/`
+- Drag-and-drop reordering (using SortableJS)
+- Custom ordering saved in `starred_order` field
+- Ordered by: starred_order (nulls last), then updated (descending)
+- Visual drag handle with grip icon
+- Auto-save indicator on reorder
+
+**Toggle Behavior**:
+- AJAX POST to toggle star on/off
+- Returns JSON with new state
+- Updates UI without page reload
+- Star icon changes color (yellow when starred)
+
+### Task Completion
+**Complete Task**:
+- AJAX POST to `/tasks/task/<task_id>/complete/`
+- Updates Google Tasks API via `tasks().patch()`
+- Sets status='completed' and completed=now()
+- Shows confirmation modal before completing
+- Moves task to "Completed Tasks" section
+
+**Uncomplete Task**:
+- AJAX POST to `/tasks/task/<task_id>/uncomplete/`
+- Updates Google Tasks API via `tasks().patch()`
+- Sets status='needsAction' and clears completed timestamp
+- Moves task back to active tasks
+
+**Error Handling**:
+- Comprehensive logging at each step
+- Returns JSON with success/error status
+- Handles re-authentication if needed
+- User-friendly error messages
+
+### UI/UX Features
+**Dashboard**:
+- Bootstrap 5 responsive layout
+- Filter bar with dropdown for task lists
+- Separate sections for active and completed tasks
+- Task cards with hover effects
+- Icons from Bootstrap Icons
+
+**Task Cards Display**:
+- Title with completion checkbox and star button
+- Due date badge (if set)
+- Notes preview (if present)
+- Task list name
+
+**Interactive Elements**:
+- All actions use AJAX (no page reloads)
+- JSON responses for all POST endpoints
+- Visual feedback (spinners, color changes)
+- Modals for confirmations (complete task)
+- Toast notifications (via save indicator)
+
+**Starred View Specifics**:
+- Drag handle visible on each card
+- SortableJS library for drag-and-drop
+- Ghost effect during drag
+- Auto-save on drop
+- Save indicator (fixed bottom-right)
+
+### Error Handling & Edge Cases
+**Re-authentication**:
+- Services return `{'authorization_url': '...', 'state': '...'}`
+- Views detect this and redirect to OAuth flow
+- Session stores redirect URL for post-auth return
+
+**Missing Credentials**:
+- Views check for `google_credentials` in session
+- Returns JSON error if missing
+- UI shows "No credentials" message
+
+**API Errors**:
+- HttpError caught and logged
+- Returns False or JSON error response
+- User sees error message in UI
+
+**Data Integrity**:
+- `unique_together` constraints prevent duplicates
+- `get_object_or_404` ensures user owns the resource
+- All modifications filtered by `user=request.user`
 
 ## Setup
 
@@ -53,19 +192,52 @@ Mirrors individual tasks from Google Tasks.
 2. Run migrations: `python manage.py migrate google_tasks`
 3. Configure Google OAuth2 credentials in `google_api/app_secrets.json`
 4. Add Tasks API scope: `https://www.googleapis.com/auth/tasks`
+5. Include URLs: `path('tasks/', include('google_tasks.urls'))`
 
 ## Usage
 
 1. Navigate to `/tasks/`
 2. Authenticate with Google (if not already authenticated)
 3. Click "Sync Now" to fetch tasks from Google
-4. Use sidebar to filter by task lists or custom labels
+4. Use filter dropdown to filter by task lists
 5. Click star icon to mark tasks as starred
-6. Create custom labels and assign them to tasks
+6. Click checkmark to complete tasks (with confirmation)
+7. Visit `/tasks/starred/` to reorder starred tasks
+
+## Admin Interface
+
+All models are registered in Django admin with:
+- **GoogleTaskList**: List display, filtering, and search
+- **GoogleTask**: List display, filtering, and search
 
 ## Dependencies
 
 All required dependencies are already in the main `requirements.txt`:
-- `google-api-python-client`
-- `google-auth`
-- `google-auth-oauthlib`
+- `google-api-python-client` - Google Tasks API client
+- `google-auth` - Google authentication
+- `google-auth-oauthlib` - OAuth2 flow
+- Bootstrap 5 (CDN) - UI framework
+- Bootstrap Icons (CDN) - Icon library
+- SortableJS (CDN) - Drag-and-drop functionality
+
+## Technical Notes
+
+### Session Management
+- OAuth credentials stored in `request.session['google_credentials']`
+- OAuth state stored in `request.session['state']`
+- Redirect URL stored in
+  `request.session['oauth_redirect_url']`
+
+### Database Queries
+- Uses `select_related()` and `prefetch_related()` where appropriate
+- Efficient `update_or_create()` for sync operations
+
+### Logging
+- Uses Django's logging framework
+- Logger name: 'django'
+- Logs authentication, API calls, errors, and task operations
+
+### DateTime Handling
+- All datetimes stored as timezone-aware
+- RFC 3339 parsing for Google API responses
+- Uses Django's `timezone.now()` for local timestamps

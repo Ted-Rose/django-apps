@@ -19,26 +19,6 @@ class GoogleTaskList(models.Model):
         return f'{self.title} ({self.user.username})'
 
 
-class TaskLabel(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
-    )
-    name = models.CharField(max_length=100)
-    color = models.CharField(
-        max_length=7,
-        default='#007bff',
-        help_text='Hex color code'
-    )
-
-    class Meta:
-        ordering = ['name']
-        unique_together = ['user', 'name']
-
-    def __str__(self):
-        return f'{self.name} ({self.user.username})'
-
-
 class GoogleTask(models.Model):
     STATUS_CHOICES = [
         ('needsAction', 'Needs Action'),
@@ -67,11 +47,6 @@ class GoogleTask(models.Model):
     updated = models.DateTimeField(null=True, blank=True)
     is_starred = models.BooleanField(default=False)
     starred_order = models.PositiveIntegerField(null=True, blank=True)
-    local_labels = models.ManyToManyField(
-        TaskLabel,
-        blank=True,
-        related_name='tasks'
-    )
 
     class Meta:
         ordering = ['-updated']
