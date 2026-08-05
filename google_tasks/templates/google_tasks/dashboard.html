@@ -14,6 +14,37 @@
         .task-card:hover {
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
+        {% if is_starred_view %}
+        .task-card {
+            cursor: grab;
+        }
+        .task-card:active {
+            cursor: grabbing;
+        }
+        .task-card.sortable-ghost {
+            opacity: 0.4;
+            background: #e9ecef;
+        }
+        .task-card.sortable-chosen {
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+        .drag-handle {
+            color: #adb5bd;
+            cursor: grab;
+            margin-right: 0.5rem;
+            font-size: 1.1rem;
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        #save-indicator {
+            display: none;
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 1000;
+        }
+        {% endif %}
         .star-btn {
             cursor: pointer;
             font-size: 1.2rem;
@@ -150,10 +181,27 @@
 
     <div class="container-fluid p-4">
         {% if tasks %}
+            <div id="task-list">
             {% for task in tasks %}
             <div class="card task-card mb-3" data-task-id="{{ task.task_id }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
+                        {% if is_starred_view %}
+                        <div class="d-flex align-items-start flex-grow-1">
+                            <span class="drag-handle mt-1">
+                                <i class="bi bi-grip-vertical"></i>
+                            </span>
+                            <div class="flex-grow-1">
+                                <h5 class="card-title mb-1">
+                                    <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')">
+                                        <i class="bi bi-check-circle"></i>
+                                    </span>
+                                    <span class="star-btn starred" onclick="toggleStar('{{ task.task_id }}')">
+                                        <i class="bi bi-star-fill"></i>
+                                    </span>
+                                    {{ task.title }}
+                                </h5>
+                        {% else %}
                         <div class="flex-grow-1">
                             <h5 class="card-title">
                                 <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')">
@@ -164,6 +212,7 @@
                                 </span>
                                 {{ task.title }}
                             </h5>
+                        {% endif %}
                             {% if task.notes %}
                             <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
                             {% endif %}
@@ -182,6 +231,9 @@
                                 {% endif %}
                             </small>
                         </div>
+                        {% if is_starred_view %}
+                        </div>
+                        {% endif %}
                         <div>
                             <span class="badge {% if task.status == 'completed' %}bg-success{% else %}bg-secondary{% endif %}">
                                 {{ task.get_status_display }}
@@ -191,6 +243,7 @@
                 </div>
             </div>
             {% endfor %}
+            </div>
         {% else %}
             {% if not completed_tasks %}
             <div class="alert alert-info">
@@ -292,6 +345,14 @@
         </div>
     </div>
 
+    {% if is_starred_view %}
+    <div id="save-indicator">
+        <span class="badge bg-success fs-6 px-3 py-2">
+            <i class="bi bi-check-circle"></i> Order saved
+        </span>
+    </div>
+    {% endif %}
+
     <div class="modal fade" id="completeTaskModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -335,6 +396,9 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% if is_starred_view %}
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    {% endif %}
     <script>
         function getCookie(name) {
             let cookieValue = null;
@@ -603,6 +667,44 @@
                 uncompleteTaskModalInstance.hide();
             });
         }
+
+        {% if is_starred_view %}
+        // Initialize SortableJS for drag-to-reorder starred tasks
+        const taskList = document.getElementById('task-list');
+        if (taskList) {
+            Sortable.create(taskList, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                handle: '.drag-handle',
+                onEnd: function () {
+                    const order = Array.from(
+                        taskList.querySelectorAll('[data-task-id]')
+                    ).map(el => el.dataset.taskId);
+
+                    fetch('{% url "google_tasks:reorder_starred" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ order: order })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const indicator = 
+                                document.getElementById('save-indicator');
+                            indicator.style.display = 'block';
+                            setTimeout(() => {
+                                indicator.style.display = 'none';
+                            }, 2000);
+                        }
+                    });
+                }
+            });
+        }
+        {% endif %}
     </script>
 </body>
 </html>
