@@ -47,7 +47,6 @@ class GoogleTask(models.Model):
     completed = models.DateTimeField(null=True, blank=True)
     updated = models.DateTimeField(null=True, blank=True)
     is_starred = models.BooleanField(default=False)
-    starred_order = models.PositiveIntegerField(null=True, blank=True)
     task_order = models.PositiveIntegerField(
         null=True,
         blank=True,
