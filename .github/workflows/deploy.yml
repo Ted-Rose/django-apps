@@ -45,19 +45,29 @@ jobs:
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements.txt
-
-      - run: pip install -r requirements.txt
-
-      - name: Run database migrations
-        env:
-          GOOGLE_CLOUD_PROJECT: ${{ env.GCP_PROJECT_ID }}
-          K_SERVICE: ${{ env.SERVICE_NAME }}
-        run: python manage.py migrate --noinput
+      - name: Run database migrations via Cloud Run Jobs
+        run: |
+          # Create a one-off Cloud Run job to run migrations
+          gcloud run jobs create django-migrate-${{ github.sha }} \
+            --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --region=${{ env.GCP_REGION }} \
+            --service-account=cloudrun-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
+            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }} \
+            --command=python \
+            --args=manage.py,migrate,--noinput \
+            --project=${{ env.GCP_PROJECT_ID }} || true
+          
+          # Execute the migration job
+          gcloud run jobs execute django-migrate-${{ github.sha }} \
+            --region=${{ env.GCP_REGION }} \
+            --wait \
+            --project=${{ env.GCP_PROJECT_ID }}
+          
+          # Clean up the job after execution
+          gcloud run jobs delete django-migrate-${{ github.sha }} \
+            --region=${{ env.GCP_REGION }} \
+            --quiet \
+            --project=${{ env.GCP_PROJECT_ID }} || true
 
       - name: Deploy to Cloud Run
         run: |
