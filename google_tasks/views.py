@@ -27,6 +27,7 @@ def dashboard(request):
             return redirect(result['authorization_url'])
 
     task_list_filter = request.GET.get('list')
+    order_by = request.GET.get('order', 'order_desc')
 
     tasks = GoogleTask.objects.filter(user=request.user)
 
@@ -35,6 +36,36 @@ def dashboard(request):
 
     active_tasks = tasks.filter(status='needsAction')
     completed_tasks = tasks.filter(status='completed')
+
+    # Apply ordering
+    if order_by == 'order_desc':
+        active_tasks = active_tasks.order_by(
+            F('starred_order').desc(nulls_last=True), '-updated'
+        )
+    elif order_by == 'order_asc':
+        active_tasks = active_tasks.order_by(
+            F('starred_order').asc(nulls_last=True), 'updated'
+        )
+    elif order_by == 'created_desc':
+        active_tasks = active_tasks.order_by('-updated')
+    elif order_by == 'created_asc':
+        active_tasks = active_tasks.order_by('updated')
+    elif order_by == 'completed_last':
+        active_tasks = active_tasks.order_by(
+            F('completed').asc(nulls_first=True), '-updated'
+        )
+    elif order_by == 'completed_first':
+        active_tasks = active_tasks.order_by(
+            F('completed').desc(nulls_last=True), '-updated'
+        )
+
+    # Apply ordering to completed tasks
+    if order_by == 'completed_last':
+        completed_tasks = completed_tasks.order_by('-completed')
+    elif order_by == 'completed_first':
+        completed_tasks = completed_tasks.order_by('completed')
+    else:
+        completed_tasks = completed_tasks.order_by('-updated')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
 
@@ -51,6 +82,7 @@ def dashboard(request):
         'selected_list': task_list_filter,
         'selected_list_title': selected_list_title,
         'has_credentials': bool(creds),
+        'order_by': order_by,
     }
 
     return render(request, 'google_tasks/dashboard.html', context)
@@ -60,16 +92,43 @@ def dashboard(request):
 def starred_tasks(request):
     """View showing only starred tasks."""
     creds = request.session.get('google_credentials')
+    order_by = request.GET.get('order', 'order_desc')
 
     starred_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_starred=True
     )
-    active_tasks = starred_tasks_qs.filter(
-        status='needsAction'
-    ).order_by(F('starred_order').asc(nulls_last=True), '-updated')
-    completed_tasks = starred_tasks_qs.filter(
-        status='completed'
-    ).order_by('-updated')
+    active_tasks = starred_tasks_qs.filter(status='needsAction')
+    completed_tasks = starred_tasks_qs.filter(status='completed')
+
+    # Apply ordering
+    if order_by == 'order_desc':
+        active_tasks = active_tasks.order_by(
+            F('starred_order').desc(nulls_last=True), '-updated'
+        )
+    elif order_by == 'order_asc':
+        active_tasks = active_tasks.order_by(
+            F('starred_order').asc(nulls_last=True), 'updated'
+        )
+    elif order_by == 'created_desc':
+        active_tasks = active_tasks.order_by('-updated')
+    elif order_by == 'created_asc':
+        active_tasks = active_tasks.order_by('updated')
+    elif order_by == 'completed_last':
+        active_tasks = active_tasks.order_by(
+            F('completed').asc(nulls_first=True), '-updated'
+        )
+    elif order_by == 'completed_first':
+        active_tasks = active_tasks.order_by(
+            F('completed').desc(nulls_last=True), '-updated'
+        )
+
+    # Apply ordering to completed tasks
+    if order_by == 'completed_last':
+        completed_tasks = completed_tasks.order_by('-completed')
+    elif order_by == 'completed_first':
+        completed_tasks = completed_tasks.order_by('completed')
+    else:
+        completed_tasks = completed_tasks.order_by('-updated')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
 
@@ -81,6 +140,7 @@ def starred_tasks(request):
         'selected_list_title': None,
         'has_credentials': bool(creds),
         'is_starred_view': True,
+        'order_by': order_by,
     }
 
     return render(request, 'google_tasks/dashboard.html', context)

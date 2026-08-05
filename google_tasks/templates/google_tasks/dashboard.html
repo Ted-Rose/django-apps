@@ -136,6 +136,62 @@
                 {% endif %}
             </ul>
         </div>
+
+        <!-- Ordering dropdown -->
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="bi bi-sort-down"></i>
+                {% if order_by == 'order_desc' %}
+                    Order Desc
+                {% elif order_by == 'order_asc' %}
+                    Order Asc
+                {% elif order_by == 'created_desc' %}
+                    Created Desc
+                {% elif order_by == 'created_asc' %}
+                    Created Asc
+                {% elif order_by == 'completed_last' %}
+                    Completed Last
+                {% elif order_by == 'completed_first' %}
+                    Completed First
+                {% else %}
+                    Order Desc
+                {% endif %}
+            </button>
+            <ul class="dropdown-menu">
+                <li>
+                    <a class="dropdown-item {% if order_by == 'order_desc' or not order_by %}active{% endif %}" href="#" onclick="changeOrder('order_desc'); return false;">
+                        <i class="bi bi-sort-numeric-down"></i> Order Desc
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item {% if order_by == 'order_asc' %}active{% endif %}" href="#" onclick="changeOrder('order_asc'); return false;">
+                        <i class="bi bi-sort-numeric-up"></i> Order Asc
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item {% if order_by == 'created_desc' %}active{% endif %}" href="#" onclick="changeOrder('created_desc'); return false;">
+                        <i class="bi bi-calendar-plus"></i> Created Desc
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item {% if order_by == 'created_asc' %}active{% endif %}" href="#" onclick="changeOrder('created_asc'); return false;">
+                        <i class="bi bi-calendar-plus"></i> Created Asc
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item {% if order_by == 'completed_last' %}active{% endif %}" href="#" onclick="changeOrder('completed_last'); return false;">
+                        <i class="bi bi-check-circle"></i> Completed Last
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item {% if order_by == 'completed_first' %}active{% endif %}" href="#" onclick="changeOrder('completed_first'); return false;">
+                        <i class="bi bi-check-circle-fill"></i> Completed First
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 
     <div class="container-fluid p-4">
@@ -370,6 +426,17 @@
             if (listId) params.set('list', listId);
             window.location.href = '?' + params.toString();
             {% endif %}
+        }
+
+        function changeOrder(orderBy) {
+            const params = new URLSearchParams(window.location.search);
+            params.delete('sync');
+            if (orderBy) {
+                params.set('order', orderBy);
+            } else {
+                params.delete('order');
+            }
+            window.location.href = '?' + params.toString();
         }
 
         const completedCollapse = document.getElementById('completedTasksCollapse');
