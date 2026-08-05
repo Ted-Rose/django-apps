@@ -56,8 +56,8 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 - `completed`: Completion timestamp (optional)
 - `updated`: Last update timestamp
 - `is_starred`: Local-only starred status (default: False)
-- `starred_order`: Custom ordering for starred tasks (optional)
-- **Ordering**: By updated timestamp (descending)
+- `task_order`: Custom manual ordering for all tasks (optional)
+- **Ordering**: By task_order (nulls last), then updated (descending)
 - **Unique constraint**: (user, task_id)
 
 ## URL Structure
@@ -66,7 +66,8 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 |------------|------|--------|-------------|
 | `/tasks/` | `dashboard` | GET | Main dashboard with all tasks |
 | `/tasks/starred/` | `starred_tasks` | GET | Starred tasks view |
-| `/tasks/starred/reorder/` | `reorder_starred` | POST | Save drag-drop order |
+| `/tasks/starred/reorder/` | `reorder_starred` | POST | Save drag-drop order (starred) |
+| `/tasks/tasks/reorder/` | `reorder_tasks` | POST | Save drag-drop order (all tasks) |
 | `/tasks/sync/` | `sync_view` | GET | Manual sync endpoint |
 | `/tasks/task/<task_id>/toggle-star/` | `toggle_star` | POST | Toggle star status |
 | `/tasks/task/<task_id>/complete/` | `complete_task_view` | POST | Mark task complete |
@@ -86,7 +87,7 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 2. For each list, sync all tasks using pagination (fetches all tasks
    regardless of count)
 3. Updates existing tasks or creates new ones
-4. Preserves local-only fields (is_starred, starred_order)
+4. Preserves local-only fields (is_starred, task_order)
 
 **Triggered by**:
 - Clicking "Sync Now" button (adds `?sync=true` to URL)
@@ -103,14 +104,16 @@ Mirrors individual tasks from Google Tasks with local enhancements.
   list
 - Active and completed tasks shown separately
 
-### Starred Tasks
-**Special Features**:
-- Dedicated view at `/tasks/starred/`
-- Drag-and-drop reordering (using SortableJS)
-- Custom ordering saved in `starred_order` field
-- Ordered by: starred_order (nulls last), then updated (descending)
-- Visual drag handle with grip icon
+### Task Ordering
+**Drag-and-Drop Reordering**:
+- Available in all views (dashboard, starred, list-filtered)
+- Uses SortableJS library for smooth drag-and-drop
+- Custom ordering saved in `task_order` field
+- Ordered by: task_order (nulls last), then updated (descending)
+- Visual drag handle with grip icon on all task cards
 - Auto-save indicator on reorder
+- Per-list ordering when viewing a specific list
+- Global ordering when viewing all tasks
 
 **Toggle Behavior**:
 - AJAX POST to toggle star on/off
