@@ -45,6 +45,15 @@ jobs:
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
 
+      - name: Grant Secret Manager access to Cloud Run service account
+        run: |
+          # Grant the Cloud Run service account access to Secret Manager
+          gcloud projects add-iam-policy-binding ${{ env.GCP_PROJECT_ID }} \
+            --member=serviceAccount:cloudrun-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
+            --role=roles/secretmanager.secretAccessor \
+            --condition=None \
+            --project=${{ env.GCP_PROJECT_ID }} || true
+
       - name: Run database migrations via Cloud Run Jobs
         run: |
           # Create a one-off Cloud Run job to run migrations
