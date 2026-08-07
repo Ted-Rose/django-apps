@@ -22,6 +22,7 @@ PRIVATE_SETTINGS_JSON_PATH = os.path.join(BASE_DIR, 'private_settings.json')
 IS_GCP_ENVIRONMENT = (
     os.environ.get('GAE_APPLICATION') is not None
     or os.environ.get('K_SERVICE') is not None
+    or os.environ.get('USE_GCP_SECRETS') == 'true'
 )
 
 if IS_GCP_ENVIRONMENT:

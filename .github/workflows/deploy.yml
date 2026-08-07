@@ -52,7 +52,7 @@ jobs:
             --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.GCP_REGION }} \
             --service-account=cloudrun-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},K_SERVICE=django-migrate \
+            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},USE_GCP_SECRETS=true \
             --command=python \
             --args=manage.py,migrate,--noinput \
             --project=${{ env.GCP_PROJECT_ID }} || true
