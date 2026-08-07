@@ -45,15 +45,6 @@ jobs:
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
 
-      - name: Grant Secret Manager access to Cloud Run service account
-        run: |
-          # Grant the Cloud Run service account access to Secret Manager
-          gcloud projects add-iam-policy-binding ${{ env.GCP_PROJECT_ID }} \
-            --member=serviceAccount:cloudrun-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-            --role=roles/secretmanager.secretAccessor \
-            --condition=None \
-            --project=${{ env.GCP_PROJECT_ID }} || true
-
       - name: Run database migrations via Cloud Run Jobs
         run: |
           # Create a one-off Cloud Run job to run migrations
@@ -67,12 +58,31 @@ jobs:
             --project=${{ env.GCP_PROJECT_ID }} || true
           
           # Execute the migration job
+          set +e
           gcloud run jobs execute django-migrate-${{ github.sha }} \
             --region=${{ env.GCP_REGION }} \
             --wait \
             --project=${{ env.GCP_PROJECT_ID }}
+          EXIT_CODE=$?
+          set -e
           
-          # Clean up the job after execution
+          # If execution failed, get logs for debugging
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Migration job failed with exit code $EXIT_CODE. Fetching logs..."
+            gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=django-migrate-${{ github.sha }}" \
+              --limit=100 \
+              --format="table(timestamp,textPayload)" \
+              --project=${{ env.GCP_PROJECT_ID }} || true
+            
+            # Clean up and exit with error
+            gcloud run jobs delete django-migrate-${{ github.sha }} \
+              --region=${{ env.GCP_REGION }} \
+              --quiet \
+              --project=${{ env.GCP_PROJECT_ID }} || true
+            exit 1
+          fi
+          
+          # Clean up the job after successful execution
           gcloud run jobs delete django-migrate-${{ github.sha }} \
             --region=${{ env.GCP_REGION }} \
             --quiet \
