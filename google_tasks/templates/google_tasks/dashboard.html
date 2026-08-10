@@ -25,15 +25,7 @@
         .task-card.sortable-chosen {
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
         }
-        .drag-handle {
-            color: #adb5bd;
-            cursor: grab;
-            margin-right: 0.5rem;
-            font-size: 1.1rem;
-        }
-        .drag-handle:active {
-            cursor: grabbing;
-        }
+
         #save-indicator {
             display: none;
             position: fixed;
@@ -190,7 +182,7 @@
         </div>
     </div>
 
-    <div class="container-fluid p-4">
+    <div class="container-fluid px-2 py-4">
         {% if tasks %}
             <div id="task-list">
             {% for task in tasks %}
@@ -198,9 +190,6 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="d-flex align-items-start flex-grow-1">
-                            <span class="drag-handle mt-1">
-                                <i class="bi bi-grip-vertical"></i>
-                            </span>
                             <div class="flex-grow-1">
                                 <h5 class="card-title mb-1">
                                     <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')">
