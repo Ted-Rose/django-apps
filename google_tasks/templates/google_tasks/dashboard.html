@@ -555,6 +555,8 @@
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
+                delay: 200,
+                delayOnTouchOnly: true,
                 onEnd: function () {
                     const order = Array.from(
                         taskList.querySelectorAll('[data-task-id]')
