@@ -72,13 +72,13 @@
             word-break: break-word;
         }
         .task-card .card-title {
-            font-size: 0.65em;
+            font-size: 0.8em;
         }
         .task-card .card-text {
-            font-size: 0.65em;
+            font-size: 0.8em;
         }
         .task-card small {
-            font-size: 0.65em;
+            font-size: 0.8em;
         }
     </style>
 </head>
@@ -209,9 +209,6 @@
                                     <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')">
                                         <i class="bi bi-check-circle"></i>
                                     </span>
-                                    <span class="star-btn {% if task.is_starred %}starred{% endif %}" onclick="toggleStar('{{ task.task_id }}')">
-                                        <i class="bi bi-star{% if task.is_starred %}-fill{% endif %}"></i>
-                                    </span>
                                     {{ task.title }}
                                 </h5>
                             {% if task.notes %}
@@ -265,9 +262,6 @@
                             <div class="d-flex justify-content-between align-items-center">
                                 <div class="flex-grow-1">
                                     <span class="text-decoration-line-through text-muted">
-                                        <span class="star-btn {% if task.is_starred %}starred{% endif %} me-1" onclick="toggleStar('{{ task.task_id }}')">
-                                            <i class="bi bi-star{% if task.is_starred %}-fill{% endif %}"></i>
-                                        </span>
                                         {{ task.title }}
                                     </span>
                                     {% if task.completed %}
