@@ -66,6 +66,20 @@
         .uncomplete-btn:hover {
             color: #007bff;
         }
+        .card-title, .card-text, .text-muted {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        .task-card .card-title {
+            font-size: 0.65em;
+        }
+        .task-card .card-text {
+            font-size: 0.65em;
+        }
+        .task-card small {
+            font-size: 0.65em;
+        }
     </style>
 </head>
 <body>
@@ -203,18 +217,12 @@
                             {% if task.notes %}
                             <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
                             {% endif %}
+                            {% if task.due_date %}
                             <small class="text-muted">
-                                <i class="bi bi-folder"></i> {{ task.task_list.title }}
-                                {% if task.due_date %}
-                                | <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
-                                {% endif %}
+                                <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
                             </small>
+                            {% endif %}
                             </div>
-                        </div>
-                        <div>
-                            <span class="badge {% if task.status == 'completed' %}bg-success{% else %}bg-secondary{% endif %}">
-                                {{ task.get_status_display }}
-                            </span>
                         </div>
                     </div>
                 </div>
@@ -262,12 +270,11 @@
                                         </span>
                                         {{ task.title }}
                                     </span>
+                                    {% if task.completed %}
                                     <small class="text-muted ms-2">
-                                        <i class="bi bi-folder"></i> {{ task.task_list.title }}
-                                        {% if task.completed %}
-                                        · {{ task.completed|date:"M d" }}
-                                        {% endif %}
+                                        {{ task.completed|date:"M d" }}
                                     </small>
+                                    {% endif %}
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="uncomplete-btn" onclick="showUncompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')" title="Mark as not completed">
