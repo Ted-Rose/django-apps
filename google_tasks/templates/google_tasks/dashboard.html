@@ -25,6 +25,9 @@
         .task-card.sortable-chosen {
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
         }
+        .task-card .card-body {
+            padding: 0.55rem 1rem;
+        }
 
         #save-indicator {
             display: none;
@@ -73,12 +76,17 @@
         }
         .task-card .card-title {
             font-size: 0.8em;
+            margin-bottom: 0.35rem;
         }
         .task-card .card-text {
             font-size: 0.8em;
+            margin-bottom: 0.35rem;
         }
         .task-card small {
             font-size: 0.8em;
+        }
+        .task-card p:last-child {
+            margin-bottom: 0;
         }
     </style>
 </head>
@@ -200,12 +208,12 @@
         {% if tasks %}
             <div id="task-list">
             {% for task in tasks %}
-            <div class="card task-card mb-3" data-task-id="{{ task.task_id }}">
+            <div class="card task-card mb-2" data-task-id="{{ task.task_id }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="d-flex align-items-start flex-grow-1">
                             <div class="flex-grow-1">
-                                <h5 class="card-title mb-1">
+                                <h5 class="card-title">
                                     <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')">
                                         <i class="bi bi-check-circle"></i>
                                     </span>
@@ -257,8 +265,8 @@
             <div class="collapse" id="completedTasksCollapse">
                 <div class="mt-2">
                     {% for task in completed_tasks %}
-                    <div class="card task-card mb-2 border-0 bg-light" data-task-id="{{ task.task_id }}">
-                        <div class="card-body py-2">
+                    <div class="card task-card mb-1 border-0 bg-light" data-task-id="{{ task.task_id }}">
+                        <div class="card-body py-1">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div class="flex-grow-1">
                                     <span class="text-decoration-line-through text-muted">
