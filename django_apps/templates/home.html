@@ -26,6 +26,7 @@
             transition: transform 0.2s ease, box-shadow 0.2s ease;
             border: none;
             height: 100%;
+            background-color: white;
         }
         .tool-card:hover {
             transform: translateY(-5px);
@@ -39,10 +40,20 @@
         .card-title {
             font-weight: 600;
             margin-bottom: 0.75rem;
+            color: #212529;
         }
         .card-text {
             color: #6c757d;
             font-size: 0.9rem;
+        }
+        a.text-decoration-none {
+            color: inherit;
+            display: block;
+        }
+        a.text-decoration-none:hover,
+        a.text-decoration-none:focus {
+            color: inherit;
+            outline: none;
         }
     </style>
 </head>
