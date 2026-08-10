@@ -181,16 +181,11 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles', 'static')
-STORAGES = {
-    'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
-    },
-    'staticfiles': {
-        'BACKEND': (
-            'whitenoise.storage.CompressedManifestStaticFilesStorage'
-        ),
-    },
-}
+# collectstatic silently fails in Docker build (no private_settings.json
+# available at build time), so STATIC_ROOT stays empty. WHITENOISE_USE_FINDERS
+# tells WhiteNoise to also scan STATICFILES_DIRS (i.e. static/) directly,
+# which IS committed to git and present in the container.
+WHITENOISE_USE_FINDERS = True
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
