@@ -59,9 +59,14 @@ elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
         BASE_URL = private_settings.get('BASE_URL')
         DATABASES = private_settings.get('DATABASES')
         ESV_KEY = private_settings.get('ESV_KEY')
-    GOOGLE_APP_SECRETS_PATH = os.path.join(BASE_DIR, 'google_api', 'app_secrets.json')
+    GOOGLE_APP_SECRETS_PATH = os.path.join(
+        BASE_DIR, 'google_api', 'app_secrets.json'
+    )
 else:
-    raise FileNotFoundError('Private settings do not exist. Please provide private settings.')
+    raise FileNotFoundError(
+        'Private settings do not exist. '
+        'Please provide private settings.'
+    )
 
 LOGIN_URL = '/login/'
 
@@ -100,6 +105,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -131,8 +137,8 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            BASE_DIR / "templates",  # If you have a project-wide templates folder
-            BASE_DIR / "django_apps/templates",  # Add this line to include your app's templates directory
+            BASE_DIR / "templates",  # project-wide templates folder
+            BASE_DIR / "django_apps/templates",  # app templates
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -149,19 +155,12 @@ TEMPLATES = [
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
+_PV = 'django.contrib.auth.password_validation'
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': f'{_PV}.UserAttributeSimilarityValidator'},
+    {'NAME': f'{_PV}.MinimumLengthValidator'},
+    {'NAME': f'{_PV}.CommonPasswordValidator'},
+    {'NAME': f'{_PV}.NumericPasswordValidator'},
 ]
 
 
@@ -182,6 +181,16 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles', 'static')
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': (
+            'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        ),
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -194,7 +203,10 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 print("MEDIA_ROOT: ", MEDIA_ROOT)
 
 
-def create_log_handler(handler_name, level, filename=None, max_bytes=10485760, backup_count=10):
+def create_log_handler(
+    handler_name, level, filename=None,
+    max_bytes=10485760, backup_count=10
+):
     if DEBUG and filename:
         # Create logs directory if it doesn't exist
         logs_dir = os.path.join(BASE_DIR, 'logs')
@@ -221,7 +233,10 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'format': (
+                '{levelname} {asctime} {module} '
+                '{process:d} {thread:d} {message}'
+            ),
             'style': '{',
         },
         'simple': {

@@ -13,4 +13,5 @@ debugpy
 google-cloud-secret-manager
 dj-database-url
 gunicorn
+whitenoise[brotli]
 django-sslserver
