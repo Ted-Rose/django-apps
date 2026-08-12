@@ -1,4 +1,5 @@
 import json
+import uuid
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db.models import F
@@ -78,7 +79,7 @@ def dashboard(request):
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
-         'btn_class': 'btn-outline-light'},
+         'btn_class': 'btn-light'},
         {'label': 'Process Labels', 'onclick': 'processLabels()',
          'icon': 'tags', 'btn_class': 'btn-success'},
         {'label': 'Sync Now', 'url': '?sync=true',
@@ -145,7 +146,7 @@ def starred_tasks(request):
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
-         'btn_class': 'btn-outline-light'},
+         'btn_class': 'btn-light'},
         {'label': 'Process Labels', 'onclick': 'processLabels()',
          'icon': 'tags', 'btn_class': 'btn-success'},
         {'label': 'Sync Now', 'url': '?sync=true',
@@ -479,3 +480,76 @@ def process_task_label_view(request, task_id):
         'success': True,
         'stats': result
     })
+
+
+@login_required
+@require_POST
+def create_divider(request):
+    """Create a new task divider."""
+    import logging
+    logger = logging.getLogger('django')
+    
+    try:
+        data = json.loads(request.body)
+        task_list_id = data.get('task_list_id')
+        position = data.get('position', 0)
+        
+        logger.info(
+            f'Creating divider for user {request.user.username} '
+            f'in list {task_list_id} at position {position}'
+        )
+        
+        task_list = get_object_or_404(
+            GoogleTaskList,
+            list_id=task_list_id,
+            user=request.user
+        )
+        
+        divider = GoogleTask.objects.create(
+            user=request.user,
+            task_id=f'divider_{uuid.uuid4().hex[:16]}',
+            task_list=task_list,
+            title='',
+            status='needsAction',
+            is_divider=True,
+            task_order=position
+        )
+        
+        logger.info(
+            f'Successfully created divider {divider.task_id}'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'task_id': divider.task_id
+        })
+    except Exception as e:
+        logger.error(f'Error creating divider: {e}')
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_POST
+def delete_divider(request, task_id):
+    """Delete a task divider."""
+    import logging
+    logger = logging.getLogger('django')
+    
+    logger.info(
+        f'Deleting divider {task_id} for user {request.user.username}'
+    )
+    
+    divider = get_object_or_404(
+        GoogleTask,
+        task_id=task_id,
+        user=request.user,
+        is_divider=True
+    )
+    divider.delete()
+    
+    logger.info(f'Successfully deleted divider {task_id}')
+    
+    return JsonResponse({'success': True})
