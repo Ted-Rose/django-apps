@@ -80,20 +80,13 @@ def dashboard(request):
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
          'btn_class': 'btn-light'},
+        {'label': 'Add Divider', 'onclick': 'createDivider()',
+         'icon': 'dash-lg', 'btn_class': 'btn-primary'},
         {'label': 'Process Labels', 'onclick': 'processLabels()',
          'icon': 'tags', 'btn_class': 'btn-success'},
         {'label': 'Sync Now', 'url': '?sync=true',
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
-    
-    # Add "Add Divider" option only when viewing a specific task list
-    if task_list_filter:
-        burger_menu_items.insert(1, {
-            'label': 'Add Divider',
-            'onclick': 'createDivider()',
-            'icon': 'dash-lg',
-            'btn_class': 'btn-primary'
-        })
 
     context = {
         'tasks': active_tasks,
@@ -156,6 +149,8 @@ def starred_tasks(request):
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
          'btn_class': 'btn-light'},
+        {'label': 'Add Divider', 'onclick': 'createDivider()',
+         'icon': 'dash-lg', 'btn_class': 'btn-primary'},
         {'label': 'Process Labels', 'onclick': 'processLabels()',
          'icon': 'tags', 'btn_class': 'btn-success'},
         {'label': 'Sync Now', 'url': '?sync=true',
@@ -195,8 +190,6 @@ def reorder_starred(request):
         ).update(task_order=position)
 
     return JsonResponse({'success': True})
-
-
 
 
 @login_required
@@ -497,23 +490,23 @@ def create_divider(request):
     """Create a new task divider."""
     import logging
     logger = logging.getLogger('django')
-    
+
     try:
         data = json.loads(request.body)
         task_list_id = data.get('task_list_id')
         position = data.get('position', 0)
-        
+
         logger.info(
             f'Creating divider for user {request.user.username} '
             f'in list {task_list_id} at position {position}'
         )
-        
+
         task_list = get_object_or_404(
             GoogleTaskList,
             list_id=task_list_id,
             user=request.user
         )
-        
+
         divider = GoogleTask.objects.create(
             user=request.user,
             task_id=f'divider_{uuid.uuid4().hex[:16]}',
@@ -523,11 +516,11 @@ def create_divider(request):
             is_divider=True,
             task_order=position
         )
-        
+
         logger.info(
             f'Successfully created divider {divider.task_id}'
         )
-        
+
         return JsonResponse({
             'success': True,
             'task_id': divider.task_id
@@ -546,11 +539,11 @@ def delete_divider(request, task_id):
     """Delete a task divider."""
     import logging
     logger = logging.getLogger('django')
-    
+
     logger.info(
         f'Deleting divider {task_id} for user {request.user.username}'
     )
-    
+
     divider = get_object_or_404(
         GoogleTask,
         task_id=task_id,
@@ -558,7 +551,7 @@ def delete_divider(request, task_id):
         is_divider=True
     )
     divider.delete()
-    
+
     logger.info(f'Successfully deleted divider {task_id}')
-    
+
     return JsonResponse({'success': True})
