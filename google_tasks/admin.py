@@ -20,7 +20,14 @@ class GoogleTaskAdmin(admin.ModelAdmin):
         'task_list',
         'status',
         'is_starred',
+        'is_divider',
         'due_date'
     ]
-    list_filter = ['user', 'task_list', 'status', 'is_starred']
+    list_filter = [
+        'user',
+        'task_list',
+        'status',
+        'is_starred',
+        'is_divider'
+    ]
     search_fields = ['title', 'notes', 'task_id']

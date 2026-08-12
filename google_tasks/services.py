@@ -200,6 +200,12 @@ def complete_task(user, creds, task_id):
             return service
 
         task = GoogleTask.objects.get(user=user, task_id=task_id)
+        
+        if task.is_divider:
+            logger.warning(
+                f'Cannot complete divider {task_id}'
+            )
+            return False
         logger.info(
             f'Found task: {task.title} in list {task.task_list.list_id}'
         )
@@ -271,6 +277,13 @@ def uncomplete_task(user, creds, task_id):
             return service
 
         task = GoogleTask.objects.get(user=user, task_id=task_id)
+        
+        if task.is_divider:
+            logger.warning(
+                f'Cannot uncomplete divider {task_id}'
+            )
+            return False
+        
         logger.info(
             f'Found task: {task.title} in list {task.task_list.list_id}'
         )

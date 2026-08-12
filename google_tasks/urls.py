@@ -34,4 +34,14 @@ urlpatterns = [
         views.process_task_label_view,
         name='process_task_label'
     ),
+    path(
+        'divider/create/',
+        views.create_divider,
+        name='create_divider'
+    ),
+    path(
+        'divider/<str:task_id>/delete/',
+        views.delete_divider,
+        name='delete_divider'
+    ),
 ]

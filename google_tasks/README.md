@@ -10,6 +10,8 @@ local features like starring.
   Tasks API
 - **Starred Tasks**: Mark tasks as starred for quick access
   (local-only feature)
+- **Task Dividers**: Add visual dividers (horizontal lines) to organize
+  tasks into groups (local-only feature)
 - **Task Lists**: View and filter tasks by their native Google Task
   Lists
 - **Bootstrap UI**: Modern, responsive interface using Bootstrap 5
@@ -58,6 +60,7 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 - `completed`: Completion timestamp (optional)
 - `updated`: Last update timestamp
 - `is_starred`: Local-only starred status (default: False)
+- `is_divider`: Local-only divider status (default: False)
 - `task_order`: Custom manual ordering for all tasks (optional)
 - **Ordering**: By task_order (nulls last), then updated (descending)
 - **Unique constraint**: (user, task_id)
@@ -76,6 +79,8 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 | `/tasks/task/<task_id>/uncomplete/` | `uncomplete_task_view` | POST | Mark task incomplete |
 | `/tasks/process-labels/` | `process_labels_view` | POST | Process labels for all active tasks |
 | `/tasks/task/<task_id>/process-label/` | `process_task_label_view` | POST | Process label for specific task |
+| `/tasks/divider/create/` | `create_divider` | POST | Create a new task divider |
+| `/tasks/divider/<task_id>/delete/` | `delete_divider` | POST | Delete a task divider |
 
 ## Behavior Details
 
@@ -178,6 +183,37 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 - No hashtag found: Skips task
 - No matching list: Skips task, logs for review
 - Multiple hashtags: Uses first matched hashtag
+
+### Task Dividers
+**Visual Organization**:
+- Add horizontal dividers (dashed lines) between tasks
+- Organize tasks into logical groups or sections
+- Local-only feature (does not sync to Google Tasks)
+
+**Creating Dividers**:
+- Click "Add Divider" button in filter bar
+- Divider appears at bottom of task list
+- Drag to desired position between tasks
+- Unique task_id format: `divider_{uuid}`
+
+**Managing Dividers**:
+- Drag and drop to reorder (uses same ordering as tasks)
+- Hover to reveal delete button
+- Click X to remove divider
+- Confirmation dialog prevents accidental deletion
+
+**Technical Details**:
+- Stored as GoogleTask with `is_divider=True`
+- Empty title and no notes/due dates
+- Excluded from Google Tasks sync operations
+- Cannot be completed/uncompleted
+- Works in all views (All Tasks, Starred, List-filtered)
+
+**Use Cases**:
+- Separate tasks by priority (High/Medium/Low)
+- Group by category (Work/Personal/Shopping)
+- Organize by timeline (Today/This Week/Later)
+- Create visual breathing room in long task lists
 
 ### UI/UX Features
 **Dashboard**:

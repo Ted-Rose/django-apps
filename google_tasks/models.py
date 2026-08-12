@@ -47,6 +47,10 @@ class GoogleTask(models.Model):
     completed = models.DateTimeField(null=True, blank=True)
     updated = models.DateTimeField(null=True, blank=True)
     is_starred = models.BooleanField(default=False)
+    is_divider = models.BooleanField(
+        default=False,
+        help_text='If True, this task acts as a visual divider'
+    )
     task_order = models.PositiveIntegerField(
         null=True,
         blank=True,

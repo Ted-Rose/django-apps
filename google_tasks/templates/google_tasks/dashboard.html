@@ -88,6 +88,33 @@
         .task-card p:last-child {
             margin-bottom: 0;
         }
+        .divider-card {
+            background-color: transparent;
+            border: none;
+            cursor: grab;
+        }
+        .divider-card:active {
+            cursor: grabbing;
+        }
+        .divider-body {
+            padding: 0.25rem 1rem;
+        }
+        .divider-card hr {
+            border-top: 2px dashed #dee2e6;
+            opacity: 0.5;
+        }
+        .divider-card:hover hr {
+            border-color: #0d6efd;
+            opacity: 0.8;
+        }
+        .delete-divider-btn {
+            opacity: 0;
+            transition: opacity 0.2s;
+            padding: 0.25rem 0.5rem;
+        }
+        .divider-card:hover .delete-divider-btn {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -197,36 +224,61 @@
                 </li>
             </ul>
         </div>
+        
+        <!-- Add Divider button -->
+        <button class="btn btn-outline-primary btn-sm" 
+                id="create-divider-btn"
+                onclick="createDivider()"
+                title="Add a visual divider">
+            <i class="bi bi-dash-lg"></i> Add Divider
+        </button>
     </div>
 
     <div class="container-fluid px-2 py-4">
         {% if tasks %}
             <div id="task-list">
             {% for task in tasks %}
-            <div class="card task-card mb-2" data-task-id="{{ task.task_id }}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="d-flex align-items-start flex-grow-1">
-                            <div class="flex-grow-1">
-                                <h5 class="card-title">
-                                    <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')">
-                                        <i class="bi bi-check-circle"></i>
-                                    </span>
-                                    {{ task.title }}
-                                </h5>
-                            {% if task.notes %}
-                            <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
-                            {% endif %}
-                            {% if task.due_date %}
-                            <small class="text-muted">
-                                <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
-                            </small>
-                            {% endif %}
+                {% if task.is_divider %}
+                <div class="card task-card divider-card mb-2" data-task-id="{{ task.task_id }}">
+                    <div class="card-body divider-body">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-grip-vertical text-muted me-2"></i>
+                            <hr class="flex-grow-1 my-0">
+                            <button class="btn btn-sm btn-link text-danger delete-divider-btn"
+                                    data-task-id="{{ task.task_id }}"
+                                    onclick="deleteDivider('{{ task.task_id }}')"
+                                    title="Delete divider">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="card task-card mb-2" data-task-id="{{ task.task_id }}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="d-flex align-items-start flex-grow-1">
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title">
+                                        <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')">
+                                            <i class="bi bi-check-circle"></i>
+                                        </span>
+                                        {{ task.title }}
+                                    </h5>
+                                {% if task.notes %}
+                                <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
+                                {% endif %}
+                                {% if task.due_date %}
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
+                                </small>
+                                {% endif %}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+                {% endif %}
             {% endfor %}
             </div>
         {% else %}
@@ -656,6 +708,84 @@
                         }
                     });
                 }
+            });
+        }
+        
+        function getCurrentTaskListId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('list') || '{{ task_lists.0.list_id }}';
+        }
+        
+        function getNextPosition() {
+            const taskCards = document.querySelectorAll('.task-card');
+            let maxOrder = 0;
+            taskCards.forEach(card => {
+                const taskId = card.getAttribute('data-task-id');
+                const orderAttr = card.getAttribute('data-order');
+                if (orderAttr) {
+                    maxOrder = Math.max(maxOrder, parseInt(orderAttr));
+                }
+            });
+            return maxOrder + 1;
+        }
+        
+        function createDivider() {
+            const taskListId = getCurrentTaskListId();
+            const position = getNextPosition();
+            
+            if (!taskListId) {
+                alert('Please select a task list first');
+                return;
+            }
+            
+            fetch('{% url "google_tasks:create_divider" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    task_list_id: taskListId,
+                    position: position
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error creating divider: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error creating divider');
+            });
+        }
+        
+        function deleteDivider(taskId) {
+            if (!confirm('Delete this divider?')) {
+                return;
+            }
+            
+            fetch(`/tasks/divider/${taskId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error deleting divider');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error deleting divider');
             });
         }
     </script>
