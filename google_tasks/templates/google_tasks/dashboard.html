@@ -713,7 +713,20 @@
         
         function getCurrentTaskListId() {
             const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('list') || '{{ task_lists.0.list_id }}';
+            const listParam = urlParams.get('list');
+            
+            if (listParam) {
+                return listParam;
+            }
+            
+            {% if task_lists %}
+            const firstList = '{{ task_lists.0.list_id }}';
+            if (firstList && firstList !== '') {
+                return firstList;
+            }
+            {% endif %}
+            
+            return null;
         }
         
         function getNextPosition() {
@@ -731,12 +744,20 @@
         
         function createDivider() {
             const taskListId = getCurrentTaskListId();
-            const position = getNextPosition();
             
             if (!taskListId) {
-                alert('Please select a task list first');
+                alert('Please select a specific task list first.\n\n' +
+                      'Dividers must belong to a task list. ' +
+                      'Use the dropdown to select a task list, then add a divider.');
                 return;
             }
+            
+            const position = getNextPosition();
+            
+            console.log('Creating divider:', {
+                taskListId: taskListId,
+                position: position
+            });
             
             fetch('{% url "google_tasks:create_divider" %}', {
                 method: 'POST',
@@ -749,17 +770,22 @@
                     position: position
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
             .then(data => {
+                console.log('Response data:', data);
                 if (data.success) {
                     window.location.reload();
                 } else {
-                    alert('Error creating divider: ' + data.error);
+                    alert('Error creating divider: ' + 
+                          (data.error || 'Unknown error'));
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error creating divider');
+                alert('Error creating divider: ' + error.message);
             });
         }
         
