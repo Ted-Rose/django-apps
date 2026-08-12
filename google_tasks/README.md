@@ -16,6 +16,8 @@ local features like starring.
 - **Drag & Drop Reordering**: Reorder starred tasks with drag-and-drop
 - **Task Completion**: Mark tasks as complete/incomplete with sync to
   Google
+- **Label Movement**: Automatically process hashtags in task notes to
+  move tasks to matching task lists and star them
 
 ## Architecture
 
@@ -72,6 +74,8 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 | `/tasks/task/<task_id>/toggle-star/` | `toggle_star` | POST | Toggle star status |
 | `/tasks/task/<task_id>/complete/` | `complete_task_view` | POST | Mark task complete |
 | `/tasks/task/<task_id>/uncomplete/` | `uncomplete_task_view` | POST | Mark task incomplete |
+| `/tasks/process-labels/` | `process_labels_view` | POST | Process labels for all active tasks |
+| `/tasks/task/<task_id>/process-label/` | `process_task_label_view` | POST | Process label for specific task |
 
 ## Behavior Details
 
@@ -141,6 +145,40 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 - Handles re-authentication if needed
 - User-friendly error messages
 
+### Label Movement
+**Hashtag Detection**:
+- Scans task title and notes for hashtags (e.g., `#Phys`, `#Work`)
+- Pattern: `#` followed by 3+ letters
+- Case-insensitive matching
+
+**Task List Matching**:
+- Exact match: `#Physical` → "Physical" task list
+- Partial match (4 chars): `#Phys` → "Physical" task list
+- Partial match (3 chars): `#Phy` → "Physical" task list
+- Uses first matched hashtag if multiple found
+
+**Processing**:
+- Click "Process Labels" button in navbar
+- Processes all active (non-completed) tasks
+- Moves tasks to matched task lists via Google Tasks API
+- Automatically stars moved tasks
+- Shows summary of processed, moved, starred, and errors
+
+**Task Movement**:
+- Since Google Tasks API has no direct move operation:
+  1. Gets full task data from source list
+  2. Creates new task in target list
+  3. Deletes task from source list
+  4. Updates local database with new task ID
+- Preserves: title, notes, due date, status
+- Updates: task_id, task_list, is_starred
+
+**Edge Cases**:
+- Task already in correct list: Just stars it
+- No hashtag found: Skips task
+- No matching list: Skips task, logs for review
+- Multiple hashtags: Uses first matched hashtag
+
 ### UI/UX Features
 **Dashboard**:
 - Bootstrap 5 responsive layout
@@ -207,6 +245,9 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 5. Click star icon to mark tasks as starred
 6. Click checkmark to complete tasks (with confirmation)
 7. Visit `/tasks/starred/` to reorder starred tasks
+8. Add hashtags to task notes (e.g., `#Work`, `#Home`, `#Phys`)
+9. Click "Process Labels" to automatically move and star tasks
+   based on hashtags
 
 ## Admin Interface
 

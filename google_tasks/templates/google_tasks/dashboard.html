@@ -101,6 +101,9 @@
                 <a href="?sync=true" class="btn btn-light btn-sm">
                     <i class="bi bi-arrow-repeat"></i> Sync Now
                 </a>
+                <button onclick="processLabels()" class="btn btn-success btn-sm">
+                    <i class="bi bi-tags"></i> Process Labels
+                </button>
                 {% else %}
                 <span class="text-light">No credentials</span>
                 {% endif %}
@@ -553,6 +556,62 @@
                     'An error occurred while uncompleting the task'
                 );
                 uncompleteTaskModalInstance.hide();
+            });
+        }
+
+        function processLabels() {
+            if (!confirm(
+                'Process labels for all active tasks? ' +
+                'This will match hashtags in task notes with task lists ' +
+                'and move tasks accordingly.'
+            )) {
+                return;
+            }
+
+            const csrftoken = getCookie('csrftoken');
+            const button = event.target.closest('button');
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = 
+                '<i class="bi bi-hourglass-split"></i> Processing...';
+
+            fetch('/tasks/process-labels/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+
+                if (data.success) {
+                    const stats = data.stats;
+                    alert(
+                        `Label Processing Complete!\n\n` +
+                        `Processed: ${stats.processed} tasks\n` +
+                        `Moved: ${stats.moved} tasks\n` +
+                        `Starred: ${stats.starred} tasks\n` +
+                        `Errors: ${stats.errors} tasks\n\n` +
+                        `Reloading page...`
+                    );
+                    location.reload();
+                } else if (data.reauth_required) {
+                    window.location.href = data.authorization_url;
+                } else {
+                    alert(
+                        'Error processing labels: ' + 
+                        (data.error || 'Unknown error')
+                    );
+                }
+            })
+            .catch(error => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+                console.error('Error:', error);
+                alert('An error occurred while processing labels');
             });
         }
 

@@ -24,4 +24,14 @@ urlpatterns = [
         views.uncomplete_task_view,
         name='uncomplete_task'
     ),
+    path(
+        'process-labels/',
+        views.process_labels_view,
+        name='process_labels'
+    ),
+    path(
+        'task/<str:task_id>/process-label/',
+        views.process_task_label_view,
+        name='process_task_label'
+    ),
 ]

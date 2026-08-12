@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime
 from django.utils import timezone
 from google_api.utils import google_auth
@@ -319,3 +320,287 @@ def uncomplete_task(user, creds, task_id):
             f'{type(e).__name__}: {str(e)}'
         )
         return False
+
+
+def extract_hashtags(text):
+    """
+    Extract hashtags from text.
+    Pattern: # followed by letters (3+ chars)
+    Returns: List of hashtag strings (without #)
+    """
+    if not text:
+        return []
+    pattern = r'#([A-Za-z]{3,})'
+    matches = re.findall(pattern, text)
+    return [match.lower() for match in matches]
+
+
+def match_task_list(hashtag, task_lists):
+    """
+    Match hashtag with task list.
+    Priority:
+    1. Exact match (case-insensitive)
+    2. Partial match (first 4 letters)
+    3. Partial match (first 3 letters)
+
+    Args:
+        hashtag: String hashtag (without #)
+        task_lists: QuerySet of GoogleTaskList objects
+
+    Returns: GoogleTaskList object or None
+    """
+    hashtag_lower = hashtag.lower()
+
+    # Exact match
+    for task_list in task_lists:
+        if task_list.title.lower() == hashtag_lower:
+            logger.info(
+                f'Exact match found: #{hashtag} -> {task_list.title}'
+            )
+            return task_list
+
+    # Partial match (first 4 letters)
+    if len(hashtag_lower) >= 4:
+        for task_list in task_lists:
+            title_lower = task_list.title.lower()
+            if title_lower.startswith(hashtag_lower[:4]):
+                logger.info(
+                    f'Partial match (4 chars): '
+                    f'#{hashtag} -> {task_list.title}'
+                )
+                return task_list
+
+    # Partial match (first 3 letters)
+    if len(hashtag_lower) >= 3:
+        for task_list in task_lists:
+            title_lower = task_list.title.lower()
+            if title_lower.startswith(hashtag_lower[:3]):
+                logger.info(
+                    f'Partial match (3 chars): '
+                    f'#{hashtag} -> {task_list.title}'
+                )
+                return task_list
+
+    logger.info(f'No match found for #{hashtag}')
+    return None
+
+
+def move_task_to_list(user, creds, task, target_list):
+    """
+    Move task to a different task list via Google Tasks API.
+
+    Since Google Tasks API doesn't have a direct move operation
+    between lists, we:
+    1. Get full task data from source list
+    2. Create new task in target list
+    3. Delete task from source list
+    4. Update local database
+
+    Args:
+        user: User object
+        creds: Google credentials
+        task: GoogleTask object
+        target_list: GoogleTaskList object
+
+    Returns: True on success, False or auth dict on failure
+    """
+    logger.info(
+        f'Moving task {task.task_id} from {task.task_list.title} '
+        f'to {target_list.title}'
+    )
+
+    try:
+        service = get_tasks_service(creds)
+
+        if isinstance(service, dict) and 'authorization_url' in service:
+            return service
+
+        # Get full task data from source list
+        source_task = service.tasks().get(
+            tasklist=task.task_list.list_id,
+            task=task.task_id
+        ).execute()
+
+        # Create task in target list
+        new_task_body = {
+            'title': source_task.get('title', ''),
+            'notes': source_task.get('notes', ''),
+            'status': source_task.get('status', 'needsAction'),
+        }
+
+        if 'due' in source_task:
+            new_task_body['due'] = source_task['due']
+
+        new_task = service.tasks().insert(
+            tasklist=target_list.list_id,
+            body=new_task_body
+        ).execute()
+
+        # Delete task from source list
+        service.tasks().delete(
+            tasklist=task.task_list.list_id,
+            task=task.task_id
+        ).execute()
+
+        # Update local database
+        task.task_id = new_task['id']
+        task.task_list = target_list
+        task.updated = parse_datetime(new_task.get('updated'))
+        task.save()
+
+        logger.info(
+            f'Successfully moved task to {target_list.title}, '
+            f'new ID: {new_task["id"]}'
+        )
+        return True
+
+    except HttpError as error:
+        logger.error(
+            f'HttpError moving task: '
+            f'Status={error.resp.status}, '
+            f'Content={error.content}'
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f'Unexpected error moving task: '
+            f'{type(e).__name__}: {str(e)}'
+        )
+        return False
+
+
+def process_task_labels(user, creds, task_id=None):
+    """
+    Process labels for one or all tasks.
+
+    For each task:
+    1. Extract hashtags from title and notes
+    2. Match hashtags with task lists
+    3. Move task if match found and not already in target list
+    4. Star the task
+    5. Log the action
+
+    Args:
+        user: User object
+        creds: Google credentials
+        task_id: Optional specific task ID to process
+
+    Returns: Dict with stats
+        {
+            'processed': int,
+            'moved': int,
+            'starred': int,
+            'errors': int,
+            'details': [...]
+        }
+    """
+    logger.info(
+        f'Starting label processing for user {user.username}, '
+        f'task_id={task_id}'
+    )
+
+    stats = {
+        'processed': 0,
+        'moved': 0,
+        'starred': 0,
+        'errors': 0,
+        'details': []
+    }
+
+    # Get tasks to process
+    if task_id:
+        tasks = GoogleTask.objects.filter(user=user, task_id=task_id)
+    else:
+        tasks = GoogleTask.objects.filter(
+            user=user,
+            status='needsAction'
+        )
+
+    # Get all task lists for matching
+    task_lists = GoogleTaskList.objects.filter(user=user)
+
+    for task in tasks:
+        stats['processed'] += 1
+        detail = {
+            'task_id': task.task_id,
+            'title': task.title,
+            'action': 'none',
+            'message': ''
+        }
+
+        # Extract hashtags from title and notes
+        hashtags = []
+        hashtags.extend(extract_hashtags(task.title))
+        hashtags.extend(extract_hashtags(task.notes or ''))
+
+        if not hashtags:
+            detail['message'] = 'No hashtags found'
+            stats['details'].append(detail)
+            continue
+
+        logger.info(
+            f'Task "{task.title}" has hashtags: {hashtags}'
+        )
+
+        # Try to match first hashtag
+        target_list = match_task_list(hashtags[0], task_lists)
+
+        if not target_list:
+            detail['message'] = (
+                f'No matching list for #{hashtags[0]}'
+            )
+            stats['details'].append(detail)
+            continue
+
+        # Check if task is already in target list
+        if task.task_list.list_id == target_list.list_id:
+            logger.info(
+                f'Task already in {target_list.title}, '
+                f'just starring it'
+            )
+            if not task.is_starred:
+                task.is_starred = True
+                task.save()
+                stats['starred'] += 1
+                detail['action'] = 'starred'
+                detail['message'] = (
+                    f'Already in {target_list.title}, starred'
+                )
+            else:
+                detail['message'] = (
+                    f'Already in {target_list.title} and starred'
+                )
+            stats['details'].append(detail)
+            continue
+
+        # Move task to target list
+        result = move_task_to_list(user, creds, task, target_list)
+
+        if isinstance(result, dict) and 'authorization_url' in result:
+            logger.warning('Reauth required during label processing')
+            return result
+
+        if result:
+            # Star the task
+            task.is_starred = True
+            task.save()
+            stats['moved'] += 1
+            stats['starred'] += 1
+            detail['action'] = 'moved_and_starred'
+            detail['message'] = (
+                f'Moved to {target_list.title} and starred'
+            )
+        else:
+            stats['errors'] += 1
+            detail['action'] = 'error'
+            detail['message'] = 'Failed to move task'
+
+        stats['details'].append(detail)
+
+    logger.info(
+        f'Label processing complete: {stats["processed"]} processed, '
+        f'{stats["moved"]} moved, {stats["starred"]} starred, '
+        f'{stats["errors"]} errors'
+    )
+
+    return stats

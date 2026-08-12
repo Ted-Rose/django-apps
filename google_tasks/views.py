@@ -8,7 +8,8 @@ from google_tasks.models import GoogleTask, GoogleTaskList
 from google_tasks.services import (
     sync_all,
     complete_task,
-    uncomplete_task
+    uncomplete_task,
+    process_task_labels
 )
 
 
@@ -360,3 +361,101 @@ def uncomplete_task_view(request, task_id):
             'success': False,
             'error': 'Failed to uncomplete task'
         }, status=500)
+
+
+@login_required
+@require_POST
+def process_labels_view(request):
+    """Process labels for all active tasks."""
+    import logging
+    logger = logging.getLogger('django')
+
+    logger.info(
+        f'process_labels_view called by user {request.user.username}'
+    )
+
+    creds = request.session.get('google_credentials')
+
+    if not creds:
+        logger.error(
+            f'No credentials found for user {request.user.username}'
+        )
+        return JsonResponse({
+            'success': False,
+            'error': 'No credentials found'
+        }, status=401)
+
+    result = process_task_labels(request.user, creds)
+
+    if isinstance(result, dict) and 'authorization_url' in result:
+        logger.warning('Reauth required, returning authorization URL')
+        request.session['state'] = result['state']
+        request.session['oauth_scopes'] = result.get('scopes', [])
+        request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
+        return JsonResponse({
+            'success': False,
+            'reauth_required': True,
+            'authorization_url': result['authorization_url']
+        })
+
+    logger.info(
+        f'Label processing complete: {result["processed"]} processed, '
+        f'{result["moved"]} moved, {result["starred"]} starred'
+    )
+    return JsonResponse({
+        'success': True,
+        'stats': result
+    })
+
+
+@login_required
+@require_POST
+def process_task_label_view(request, task_id):
+    """Process labels for a specific task."""
+    import logging
+    logger = logging.getLogger('django')
+
+    logger.info(
+        f'process_task_label_view called by user '
+        f'{request.user.username} for task {task_id}'
+    )
+
+    creds = request.session.get('google_credentials')
+
+    if not creds:
+        logger.error(
+            f'No credentials found for user {request.user.username}'
+        )
+        return JsonResponse({
+            'success': False,
+            'error': 'No credentials found'
+        }, status=401)
+
+    # Verify task belongs to user
+    get_object_or_404(
+        GoogleTask,
+        task_id=task_id,
+        user=request.user
+    )
+
+    result = process_task_labels(request.user, creds, task_id=task_id)
+
+    if isinstance(result, dict) and 'authorization_url' in result:
+        logger.warning('Reauth required, returning authorization URL')
+        request.session['state'] = result['state']
+        request.session['oauth_scopes'] = result.get('scopes', [])
+        request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
+        return JsonResponse({
+            'success': False,
+            'reauth_required': True,
+            'authorization_url': result['authorization_url']
+        })
+
+    logger.info(
+        f'Label processing for task {task_id} complete: '
+        f'{result["moved"]} moved, {result["starred"]} starred'
+    )
+    return JsonResponse({
+        'success': True,
+        'stats': result
+    })
