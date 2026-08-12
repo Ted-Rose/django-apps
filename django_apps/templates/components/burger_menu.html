@@ -1,0 +1,130 @@
+{% comment %}
+Reusable Burger Menu Component
+
+Usage:
+{% include "components/burger_menu.html" with menu_items=menu_items %}
+
+Where menu_items is a list of dictionaries with:
+- label: Button text
+- url: Link URL
+- icon: Bootstrap icon class (optional)
+- btn_class: Additional button classes (optional, default: btn-light)
+{% endcomment %}
+
+<style>
+    .burger-menu {
+        position: relative;
+    }
+    
+    .burger-icon {
+        display: none;
+        cursor: pointer;
+        font-size: 1.5rem;
+        color: white;
+        background: none;
+        border: none;
+        padding: 0.5rem;
+    }
+    
+    .burger-menu-items {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    @media (max-width: 768px) {
+        .burger-icon {
+            display: block;
+        }
+        
+        .burger-menu-items {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 0.25rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 0.5rem;
+            flex-direction: column;
+            align-items: stretch;
+            min-width: 200px;
+            z-index: 1000;
+            margin-top: 0.5rem;
+        }
+        
+        .burger-menu-items.show {
+            display: flex;
+        }
+        
+        .burger-menu-items .btn {
+            width: 100%;
+            text-align: left;
+            justify-content: flex-start;
+        }
+    }
+</style>
+
+<div class="burger-menu">
+    <button class="burger-icon" id="burgerToggle" 
+            aria-label="Toggle menu">
+        <i class="bi bi-list"></i>
+    </button>
+    
+    <div class="burger-menu-items" id="burgerMenuItems">
+        {% for item in menu_items %}
+            {% if item.url %}
+                <a href="{{ item.url }}" 
+                   class="btn btn-sm {{ item.btn_class|default:'btn-light' }}"
+                   {% if item.onclick %}
+                   onclick="{{ item.onclick }}"
+                   {% endif %}>
+                    {% if item.icon %}
+                        <i class="bi bi-{{ item.icon }}"></i>
+                    {% endif %}
+                    {{ item.label }}
+                </a>
+            {% elif item.onclick %}
+                <button onclick="{{ item.onclick }}" 
+                        class="btn btn-sm 
+                               {{ item.btn_class|default:'btn-light' }}">
+                    {% if item.icon %}
+                        <i class="bi bi-{{ item.icon }}"></i>
+                    {% endif %}
+                    {{ item.label }}
+                </button>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    (function() {
+        const burgerToggle = document.getElementById('burgerToggle');
+        const burgerMenuItems = 
+            document.getElementById('burgerMenuItems');
+        
+        if (burgerToggle && burgerMenuItems) {
+            burgerToggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                burgerMenuItems.classList.toggle('show');
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!burgerMenuItems.contains(e.target) && 
+                    e.target !== burgerToggle) {
+                    burgerMenuItems.classList.remove('show');
+                }
+            });
+            
+            // Close menu when clicking a menu item
+            burgerMenuItems.querySelectorAll('a, button')
+                .forEach(function(item) {
+                item.addEventListener('click', function() {
+                    burgerMenuItems.classList.remove('show');
+                });
+            });
+        }
+    })();
+</script>

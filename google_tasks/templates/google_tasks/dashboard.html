@@ -96,20 +96,12 @@
             <a class="navbar-brand" href="{% url 'google_tasks:dashboard' %}">
                 <i class="bi bi-check2-square"></i> Google Tasks
             </a>
-            <div class="navbar-nav ms-auto d-flex align-items-center gap-2">
+            <div class="navbar-nav ms-auto">
                 {% if has_credentials %}
-                <a href="?sync=true" class="btn btn-light btn-sm">
-                    <i class="bi bi-arrow-repeat"></i> Sync Now
-                </a>
-                <button onclick="processLabels()" class="btn btn-success btn-sm">
-                    <i class="bi bi-tags"></i> Process Labels
-                </button>
+                    {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
                 {% else %}
-                <span class="text-light">No credentials</span>
+                    <span class="text-light">No credentials</span>
                 {% endif %}
-                <a href="/" class="btn btn-outline-light btn-sm">
-                    <i class="bi bi-house"></i> Home
-                </a>
             </div>
         </div>
     </nav>

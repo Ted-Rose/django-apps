@@ -76,6 +76,15 @@ def dashboard(request):
             list_id=task_list_filter
         ).values_list('title', flat=True).first()
 
+    burger_menu_items = [
+        {'label': 'Home', 'url': '/', 'icon': 'house',
+         'btn_class': 'btn-outline-light'},
+        {'label': 'Process Labels', 'onclick': 'processLabels()',
+         'icon': 'tags', 'btn_class': 'btn-success'},
+        {'label': 'Sync Now', 'url': '?sync=true',
+         'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
+    ]
+
     context = {
         'tasks': active_tasks,
         'completed_tasks': completed_tasks,
@@ -84,6 +93,7 @@ def dashboard(request):
         'selected_list_title': selected_list_title,
         'has_credentials': bool(creds),
         'order_by': order_by,
+        'burger_menu_items': burger_menu_items,
     }
 
     return render(request, 'google_tasks/dashboard.html', context)
@@ -133,6 +143,15 @@ def starred_tasks(request):
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
 
+    burger_menu_items = [
+        {'label': 'Home', 'url': '/', 'icon': 'house',
+         'btn_class': 'btn-outline-light'},
+        {'label': 'Process Labels', 'onclick': 'processLabels()',
+         'icon': 'tags', 'btn_class': 'btn-success'},
+        {'label': 'Sync Now', 'url': '?sync=true',
+         'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
+    ]
+
     context = {
         'tasks': active_tasks,
         'completed_tasks': completed_tasks,
@@ -142,6 +161,7 @@ def starred_tasks(request):
         'has_credentials': bool(creds),
         'is_starred_view': True,
         'order_by': order_by,
+        'burger_menu_items': burger_menu_items,
     }
 
     return render(request, 'google_tasks/dashboard.html', context)
