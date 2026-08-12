@@ -225,13 +225,15 @@
             </ul>
         </div>
         
-        <!-- Add Divider button -->
+        <!-- Add Divider button - only show when a specific task list is selected -->
+        {% if selected_list and not is_starred_view %}
         <button class="btn btn-outline-primary btn-sm" 
                 id="create-divider-btn"
                 onclick="createDivider()"
-                title="Add a visual divider">
+                title="Add a visual divider to organize tasks">
             <i class="bi bi-dash-lg"></i> Add Divider
         </button>
+        {% endif %}
     </div>
 
     <div class="container-fluid px-2 py-4">
