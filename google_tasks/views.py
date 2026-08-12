@@ -85,6 +85,15 @@ def dashboard(request):
         {'label': 'Sync Now', 'url': '?sync=true',
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
+    
+    # Add "Add Divider" option only when viewing a specific task list
+    if task_list_filter:
+        burger_menu_items.insert(1, {
+            'label': 'Add Divider',
+            'onclick': 'createDivider()',
+            'icon': 'dash-lg',
+            'btn_class': 'btn-primary'
+        })
 
     context = {
         'tasks': active_tasks,
