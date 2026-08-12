@@ -115,6 +115,26 @@
         .divider-card:hover .delete-divider-btn {
             opacity: 1;
         }
+        .divider-text {
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 0.75em;
+            color: #6c757d;
+            opacity: 0.7;
+            padding: 0 0.5rem;
+            width: auto;
+            min-width: 100px;
+            max-width: 300px;
+        }
+        .divider-text:focus {
+            opacity: 1;
+            color: #495057;
+        }
+        .divider-text::placeholder {
+            color: #adb5bd;
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
@@ -235,7 +255,15 @@
                     <div class="card-body divider-body">
                         <div class="d-flex align-items-center">
                             <i class="bi bi-grip-vertical text-muted me-2"></i>
-                            <hr class="flex-grow-1 my-0">
+                            <hr class="flex-grow-1 my-0 me-2">
+                            <input type="text" 
+                                   class="divider-text" 
+                                   value="{{ task.title }}"
+                                   placeholder="Label..."
+                                   data-task-id="{{ task.task_id }}"
+                                   onblur="updateDividerText(this)"
+                                   onkeypress="if(event.key==='Enter') this.blur()">
+                            <hr class="flex-grow-1 my-0 ms-2">
                             <button class="btn btn-sm btn-link text-danger delete-divider-btn"
                                     data-task-id="{{ task.task_id }}"
                                     onclick="deleteDivider('{{ task.task_id }}')"
@@ -254,6 +282,9 @@
                                     <h5 class="card-title">
                                         <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')">
                                             <i class="bi bi-check-circle"></i>
+                                        </span>
+                                        <span class="star-btn me-1 {% if task.is_starred %}starred{% endif %}" onclick="toggleStar('{{ task.task_id }}')" title="{% if task.is_starred %}Unstar{% else %}Star{% endif %}">
+                                            <i class="bi {% if task.is_starred %}bi-star-fill{% else %}bi-star{% endif %}"></i>
                                         </span>
                                         {{ task.title }}
                                     </h5>
@@ -318,6 +349,9 @@
                                     {% endif %}
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
+                                    <span class="star-btn {% if task.is_starred %}starred{% endif %}" onclick="toggleStar('{{ task.task_id }}')" title="{% if task.is_starred %}Unstar{% else %}Star{% endif %}">
+                                        <i class="bi {% if task.is_starred %}bi-star-fill{% else %}bi-star{% endif %}"></i>
+                                    </span>
                                     <span class="uncomplete-btn" onclick="showUncompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}')" title="Mark as not completed">
                                         <i class="bi bi-arrow-counterclockwise"></i>
                                     </span>
@@ -804,6 +838,34 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert('Error deleting divider');
+            });
+        }
+
+        function updateDividerText(input) {
+            const taskId = input.dataset.taskId;
+            const newText = input.value.trim();
+            
+            fetch(`/tasks/divider/${taskId}/update/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    title: newText
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Error updating divider text');
+                    input.value = input.defaultValue;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating divider text');
+                input.value = input.defaultValue;
             });
         }
     </script>
