@@ -555,3 +555,40 @@ def delete_divider(request, task_id):
     logger.info(f'Successfully deleted divider {task_id}')
 
     return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def update_divider(request, task_id):
+    """Update a task divider's text."""
+    import logging
+    logger = logging.getLogger('django')
+
+    try:
+        data = json.loads(request.body)
+        new_title = data.get('title', '')
+
+        logger.info(
+            f'Updating divider {task_id} for user '
+            f'{request.user.username} with title: {new_title}'
+        )
+
+        divider = get_object_or_404(
+            GoogleTask,
+            task_id=task_id,
+            user=request.user,
+            is_divider=True
+        )
+
+        divider.title = new_title
+        divider.save()
+
+        logger.info(f'Successfully updated divider {task_id}')
+
+        return JsonResponse({'success': True})
+    except Exception as e:
+        logger.error(f'Error updating divider: {e}')
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
