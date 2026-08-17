@@ -44,4 +44,9 @@ urlpatterns = [
         views.delete_divider,
         name='delete_divider'
     ),
+    path(
+        'divider/<str:task_id>/update/',
+        views.update_divider,
+        name='update_divider'
+    ),
 ]
