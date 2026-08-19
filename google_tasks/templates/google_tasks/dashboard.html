@@ -148,6 +148,46 @@
             color: #adb5bd;
             opacity: 0.5;
         }
+        .undo-redo-controls {
+            position: fixed;
+            bottom: 1.5rem;
+            left: 1.5rem;
+            z-index: 1000;
+            display: flex;
+            gap: 0.5rem;
+        }
+        .undo-redo-controls button {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transition: all 0.2s ease;
+        }
+        .undo-redo-controls button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .undo-redo-controls button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .action-toast {
+            position: fixed;
+            bottom: 5rem;
+            left: 1.5rem;
+            z-index: 1001;
+            min-width: 250px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+        .action-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
@@ -416,6 +456,22 @@
         </span>
     </div>
 
+    <div class="undo-redo-controls">
+        <button id="undo-btn" class="btn btn-primary" title="Undo (Ctrl+Z)" disabled>
+            <i class="bi bi-arrow-counterclockwise"></i>
+        </button>
+        <button id="redo-btn" class="btn btn-secondary" title="Redo (Ctrl+Y)" disabled>
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+    </div>
+
+    <div id="action-toast" class="action-toast">
+        <div class="alert alert-info mb-0">
+            <i class="bi bi-info-circle"></i>
+            <span id="toast-message"></span>
+        </div>
+    </div>
+
     <div class="modal fade" id="completeTaskModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -461,6 +517,257 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     <script>
+        class ActionHistory {
+            constructor() {
+                this.undoStack = [];
+                this.redoStack = [];
+                this.maxStackSize = 50;
+                this.storageKey = 'taskActionHistory';
+                this.loadFromStorage();
+                this.updateUI();
+            }
+
+            recordAction(action) {
+                this.undoStack.push({
+                    ...action,
+                    timestamp: Date.now()
+                });
+                
+                if (this.undoStack.length > this.maxStackSize) {
+                    this.undoStack.shift();
+                }
+                
+                this.redoStack = [];
+                this.saveToStorage();
+                this.updateUI();
+            }
+
+            canUndo() {
+                return this.undoStack.length > 0;
+            }
+
+            canRedo() {
+                return this.redoStack.length > 0;
+            }
+
+            getLastAction() {
+                return this.undoStack[this.undoStack.length - 1];
+            }
+
+            undo() {
+                if (!this.canUndo()) return null;
+                
+                const action = this.undoStack.pop();
+                this.redoStack.push(action);
+                this.saveToStorage();
+                this.updateUI();
+                return action;
+            }
+
+            redo() {
+                if (!this.canRedo()) return null;
+                
+                const action = this.redoStack.pop();
+                this.undoStack.push(action);
+                this.saveToStorage();
+                this.updateUI();
+                return action;
+            }
+
+            clear() {
+                this.undoStack = [];
+                this.redoStack = [];
+                this.saveToStorage();
+                this.updateUI();
+            }
+
+            saveToStorage() {
+                try {
+                    const data = {
+                        undoStack: this.undoStack.slice(-this.maxStackSize),
+                        redoStack: this.redoStack.slice(-this.maxStackSize)
+                    };
+                    localStorage.setItem(this.storageKey, JSON.stringify(data));
+                } catch (e) {
+                    console.warn('Failed to save action history:', e);
+                }
+            }
+
+            loadFromStorage() {
+                try {
+                    const data = localStorage.getItem(this.storageKey);
+                    if (data) {
+                        const parsed = JSON.parse(data);
+                        this.undoStack = parsed.undoStack || [];
+                        this.redoStack = parsed.redoStack || [];
+                    }
+                } catch (e) {
+                    console.warn('Failed to load action history:', e);
+                    this.undoStack = [];
+                    this.redoStack = [];
+                }
+            }
+
+            updateUI() {
+                const undoBtn = document.getElementById('undo-btn');
+                const redoBtn = document.getElementById('redo-btn');
+                
+                if (undoBtn) {
+                    undoBtn.disabled = !this.canUndo();
+                }
+                if (redoBtn) {
+                    redoBtn.disabled = !this.canRedo();
+                }
+            }
+        }
+
+        const actionHistory = new ActionHistory();
+
+        function showToast(message) {
+            const toast = document.getElementById('action-toast');
+            const messageEl = document.getElementById('toast-message');
+            
+            messageEl.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function performUndo() {
+            const action = actionHistory.undo();
+            if (!action) return;
+            
+            switch(action.type) {
+                case 'TOGGLE_STAR':
+                    toggleStar(action.taskId, true);
+                    showToast(`Undid ${action.previousState ? 'unstar' : 'star'} action`);
+                    break;
+                    
+                case 'COMPLETE_TASK':
+                    currentTaskId = action.taskId;
+                    uncompleteTask(true);
+                    showToast(`Undid complete: ${action.taskTitle}`);
+                    break;
+                    
+                case 'UNCOMPLETE_TASK':
+                    currentTaskId = action.taskId;
+                    completeTask(true);
+                    showToast(`Undid uncomplete: ${action.taskTitle}`);
+                    break;
+                    
+                case 'ARCHIVE_TASK':
+                    showToast(`Cannot undo archive - please restore from Archive view`);
+                    actionHistory.recordAction(action);
+                    break;
+                    
+                case 'DELETE_TASK':
+                    showToast(`Cannot undo delete - please restore from Trash view`);
+                    actionHistory.recordAction(action);
+                    break;
+                    
+                case 'DELETE_DIVIDER':
+                    showToast(`Cannot undo divider deletion - please recreate manually`);
+                    actionHistory.recordAction(action);
+                    break;
+                    
+                case 'UPDATE_DIVIDER':
+                    const dividerInput = document.querySelector(`[data-task-id="${action.taskId}"] .divider-text`);
+                    if (dividerInput) {
+                        dividerInput.value = action.previousText;
+                        updateDividerText(dividerInput, true);
+                        showToast(`Undid divider text update`);
+                    }
+                    break;
+                    
+                case 'REORDER_TASKS':
+                    reorderTasksToOrder(action.previousOrder);
+                    showToast(`Undid task reorder`);
+                    break;
+            }
+        }
+
+        function performRedo() {
+            const action = actionHistory.redo();
+            if (!action) return;
+            
+            switch(action.type) {
+                case 'TOGGLE_STAR':
+                    toggleStar(action.taskId, true);
+                    showToast(`Redid ${action.previousState ? 'star' : 'unstar'} action`);
+                    break;
+                    
+                case 'COMPLETE_TASK':
+                    currentTaskId = action.taskId;
+                    completeTask(true);
+                    showToast(`Redid complete: ${action.taskTitle}`);
+                    break;
+                    
+                case 'UNCOMPLETE_TASK':
+                    currentTaskId = action.taskId;
+                    uncompleteTask(true);
+                    showToast(`Redid uncomplete: ${action.taskTitle}`);
+                    break;
+                    
+                case 'UPDATE_DIVIDER':
+                    const dividerInput = document.querySelector(`[data-task-id="${action.taskId}"] .divider-text`);
+                    if (dividerInput) {
+                        dividerInput.value = action.newText;
+                        updateDividerText(dividerInput, true);
+                        showToast(`Redid divider text update`);
+                    }
+                    break;
+                    
+                case 'REORDER_TASKS':
+                    reorderTasksToOrder(action.newOrder);
+                    showToast(`Redid task reorder`);
+                    break;
+                    
+                default:
+                    showToast(`Cannot redo this action`);
+                    break;
+            }
+        }
+
+        function reorderTasksToOrder(order) {
+            const taskList = document.getElementById('task-list');
+            if (!taskList) return;
+            
+            const taskCards = {};
+            taskList.querySelectorAll('[data-task-id]').forEach(card => {
+                taskCards[card.dataset.taskId] = card;
+            });
+            
+            order.forEach(taskId => {
+                if (taskCards[taskId]) {
+                    taskList.appendChild(taskCards[taskId]);
+                }
+            });
+            
+            {% if is_starred_view %}
+            const url = '{% url "google_tasks:reorder_starred" %}';
+            const body = JSON.stringify({ order: order });
+            {% else %}
+            const params = new URLSearchParams(window.location.search);
+            const taskListId = params.get('list');
+            const url = '{% url "google_tasks:reorder_tasks" %}';
+            const body = JSON.stringify({
+                order: order,
+                task_list_id: taskListId
+            });
+            {% endif %}
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                body: body
+            });
+        }
+
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -476,7 +783,18 @@
             return cookieValue;
         }
 
-        function toggleStar(taskId) {
+        function toggleStar(taskId, skipHistory = false) {
+            const starBtn = document.querySelector(`[data-task-id="${taskId}"] .star-btn`);
+            const wasStarred = starBtn.classList.contains('starred');
+            
+            if (!skipHistory) {
+                actionHistory.recordAction({
+                    type: 'TOGGLE_STAR',
+                    taskId: taskId,
+                    previousState: wasStarred
+                });
+            }
+            
             const csrftoken = getCookie('csrftoken');
             fetch(`/tasks/task/${taskId}/toggle-star/`, {
                 method: 'POST',
@@ -488,7 +806,6 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const starBtn = document.querySelector(`[data-task-id="${taskId}"] .star-btn`);
                     const icon = starBtn.querySelector('i');
                     if (data.is_starred) {
                         starBtn.classList.add('starred');
@@ -580,11 +897,22 @@
             uncompleteTaskModalInstance.show();
         }
 
-        function completeTask() {
+        function completeTask(skipHistory = false) {
             if (!currentTaskId) return;
             
-            const csrftoken = getCookie('csrftoken');
             const taskId = currentTaskId;
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskCard ? taskCard.querySelector('.card-title')?.textContent.trim() : '';
+            
+            if (!skipHistory) {
+                actionHistory.recordAction({
+                    type: 'COMPLETE_TASK',
+                    taskId: taskId,
+                    taskTitle: taskTitle
+                });
+            }
+            
+            const csrftoken = getCookie('csrftoken');
             
             fetch(`/tasks/task/${taskId}/complete/`, {
                 method: 'POST',
@@ -625,11 +953,22 @@
             });
         }
 
-        function uncompleteTask() {
+        function uncompleteTask(skipHistory = false) {
             if (!currentTaskId) return;
             
-            const csrftoken = getCookie('csrftoken');
             const taskId = currentTaskId;
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskCard ? taskCard.textContent.trim() : '';
+            
+            if (!skipHistory) {
+                actionHistory.recordAction({
+                    type: 'UNCOMPLETE_TASK',
+                    taskId: taskId,
+                    taskTitle: taskTitle
+                });
+            }
+            
+            const csrftoken = getCookie('csrftoken');
             
             fetch(`/tasks/task/${taskId}/uncomplete/`, {
                 method: 'POST',
@@ -730,7 +1069,13 @@
 
         // Initialize SortableJS for drag-to-reorder tasks
         const taskList = document.getElementById('task-list');
+        let previousOrder = [];
+        
         if (taskList) {
+            previousOrder = Array.from(
+                taskList.querySelectorAll('[data-task-id]')
+            ).map(el => el.dataset.taskId);
+            
             Sortable.create(taskList, {
                 animation: 150,
                 ghostClass: 'sortable-ghost',
@@ -738,10 +1083,21 @@
                 handle: '.divider-drag-handle, .task-card:not(.divider-card)',
                 delay: 200,
                 delayOnTouchOnly: true,
+                onStart: function() {
+                    previousOrder = Array.from(
+                        taskList.querySelectorAll('[data-task-id]')
+                    ).map(el => el.dataset.taskId);
+                },
                 onEnd: function () {
                     const order = Array.from(
                         taskList.querySelectorAll('[data-task-id]')
                     ).map(el => el.dataset.taskId);
+                    
+                    actionHistory.recordAction({
+                        type: 'REORDER_TASKS',
+                        previousOrder: previousOrder,
+                        newOrder: order
+                    });
 
                     {% if is_starred_view %}
                     // Use starred reorder endpoint
@@ -898,9 +1254,20 @@
             return false;
         }
         
-        function deleteDivider(taskId) {
+        function deleteDivider(taskId, skipHistory = false) {
             if (!confirm('Delete this divider?')) {
                 return;
+            }
+            
+            const dividerCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const dividerText = dividerCard ? dividerCard.querySelector('.divider-text')?.value : '';
+            
+            if (!skipHistory) {
+                actionHistory.recordAction({
+                    type: 'DELETE_DIVIDER',
+                    taskId: taskId,
+                    dividerText: dividerText
+                });
             }
             
             fetch(`/tasks/divider/${taskId}/delete/`, {
@@ -924,9 +1291,19 @@
             });
         }
 
-        function updateDividerText(input) {
+        function updateDividerText(input, skipHistory = false) {
             const taskId = input.dataset.taskId;
             const newText = input.value.trim();
+            const oldText = input.defaultValue;
+            
+            if (!skipHistory && oldText !== newText) {
+                actionHistory.recordAction({
+                    type: 'UPDATE_DIVIDER',
+                    taskId: taskId,
+                    previousText: oldText,
+                    newText: newText
+                });
+            }
             
             fetch(`/tasks/divider/${taskId}/update/`, {
                 method: 'POST',
@@ -952,7 +1329,18 @@
             });
         }
 
-        function archiveTask(taskId) {
+        function archiveTask(taskId, skipHistory = false) {
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskCard ? taskCard.querySelector('.card-title')?.textContent.trim() : '';
+            
+            if (!skipHistory) {
+                actionHistory.recordAction({
+                    type: 'ARCHIVE_TASK',
+                    taskId: taskId,
+                    taskTitle: taskTitle
+                });
+            }
+            
             const csrftoken = getCookie('csrftoken');
             
             fetch(`/tasks/task/${taskId}/archive/`, {
@@ -983,9 +1371,20 @@
             });
         }
 
-        function deleteTask(taskId) {
+        function deleteTask(taskId, skipHistory = false) {
             if (!confirm('Move this task to trash?')) {
                 return;
+            }
+            
+            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskCard ? taskCard.querySelector('.card-title')?.textContent.trim() : '';
+            
+            if (!skipHistory) {
+                actionHistory.recordAction({
+                    type: 'DELETE_TASK',
+                    taskId: taskId,
+                    taskTitle: taskTitle
+                });
             }
             
             const csrftoken = getCookie('csrftoken');
@@ -1017,6 +1416,29 @@
                 alert('An error occurred while deleting the task');
             });
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const undoBtn = document.getElementById('undo-btn');
+            const redoBtn = document.getElementById('redo-btn');
+            
+            if (undoBtn) {
+                undoBtn.addEventListener('click', performUndo);
+            }
+            
+            if (redoBtn) {
+                redoBtn.addEventListener('click', performRedo);
+            }
+            
+            document.addEventListener('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+                    e.preventDefault();
+                    performUndo();
+                } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+                    e.preventDefault();
+                    performRedo();
+                }
+            });
+        });
     </script>
 </body>
 </html>
