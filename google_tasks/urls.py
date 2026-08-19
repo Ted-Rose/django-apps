@@ -77,6 +77,11 @@ urlpatterns = [
         name='permanent_delete_task'
     ),
     path(
+        'task/create/',
+        views.create_task_view,
+        name='create_task'
+    ),
+    path(
         'task/<str:task_id>/',
         views.task_detail,
         name='task_detail'

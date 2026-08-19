@@ -792,6 +792,64 @@ def task_detail(request, task_id):
 
 @login_required
 @require_POST
+def create_task_view(request):
+    """Create a new task with title, notes, and starred status."""
+    import logging
+    logger = logging.getLogger('django')
+
+    try:
+        data = json.loads(request.body)
+        title = data.get('title', '').strip()
+        notes = data.get('notes', '').strip()
+        is_starred = data.get('is_starred', False)
+        task_list_id = data.get('task_list_id')
+
+        logger.info(
+            f'Creating task for user {request.user.username}: '
+            f'title={title}, starred={is_starred}'
+        )
+
+        if not title:
+            return JsonResponse({
+                'success': False,
+                'error': 'Title cannot be empty'
+            }, status=400)
+
+        task_list = None
+        if task_list_id:
+            task_list = get_object_or_404(
+                GoogleTaskList,
+                list_id=task_list_id,
+                user=request.user
+            )
+
+        task = GoogleTask.objects.create(
+            user=request.user,
+            task_id=f'local_{uuid.uuid4().hex[:16]}',
+            task_list=task_list,
+            title=title,
+            notes=notes if notes else None,
+            status='needsAction',
+            is_starred=is_starred,
+            is_divider=False
+        )
+
+        logger.info(f'Successfully created task {task.task_id}')
+
+        return JsonResponse({
+            'success': True,
+            'task_id': task.task_id
+        })
+    except Exception as e:
+        logger.error(f'Error creating task: {e}')
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+@require_POST
 def update_task_view(request, task_id):
     """Update task title and notes."""
     import logging

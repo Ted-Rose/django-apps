@@ -467,6 +467,10 @@
         </span>
     </div>
 
+    <button class="floating-add-btn" onclick="showCreateTaskModal()" title="Create new task">
+        <i class="bi bi-plus"></i>
+    </button>
+
     <div class="undo-redo-controls">
         <button id="undo-btn" class="btn btn-primary" title="Undo (Ctrl+Z)" disabled>
             <i class="bi bi-arrow-counterclockwise"></i>
@@ -519,6 +523,39 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" onclick="uncompleteTask()">
                         <i class="bi bi-arrow-counterclockwise"></i> Mark as Not Completed
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="createTaskModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Task</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="taskTitle" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="taskTitle" placeholder="Enter task title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="taskNotes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="taskNotes" rows="4" placeholder="Enter task notes (optional)"></textarea>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="taskStarred">
+                        <label class="form-check-label" for="taskStarred">
+                            <i class="bi bi-star-fill text-warning"></i> Star this task
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createTask()">
+                        <i class="bi bi-plus-circle"></i> Create Task
                     </button>
                 </div>
             </div>
@@ -875,6 +912,19 @@
         let currentTaskId = null;
         let completeTaskModalInstance = null;
         let uncompleteTaskModalInstance = null;
+        let createTaskModalInstance = null;
+
+        function showCreateTaskModal() {
+            document.getElementById('taskTitle').value = '';
+            document.getElementById('taskNotes').value = '';
+            document.getElementById('taskStarred').checked = false;
+            
+            const modalElement = document.getElementById('createTaskModal');
+            if (!createTaskModalInstance) {
+                createTaskModalInstance = new bootstrap.Modal(modalElement);
+            }
+            createTaskModalInstance.show();
+        }
 
         function showCompleteModal(taskId, taskTitle) {
             currentTaskId = taskId;
@@ -1411,6 +1461,61 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while archiving the task');
+            });
+        }
+
+        function createTask() {
+            const title = document.getElementById('taskTitle').value.trim();
+            const notes = document.getElementById('taskNotes').value.trim();
+            const isStarred = document.getElementById('taskStarred').checked;
+            
+            if (!title) {
+                alert('Please enter a task title');
+                return;
+            }
+            
+            const csrftoken = getCookie('csrftoken');
+            const params = new URLSearchParams(window.location.search);
+            const taskListId = params.get('list');
+            
+            const requestBody = {
+                title: title,
+                notes: notes || null,
+                is_starred: isStarred
+            };
+            
+            {% if is_starred_view %}
+            requestBody.is_starred = true;
+            {% else %}
+            if (taskListId) {
+                requestBody.task_list_id = taskListId;
+            }
+            {% endif %}
+            
+            fetch('/tasks/task/create/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    createTaskModalInstance.hide();
+                    location.reload();
+                } else if (data.reauth_required) {
+                    createTaskModalInstance.hide();
+                    window.location.href = data.authorization_url;
+                } else {
+                    alert('Failed to create task: ' + 
+                        (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while creating the task');
             });
         }
 
