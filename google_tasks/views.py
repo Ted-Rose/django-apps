@@ -766,3 +766,71 @@ def trash_tasks(request):
     }
 
     return render(request, 'google_tasks/trash.html', context)
+
+
+@login_required
+def task_detail(request, task_id):
+    """View showing task details with edit capability."""
+    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+    creds = request.session.get('google_credentials')
+
+    burger_menu_items = [
+        {'label': 'Home', 'url': '/', 'icon': 'house',
+         'btn_class': 'btn-light'},
+        {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
+         'btn_class': 'btn-primary'},
+    ]
+
+    context = {
+        'task': task,
+        'has_credentials': bool(creds),
+        'burger_menu_items': burger_menu_items,
+    }
+
+    return render(request, 'google_tasks/task_detail.html', context)
+
+
+@login_required
+@require_POST
+def update_task_view(request, task_id):
+    """Update task title and notes."""
+    import logging
+    logger = logging.getLogger('django')
+
+    try:
+        data = json.loads(request.body)
+        title = data.get('title', '').strip()
+        notes = data.get('notes', '').strip()
+
+        logger.info(
+            f'Updating task {task_id} for user {request.user.username}'
+        )
+
+        task = get_object_or_404(
+            GoogleTask,
+            task_id=task_id,
+            user=request.user
+        )
+
+        if not title:
+            return JsonResponse({
+                'success': False,
+                'error': 'Title cannot be empty'
+            }, status=400)
+
+        task.title = title
+        task.notes = notes if notes else None
+        task.save()
+
+        logger.info(f'Successfully updated task {task_id}')
+
+        return JsonResponse({
+            'success': True,
+            'task_id': task_id
+        })
+    except Exception as e:
+        logger.error(f'Error updating task: {e}')
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)

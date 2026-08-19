@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "pwa/head.html" %}
+    <title>{{ task.title }} - Task Details</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        .task-detail-container {
+            max-width: 800px;
+            margin: 2rem auto;
+        }
+        .save-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+        }
+        .form-control:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        .task-meta {
+            background-color: #f8f9fa;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .task-meta .badge {
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'google_tasks:dashboard' %}">
+                <i class="bi bi-check2-square"></i> Google Tasks
+            </a>
+            <div class="navbar-nav ms-auto">
+                {% if has_credentials %}
+                    {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
+                {% else %}
+                    <span class="text-light">No credentials</span>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid task-detail-container">
+        <div class="d-flex align-items-center mb-3">
+            <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            <h2 class="mb-0">Edit Task</h2>
+        </div>
+
+        <div class="task-meta">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                {% if task.status == 'completed' %}
+                    <span class="badge bg-success">
+                        <i class="bi bi-check-circle"></i> Completed
+                    </span>
+                {% else %}
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-circle"></i> Needs Action
+                    </span>
+                {% endif %}
+                
+                {% if task.is_starred %}
+                    <span class="badge bg-warning">
+                        <i class="bi bi-star-fill"></i> Starred
+                    </span>
+                {% endif %}
+                
+                {% if task.due_date %}
+                    <span class="badge bg-info">
+                        <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
+                    </span>
+                {% endif %}
+                
+                {% if task.task_list %}
+                    <span class="badge bg-secondary">
+                        <i class="bi bi-folder"></i> {{ task.task_list.title }}
+                    </span>
+                {% endif %}
+            </div>
+            
+            {% if task.updated %}
+                <small class="text-muted d-block mt-2">
+                    <i class="bi bi-clock"></i> Last updated: {{ task.updated|date:"M d, Y g:i A" }}
+                </small>
+            {% endif %}
+        </div>
+
+        <form id="task-form">
+            <div class="mb-4">
+                <label for="task-title" class="form-label fw-bold">
+                    <i class="bi bi-text-left"></i> Title
+                </label>
+                <input 
+                    type="text" 
+                    class="form-control form-control-lg" 
+                    id="task-title" 
+                    name="title"
+                    value="{{ task.title }}"
+                    required
+                    maxlength="500"
+                    placeholder="Enter task title">
+                <div class="form-text">Required field (max 500 characters)</div>
+            </div>
+
+            <div class="mb-4">
+                <label for="task-notes" class="form-label fw-bold">
+                    <i class="bi bi-journal-text"></i> Notes
+                </label>
+                <textarea 
+                    class="form-control" 
+                    id="task-notes" 
+                    name="notes"
+                    rows="10"
+                    placeholder="Enter task notes or details...">{{ task.notes|default:"" }}</textarea>
+                <div class="form-text">Optional field for additional details</div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Save Changes
+                </button>
+                <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </a>
+            </div>
+        </form>
+
+        <div id="alert-container" class="mt-3"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alert-container');
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            alertContainer.innerHTML = alertHtml;
+            
+            setTimeout(() => {
+                const alert = alertContainer.querySelector('.alert');
+                if (alert) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
+
+        document.getElementById('task-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const title = document.getElementById('task-title').value.trim();
+            const notes = document.getElementById('task-notes').value.trim();
+            
+            if (!title) {
+                showAlert('Title cannot be empty', 'danger');
+                return;
+            }
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+            
+            fetch('{% url "google_tasks:update_task" task.task_id %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: title,
+                    notes: notes
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Task updated successfully!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '{% url "google_tasks:dashboard" %}';
+                    }, 1500);
+                } else {
+                    showAlert(data.error || 'Failed to update task', 'danger');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('An error occurred while updating the task', 'danger');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            });
+        });
+
+        document.getElementById('task-title').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('task-form').dispatchEvent(new Event('submit'));
+            }
+        });
+    </script>
+</body>
+</html>

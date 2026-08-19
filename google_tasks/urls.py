@@ -76,4 +76,14 @@ urlpatterns = [
         views.permanent_delete_task_view,
         name='permanent_delete_task'
     ),
+    path(
+        'task/<str:task_id>/',
+        views.task_detail,
+        name='task_detail'
+    ),
+    path(
+        'task/<str:task_id>/update/',
+        views.update_task_view,
+        name='update_task'
+    ),
 ]
