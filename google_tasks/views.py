@@ -9,6 +9,7 @@ from django.utils import timezone
 from google_tasks.models import GoogleTask, GoogleTaskList
 from google_tasks.services import (
     sync_all,
+    create_task,
     complete_task,
     uncomplete_task,
     process_task_labels
@@ -797,6 +798,17 @@ def create_task_view(request):
     import logging
     logger = logging.getLogger('django')
 
+    creds = request.session.get('google_credentials')
+
+    if not creds:
+        logger.error(
+            f'No credentials found for user {request.user.username}'
+        )
+        return JsonResponse({
+            'success': False,
+            'error': 'No credentials found'
+        }, status=401)
+
     try:
         data = json.loads(request.body)
         title = data.get('title', '').strip()
@@ -815,26 +827,58 @@ def create_task_view(request):
                 'error': 'Title cannot be empty'
             }, status=400)
 
+        result = create_task(
+            request.user,
+            creds,
+            title,
+            notes=notes if notes else None,
+            task_list_id=task_list_id
+        )
+
+        if isinstance(result, dict) and 'authorization_url' in result:
+            logger.warning('Reauth required, returning authorization URL')
+            request.session['state'] = result['state']
+            request.session['oauth_scopes'] = result.get('scopes', [])
+            request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
+            return JsonResponse({
+                'success': False,
+                'reauth_required': True,
+                'authorization_url': result['authorization_url']
+            })
+
+        if not result:
+            logger.error('Failed to create task in Google Tasks API')
+            return JsonResponse({
+                'success': False,
+                'error': 'Failed to create task in Google Tasks'
+            }, status=500)
+
         task_list = None
         if task_list_id:
-            task_list = get_object_or_404(
-                GoogleTaskList,
+            task_list = GoogleTaskList.objects.filter(
                 list_id=task_list_id,
                 user=request.user
-            )
+            ).first()
+        else:
+            task_list = GoogleTaskList.objects.filter(
+                user=request.user
+            ).first()
 
         task = GoogleTask.objects.create(
             user=request.user,
-            task_id=f'local_{uuid.uuid4().hex[:16]}',
+            task_id=result['id'],
             task_list=task_list,
-            title=title,
-            notes=notes if notes else None,
-            status='needsAction',
+            title=result.get('title', title),
+            notes=result.get('notes'),
+            status=result.get('status', 'needsAction'),
             is_starred=is_starred,
-            is_divider=False
+            is_divider=False,
+            updated=timezone.now()
         )
 
-        logger.info(f'Successfully created task {task.task_id}')
+        logger.info(
+            f'Successfully created task {task.task_id} in Google Tasks'
+        )
 
         return JsonResponse({
             'success': True,

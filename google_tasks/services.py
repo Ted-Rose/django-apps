@@ -181,6 +181,76 @@ def sync_all(user, creds):
     return tasks_result
 
 
+def create_task(user, creds, title, notes=None, task_list_id=None):
+    """
+    Create a new task in Google Tasks API.
+    Returns task data on success, or auth dict if reauth needed.
+    """
+    logger.info(
+        f'Attempting to create task "{title}" for user {user.username}'
+    )
+    try:
+        service = get_tasks_service(creds)
+
+        if isinstance(service, dict) and 'authorization_url' in service:
+            logger.warning(
+                f'Reauth required for user {user.username} '
+                f'when creating task'
+            )
+            return service
+
+        if not task_list_id:
+            default_list = GoogleTaskList.objects.filter(
+                user=user
+            ).first()
+            if not default_list:
+                logger.error(
+                    f'No task list found for user {user.username}'
+                )
+                return None
+            task_list_id = default_list.list_id
+            logger.info(
+                f'Using default task list: {default_list.title}'
+            )
+
+        task_body = {
+            'title': title,
+            'status': 'needsAction'
+        }
+
+        if notes:
+            task_body['notes'] = notes
+
+        logger.info(
+            f'Calling Google API to create task in tasklist {task_list_id}'
+        )
+        response = service.tasks().insert(
+            tasklist=task_list_id,
+            body=task_body
+        ).execute()
+        logger.info(f'Google API response: {response}')
+
+        logger.info(
+            'Successfully created task in Google Tasks API'
+        )
+        return response
+
+    except HttpError as error:
+        logger.error(
+            f'HttpError creating task: '
+            f'Status={error.resp.status}, '
+            f'Reason={error.resp.reason}, '
+            f'Content={error.content}'
+        )
+        return None
+    except Exception as e:
+        logger.error(
+            f'Unexpected error creating task: '
+            f'{type(e).__name__}: {str(e)}'
+        )
+        return None
+
+
 def complete_task(user, creds, task_id):
     """
     Mark a task as completed in Google Tasks API.
