@@ -91,9 +91,14 @@
         .divider-card {
             background-color: transparent;
             border: none;
-            cursor: grab;
+            cursor: default;
         }
-        .divider-card:active {
+        .divider-drag-handle {
+            cursor: grab;
+            padding: 0.25rem;
+            margin-right: 0.5rem;
+        }
+        .divider-drag-handle:active {
             cursor: grabbing;
         }
         .divider-body {
@@ -126,10 +131,18 @@
             width: auto;
             min-width: 100px;
             max-width: 300px;
+            cursor: text;
         }
         .divider-text:focus {
             opacity: 1;
             color: #495057;
+            background: rgba(13, 110, 253, 0.05);
+            border-radius: 3px;
+        }
+        .divider-text:hover:not(:focus) {
+            opacity: 0.9;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 3px;
         }
         .divider-text::placeholder {
             color: #adb5bd;
@@ -264,19 +277,22 @@
                 <div class="card task-card divider-card mb-2" data-task-id="{{ task.task_id }}">
                     <div class="card-body divider-body">
                         <div class="d-flex align-items-center">
-                            <i class="bi bi-grip-vertical text-muted me-2"></i>
+                            <span class="divider-drag-handle" title="Drag to reorder">
+                                <i class="bi bi-grip-vertical text-muted"></i>
+                            </span>
                             <hr class="flex-grow-1 my-0 me-2">
                             <input type="text" 
                                    class="divider-text" 
                                    value="{{ task.title }}"
-                                   placeholder="Label..."
+                                   placeholder="Click to label..."
                                    data-task-id="{{ task.task_id }}"
                                    onblur="updateDividerText(this)"
-                                   onkeypress="if(event.key==='Enter') this.blur()">
+                                   onkeypress="if(event.key==='Enter') this.blur()"
+                                   onclick="event.stopPropagation()">
                             <hr class="flex-grow-1 my-0 ms-2">
                             <button class="btn btn-sm btn-link text-danger delete-divider-btn"
                                     data-task-id="{{ task.task_id }}"
-                                    onclick="deleteDivider('{{ task.task_id }}')"
+                                    onclick="deleteDivider('{{ task.task_id }}'); event.stopPropagation();"
                                     title="Delete divider">
                                 <i class="bi bi-x-circle"></i>
                             </button>
@@ -719,6 +735,7 @@
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
+                handle: '.divider-drag-handle, .task-card:not(.divider-card)',
                 delay: 200,
                 delayOnTouchOnly: true,
                 onEnd: function () {
