@@ -35,15 +35,8 @@ if IS_GCP_ENVIRONMENT:
     ESV_KEY = get_secret('ESV_KEY')
 
     db_config = dj_database_url.parse(get_secret('DATABASE_URL'))
-    db_ssl_cert_content = get_secret('DB_SSL_CERT')
-    if db_ssl_cert_content:
-        CA_PEM_PATH = '/tmp/ca.pem'
-        if not os.path.exists(CA_PEM_PATH):
-            with open(CA_PEM_PATH, 'w') as f:
-                f.write(db_ssl_cert_content)
-        db_config.setdefault('OPTIONS', {})
-        db_config['OPTIONS']['sslmode'] = 'require'
-        db_config['OPTIONS']['sslrootcert'] = CA_PEM_PATH
+    db_config.setdefault('OPTIONS', {})
+    db_config['OPTIONS']['sslmode'] = 'require'
     DATABASES = {'default': db_config}
 
     GOOGLE_APP_SECRETS_PATH = '/tmp/app_secrets.json'
