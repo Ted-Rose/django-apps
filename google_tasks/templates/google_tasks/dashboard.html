@@ -769,13 +769,19 @@
         }
         
         function createDivider() {
+            {% if is_starred_view %}
+            alert('Dividers cannot be added in Starred view.\n\n' +
+                  'Dividers belong to specific task lists. ' +
+                  'Please select a task list from the dropdown, then add a divider there.');
+            return false;
+            {% else %}
             const taskListId = getCurrentTaskListId();
             
             if (!taskListId) {
                 alert('Please select a specific task list first.\n\n' +
                       'Dividers must belong to a task list. ' +
                       'Use the dropdown to select a task list, then add a divider.');
-                return;
+                return false;
             }
             
             const position = getNextPosition();
@@ -813,6 +819,8 @@
                 console.error('Error:', error);
                 alert('Error creating divider: ' + error.message);
             });
+            {% endif %}
+            return false;
         }
         
         function deleteDivider(taskId) {

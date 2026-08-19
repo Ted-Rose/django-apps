@@ -85,7 +85,7 @@ Where menu_items is a list of dictionaries with:
                     {{ item.label }}
                 </a>
             {% elif item.onclick %}
-                <button onclick="{{ item.onclick }}" 
+                <button onclick="{{ item.onclick }}; return false;" 
                         class="btn btn-sm 
                                {{ item.btn_class|default:'btn-light' }}">
                     {% if item.icon %}
