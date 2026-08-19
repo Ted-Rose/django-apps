@@ -815,10 +815,11 @@ def create_task_view(request):
         notes = data.get('notes', '').strip()
         is_starred = data.get('is_starred', False)
         task_list_id = data.get('task_list_id')
+        reminder_date = data.get('reminder_date')
 
         logger.info(
             f'Creating task for user {request.user.username}: '
-            f'title={title}, starred={is_starred}'
+            f'title={title}, starred={is_starred}, reminder={reminder_date}'
         )
 
         if not title:
@@ -832,7 +833,8 @@ def create_task_view(request):
             creds,
             title,
             notes=notes if notes else None,
-            task_list_id=task_list_id
+            task_list_id=task_list_id,
+            reminder_date=reminder_date
         )
 
         if isinstance(result, dict) and 'authorization_url' in result:
@@ -864,6 +866,18 @@ def create_task_view(request):
                 user=request.user
             ).first()
 
+        reminder_datetime = None
+        if reminder_date:
+            try:
+                from datetime import datetime
+                reminder_datetime = datetime.fromisoformat(reminder_date)
+                if timezone.is_naive(reminder_datetime):
+                    reminder_datetime = timezone.make_aware(reminder_datetime)
+            except (ValueError, AttributeError):
+                logger.warning(
+                    f'Invalid reminder_date format: {reminder_date}'
+                )
+
         task = GoogleTask.objects.create(
             user=request.user,
             task_id=result['id'],
@@ -873,6 +887,7 @@ def create_task_view(request):
             status=result.get('status', 'needsAction'),
             is_starred=is_starred,
             is_divider=False,
+            reminder_date=reminder_datetime,
             updated=timezone.now()
         )
 
@@ -895,7 +910,7 @@ def create_task_view(request):
 @login_required
 @require_POST
 def update_task_view(request, task_id):
-    """Update task title and notes."""
+    """Update task title, notes, and reminder date."""
     import logging
     logger = logging.getLogger('django')
 
@@ -903,6 +918,7 @@ def update_task_view(request, task_id):
         data = json.loads(request.body)
         title = data.get('title', '').strip()
         notes = data.get('notes', '').strip()
+        reminder_date = data.get('reminder_date')
 
         logger.info(
             f'Updating task {task_id} for user {request.user.username}'
@@ -922,6 +938,23 @@ def update_task_view(request, task_id):
 
         task.title = title
         task.notes = notes if notes else None
+
+        if reminder_date:
+            try:
+                from datetime import datetime
+                reminder_datetime = datetime.fromisoformat(reminder_date)
+                if timezone.is_naive(reminder_datetime):
+                    reminder_datetime = timezone.make_aware(
+                        reminder_datetime
+                    )
+                task.reminder_date = reminder_datetime
+            except (ValueError, AttributeError):
+                logger.warning(
+                    f'Invalid reminder_date format: {reminder_date}'
+                )
+        else:
+            task.reminder_date = None
+
         task.save()
 
         logger.info(f'Successfully updated task {task_id}')

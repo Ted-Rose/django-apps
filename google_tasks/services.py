@@ -181,10 +181,16 @@ def sync_all(user, creds):
     return tasks_result
 
 
-def create_task(user, creds, title, notes=None, task_list_id=None):
+def create_task(
+    user, creds, title, notes=None, task_list_id=None, reminder_date=None
+):
     """
     Create a new task in Google Tasks API.
     Returns task data on success, or auth dict if reauth needed.
+
+    Note: reminder_date is stored locally in our database.
+    Google Tasks API doesn't have a native reminder field,
+    but we can use it for local notifications or other features.
     """
     logger.info(
         f'Attempting to create task "{title}" for user {user.username}'
