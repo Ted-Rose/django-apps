@@ -49,4 +49,31 @@ urlpatterns = [
         views.update_divider,
         name='update_divider'
     ),
+    path('archived/', views.archived_tasks, name='archived'),
+    path('trash/', views.trash_tasks, name='trash'),
+    path(
+        'task/<str:task_id>/archive/',
+        views.archive_task_view,
+        name='archive_task'
+    ),
+    path(
+        'task/<str:task_id>/unarchive/',
+        views.unarchive_task_view,
+        name='unarchive_task'
+    ),
+    path(
+        'task/<str:task_id>/delete/',
+        views.delete_task_view,
+        name='delete_task'
+    ),
+    path(
+        'task/<str:task_id>/restore/',
+        views.restore_task_view,
+        name='restore_task'
+    ),
+    path(
+        'task/<str:task_id>/permanent-delete/',
+        views.permanent_delete_task_view,
+        name='permanent_delete_task'
+    ),
 ]

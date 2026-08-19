@@ -176,6 +176,16 @@
                         <i class="bi bi-star-fill text-warning"></i> Starred
                     </a>
                 </li>
+                <li>
+                    <a class="dropdown-item {% if is_archived_view %}active{% endif %}" href="{% url 'google_tasks:archived' %}">
+                        <i class="bi bi-archive"></i> Archive
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item {% if is_trash_view %}active{% endif %}" href="{% url 'google_tasks:trash' %}">
+                        <i class="bi bi-trash"></i> Trash
+                    </a>
+                </li>
                 {% if task_lists %}
                 <li><hr class="dropdown-divider"></li>
                 {% for list in task_lists %}
@@ -297,6 +307,23 @@
                                 </small>
                                 {% endif %}
                                 </div>
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" href="#" onclick="archiveTask('{{ task.task_id }}'); return false;">
+                                            <i class="bi bi-archive"></i> Archive
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item text-danger" href="#" onclick="deleteTask('{{ task.task_id }}'); return false;">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </a>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -905,6 +932,72 @@
                 console.error('Error:', error);
                 alert('Error updating divider text');
                 input.value = input.defaultValue;
+            });
+        }
+
+        function archiveTask(taskId) {
+            const csrftoken = getCookie('csrftoken');
+            
+            fetch(`/tasks/task/${taskId}/archive/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+                    if (taskCard) {
+                        taskCard.style.transition = 'opacity 0.3s ease';
+                        taskCard.style.opacity = '0';
+                        setTimeout(() => {
+                            taskCard.remove();
+                        }, 300);
+                    }
+                } else {
+                    alert('Failed to archive task');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while archiving the task');
+            });
+        }
+
+        function deleteTask(taskId) {
+            if (!confirm('Move this task to trash?')) {
+                return;
+            }
+            
+            const csrftoken = getCookie('csrftoken');
+            
+            fetch(`/tasks/task/${taskId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+                    if (taskCard) {
+                        taskCard.style.transition = 'opacity 0.3s ease';
+                        taskCard.style.opacity = '0';
+                        setTimeout(() => {
+                            taskCard.remove();
+                        }, 300);
+                    }
+                } else {
+                    alert('Failed to delete task');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the task');
             });
         }
     </script>
