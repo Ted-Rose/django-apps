@@ -42,7 +42,7 @@ if IS_GCP_ENVIRONMENT:
             with open(CA_PEM_PATH, 'w') as f:
                 f.write(db_ssl_cert_content)
         db_config.setdefault('OPTIONS', {})
-        db_config['OPTIONS']['sslmode'] = 'verify-full'
+        db_config['OPTIONS']['sslmode'] = 'require'
         db_config['OPTIONS']['sslrootcert'] = CA_PEM_PATH
     DATABASES = {'default': db_config}
 

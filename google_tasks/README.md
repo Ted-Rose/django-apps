@@ -20,6 +20,9 @@ local features like starring.
   Google
 - **Label Movement**: Automatically process hashtags in task notes to
   move tasks to matching task lists and star them
+- **Undo/Redo Action History**: Client-side undo/redo functionality
+  for all database-impacting actions with keyboard shortcuts and
+  localStorage persistence
 
 ## Architecture
 
@@ -81,6 +84,7 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 | `/tasks/task/<task_id>/process-label/` | `process_task_label_view` | POST | Process label for specific task |
 | `/tasks/divider/create/` | `create_divider` | POST | Create a new task divider |
 | `/tasks/divider/<task_id>/delete/` | `delete_divider` | POST | Delete a task divider |
+| `/tasks/divider/<task_id>/update/` | `update_divider` | POST | Update divider text |
 
 ## Behavior Details
 
@@ -215,6 +219,67 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 - Organize by timeline (Today/This Week/Later)
 - Create visual breathing room in long task lists
 
+### Undo/Redo Action History
+**Client-Side Action Tracking**:
+- Tracks all database-impacting user actions
+- Maintains undo and redo stacks with up to 50 actions
+- Persists history to localStorage (survives page refreshes)
+- Automatic cleanup when stack exceeds limit
+
+**Tracked Actions**:
+- ✅ **Star/Unstar**: Fully reversible toggle operations
+- ✅ **Complete/Uncomplete**: Full undo/redo support
+- ✅ **Reorder Tasks**: Restore previous task order
+- ✅ **Update Divider Text**: Revert text changes
+- ⚠️ **Archive/Delete**: Shows message to restore from Archive/Trash view
+- ⚠️ **Delete Divider**: Shows message to recreate manually
+
+**User Interface**:
+- **Floating Buttons** (bottom-left corner):
+  - Blue undo button with counter-clockwise arrow icon
+  - Gray redo button with clockwise arrow icon
+  - Auto-disabled when no actions available
+  - Hover effects with elevation animation
+- **Keyboard Shortcuts**:
+  - `Ctrl+Z` / `Cmd+Z` - Undo last action
+  - `Ctrl+Y` / `Cmd+Y` or `Ctrl+Shift+Z` / `Cmd+Shift+Z` - Redo action
+- **Toast Notifications**:
+  - Appears bottom-left when undo/redo performed
+  - Shows descriptive message (e.g., "Undid complete: Task Name")
+  - Auto-dismisses after 3 seconds
+  - Smooth fade-in/fade-out animations
+
+**Technical Implementation**:
+- `ActionHistory` class manages undo/redo stacks
+- Each action stores: type, task ID, previous state, timestamp
+- Actions execute with `skipHistory` flag to prevent recording during undo/redo
+- localStorage key: `taskActionHistory`
+- Maximum stack size: 50 actions (configurable)
+
+**Action Recording**:
+```javascript
+{
+    type: 'TOGGLE_STAR',
+    taskId: 'task-123',
+    previousState: true,
+    timestamp: 1692435600000
+}
+```
+
+**Behavior**:
+- New action: Records to undo stack, clears redo stack
+- Undo: Pops from undo stack, executes reverse, pushes to redo stack
+- Redo: Pops from redo stack, re-executes forward, pushes to undo stack
+- Page refresh: Restores history from localStorage
+
+**Limitations**:
+- Archive/Delete actions cannot be fully undone client-side
+- History cleared when navigating to different views
+- No synchronization between browser tabs
+- Subject to browser localStorage quota (~5-10MB)
+
+**See Also**: `UNDO_REDO_IMPLEMENTATION.md` for detailed technical documentation
+
 ### UI/UX Features
 **Dashboard**:
 - Bootstrap 5 responsive layout
@@ -284,6 +349,8 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 8. Add hashtags to task notes (e.g., `#Work`, `#Home`, `#Phys`)
 9. Click "Process Labels" to automatically move and star tasks
    based on hashtags
+10. Use `Ctrl+Z` / `Cmd+Z` to undo actions, `Ctrl+Y` / `Cmd+Y` to redo
+11. Click undo/redo buttons (bottom-left) for visual action history
 
 ## Admin Interface
 
