@@ -188,10 +188,12 @@ def reorder_starred(request):
             {'success': False, 'error': 'Invalid JSON'}, status=400
         )
 
+    max_position = len(ordered_ids) - 1
     for position, task_id in enumerate(ordered_ids):
+        inverted_position = max_position - position
         GoogleTask.objects.filter(
             task_id=task_id, user=request.user
-        ).update(task_order=position)
+        ).update(task_order=inverted_position)
 
     return JsonResponse({'success': True})
 
