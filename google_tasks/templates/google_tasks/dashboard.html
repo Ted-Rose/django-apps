@@ -770,10 +770,41 @@
         
         function createDivider() {
             {% if is_starred_view %}
-            alert('Dividers cannot be added in Starred view.\n\n' +
-                  'Dividers belong to specific task lists. ' +
-                  'Please select a task list from the dropdown, then add a divider there.');
-            return false;
+            const position = getNextPosition();
+            
+            console.log('Creating starred divider:', {
+                position: position,
+                is_starred: true
+            });
+            
+            fetch('{% url "google_tasks:create_divider" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    position: position,
+                    is_starred: true
+                })
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error creating divider: ' + 
+                          (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error creating divider: ' + error.message);
+            });
             {% else %}
             const taskListId = getCurrentTaskListId();
             

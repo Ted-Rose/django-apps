@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import F
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.utils import timezone
 from google_tasks.models import GoogleTask, GoogleTaskList
 from google_tasks.services import (
     sync_all,
@@ -31,7 +32,9 @@ def dashboard(request):
     task_list_filter = request.GET.get('list')
     order_by = request.GET.get('order', 'order_desc')
 
-    tasks = GoogleTask.objects.filter(user=request.user)
+    tasks = GoogleTask.objects.filter(
+        user=request.user, is_archived=False, is_deleted=False
+    )
 
     if task_list_filter:
         tasks = tasks.filter(task_list__list_id=task_list_filter)
@@ -109,7 +112,8 @@ def starred_tasks(request):
     order_by = request.GET.get('order', 'order_desc')
 
     starred_tasks_qs = GoogleTask.objects.filter(
-        user=request.user, is_starred=True
+        user=request.user, is_starred=True, is_archived=False,
+        is_deleted=False
     )
     active_tasks = starred_tasks_qs.filter(status='needsAction')
     completed_tasks = starred_tasks_qs.filter(status='completed')
@@ -495,17 +499,21 @@ def create_divider(request):
         data = json.loads(request.body)
         task_list_id = data.get('task_list_id')
         position = data.get('position', 0)
+        is_starred = data.get('is_starred', False)
 
         logger.info(
             f'Creating divider for user {request.user.username} '
-            f'in list {task_list_id} at position {position}'
+            f'in list {task_list_id} at position {position}, '
+            f'starred={is_starred}'
         )
 
-        task_list = get_object_or_404(
-            GoogleTaskList,
-            list_id=task_list_id,
-            user=request.user
-        )
+        task_list = None
+        if task_list_id:
+            task_list = get_object_or_404(
+                GoogleTaskList,
+                list_id=task_list_id,
+                user=request.user
+            )
 
         divider = GoogleTask.objects.create(
             user=request.user,
@@ -514,6 +522,7 @@ def create_divider(request):
             title='',
             status='needsAction',
             is_divider=True,
+            is_starred=is_starred,
             task_order=position
         )
 
@@ -592,3 +601,166 @@ def update_divider(request, task_id):
             'success': False,
             'error': str(e)
         }, status=400)
+
+
+@login_required
+@require_POST
+def archive_task_view(request, task_id):
+    """Archive a task (hide from main view but keep accessible)."""
+    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+    task.is_archived = True
+    task.save()
+
+    return JsonResponse({
+        'success': True,
+        'task_id': task_id
+    })
+
+
+@login_required
+@require_POST
+def unarchive_task_view(request, task_id):
+    """Unarchive a task (restore to main view)."""
+    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+    task.is_archived = False
+    task.save()
+
+    return JsonResponse({
+        'success': True,
+        'task_id': task_id
+    })
+
+
+@login_required
+@require_POST
+def delete_task_view(request, task_id):
+    """Move task to trash (soft delete)."""
+    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+    task.is_deleted = True
+    task.deleted_at = timezone.now()
+    task.save()
+
+    return JsonResponse({
+        'success': True,
+        'task_id': task_id
+    })
+
+
+@login_required
+@require_POST
+def restore_task_view(request, task_id):
+    """Restore task from trash."""
+    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+    task.is_deleted = False
+    task.deleted_at = None
+    task.save()
+
+    return JsonResponse({
+        'success': True,
+        'task_id': task_id
+    })
+
+
+@login_required
+@require_POST
+def permanent_delete_task_view(request, task_id):
+    """Permanently delete a task from database."""
+    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+    task.delete()
+
+    return JsonResponse({
+        'success': True,
+        'task_id': task_id
+    })
+
+
+@login_required
+def archived_tasks(request):
+    """View showing archived tasks."""
+    creds = request.session.get('google_credentials')
+    order_by = request.GET.get('order', 'order_desc')
+
+    archived_tasks_qs = GoogleTask.objects.filter(
+        user=request.user, is_archived=True, is_deleted=False
+    )
+    active_tasks = archived_tasks_qs.filter(status='needsAction')
+    completed_tasks = archived_tasks_qs.filter(status='completed')
+
+    if order_by == 'order_desc':
+        active_tasks = active_tasks.order_by(
+            F('task_order').desc(nulls_last=True), '-updated'
+        )
+    elif order_by == 'order_asc':
+        active_tasks = active_tasks.order_by(
+            F('task_order').asc(nulls_last=True), 'updated'
+        )
+    elif order_by == 'created_desc':
+        active_tasks = active_tasks.order_by('-updated')
+    elif order_by == 'created_asc':
+        active_tasks = active_tasks.order_by('updated')
+
+    if order_by == 'completed_last':
+        completed_tasks = completed_tasks.order_by('-completed')
+    elif order_by == 'completed_first':
+        completed_tasks = completed_tasks.order_by('completed')
+    else:
+        completed_tasks = completed_tasks.order_by('-updated')
+
+    task_lists = GoogleTaskList.objects.filter(user=request.user)
+
+    burger_menu_items = [
+        {'label': 'Home', 'url': '/', 'icon': 'house',
+         'btn_class': 'btn-light'},
+        {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
+         'btn_class': 'btn-primary'},
+    ]
+
+    context = {
+        'tasks': active_tasks,
+        'completed_tasks': completed_tasks,
+        'task_lists': task_lists,
+        'has_credentials': bool(creds),
+        'is_archived_view': True,
+        'order_by': order_by,
+        'burger_menu_items': burger_menu_items,
+    }
+
+    return render(request, 'google_tasks/archived.html', context)
+
+
+@login_required
+def trash_tasks(request):
+    """View showing deleted tasks (trash)."""
+    creds = request.session.get('google_credentials')
+    order_by = request.GET.get('order', 'deleted_desc')
+
+    deleted_tasks_qs = GoogleTask.objects.filter(
+        user=request.user, is_deleted=True
+    )
+
+    if order_by == 'deleted_desc':
+        deleted_tasks_qs = deleted_tasks_qs.order_by('-deleted_at')
+    elif order_by == 'deleted_asc':
+        deleted_tasks_qs = deleted_tasks_qs.order_by('deleted_at')
+    else:
+        deleted_tasks_qs = deleted_tasks_qs.order_by('-deleted_at')
+
+    task_lists = GoogleTaskList.objects.filter(user=request.user)
+
+    burger_menu_items = [
+        {'label': 'Home', 'url': '/', 'icon': 'house',
+         'btn_class': 'btn-light'},
+        {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
+         'btn_class': 'btn-primary'},
+    ]
+
+    context = {
+        'tasks': deleted_tasks_qs,
+        'task_lists': task_lists,
+        'has_credentials': bool(creds),
+        'is_trash_view': True,
+        'order_by': order_by,
+        'burger_menu_items': burger_menu_items,
+    }
+
+    return render(request, 'google_tasks/trash.html', context)

@@ -34,7 +34,9 @@ class GoogleTask(models.Model):
     task_list = models.ForeignKey(
         GoogleTaskList,
         on_delete=models.CASCADE,
-        related_name='tasks'
+        related_name='tasks',
+        null=True,
+        blank=True
     )
     title = models.CharField(max_length=500)
     notes = models.TextField(blank=True, null=True)
@@ -55,6 +57,19 @@ class GoogleTask(models.Model):
         null=True,
         blank=True,
         help_text='Manual ordering for tasks (replaces starred_order)'
+    )
+    is_archived = models.BooleanField(
+        default=False,
+        help_text='Task is archived (hidden from main view but accessible)'
+    )
+    is_deleted = models.BooleanField(
+        default=False,
+        help_text='Task is in trash (will be auto-purged after 30 days)'
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the task was moved to trash'
     )
 
     class Meta:
