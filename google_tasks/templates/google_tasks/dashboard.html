@@ -197,6 +197,33 @@
             opacity: 1;
             transform: translateY(0);
         }
+        .floating-add-btn {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-size: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 999;
+        }
+        .floating-add-btn:hover {
+            background-color: #0b5ed7;
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        }
+        .floating-add-btn:active {
+            transform: scale(0.95);
+        }
     </style>
 </head>
 <body>
