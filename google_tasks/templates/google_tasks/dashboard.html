@@ -572,11 +572,6 @@
                         <label for="taskNotes" class="form-label">Notes</label>
                         <textarea class="form-control" id="taskNotes" rows="4" placeholder="Enter task notes (optional)"></textarea>
                     </div>
-                    <div class="mb-3">
-                        <label for="taskReminderDate" class="form-label">Reminder Date & Time</label>
-                        <input type="datetime-local" class="form-control" id="taskReminderDate">
-                        <div class="form-text">Optional reminder for this task</div>
-                    </div>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="taskStarred">
                         <label class="form-check-label" for="taskStarred">
@@ -949,7 +944,6 @@
         function showCreateTaskModal() {
             document.getElementById('taskTitle').value = '';
             document.getElementById('taskNotes').value = '';
-            document.getElementById('taskReminderDate').value = '';
             document.getElementById('taskStarred').checked = false;
             
             const modalElement = document.getElementById('createTaskModal');
@@ -1500,7 +1494,6 @@
         function createTask() {
             const title = document.getElementById('taskTitle').value.trim();
             const notes = document.getElementById('taskNotes').value.trim();
-            const reminderDate = document.getElementById('taskReminderDate').value;
             const isStarred = document.getElementById('taskStarred').checked;
             
             if (!title) {
@@ -1517,10 +1510,6 @@
                 notes: notes || null,
                 is_starred: isStarred
             };
-            
-            if (reminderDate) {
-                requestBody.reminder_date = reminderDate;
-            }
 
             {% if is_starred_view %}
             requestBody.is_starred = true;

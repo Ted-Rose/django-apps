@@ -389,3 +389,29 @@ All required dependencies are already in the main `requirements.txt`:
 - All datetimes stored as timezone-aware
 - RFC 3339 parsing for Google API responses
 - Uses Django's `timezone.now()` for local timestamps
+
+## Google Tasks API Limitations
+
+### Reminders Not Supported
+**Important**: The Google Tasks API does **not** expose reminder functionality, even though reminders are available in the official Google Tasks mobile and web applications.
+
+**What this means**:
+- ❌ Cannot read task reminders via the API
+- ❌ Cannot set task reminders via the API
+- ❌ Reminders set in Google Tasks apps will not sync to this application
+- ❌ Cannot trigger notifications based on Google Tasks reminders
+
+**Why this limitation exists**:
+- Google Tasks API only exposes these fields: `title`, `notes`, `status`, `due`, `completed`, `deleted`, `hidden`, `links`, `assignmentInfo`
+- The `reminder` field exists in Google's backend but is not available in the public API
+- See [official API documentation](https://developers.google.com/tasks/reference/rest/v1/tasks)
+
+**Workarounds**:
+- Use the `due_date` field for basic deadline tracking
+- Set reminders directly in Google Tasks mobile/web apps (they work there, just won't sync via API)
+- Build a custom local notification system if needed (would require additional implementation)
+
+### Other API Limitations
+- **Due Date Time**: The `due` field only records date information; the time portion is discarded by the API
+- **Task Movement**: No direct "move" operation between lists; requires create + delete workflow
+- **Batch Operations**: Limited batch operation support; most actions require individual API calls

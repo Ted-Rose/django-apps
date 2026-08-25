@@ -41,11 +41,6 @@ class GoogleTask(models.Model):
     title = models.CharField(max_length=500)
     notes = models.TextField(blank=True, null=True)
     due_date = models.DateTimeField(null=True, blank=True)
-    reminder_date = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text='Reminder date and time for the task'
-    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
