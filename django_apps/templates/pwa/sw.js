@@ -6,11 +6,14 @@ const OFFLINE_URL = '{{ offline_url }}';
 
 // App shell: precached on install so the app is installable and works offline.
 const PRECACHE_URLS = [
+  '/',
   OFFLINE_URL,
   '{% static "pwa/icons/icon.svg" %}',
   '{% static "pwa/icons/icon-192.png" %}',
   '{% static "pwa/icons/icon-512.png" %}',
-  '{% static "pwa/icons/icon-maskable-512.png" %}'
+  '{% static "pwa/icons/icon-maskable-512.png" %}',
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css'
 ];
 
 // Paths we never want the service worker to serve from cache (auth, APIs, admin).
@@ -42,16 +45,23 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (BYPASS_PATHS.some((p) => url.pathname.startsWith(p))) return;
 
-  // Navigations: network-first, fall back to cache, then offline page.
+  // Navigations: cache-first for instant loading, update cache in background.
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-          return res;
-        })
-        .catch(() => caches.match(req).then((r) => r || caches.match(OFFLINE_URL)))
+      caches.match(req).then((cached) => {
+        // Return cached version immediately for instant load
+        const fetchPromise = fetch(req)
+          .then((res) => {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+            return res;
+          })
+          .catch(() => cached || caches.match(OFFLINE_URL));
+        
+        // If we have a cached version, return it immediately
+        // Otherwise wait for network
+        return cached || fetchPromise;
+      })
     );
     return;
   }

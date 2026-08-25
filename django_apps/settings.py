@@ -26,23 +26,25 @@ IS_GCP_ENVIRONMENT = (
 )
 
 if IS_GCP_ENVIRONMENT:
-    from .gcp import get_secret
     import dj_database_url
 
-    SECRET_KEY = get_secret('DJANGO_SECRET_KEY')
+    # Read secrets from environment variables (injected by Cloud Run)
+    SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
     DEBUG = False
-    BASE_URL = get_secret('APP_BASE_URL')
-    ESV_KEY = get_secret('ESV_KEY')
+    BASE_URL = os.environ.get('APP_BASE_URL')
+    ESV_KEY = os.environ.get('ESV_KEY')
 
-    db_config = dj_database_url.parse(get_secret('DATABASE_URL'))
+    db_config = dj_database_url.parse(os.environ.get('DATABASE_URL'))
     db_config.setdefault('OPTIONS', {})
     db_config['OPTIONS']['sslmode'] = 'require'
+    # Enable connection pooling to reuse DB connections
+    db_config['CONN_MAX_AGE'] = 600  # 10 minutes
     DATABASES = {'default': db_config}
 
     GOOGLE_APP_SECRETS_PATH = '/tmp/app_secrets.json'
     if not os.path.exists(GOOGLE_APP_SECRETS_PATH):
         with open(GOOGLE_APP_SECRETS_PATH, 'w') as f:
-            f.write(get_secret('GOOGLE_OAUTH_CLIENT_JSON'))
+            f.write(os.environ.get('GOOGLE_OAUTH_CLIENT_JSON', '{}'))
 
 elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
     with open(PRIVATE_SETTINGS_JSON_PATH, 'r') as file:
@@ -178,7 +180,8 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles', 'static')
 # available at build time), so STATIC_ROOT stays empty. WHITENOISE_USE_FINDERS
 # tells WhiteNoise to also scan STATICFILES_DIRS (i.e. static/) directly,
 # which IS committed to git and present in the container.
-WHITENOISE_USE_FINDERS = True
+# Only use finders in DEBUG mode for better production performance
+WHITENOISE_USE_FINDERS = DEBUG
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

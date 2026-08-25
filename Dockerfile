@@ -20,4 +20,4 @@ RUN python manage.py collectstatic --noinput || true
 
 EXPOSE 8080
 
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 django_apps.wsgi:application
+CMD exec gunicorn --bind :$PORT --workers 2 --threads 4 --timeout 0 --preload django_apps.wsgi:application

@@ -17,6 +17,56 @@ resource "google_cloud_run_v2_service" "django_app" {
         value = var.project_id
       }
 
+      env {
+        name = "DJANGO_SECRET_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.app["DJANGO_SECRET_KEY"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.app["DATABASE_URL"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "APP_BASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.app["APP_BASE_URL"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "ESV_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.app["ESV_KEY"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_OAUTH_CLIENT_JSON"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.app["GOOGLE_OAUTH_CLIENT_JSON"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
       ports {
         container_port = 8080
       }
