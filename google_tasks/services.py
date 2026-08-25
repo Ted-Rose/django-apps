@@ -118,27 +118,34 @@ def sync_tasks(user, creds, task_list_id=None):
                 tasks = results.get('items', [])
 
                 for task_data in tasks:
+                    defaults = {
+                        'task_list': task_list,
+                        'title': task_data.get('title', 'Untitled'),
+                        'notes': task_data.get('notes', ''),
+                        'due_date': parse_datetime(
+                            task_data.get('due')
+                        ),
+                        'status': task_data.get(
+                            'status', 'needsAction'
+                        ),
+                        'completed': parse_datetime(
+                            task_data.get('completed')
+                        ),
+                        'updated': parse_datetime(
+                            task_data.get('updated')
+                        ),
+                    }
+
                     task, created = GoogleTask.objects.update_or_create(
                         user=user,
                         task_id=task_data['id'],
-                        defaults={
-                            'task_list': task_list,
-                            'title': task_data.get('title', 'Untitled'),
-                            'notes': task_data.get('notes', ''),
-                            'due_date': parse_datetime(
-                                task_data.get('due')
-                            ),
-                            'status': task_data.get(
-                                'status', 'needsAction'
-                            ),
-                            'completed': parse_datetime(
-                                task_data.get('completed')
-                            ),
-                            'updated': parse_datetime(
-                                task_data.get('updated')
-                            ),
-                        }
+                        defaults=defaults
                     )
+
+                    if created and not task.created:
+                        task.created = timezone.now()
+                        task.save(update_fields=['created'])
+
                     total_synced += 1
 
                 page_token = results.get('nextPageToken')
@@ -270,7 +277,7 @@ def complete_task(user, creds, task_id):
             return service
 
         task = GoogleTask.objects.get(user=user, task_id=task_id)
-        
+
         if task.is_divider:
             logger.warning(
                 f'Cannot complete divider {task_id}'
@@ -347,13 +354,13 @@ def uncomplete_task(user, creds, task_id):
             return service
 
         task = GoogleTask.objects.get(user=user, task_id=task_id)
-        
+
         if task.is_divider:
             logger.warning(
                 f'Cannot uncomplete divider {task_id}'
             )
             return False
-        
+
         logger.info(
             f'Found task: {task.title} in list {task.task_list.list_id}'
         )

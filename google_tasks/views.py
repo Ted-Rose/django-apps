@@ -53,9 +53,13 @@ def dashboard(request):
             F('task_order').asc(nulls_last=True), 'updated'
         )
     elif order_by == 'created_desc':
-        active_tasks = active_tasks.order_by('-updated')
+        active_tasks = active_tasks.order_by(
+            F('created').desc(nulls_last=True), '-updated'
+        )
     elif order_by == 'created_asc':
-        active_tasks = active_tasks.order_by('updated')
+        active_tasks = active_tasks.order_by(
+            F('created').asc(nulls_last=True), 'updated'
+        )
     elif order_by == 'completed_last':
         active_tasks = active_tasks.order_by(
             F('completed').asc(nulls_first=True), '-updated'
@@ -129,9 +133,13 @@ def starred_tasks(request):
             F('task_order').asc(nulls_last=True), 'updated'
         )
     elif order_by == 'created_desc':
-        active_tasks = active_tasks.order_by('-updated')
+        active_tasks = active_tasks.order_by(
+            F('created').desc(nulls_last=True), '-updated'
+        )
     elif order_by == 'created_asc':
-        active_tasks = active_tasks.order_by('updated')
+        active_tasks = active_tasks.order_by(
+            F('created').asc(nulls_last=True), 'updated'
+        )
     elif order_by == 'completed_last':
         active_tasks = active_tasks.order_by(
             F('completed').asc(nulls_first=True), '-updated'
@@ -526,7 +534,8 @@ def create_divider(request):
             status='needsAction',
             is_divider=True,
             is_starred=is_starred,
-            task_order=position
+            task_order=position,
+            created=timezone.now()
         )
 
         logger.info(
@@ -698,9 +707,13 @@ def archived_tasks(request):
             F('task_order').asc(nulls_last=True), 'updated'
         )
     elif order_by == 'created_desc':
-        active_tasks = active_tasks.order_by('-updated')
+        active_tasks = active_tasks.order_by(
+            F('created').desc(nulls_last=True), '-updated'
+        )
     elif order_by == 'created_asc':
-        active_tasks = active_tasks.order_by('updated')
+        active_tasks = active_tasks.order_by(
+            F('created').asc(nulls_last=True), 'updated'
+        )
 
     if order_by == 'completed_last':
         completed_tasks = completed_tasks.order_by('-completed')
@@ -873,7 +886,8 @@ def create_task_view(request):
             status=result.get('status', 'needsAction'),
             is_starred=is_starred,
             is_divider=False,
-            updated=timezone.now()
+            updated=timezone.now(),
+            created=timezone.now()
         )
 
         logger.info(

@@ -48,6 +48,11 @@ class GoogleTask(models.Model):
     )
     completed = models.DateTimeField(null=True, blank=True)
     updated = models.DateTimeField(null=True, blank=True)
+    created = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When this task was first synced/created locally'
+    )
     is_starred = models.BooleanField(default=False)
     is_divider = models.BooleanField(
         default=False,
