@@ -167,6 +167,12 @@
 
       // Create an audio player for message
       function createAudio(text, messageId, autoplay = false) {
+          // Truncate text to 4500 chars to stay under 5000 limit
+          const maxLength = 4500;
+          if (text.length > maxLength) {
+              text = text.substring(0, maxLength) + '... (truncated)';
+          }
+          
           fetch(`/text-to-audio?text=${encodeURIComponent(text)}&filename=${messageId}`)
               .then(response => {
                   if (!response.ok) {
