@@ -14,6 +14,8 @@ def gmail(request):
             # If user has to authorize authorization_url is returned
             if 'authorization_url' in messages and 'state' in messages:
                 request.session['state'] = messages['state']
+                request.session['oauth_scopes'] = messages.get('scopes', [])
+                request.session['oauth_redirect_url'] = 'google_api:gmail'
                 return redirect(messages['authorization_url'])
             
             context = {'messages': messages}
@@ -22,6 +24,7 @@ def gmail(request):
             auth = google_auth()
             request.session['state'] = auth['state']
             request.session['oauth_scopes'] = auth.get('scopes', [])
+            request.session['oauth_redirect_url'] = 'google_api:gmail'
             return redirect(auth['authorization_url'])
 
     return render(request, 'gmail.html')
