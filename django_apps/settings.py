@@ -28,13 +28,20 @@ IS_GCP_ENVIRONMENT = (
 if IS_GCP_ENVIRONMENT:
     import dj_database_url
 
-    # Read secrets from environment variables (injected by Cloud Run)
-    SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
-    DEBUG = False
-    BASE_URL = os.environ.get('APP_BASE_URL')
-    ESV_KEY = os.environ.get('ESV_KEY')
+    # Helper to ensure env vars are strings (defensive against bytes)
+    def get_env_str(key, default=''):
+        value = os.environ.get(key, default)
+        if isinstance(value, bytes):
+            return value.decode('utf-8')
+        return value
 
-    db_config = dj_database_url.parse(os.environ.get('DATABASE_URL'))
+    # Read secrets from environment variables (injected by Cloud Run)
+    SECRET_KEY = get_env_str('DJANGO_SECRET_KEY')
+    DEBUG = False
+    BASE_URL = get_env_str('APP_BASE_URL')
+    ESV_KEY = get_env_str('ESV_KEY')
+
+    db_config = dj_database_url.parse(get_env_str('DATABASE_URL'))
     db_config.setdefault('OPTIONS', {})
     db_config['OPTIONS']['sslmode'] = 'require'
     # Enable connection pooling to reuse DB connections
@@ -44,7 +51,7 @@ if IS_GCP_ENVIRONMENT:
     GOOGLE_APP_SECRETS_PATH = '/tmp/app_secrets.json'
     if not os.path.exists(GOOGLE_APP_SECRETS_PATH):
         with open(GOOGLE_APP_SECRETS_PATH, 'w') as f:
-            f.write(os.environ.get('GOOGLE_OAUTH_CLIENT_JSON', '{}'))
+            f.write(get_env_str('GOOGLE_OAUTH_CLIENT_JSON', '{}'))
 
 elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
     with open(PRIVATE_SETTINGS_JSON_PATH, 'r') as file:
