@@ -15,9 +15,14 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import re
-from datetime import datetime
-from langdetect import detect, DetectorFactory
+from datetime import datetime, timedelta
+from langdetect import detect, DetectorFactory, LangDetectException
 from bs4 import BeautifulSoup
+import tempfile
+import google.auth
+import google.auth.transport.requests
+from typing import Optional
+from google.cloud import storage
 
 logger = logging.getLogger('django')
 
@@ -33,31 +38,147 @@ BASE_SCOPES = [
 ]
 
 
-def text_to_audio(text: str, lang: str = None, filename: str = None) -> str:
-    DetectorFactory.seed = 0
-    if lang is None:
-        lang = detect(text)
-        print("\n\n\nset lang to: ", lang)
-        # Sometimes by mistake English is mistaken as German or Danish
-        if lang not in ['lv', 'en']:
-            lang = 'en'
-    
+class AudioGenerationError(Exception):
+    """Raised when audio generation fails"""
+    pass
+
+
+def _sanitize_text_for_audio(text: str) -> str:
+    """
+    Sanitize text for audio generation.
+
+    Args:
+        text: Raw text
+
+    Returns:
+        Sanitized text suitable for TTS
+    """
     # Replace URLs with the word "web link"
     text = re.sub(r'https?://\S+', 'web link', text)
+
     # Remove long dashes
     text = re.sub(r'-{2,}', '', text)
 
-    filename = 'message_audio.mp3' if filename is None else str(filename) + '.mp3'
-    audio_file_path = os.path.join(settings.MEDIA_ROOT, "recordings", filename)
-    
-    # Check if the file already exists
-    if not os.path.exists(audio_file_path):
-        # If it doesn't exist, create the audio file
+    # Remove excessive whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+
+
+def text_to_audio(
+    text: str,
+    lang: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> str:
+    """
+    Generate audio from text and upload to GCS.
+
+    Args:
+        text: Text to convert to audio (max 5000 chars)
+        lang: Language code (auto-detected if None)
+        filename: Base filename without extension
+                  (auto-generated if None)
+
+    Returns:
+        Signed GCS URL valid for 7 days
+
+    Raises:
+        AudioGenerationError: If audio generation or upload fails
+        ValueError: If inputs are invalid
+    """
+    # Input validation
+    if not text or not isinstance(text, str):
+        raise ValueError("Text must be a non-empty string")
+
+    if len(text) > 5000:
+        raise ValueError("Text too long (max 5000 characters)")
+
+    # Detect language
+    DetectorFactory.seed = 0
+    if lang is None:
+        try:
+            lang = detect(text)
+            logger.info(f"Detected language: {lang}")
+            # Sometimes English is mistaken as German or Danish
+            if lang not in ['lv', 'en']:
+                lang = 'en'
+                logger.info("Defaulting to English")
+        except LangDetectException as e:
+            logger.warning(
+                f"Language detection failed: {e}, "
+                f"defaulting to English"
+            )
+            lang = 'en'
+
+    # Sanitize text
+    text = _sanitize_text_for_audio(text)
+
+    # Generate unique filename (timestamp + microseconds avoids
+    # collisions; no blob.exists() check needed)
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+    if filename:
+        # Sanitize to prevent path traversal
+        safe_filename = "".join(
+            c for c in str(filename)
+            if c.isalnum() or c in ('-', '_')
+        )
+        unique_filename = f"{timestamp}_{safe_filename}.mp3"
+    else:
+        unique_filename = f"{timestamp}_message_audio.mp3"
+
+    # Get GCS bucket
+    bucket_name = os.environ.get('GCS_AUDIO_BUCKET')
+    if not bucket_name:
+        logger.error('GCS_AUDIO_BUCKET environment variable not set')
+        raise AudioGenerationError('GCS storage not configured')
+
+    try:
+        # Refresh ADC credentials so access_token is current.
+        # On Cloud Run there is no private key — signed URLs must
+        # use the IAM signBlob API via service_account_email +
+        # access_token.
+        credentials, _ = google.auth.default()
+        credentials.refresh(
+            google.auth.transport.requests.Request()
+        )
+
+        storage_client = storage.Client(credentials=credentials)
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(f"recordings/{unique_filename}")
+
+        # Generate audio and upload via a temp file (gTTS needs a
+        # path)
         audio = gTTS(text=text, lang=lang, slow=False)
-        audio.save(audio_file_path)
-    
-    audio_url = settings.MEDIA_URL + 'recordings/' + filename
-    return audio_url
+        with tempfile.NamedTemporaryFile(
+            suffix='.mp3', delete=False
+        ) as tmp_file:
+            tmp_path = tmp_file.name
+            audio.save(tmp_path)
+
+        try:
+            blob.upload_from_filename(
+                tmp_path,
+                content_type='audio/mpeg',
+                timeout=30,
+            )
+            logger.info(f'Uploaded audio to GCS: {unique_filename}')
+        finally:
+            os.unlink(tmp_path)
+
+        # Generate signed URL valid for 7 days
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(days=7),
+            method="GET",
+            service_account_email=credentials.service_account_email,
+            access_token=credentials.token,
+        )
+
+        return signed_url
+
+    except Exception as e:
+        logger.exception(f"Failed to generate audio: {e}")
+        raise AudioGenerationError(f"Audio generation failed: {e}")
 
 
 def extract_text_from_html(html_content):

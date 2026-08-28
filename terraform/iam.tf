@@ -134,3 +134,25 @@ resource "google_service_account_iam_member" "github_deployer_act_as_cloudrun" {
   member              = "serviceAccount:${google_service_account.github_deployer.email}"
   depends_on = [google_project_service.enabled, google_service_account.github_deployer, google_service_account.cloudrun]
 }
+
+# Cloud Run SA can write audio files to bucket
+resource "google_storage_bucket_iam_member" "cloudrun_audio_object_creator" {
+  bucket = google_storage_bucket.audio_recordings.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.cloudrun.email}"
+}
+
+# Cloud Run SA can read audio files (for signed URL generation)
+resource "google_storage_bucket_iam_member" "cloudrun_audio_object_viewer" {
+  bucket = google_storage_bucket.audio_recordings.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.cloudrun.email}"
+}
+
+# Cloud Run SA can sign blobs on its own behalf (required for
+# generate_signed_url on Cloud Run where no private key is available)
+resource "google_service_account_iam_member" "cloudrun_self_sign" {
+  service_account_id = google_service_account.cloudrun.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.cloudrun.email}"
+}

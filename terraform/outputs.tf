@@ -21,3 +21,13 @@ output "secret_ids_observed" {
 output "gae_standard_image_base" {
   value = "${google_artifact_registry_repository.gae_standard.location}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.gae_standard.repository_id}"
 }
+
+output "audio_storage_bucket" {
+  description = "GCS bucket for audio recordings"
+  value       = google_storage_bucket.audio_recordings.name
+}
+
+output "audio_storage_bucket_url" {
+  description = "GCS bucket URL"
+  value       = google_storage_bucket.audio_recordings.url
+}

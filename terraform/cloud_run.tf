@@ -67,6 +67,11 @@ resource "google_cloud_run_v2_service" "django_app" {
         }
       }
 
+      env {
+        name  = "GCS_AUDIO_BUCKET"
+        value = google_storage_bucket.audio_recordings.name
+      }
+
       ports {
         container_port = 8080
       }

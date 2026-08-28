@@ -5,6 +5,7 @@ google-api-python-client==2.136.0
 google-auth==2.31.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
+google-cloud-storage==2.19.0
 langdetect==1.0.9
 beautifulsoup4==4.12.3
 googletrans==4.0.0-rc1
