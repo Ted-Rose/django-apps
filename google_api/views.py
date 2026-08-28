@@ -48,10 +48,28 @@ def audio(request):
         text = request.GET.get('text')
         filename = request.GET.get('filename')
         lang = request.GET.get('lang')
-        audio_url = text_to_audio(text=text, lang=lang, filename=filename)
         
-        # Return the audio URL as JSON response
-        return JsonResponse({'audio_url': audio_url})
+        try:
+            audio_url = text_to_audio(
+                text=text, lang=lang, filename=filename
+            )
+            # Return the audio URL as JSON response
+            return JsonResponse({'audio_url': audio_url})
+        except ValueError as e:
+            # Invalid input (empty text, too long, etc.)
+            return JsonResponse(
+                {'error': str(e)},
+                status=400
+            )
+        except Exception as e:
+            # Audio generation or upload failed
+            return JsonResponse(
+                {'error': f'Failed to generate audio: {str(e)}'},
+                status=500
+            )
     else:
-        # Return a 405 Method Not Allowed response for other request methods
-        return JsonResponse({'error': 'Method Not Allowed'}, status=405)
+        # Return a 405 Method Not Allowed response
+        return JsonResponse(
+            {'error': 'Method Not Allowed'},
+            status=405
+        )
