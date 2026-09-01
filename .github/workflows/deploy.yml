@@ -102,7 +102,7 @@ jobs:
             --memory=1Gi \
             --cpu=1 \
             --timeout=300 \
-            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},GCS_AUDIO_BUCKET=django-apps-audio \
+            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},GCS_AUDIO_BUCKET=gmail-vercel-audio-recordings \
             --project=${{ env.GCP_PROJECT_ID }}
 
       - name: Show service URL

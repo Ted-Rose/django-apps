@@ -184,13 +184,13 @@ def text_to_audio(
 def extract_text_from_html(html_content):
     # Remove HTML comments
     html_content = re.sub(r'<!--(.*?)-->', '', html_content, flags=re.DOTALL)
-    
+
     # Remove all HTML tags
     clean_text = re.sub(r'<.*?>', '', html_content, flags=re.DOTALL)
-    
+
     # Normalize spaces and remove extra newlines
     clean_text = re.sub(r'\s+', ' ', clean_text)
-    
+
     return clean_text.strip()
 
 
@@ -206,11 +206,11 @@ def google_auth(creds=None, scopes=None):
     )
     with open(client_secrets_path, 'r') as file:
         data = json.load(file)
-    
+
     client_id = data.get('web', {}).get('client_id')
     client_secret = data.get('web', {}).get('client_secret')
     token_uri = data.get('web', {}).get('token_uri')
-    
+
     if creds:
         granted_scopes = set(creds.get('scopes', []))
         required_scopes = set(scopes)
@@ -242,19 +242,24 @@ def google_auth(creds=None, scopes=None):
             if can_refresh:
                 creds.refresh(Request())
             else:
-                creds = None  # Set creds to None to ensure we run the OAuth flow
+                # Set creds to None to ensure we run the OAuth flow
+                creds = None
         if not creds or not creds.valid:
             flow = InstalledAppFlow.from_client_secrets_file(
                 client_secrets_path,
                 scopes,
-                redirect_uri = f"{settings.BASE_URL}/google/callback"
+                redirect_uri=f"{settings.BASE_URL}/google/callback"
             )
-            authorization_url, state  = flow.authorization_url(
+            authorization_url, state = flow.authorization_url(
                 access_type='offline',
                 include_granted_scopes='true'
             )
-            return {"authorization_url": authorization_url, "state": state, "scopes": scopes}
-  
+            return {
+                "authorization_url": authorization_url,
+                "state": state,
+                "scopes": scopes
+            }
+
     return creds
 
 
@@ -264,24 +269,37 @@ def get_messages(query, creds):
     """
     try:
         credentials = google_auth(creds)
-        if isinstance(credentials, dict) and 'authorization_url' in credentials:
-          return credentials
+        if (isinstance(credentials, dict) and
+                'authorization_url' in credentials):
+            return credentials
 
         service = build("gmail", "v1", credentials=credentials)
-        results = service.users().messages().list(userId="me", q=query, maxResults=100).execute()
+        results = (
+            service.users().messages()
+            .list(userId="me", q=query, maxResults=100)
+            .execute()
+        )
         messages = results.get("messages", [])
-        
+
         message_details = []
 
         if not messages:
             print("No messages found.")
-            return
-        
+            return []
+
         for message in messages:
             message_id = message['id']
-            msg = service.users().messages().get(userId="me", id=message_id, format='raw').execute()
-            msg_str = base64.urlsafe_b64decode(msg['raw'].encode('ASCII'))
-            mime_message = BytesParser(policy=policy.default).parsebytes(msg_str)
+            msg = (
+                service.users().messages()
+                .get(userId="me", id=message_id, format='raw')
+                .execute()
+            )
+            msg_str = base64.urlsafe_b64decode(
+                msg['raw'].encode('ASCII')
+            )
+            mime_message = BytesParser(
+                policy=policy.default
+            ).parsebytes(msg_str)
 
             subject = mime_message['subject']
             sender = mime_message['from']
@@ -290,17 +308,28 @@ def get_messages(query, creds):
             charset = mime_message.get_content_charset('utf-8')
             if mime_message.is_multipart():
                 for part in mime_message.iter_parts():
-                    if part.get_content_type() == 'text/plain':
-                        body = part.get_payload(decode=True).decode(charset, errors='replace')
+                    content_type = part.get_content_type()
+                    if content_type == 'text/plain':
+                        body = (
+                            part.get_payload(decode=True)
+                            .decode(charset, errors='replace')
+                        )
                         break
-                    elif part.get_content_type() == 'text/html':
-                        body = extract_text_from_html(part.get_payload(decode=True).decode(charset, errors='replace'))
+                    elif content_type == 'text/html':
+                        html_content = (
+                            part.get_payload(decode=True)
+                            .decode(charset, errors='replace')
+                        )
+                        body = extract_text_from_html(html_content)
                         break
                 if not body:
                     body = 'Multipart message without text part!'
             else:
-                body = mime_message.get_payload(decode=True).decode(charset, errors='replace')
-            
+                body = (
+                    mime_message.get_payload(decode=True)
+                    .decode(charset, errors='replace')
+                )
+
             body = extract_text_from_html(body)
             if sender == "e-klase <notifikacijas@e-klase.lv>":
                 # Extract subject using a regular expression
@@ -308,8 +337,11 @@ def get_messages(query, creds):
                 if subject_match:
                     subject = subject_match.group(1).strip()
 
-                # Extract the main body content, excluding boilerplate, subject, and recipient info
-                body_pattern = r"Kam: ([\s\S]*?)(?=_______________________________________________Lai atbildētu vai pārsūtītu)"
+                # Extract main body content, excluding boilerplate
+                body_pattern = (
+                    r"Kam: ([\s\S]*?)(?=_______________________________"
+                    r"________________Lai atbildētu vai pārsūtītu)"
+                )
                 body_match = re.search(body_pattern, body, re.DOTALL)
                 if body_match:
                     body = body_match.group(1).strip()
@@ -370,7 +402,7 @@ def callback(request, scopes=None):
     flow = InstalledAppFlow.from_client_secrets_file(
                 client_secrets_path,
                 scopes,
-                redirect_uri = f"{settings.BASE_URL}/google/callback"
+                redirect_uri=f"{settings.BASE_URL}/google/callback"
             )
     flow.fetch_token(authorization_response=request.build_absolute_uri())
     credentials = flow.credentials

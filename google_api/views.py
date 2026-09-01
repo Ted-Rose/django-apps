@@ -1,7 +1,6 @@
 from django.shortcuts import render, redirect
 from google_api.utils import get_messages, text_to_audio, google_auth
 from django.http import JsonResponse
-from django.conf import settings
 
 
 def gmail(request):
@@ -12,12 +11,13 @@ def gmail(request):
             messages = get_messages(query=query, creds=creds)
 
             # If user has to authorize authorization_url is returned
-            if 'authorization_url' in messages and 'state' in messages:
+            if (isinstance(messages, dict) and 'authorization_url' in
+                    messages and 'state' in messages):
                 request.session['state'] = messages['state']
                 request.session['oauth_scopes'] = messages.get('scopes', [])
                 request.session['oauth_redirect_url'] = 'google_api:gmail'
                 return redirect(messages['authorization_url'])
-            
+
             context = {'messages': messages}
             return render(request, 'gmail.html', context)
         else:
