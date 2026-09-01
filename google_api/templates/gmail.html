@@ -167,9 +167,9 @@
 
       // Create an audio player for message
       function createAudio(text, messageId, autoplay = false) {
-          // Truncate to 1500 chars (URL encoding can triple the size)
-          // This ensures we stay well under the 5000 char backend limit
-          const maxLength = 1500;
+          // Truncate to 2300 chars (URL encoding can expand size ~2x)
+          // This ensures we stay under the 5000 char backend limit
+          const maxLength = 2300;
           if (text.length > maxLength) {
               text = text.substring(0, maxLength) + '... (message truncated for audio)';
           }
