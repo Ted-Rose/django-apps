@@ -6,79 +6,200 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% include "pwa/head.html" %}
     <title>Gmail to Audio</title>
+    <link 
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+        rel="stylesheet">
+    <link 
+        rel="stylesheet" 
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        .message-card {
+            transition: all 0.2s ease;
+        }
+        .message-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .message-body {
+            display: none;
+            margin-top: 10px;
+        }
+        .message-body.show {
+            display: block;
+        }
+        .card-title {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        .message-card .card-title {
+            font-size: 0.9em;
+            margin-bottom: 0.5rem;
+        }
+        .message-card .card-text {
+            font-size: 0.85em;
+        }
+        .message-card small {
+            font-size: 0.8em;
+        }
+    </style>
 </head>
 
 <body>
-    <h1>Get emails!</h1>
-    <style>
-      body {
-          font-family: Arial, sans-serif;
-          margin: 20px;
-      }
-      h1, h2, p {
-          margin: 10px 0;
-      }
-      button {
-          padding: 5px 10px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          background-color: #f0f8ff;
-          cursor: pointer;
-          font-family: inherit;
-      }
-      button:hover {
-          background-color: #e0e8ff;
-      }
-      .message-body {
-          display: none;  /* Hide the body content initially */
-          margin-top: 5px;
-      }
-  </style>
-    <form method="get" action="">
-      <label for="query">Filter what emails you would like to fetch:</label>
-      <input type="text" id="query" name="query" value="is: unread">
-      <button type="submit" name="get_messages">Get Emails</button>
-  </form>
-
-    <!-- Display email list if available -->
-    {% if messages %}
-        <h2>Found some emails!</h2>
-
-        {% for message in messages %}
-        <div id="message-{{ message.id }}-container">
-            <p>Message id: {{ message.id }}</p>
-            <p class="subject">Subject: {{ message.subject }}</p>
-            <p class="sender">Sender: {{ message.sender }}</p>
-            <p class="body-toggle">Body: <button type="button">Show</button></p>
-            <p class="message-body">Body: {{ message.body }}</p>
-            <div id="audio-player-{{ message.id }}"></div>
-            <form method="get" action="" class="create-audio-form">
-                <input type="hidden" name="message-id" value="{{ message.id }}">
-                <button type="button" class="play-audio">Play</button>
-                <button type="button" class="play-all-audios">Play all from here</button>
-            </form>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-envelope"></i> Gmail to Audio
+            </a>
         </div>
-        {% endfor %}
-    {% endif %}
+    </nav>
 
+    <div class="container-fluid px-3 py-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-filter"></i> Filter Emails
+                </h5>
+                <form method="get" action="">
+                    <div class="mb-3">
+                        <label for="query" class="form-label">
+                            Enter your Gmail search query:
+                        </label>
+                        <input 
+                            type="text" 
+                            class="form-control" 
+                            id="query" 
+                            name="query" 
+                            value="is: unread" 
+                            placeholder="e.g., is:unread">
+                    </div>
+                    <button 
+                        type="submit" 
+                        name="get_messages" 
+                        class="btn btn-primary">
+                        <i class="bi bi-envelope-open"></i> Get Emails
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Display email list if available -->
+        {% if messages %}
+            <h4 class="mb-3">
+                <i class="bi bi-inbox"></i> Found {{ messages|length }} 
+                email{{ messages|length|pluralize }}
+            </h4>
+
+            {% for message in messages %}
+            <div 
+                id="message-{{ message.id }}-container" 
+                class="card message-card mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between 
+                                align-items-start mb-2">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title subject">
+                                <i class="bi bi-chat-left-text"></i> 
+                                {{ message.subject }}
+                            </h5>
+                            <p class="card-text text-muted sender mb-2">
+                                <i class="bi bi-person"></i> 
+                                {{ message.sender }}
+                            </p>
+                            <small class="text-muted">
+                                <i class="bi bi-hash"></i> 
+                                ID: {{ message.id }}
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <button 
+                            type="button" 
+                            class="btn btn-sm btn-outline-secondary 
+                                   body-toggle-btn">
+                            <i class="bi bi-eye"></i> Show Body
+                        </button>
+                    </div>
+
+                    <div class="message-body alert alert-light">
+                        <strong>Body:</strong>
+                        <div class="mt-2">{{ message.body }}</div>
+                    </div>
+
+                    <div id="audio-player-{{ message.id }}" 
+                         class="mb-3"></div>
+
+                    <form 
+                        method="get" 
+                        action="" 
+                        class="create-audio-form">
+                        <input 
+                            type="hidden" 
+                            name="message-id" 
+                            value="{{ message.id }}">
+                        <div class="btn-group" role="group">
+                            <button 
+                                type="button" 
+                                class="btn btn-primary play-audio">
+                                <i class="bi bi-play-circle"></i> Play
+                            </button>
+                            <button 
+                                type="button" 
+                                class="btn btn-success play-all-audios">
+                                <i class="bi bi-play-fill"></i> 
+                                Play All From Here
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> 
+                No emails found. Use the filter above to fetch emails.
+            </div>
+        {% endif %}
+    </div>
+
+    <script 
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js">
+    </script>
     <script>
       let messageIds = [];
 
       document.addEventListener("DOMContentLoaded", () => {
-          const messageIdElements = document.querySelectorAll('input[name="message-id"]');
-          messageIds = Array.from(messageIdElements).map(input => input.value);
+          const messageIdElements = 
+              document.querySelectorAll('input[name="message-id"]');
+          messageIds = Array.from(messageIdElements).map(
+              input => input.value
+          );
+
+          // Setup body toggle buttons
+          const bodyToggleButtons = 
+              document.querySelectorAll('.body-toggle-btn');
+          bodyToggleButtons.forEach(button => {
+              button.addEventListener('click', function() {
+                  const container = this.closest('.card-body');
+                  const messageBody = 
+                      container.querySelector('.message-body');
+                  const icon = this.querySelector('i');
+                  
+                  if (messageBody.classList.contains('show')) {
+                      messageBody.classList.remove('show');
+                      this.innerHTML = 
+                          '<i class="bi bi-eye"></i> Show Body';
+                  } else {
+                      messageBody.classList.add('show');
+                      this.innerHTML = 
+                          '<i class="bi bi-eye-slash"></i> Hide Body';
+                  }
+              });
+          });
       });
 
       let currentIndex = 0;      
-      let AutoplayIds = []
-      const bodyToggleButtons = document.querySelectorAll('.body-toggle button');
-        bodyToggleButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const messageBody = this.parentElement.nextElementSibling;
-                messageBody.style.display = messageBody.style.display === 'none' ? 'block' : 'none';
-                this.textContent = messageBody.style.display === 'none' ? 'Show' : 'Hide';
-              });
-            });
+      let AutoplayIds = [];
       function createAllAudios(firstMessageId, playOnlyFirst = false) {
         AutoplayIds = [];
         const startIndex = messageIds.findIndex(id => id === firstMessageId);
