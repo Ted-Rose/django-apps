@@ -149,11 +149,14 @@ resource "google_storage_bucket_iam_member" "cloudrun_audio_object_viewer" {
   member = "serviceAccount:${google_service_account.cloudrun.email}"
 }
 
-# Note: roles/iam.serviceAccountTokenCreator is NOT required for
-# signed URL generation when using service_account_email + access_token
-# (token-based signing). The Cloud Run SA already has implicit permission
-# to sign on its own behalf via the IAM signBlob API when using ADC.
-# Adding this binding would require the deployer SA to have
-# iam.serviceAccounts.setIamPolicy permission, which violates least
-# privilege. The current implementation in utils.py correctly uses
-# token-based signing without this binding.
+# Cloud Run SA needs to sign blobs for generating signed URLs
+# This allows the SA to sign on its own behalf
+resource "google_service_account_iam_member" "cloudrun_self_token_creator" {
+  service_account_id = google_service_account.cloudrun.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.cloudrun.email}"
+  depends_on = [
+    google_project_service.enabled,
+    google_service_account.cloudrun
+  ]
+}
