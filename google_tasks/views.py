@@ -38,14 +38,7 @@ def get_creds_dict(user):
 @login_required
 def dashboard(request):
     """Main dashboard showing all tasks."""
-    from django.shortcuts import redirect
-    from django.urls import reverse
-    
     creds = get_creds_dict(request.user)
-    
-    # If no credentials, redirect to login
-    if not creds and 'sync' not in request.GET:
-        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -157,14 +150,7 @@ def dashboard(request):
 @login_required
 def starred_tasks(request):
     """View showing only starred tasks."""
-    from django.shortcuts import redirect
-    from django.urls import reverse
-    
     creds = get_creds_dict(request.user)
-    
-    # If no credentials, redirect to login
-    if not creds and 'sync' not in request.GET:
-        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -768,15 +754,7 @@ def permanent_delete_task_view(request, task_id):
 @login_required
 def archived_tasks(request):
     """View showing archived tasks."""
-    from django.shortcuts import redirect
-    from django.urls import reverse
-    
     creds = get_creds_dict(request.user)
-    
-    # If no credentials, redirect to login
-    if not creds:
-        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
-    
     order_by = request.GET.get('order', 'order_desc')
 
     archived_tasks_qs = GoogleTask.objects.filter(
@@ -842,15 +820,7 @@ def archived_tasks(request):
 @login_required
 def trash_tasks(request):
     """View showing deleted tasks (trash)."""
-    from django.shortcuts import redirect
-    from django.urls import reverse
-    
     creds = get_creds_dict(request.user)
-    
-    # If no credentials, redirect to login
-    if not creds:
-        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
-    
     order_by = request.GET.get('order', 'deleted_desc')
 
     deleted_tasks_qs = GoogleTask.objects.filter(
@@ -896,15 +866,8 @@ def trash_tasks(request):
 @login_required
 def task_detail(request, task_id):
     """View showing task details with edit capability."""
-    from django.shortcuts import redirect
-    from django.urls import reverse
-    
     task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
     creds = get_creds_dict(request.user)
-    
-    # If no credentials, redirect to login
-    if not creds:
-        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',

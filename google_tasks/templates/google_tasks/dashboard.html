@@ -238,6 +238,7 @@
         </div>
     </nav>
 
+    {% if has_credentials %}
     <div class="filter-bar py-2 px-3 d-flex align-items-center gap-2 flex-wrap">
         <!-- View dropdown: All Tasks + Starred + Task Lists -->
         <div class="dropdown">
@@ -340,6 +341,7 @@
             </ul>
         </div>
     </div>
+    {% endif %}
 
     <div class="container-fluid px-2 py-4">
         {% if tasks %}
@@ -423,17 +425,30 @@
             </div>
         {% else %}
             {% if not completed_tasks %}
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i> 
-                {% if is_starred_view %}
-                No starred tasks yet. Star tasks from the main dashboard to see them here.
-                {% else %}
-                No tasks found.
+            <div class="alert alert-info text-center py-5">
                 {% if has_credentials %}
-                Click "Sync Now" to fetch your tasks.
+                    <i class="bi bi-info-circle fs-1 d-block mb-3"></i>
+                    <h5>
+                        {% if is_starred_view %}
+                        No starred tasks yet
+                        {% else %}
+                        No tasks found
+                        {% endif %}
+                    </h5>
+                    <p class="mb-0">
+                        {% if is_starred_view %}
+                        Star tasks from the main dashboard to see them here.
+                        {% else %}
+                        Click "Sync Now" in the menu to fetch your tasks from Google.
+                        {% endif %}
+                    </p>
                 {% else %}
-                Please authenticate with Google to sync your tasks.
-                {% endif %}
+                    <i class="bi bi-shield-lock fs-1 d-block mb-3 text-warning"></i>
+                    <h5>Google Authentication Required</h5>
+                    <p class="mb-3">You need to authenticate with Google to access your tasks.</p>
+                    <a href="/login/?next={{ request.get_full_path }}" class="btn btn-warning btn-lg">
+                        <i class="bi bi-google"></i> Login with Google
+                    </a>
                 {% endif %}
             </div>
             {% endif %}
@@ -490,11 +505,15 @@
         </span>
     </div>
 
+    {% if has_credentials %}
     <button class="floating-add-btn" onclick="showCreateTaskModal()" title="Create new task">
         <i class="bi bi-plus"></i>
     </button>
 
     <div class="undo-redo-controls">
+    {% else %}
+    <div class="undo-redo-controls" style="display: none;">
+    {% endif %}
         <button id="undo-btn" class="btn btn-primary" title="Undo (Ctrl+Z)" disabled>
             <i class="bi bi-arrow-counterclockwise"></i>
         </button>
