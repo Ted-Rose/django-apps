@@ -29,7 +29,7 @@ def gmail(request):
             request.user,
             scopes=['https://www.googleapis.com/auth/gmail.readonly']
         )
-        
+
         if creds:
             query = request.GET.get('query', '')
             # Pass credentials dict for backward compatibility
@@ -69,18 +69,18 @@ def login_view(request):
     This includes Gmail (readonly) and Google Tasks access.
     """
     from google_api.utils import ALL_APP_SCOPES
-    
+
     next_url = request.GET.get('next', 'google_tasks:dashboard')
     request.session['oauth_redirect_url'] = next_url
-    
+
     # Request all scopes at once for a unified login experience
     auth = google_auth(scopes=ALL_APP_SCOPES, user=request.user)
-    
+
     if isinstance(auth, dict) and 'authorization_url' in auth:
         request.session['state'] = auth['state']
         request.session['oauth_scopes'] = auth['scopes']
         return redirect(auth['authorization_url'])
-    
+
     # Already authenticated, redirect to next URL
     return redirect(next_url)
 
@@ -90,7 +90,7 @@ def audio(request):
         text = request.GET.get('text')
         filename = request.GET.get('filename')
         lang = request.GET.get('lang')
-        
+
         try:
             audio_url = text_to_audio(
                 text=text, lang=lang, filename=filename
