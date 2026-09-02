@@ -231,6 +231,18 @@
                 );
             });
         }
+
+        // Save current view to localStorage on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const currentPath = window.location.pathname;
+                const currentSearch = window.location.search;
+                const fullUrl = currentPath + currentSearch;
+                localStorage.setItem('lastTasksView', fullUrl);
+            } catch (e) {
+                console.warn('Failed to save view to localStorage:', e);
+            }
+        });
     </script>
 </body>
 </html>

@@ -895,19 +895,34 @@
             });
         }
 
+        function saveCurrentView() {
+            try {
+                const currentPath = window.location.pathname;
+                const currentSearch = window.location.search;
+                const fullUrl = currentPath + currentSearch;
+                localStorage.setItem('lastTasksView', fullUrl);
+            } catch (e) {
+                console.warn('Failed to save view to localStorage:', e);
+            }
+        }
+
         function selectList(listId) {
             {% if is_starred_view %}
             // Navigate to dashboard with list filter
             const params = new URLSearchParams();
             if (listId) params.set('list', listId);
-            window.location.href = 
+            const url = 
                 '{% url "google_tasks:dashboard" %}?' + params.toString();
+            saveCurrentView();
+            window.location.href = url;
             {% else %}
             const params = new URLSearchParams(window.location.search);
             params.delete('list');
             params.delete('sync');
             if (listId) params.set('list', listId);
-            window.location.href = '?' + params.toString();
+            const url = '?' + params.toString();
+            saveCurrentView();
+            window.location.href = url;
             {% endif %}
         }
 
@@ -919,6 +934,7 @@
             } else {
                 params.delete('order');
             }
+            saveCurrentView();
             window.location.href = '?' + params.toString();
         }
 
@@ -1593,6 +1609,30 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Restore last view if visiting without parameters
+            const currentPath = window.location.pathname;
+            const currentSearch = window.location.search;
+            const isDefaultView = (
+                currentPath === '{% url "google_tasks:dashboard" %}' && 
+                !currentSearch
+            );
+            
+            if (isDefaultView) {
+                try {
+                    const lastView = localStorage.getItem('lastTasksView');
+                    if (lastView && lastView !== currentPath) {
+                        // Redirect to last view
+                        window.location.href = lastView;
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('Failed to restore view:', e);
+                }
+            }
+            
+            // Save current view to localStorage
+            saveCurrentView();
+            
             const undoBtn = document.getElementById('undo-btn');
             const redoBtn = document.getElementById('redo-btn');
             

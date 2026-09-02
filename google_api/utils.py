@@ -353,8 +353,13 @@ def get_messages(query, creds):
                     # Remove extra whitespace
                     body = re.sub(r'\s+', ' ', body).strip()
 
-                    body_start_pattern = r".*?Lai aplūkotu pielikumus, pieslēdzieties E-klasei\."
-                    new_body = re.sub(body_start_pattern, '', body, flags=re.DOTALL)
+                    body_start_pattern = (
+                        r".*?Lai aplūkotu pielikumus, "
+                        r"pieslēdzieties E-klasei\."
+                    )
+                    new_body = re.sub(
+                        body_start_pattern, '', body, flags=re.DOTALL
+                    )
                     body = new_body.strip()
 
             message_details.append({
@@ -367,7 +372,6 @@ def get_messages(query, creds):
     except HttpError as error:
         # Handle errors from Gmail API.
         print(f"An error occurred: {error}")
-    
     return message_details
 
 
@@ -435,5 +439,7 @@ def callback(request, scopes=None):
     except Exception:
         logger.exception('Failed to fetch Google userinfo in callback')
 
-    redirect_url = request.session.pop('oauth_redirect_url', 'google_api:gmail')
+    redirect_url = request.session.pop(
+        'oauth_redirect_url', 'google_api:gmail'
+    )
     return redirect(redirect_url)

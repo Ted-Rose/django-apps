@@ -27,7 +27,9 @@ def dashboard(request):
         if isinstance(result, dict) and 'authorization_url' in result:
             request.session['state'] = result['state']
             request.session['oauth_scopes'] = result.get('scopes', [])
-            request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
+            # Preserve current URL with parameters
+            current_url = request.get_full_path()
+            request.session['oauth_redirect_url'] = current_url
             return redirect(result['authorization_url'])
 
     task_list_filter = request.GET.get('list')
@@ -114,6 +116,18 @@ def dashboard(request):
 def starred_tasks(request):
     """View showing only starred tasks."""
     creds = request.session.get('google_credentials')
+
+    if 'sync' in request.GET and creds:
+        result = sync_all(request.user, creds)
+
+        if isinstance(result, dict) and 'authorization_url' in result:
+            request.session['state'] = result['state']
+            request.session['oauth_scopes'] = result.get('scopes', [])
+            # Preserve current URL with parameters
+            current_url = request.get_full_path()
+            request.session['oauth_redirect_url'] = current_url
+            return redirect(result['authorization_url'])
+
     order_by = request.GET.get('order', 'order_desc')
 
     starred_tasks_qs = GoogleTask.objects.filter(
