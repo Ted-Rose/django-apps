@@ -14,12 +14,31 @@ from google_tasks.services import (
     uncomplete_task,
     process_task_labels
 )
+from google_api.utils import get_user_credentials
+
+
+def get_creds_dict(user):
+    """
+    Helper function to get credentials dict for backward compatibility.
+    """
+    creds = get_user_credentials(
+        user,
+        scopes=['https://www.googleapis.com/auth/tasks']
+    )
+    if creds:
+        return {
+            'token': creds.token,
+            'refresh_token': creds.refresh_token,
+            'expiry': creds.expiry.isoformat(),
+            'scopes': list(creds.scopes or []),
+        }
+    return None
 
 
 @login_required
 def dashboard(request):
     """Main dashboard showing all tasks."""
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -115,7 +134,7 @@ def dashboard(request):
 @login_required
 def starred_tasks(request):
     """View showing only starred tasks."""
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -276,7 +295,7 @@ def toggle_star(request, task_id):
 @login_required
 def sync_view(request):
     """Manual sync endpoint."""
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     if not creds:
         return JsonResponse({
@@ -311,7 +330,7 @@ def complete_task_view(request, task_id):
         f'for task {task_id}'
     )
 
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     if not creds:
         logger.error(
@@ -369,7 +388,7 @@ def uncomplete_task_view(request, task_id):
         f'for task {task_id}'
     )
 
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     if not creds:
         logger.error(
@@ -426,7 +445,7 @@ def process_labels_view(request):
         f'process_labels_view called by user {request.user.username}'
     )
 
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     if not creds:
         logger.error(
@@ -472,7 +491,7 @@ def process_task_label_view(request, task_id):
         f'{request.user.username} for task {task_id}'
     )
 
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     if not creds:
         logger.error(
@@ -703,7 +722,7 @@ def permanent_delete_task_view(request, task_id):
 @login_required
 def archived_tasks(request):
     """View showing archived tasks."""
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
     order_by = request.GET.get('order', 'order_desc')
 
     archived_tasks_qs = GoogleTask.objects.filter(
@@ -761,7 +780,7 @@ def archived_tasks(request):
 @login_required
 def trash_tasks(request):
     """View showing deleted tasks (trash)."""
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
     order_by = request.GET.get('order', 'deleted_desc')
 
     deleted_tasks_qs = GoogleTask.objects.filter(
@@ -800,7 +819,7 @@ def trash_tasks(request):
 def task_detail(request, task_id):
     """View showing task details with edit capability."""
     task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
@@ -825,7 +844,7 @@ def create_task_view(request):
     import logging
     logger = logging.getLogger('django')
 
-    creds = request.session.get('google_credentials')
+    creds = get_creds_dict(request.user)
 
     if not creds:
         logger.error(

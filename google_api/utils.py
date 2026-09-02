@@ -41,6 +41,14 @@ BASE_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
 ]
 
+# All scopes needed for the application
+ALL_APP_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/tasks",
+]
+
 
 class AudioGenerationError(Exception):
     """Raised when audio generation fails"""
@@ -198,7 +206,81 @@ def extract_text_from_html(html_content):
     return clean_text.strip()
 
 
-def google_auth(creds=None, scopes=None):
+def get_user_credentials(user, scopes=None):
+    """
+    Get Google OAuth credentials for a user from the database.
+    
+    Args:
+        user: Django User object
+        scopes: Optional list of required scopes
+        
+    Returns:
+        Credentials object if valid, None if missing or invalid
+    """
+    from google_api.models import GoogleOAuthCredentials
+    
+    try:
+        oauth_creds = GoogleOAuthCredentials.objects.get(user=user)
+        
+        # Check if required scopes are granted
+        if scopes and not oauth_creds.has_all_scopes(scopes):
+            logger.warning(
+                f'User {user.username} missing required scopes. '
+                f'Required: {scopes}, Granted: {oauth_creds.scopes}'
+            )
+            return None
+        
+        client_secrets_path = getattr(
+            settings, 'GOOGLE_APP_SECRETS_PATH',
+            os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),
+        )
+        with open(client_secrets_path, 'r') as file:
+            data = json.load(file)
+        
+        client_id = data.get('web', {}).get('client_id')
+        client_secret = data.get('web', {}).get('client_secret')
+        token_uri = data.get('web', {}).get('token_uri')
+        
+        creds = Credentials(
+            token=oauth_creds.access_token,
+            refresh_token=oauth_creds.refresh_token,
+            client_secret=client_secret,
+            client_id=client_id,
+            token_uri=token_uri,
+            scopes=oauth_creds.scopes,
+            expiry=oauth_creds.token_expiry,
+        )
+        
+        # Refresh if expired
+        if creds.expired and creds.refresh_token:
+            logger.info(f'Refreshing expired token for user {user.username}')
+            creds.refresh(Request())
+            
+            # Update database with new token
+            oauth_creds.access_token = creds.token
+            oauth_creds.token_expiry = creds.expiry
+            oauth_creds.save()
+            logger.info(f'Token refreshed for user {user.username}')
+        
+        return creds
+        
+    except GoogleOAuthCredentials.DoesNotExist:
+        logger.info(f'No credentials found for user {user.username}')
+        return None
+
+
+def google_auth(creds=None, scopes=None, user=None):
+    """
+    Get or create Google OAuth credentials.
+    
+    Args:
+        creds: Legacy session-based credentials dict (deprecated)
+        scopes: List of OAuth scopes to request
+        user: Django User object (preferred method)
+        
+    Returns:
+        Credentials object or dict with authorization_url if reauth needed
+    """
     if scopes is None:
         scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
     scopes = list(set(scopes) | set(BASE_SCOPES))
@@ -215,6 +297,23 @@ def google_auth(creds=None, scopes=None):
     client_secret = data.get('web', {}).get('client_secret')
     token_uri = data.get('web', {}).get('token_uri')
 
+    # Try to get credentials from database if user is provided
+    if user and user.is_authenticated:
+        db_creds = get_user_credentials(user, scopes)
+        if db_creds and db_creds.valid:
+            return db_creds
+        # If credentials exist but scopes are missing, trigger reauth
+        if db_creds is None:
+            from google_api.models import GoogleOAuthCredentials
+            try:
+                oauth_creds = GoogleOAuthCredentials.objects.get(user=user)
+                if not oauth_creds.has_all_scopes(scopes):
+                    # Need to reauth for additional scopes
+                    pass
+            except GoogleOAuthCredentials.DoesNotExist:
+                pass
+
+    # Legacy session-based credentials support
     if creds:
         granted_scopes = set(creds.get('scopes', []))
         required_scopes = set(scopes)
@@ -256,7 +355,8 @@ def google_auth(creds=None, scopes=None):
             )
             authorization_url, state = flow.authorization_url(
                 access_type='offline',
-                include_granted_scopes='true'
+                include_granted_scopes='true',
+                prompt='consent'
             )
             return {
                 "authorization_url": authorization_url,
@@ -397,6 +497,12 @@ def build_google_service(service_name, version, creds, scopes=None):
 
 
 def callback(request, scopes=None):
+    """
+    OAuth callback handler.
+    Saves credentials to database for long-term storage.
+    """
+    from google_api.models import GoogleOAuthCredentials
+    
     if scopes is None:
         scopes = request.session.pop(
             'oauth_scopes',
@@ -416,6 +522,8 @@ def callback(request, scopes=None):
             )
     flow.fetch_token(authorization_response=request.build_absolute_uri())
     credentials = flow.credentials
+    
+    # Keep credentials in session for backward compatibility
     request.session['google_credentials'] = {
         'token': credentials.token,
         'refresh_token': credentials.refresh_token,
@@ -423,6 +531,8 @@ def callback(request, scopes=None):
         'scopes': list(credentials.scopes or []),
     }
 
+    # Get or create user from Google userinfo
+    user = None
     try:
         userinfo = http_requests.get(
             'https://www.googleapis.com/oauth2/v3/userinfo',
@@ -433,7 +543,7 @@ def callback(request, scopes=None):
         if email:
             User = get_user_model()
             username = email.split('@')[0][:150]
-            user, _ = User.objects.get_or_create(
+            user, created = User.objects.get_or_create(
                 email=email,
                 defaults={'username': username},
             )
@@ -442,11 +552,31 @@ def callback(request, scopes=None):
                 user,
                 backend='django.contrib.auth.backends.ModelBackend',
             )
+            logger.info(
+                f'User {user.username} logged in '
+                f'({"created" if created else "existing"})'
+            )
     except Exception:
         logger.exception('Failed to fetch Google userinfo in callback')
 
+    # Save credentials to database for authenticated user
+    if user:
+        GoogleOAuthCredentials.objects.update_or_create(
+            user=user,
+            defaults={
+                'access_token': credentials.token,
+                'refresh_token': credentials.refresh_token,
+                'token_expiry': credentials.expiry,
+                'scopes': list(credentials.scopes or []),
+            }
+        )
+        logger.info(
+            f'Saved credentials for user {user.username} '
+            f'with scopes: {list(credentials.scopes or [])}'
+        )
+
     redirect_url = request.session.pop(
-        'oauth_redirect_url', 'google_api:gmail'
+        'oauth_redirect_url', 'google_tasks:dashboard'
     )
 
     # Remove sync parameter to prevent re-triggering OAuth loop

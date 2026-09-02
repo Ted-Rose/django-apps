@@ -47,9 +47,16 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">
+            <a class="navbar-brand" href="{% url 'google_api:gmail' %}">
                 <i class="bi bi-envelope"></i> Gmail to Audio
             </a>
+            <div class="navbar-nav ms-auto">
+                {% if has_credentials %}
+                    {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
+                {% else %}
+                    <span class="text-light">No credentials</span>
+                {% endif %}
+            </div>
         </div>
     </nav>
 
