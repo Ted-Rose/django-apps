@@ -17,6 +17,10 @@ def gmail(request):
          'btn_class': 'btn-light'},
         {'label': 'Tasks', 'url': '/tasks/', 'icon': 'check2-square',
          'btn_class': 'btn-light'},
+        {'label': f'Logout ({request.user.email or request.user.username})',
+         'url': '/admin/logout/',
+         'icon': 'box-arrow-right',
+         'btn_class': 'btn-outline-light'},
     ]
 
     if 'get_messages' in request.GET:

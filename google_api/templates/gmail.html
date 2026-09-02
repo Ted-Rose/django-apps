@@ -51,11 +51,7 @@
                 <i class="bi bi-envelope"></i> Gmail to Audio
             </a>
             <div class="navbar-nav ms-auto">
-                {% if has_credentials %}
-                    {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
-                {% else %}
-                    <span class="text-light">No credentials</span>
-                {% endif %}
+                {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
             </div>
         </div>
     </nav>
