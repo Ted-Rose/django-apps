@@ -209,19 +209,19 @@ def extract_text_from_html(html_content):
 def get_user_credentials(user, scopes=None):
     """
     Get Google OAuth credentials for a user from the database.
-    
+
     Args:
         user: Django User object
         scopes: Optional list of required scopes
-        
+
     Returns:
         Credentials object if valid, None if missing or invalid
     """
     from google_api.models import GoogleOAuthCredentials
-    
+
     try:
         oauth_creds = GoogleOAuthCredentials.objects.get(user=user)
-        
+
         # Check if required scopes are granted
         if scopes and not oauth_creds.has_all_scopes(scopes):
             logger.warning(
@@ -229,18 +229,18 @@ def get_user_credentials(user, scopes=None):
                 f'Required: {scopes}, Granted: {oauth_creds.scopes}'
             )
             return None
-        
+
         client_secrets_path = getattr(
             settings, 'GOOGLE_APP_SECRETS_PATH',
             os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),
         )
         with open(client_secrets_path, 'r') as file:
             data = json.load(file)
-        
+
         client_id = data.get('web', {}).get('client_id')
         client_secret = data.get('web', {}).get('client_secret')
         token_uri = data.get('web', {}).get('token_uri')
-        
+
         creds = Credentials(
             token=oauth_creds.access_token,
             refresh_token=oauth_creds.refresh_token,
@@ -250,20 +250,20 @@ def get_user_credentials(user, scopes=None):
             scopes=oauth_creds.scopes,
             expiry=oauth_creds.token_expiry,
         )
-        
+
         # Refresh if expired
         if creds.expired and creds.refresh_token:
             logger.info(f'Refreshing expired token for user {user.username}')
             creds.refresh(Request())
-            
+
             # Update database with new token
             oauth_creds.access_token = creds.token
             oauth_creds.token_expiry = creds.expiry
             oauth_creds.save()
             logger.info(f'Token refreshed for user {user.username}')
-        
+
         return creds
-        
+
     except GoogleOAuthCredentials.DoesNotExist:
         logger.info(f'No credentials found for user {user.username}')
         return None
@@ -272,12 +272,12 @@ def get_user_credentials(user, scopes=None):
 def google_auth(creds=None, scopes=None, user=None):
     """
     Get or create Google OAuth credentials.
-    
+
     Args:
         creds: Legacy session-based credentials dict (deprecated)
         scopes: List of OAuth scopes to request
         user: Django User object (preferred method)
-        
+
     Returns:
         Credentials object or dict with authorization_url if reauth needed
     """
@@ -502,7 +502,7 @@ def callback(request, scopes=None):
     Saves credentials to database for long-term storage.
     """
     from google_api.models import GoogleOAuthCredentials
-    
+
     if scopes is None:
         scopes = request.session.pop(
             'oauth_scopes',
@@ -522,7 +522,7 @@ def callback(request, scopes=None):
             )
     flow.fetch_token(authorization_response=request.build_absolute_uri())
     credentials = flow.credentials
-    
+
     # Keep credentials in session for backward compatibility
     request.session['google_credentials'] = {
         'token': credentials.token,
