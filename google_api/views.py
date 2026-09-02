@@ -1,5 +1,10 @@
 from django.shortcuts import render, redirect
-from google_api.utils import get_messages, text_to_audio, get_user_credentials
+from google_api.utils import (
+    get_messages,
+    text_to_audio,
+    get_user_credentials,
+    google_auth
+)
 from google_api.decorators import google_auth_required
 from django.http import JsonResponse
 
