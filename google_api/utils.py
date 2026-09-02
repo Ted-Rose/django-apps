@@ -398,6 +398,8 @@ def callback(request, scopes=None):
             'oauth_scopes',
             ["https://www.googleapis.com/auth/gmail.readonly"]
         )
+    # Add BASE_SCOPES to match what google_auth requests
+    scopes = list(set(scopes) | set(BASE_SCOPES))
     client_secrets_path = getattr(
         settings, 'GOOGLE_APP_SECRETS_PATH',
         os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),
