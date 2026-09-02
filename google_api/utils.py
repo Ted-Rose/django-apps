@@ -32,6 +32,10 @@ logger = logging.getLogger('django')
 # raises a Warning on the scope change and the callback fails.
 os.environ.setdefault('OAUTHLIB_RELAX_TOKEN_SCOPE', '1')
 
+# Allow HTTP for local development (ONLY for development!)
+# In production, always use HTTPS
+os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
+
 BASE_SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
@@ -444,4 +448,17 @@ def callback(request, scopes=None):
     redirect_url = request.session.pop(
         'oauth_redirect_url', 'google_api:gmail'
     )
+
+    # Remove sync parameter to prevent re-triggering OAuth loop
+    if isinstance(redirect_url, str) and 'sync' in redirect_url:
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        parsed = urlparse(redirect_url)
+        query_params = parse_qs(parsed.query)
+        query_params.pop('sync', None)
+        new_query = urlencode(query_params, doseq=True)
+        redirect_url = urlunparse((
+            parsed.scheme, parsed.netloc, parsed.path,
+            parsed.params, new_query, parsed.fragment
+        ))
+
     return redirect(redirect_url)
