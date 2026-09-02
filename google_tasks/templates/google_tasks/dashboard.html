@@ -900,7 +900,11 @@
                 const currentPath = window.location.pathname;
                 const currentSearch = window.location.search;
                 const fullUrl = currentPath + currentSearch;
-                localStorage.setItem('lastTasksView', fullUrl);
+                // Only save non-default views
+                if (currentPath !== '{% url "google_tasks:dashboard" %}' || 
+                    currentSearch) {
+                    localStorage.setItem('lastTasksView', fullUrl);
+                }
             } catch (e) {
                 console.warn('Failed to save view to localStorage:', e);
             }
@@ -1609,7 +1613,8 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Restore last view if visiting without parameters
+            // Restore last view if visiting without parameters AND
+            // not coming from a user click (check referrer)
             const currentPath = window.location.pathname;
             const currentSearch = window.location.search;
             const isDefaultView = (
@@ -1620,7 +1625,18 @@
             if (isDefaultView) {
                 try {
                     const lastView = localStorage.getItem('lastTasksView');
-                    if (lastView && lastView !== currentPath) {
+                    const referrer = document.referrer;
+                    
+                    // Only redirect if:
+                    // 1. There's a saved view
+                    // 2. It's different from current path
+                    // 3. User didn't just navigate from within the app
+                    const isInternalNavigation = referrer && 
+                        referrer.includes(window.location.host);
+                    
+                    if (lastView && 
+                        lastView !== currentPath && 
+                        !isInternalNavigation) {
                         // Redirect to last view
                         window.location.href = lastView;
                         return;
