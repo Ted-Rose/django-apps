@@ -38,7 +38,14 @@ def get_creds_dict(user):
 @login_required
 def dashboard(request):
     """Main dashboard showing all tasks."""
+    from django.shortcuts import redirect
+    from django.urls import reverse
+    
     creds = get_creds_dict(request.user)
+    
+    # If no credentials, redirect to login
+    if not creds and 'sync' not in request.GET:
+        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -116,6 +123,22 @@ def dashboard(request):
         {'label': 'Sync Now', 'url': '?sync=true',
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
+    
+    # Add login/logout option
+    if creds:
+        burger_menu_items.append({
+            'label': f'Logout ({request.user.email or request.user.username})',
+            'url': '/admin/logout/',
+            'icon': 'box-arrow-right',
+            'btn_class': 'btn-outline-light'
+        })
+    else:
+        burger_menu_items.append({
+            'label': 'Login with Google',
+            'url': f"/login/?next={request.get_full_path()}",
+            'icon': 'google',
+            'btn_class': 'btn-warning'
+        })
 
     context = {
         'tasks': active_tasks,
@@ -134,7 +157,14 @@ def dashboard(request):
 @login_required
 def starred_tasks(request):
     """View showing only starred tasks."""
+    from django.shortcuts import redirect
+    from django.urls import reverse
+    
     creds = get_creds_dict(request.user)
+    
+    # If no credentials, redirect to login
+    if not creds and 'sync' not in request.GET:
+        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -202,6 +232,22 @@ def starred_tasks(request):
         {'label': 'Sync Now', 'url': '?sync=true',
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
+    
+    # Add login/logout option
+    if creds:
+        burger_menu_items.append({
+            'label': f'Logout ({request.user.email or request.user.username})',
+            'url': '/admin/logout/',
+            'icon': 'box-arrow-right',
+            'btn_class': 'btn-outline-light'
+        })
+    else:
+        burger_menu_items.append({
+            'label': 'Login with Google',
+            'url': f"/login/?next={request.get_full_path()}",
+            'icon': 'google',
+            'btn_class': 'btn-warning'
+        })
 
     context = {
         'tasks': active_tasks,
@@ -722,7 +768,15 @@ def permanent_delete_task_view(request, task_id):
 @login_required
 def archived_tasks(request):
     """View showing archived tasks."""
+    from django.shortcuts import redirect
+    from django.urls import reverse
+    
     creds = get_creds_dict(request.user)
+    
+    # If no credentials, redirect to login
+    if not creds:
+        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
+    
     order_by = request.GET.get('order', 'order_desc')
 
     archived_tasks_qs = GoogleTask.objects.filter(
@@ -763,6 +817,14 @@ def archived_tasks(request):
         {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
          'btn_class': 'btn-primary'},
     ]
+    
+    # Add logout option
+    burger_menu_items.append({
+        'label': f'Logout ({request.user.email or request.user.username})',
+        'url': '/admin/logout/',
+        'icon': 'box-arrow-right',
+        'btn_class': 'btn-outline-light'
+    })
 
     context = {
         'tasks': active_tasks,
@@ -780,7 +842,15 @@ def archived_tasks(request):
 @login_required
 def trash_tasks(request):
     """View showing deleted tasks (trash)."""
+    from django.shortcuts import redirect
+    from django.urls import reverse
+    
     creds = get_creds_dict(request.user)
+    
+    # If no credentials, redirect to login
+    if not creds:
+        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
+    
     order_by = request.GET.get('order', 'deleted_desc')
 
     deleted_tasks_qs = GoogleTask.objects.filter(
@@ -802,6 +872,14 @@ def trash_tasks(request):
         {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
          'btn_class': 'btn-primary'},
     ]
+    
+    # Add logout option
+    burger_menu_items.append({
+        'label': f'Logout ({request.user.email or request.user.username})',
+        'url': '/admin/logout/',
+        'icon': 'box-arrow-right',
+        'btn_class': 'btn-outline-light'
+    })
 
     context = {
         'tasks': deleted_tasks_qs,
@@ -818,8 +896,15 @@ def trash_tasks(request):
 @login_required
 def task_detail(request, task_id):
     """View showing task details with edit capability."""
+    from django.shortcuts import redirect
+    from django.urls import reverse
+    
     task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
     creds = get_creds_dict(request.user)
+    
+    # If no credentials, redirect to login
+    if not creds:
+        return redirect(f"{reverse('google_api:login')}?next={request.get_full_path()}")
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
@@ -827,6 +912,14 @@ def task_detail(request, task_id):
         {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
          'btn_class': 'btn-primary'},
     ]
+    
+    # Add logout option
+    burger_menu_items.append({
+        'label': f'Logout ({request.user.email or request.user.username})',
+        'url': '/admin/logout/',
+        'icon': 'box-arrow-right',
+        'btn_class': 'btn-outline-light'
+    })
 
     context = {
         'task': task,
