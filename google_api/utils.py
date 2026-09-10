@@ -352,7 +352,7 @@ def google_auth(creds=None, scopes=None, user=None):
             if timezone.is_naive(expiry):
                 # Google Auth library expects UTC timezone
                 expiry = expiry.replace(tzinfo=dt_timezone.utc)
-            
+
             creds = Credentials(
                 token=creds['token'],
                 refresh_token=creds['refresh_token'],
