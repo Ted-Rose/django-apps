@@ -281,8 +281,14 @@ def get_user_credentials(user, scopes=None):
             creds.refresh(Request())
 
             # Update database with new token
+            # Ensure expiry is timezone-aware
+            refreshed_expiry = creds.expiry
+            if refreshed_expiry and (refreshed_expiry.tzinfo is None or refreshed_expiry.tzinfo.utcoffset(refreshed_expiry) is None):
+                logger.warning('Refresh returned naive expiry, converting to UTC')
+                refreshed_expiry = refreshed_expiry.replace(tzinfo=dt_timezone.utc)
+            
             oauth_creds.access_token = creds.token
-            oauth_creds.token_expiry = creds.expiry
+            oauth_creds.token_expiry = refreshed_expiry
             oauth_creds.save()
             logger.info(f'Token refreshed for user {user.username}')
 
@@ -591,12 +597,21 @@ def callback(request, scopes=None):
 
     # Save credentials to database for authenticated user
     if user:
+        # Ensure expiry is timezone-aware
+        expiry = credentials.expiry
+        if expiry and (expiry.tzinfo is None or expiry.tzinfo.utcoffset(expiry) is None):
+            logger.warning(
+                f'Callback received naive expiry datetime, '
+                f'converting to UTC'
+            )
+            expiry = expiry.replace(tzinfo=dt_timezone.utc)
+        
         GoogleOAuthCredentials.objects.update_or_create(
             user=user,
             defaults={
                 'access_token': credentials.token,
                 'refresh_token': credentials.refresh_token,
-                'token_expiry': credentials.expiry,
+                'token_expiry': expiry,
                 'scopes': list(credentials.scopes or []),
             }
         )
