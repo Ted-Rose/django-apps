@@ -16,6 +16,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import re
 from datetime import datetime, timedelta
+from django.utils import timezone
 from langdetect import detect, DetectorFactory, LangDetectException
 from bs4 import BeautifulSoup
 import tempfile
@@ -241,6 +242,12 @@ def get_user_credentials(user, scopes=None):
         client_secret = data.get('web', {}).get('client_secret')
         token_uri = data.get('web', {}).get('token_uri')
 
+        # Ensure token_expiry is timezone-aware for Google Auth
+        # library
+        token_expiry = oauth_creds.token_expiry
+        if token_expiry and timezone.is_naive(token_expiry):
+            token_expiry = timezone.make_aware(token_expiry)
+
         creds = Credentials(
             token=oauth_creds.access_token,
             refresh_token=oauth_creds.refresh_token,
@@ -248,7 +255,7 @@ def get_user_credentials(user, scopes=None):
             client_id=client_id,
             token_uri=token_uri,
             scopes=oauth_creds.scopes,
-            expiry=oauth_creds.token_expiry,
+            expiry=token_expiry,
         )
 
         # Refresh if expired
@@ -329,6 +336,11 @@ def google_auth(creds=None, scopes=None, user=None):
             creds = None
         else:
             logger.info('All required scopes are granted')
+            # Parse expiry and ensure it's timezone-aware
+            expiry = datetime.fromisoformat(creds['expiry'])
+            if timezone.is_naive(expiry):
+                expiry = timezone.make_aware(expiry)
+            
             creds = Credentials(
                 token=creds['token'],
                 refresh_token=creds['refresh_token'],
@@ -336,12 +348,12 @@ def google_auth(creds=None, scopes=None, user=None):
                 client_id=client_id,
                 token_uri=token_uri,
                 scopes=scopes,
-                expiry=datetime.fromisoformat(creds['expiry']),
+                expiry=expiry,
             )
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            can_refresh = creds.expiry > datetime.today()
+            can_refresh = creds.expiry > timezone.now()
             if can_refresh:
                 creds.refresh(Request())
             else:
