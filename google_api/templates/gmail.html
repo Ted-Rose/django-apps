@@ -326,7 +326,7 @@
       const playAudioButtons = document.querySelectorAll('.play-audio');
       playAudioButtons.forEach(button => {
           button.addEventListener('click', function () {
-              let form = this.parentElement;
+              let form = this.closest('.create-audio-form');
               let messageId = form.querySelector('input[name="message-id"]').value;
               createAllAudios(messageId, playOnlyCurrent = true);
           });
@@ -336,7 +336,7 @@
       const createAllAudioButtons = document.querySelectorAll('.play-all-audios');
       createAllAudioButtons.forEach(button => {
           button.addEventListener('click', function () {
-              let form = this.parentElement;
+              let form = this.closest('.create-audio-form');
               let messageId = form.querySelector('input[name="message-id"]').value;
               createAllAudios(messageId);
           });

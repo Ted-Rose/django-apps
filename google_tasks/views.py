@@ -325,6 +325,7 @@ def toggle_star(request, task_id):
 
 
 @login_required
+@require_POST
 def sync_view(request):
     """Manual sync endpoint."""
     creds = get_creds_dict(request.user)
