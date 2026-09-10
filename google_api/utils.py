@@ -319,7 +319,7 @@ def get_user_credentials(user, scopes=None):
                     is_expired = True
             else:
                 raise
-        
+
         if is_expired and creds.refresh_token:
             logger.info(f'Refreshing expired token for user {user.username}')
             creds.refresh(Request())
@@ -667,13 +667,19 @@ def callback(request, scopes=None):
     if user:
         # Ensure expiry is timezone-aware
         expiry = credentials.expiry
-        if expiry and (expiry.tzinfo is None or expiry.tzinfo.utcoffset(expiry) is None):
+        expiry_is_naive = (
+            expiry and (
+                expiry.tzinfo is None or
+                expiry.tzinfo.utcoffset(expiry) is None
+            )
+        )
+        if expiry_is_naive:
             logger.warning(
-                f'Callback received naive expiry datetime, '
-                f'converting to UTC'
+                'Callback received naive expiry datetime, '
+                'converting to UTC'
             )
             expiry = expiry.replace(tzinfo=dt_timezone.utc)
-        
+
         GoogleOAuthCredentials.objects.update_or_create(
             user=user,
             defaults={
