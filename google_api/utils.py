@@ -274,6 +274,18 @@ def get_user_credentials(user, scopes=None):
             scopes=oauth_creds.scopes,
             expiry=token_expiry,
         )
+        
+        # Double-check: if creds.expiry is still naive, fix it directly
+        if creds.expiry and (creds.expiry.tzinfo is None or creds.expiry.tzinfo.utcoffset(creds.expiry) is None):
+            logger.error(
+                f'Credentials object has naive expiry after creation! '
+                f'Fixing directly. expiry={creds.expiry}'
+            )
+            # Directly modify the credentials object's expiry
+            creds.expiry = creds.expiry.replace(tzinfo=dt_timezone.utc)
+            # Also update the database
+            oauth_creds.token_expiry = creds.expiry
+            oauth_creds.save()
 
         # Refresh if expired
         if creds.expired and creds.refresh_token:
