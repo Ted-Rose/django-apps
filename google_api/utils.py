@@ -246,18 +246,24 @@ def get_user_credentials(user, scopes=None):
         # library (Google uses UTC)
         token_expiry = oauth_creds.token_expiry
         if token_expiry:
-            if timezone.is_naive(token_expiry):
-                logger.info(
+            # Check both Django's is_naive and direct tzinfo check
+            if token_expiry.tzinfo is None or token_expiry.tzinfo.utcoffset(token_expiry) is None:
+                logger.warning(
                     f'Converting naive token_expiry to UTC-aware for '
-                    f'user {user.username}'
+                    f'user {user.username}. tzinfo={token_expiry.tzinfo}'
                 )
                 # Google Auth library expects UTC timezone
                 token_expiry = token_expiry.replace(tzinfo=dt_timezone.utc)
             else:
-                logger.debug(
+                logger.info(
                     f'token_expiry already timezone-aware for user '
-                    f'{user.username}'
+                    f'{user.username}. tzinfo={token_expiry.tzinfo}'
                 )
+        
+        logger.info(
+            f'Creating Credentials for {user.username} with '
+            f'expiry={token_expiry}, tzinfo={token_expiry.tzinfo if token_expiry else None}'
+        )
 
         creds = Credentials(
             token=oauth_creds.access_token,
