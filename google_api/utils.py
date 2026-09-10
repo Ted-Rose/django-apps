@@ -406,11 +406,12 @@ def google_auth(creds=None, scopes=None, user=None):
             creds = None
         else:
             logger.info('All required scopes are granted')
-            # Parse expiry and ensure it's timezone-aware (UTC)
+            # Parse expiry - Google Auth library expects NAIVE UTC
             expiry = datetime.fromisoformat(creds['expiry'])
-            if timezone.is_naive(expiry):
-                # Google Auth library expects UTC timezone
-                expiry = expiry.replace(tzinfo=dt_timezone.utc)
+            # Convert to naive UTC if timezone-aware
+            if expiry.tzinfo is not None:
+                expiry = expiry.astimezone(dt_timezone.utc)
+                expiry = expiry.replace(tzinfo=None)
 
             creds = Credentials(
                 token=creds['token'],
@@ -422,7 +423,24 @@ def google_auth(creds=None, scopes=None, user=None):
                 expiry=expiry,
             )
 
-    if not creds or not creds.valid:
+    # Check if credentials are valid - wrap in try/except for timezone
+    try:
+        is_valid = creds and creds.valid
+    except TypeError as e:
+        if 'offset-naive and offset-aware' in str(e):
+            logger.error(
+                f'TypeError when checking creds.valid: {e}. '
+                f'Fixing expiry to naive UTC'
+            )
+            if creds and creds.expiry:
+                if creds.expiry.tzinfo:
+                    creds.expiry = creds.expiry.astimezone(dt_timezone.utc)
+                creds.expiry = creds.expiry.replace(tzinfo=None)
+            is_valid = creds and creds.valid
+        else:
+            raise
+    
+    if not is_valid:
         if creds and creds.expired and creds.refresh_token:
             can_refresh = creds.expiry > timezone.now()
             if can_refresh:
