@@ -242,27 +242,26 @@ def get_user_credentials(user, scopes=None):
         client_secret = data.get('web', {}).get('client_secret')
         token_uri = data.get('web', {}).get('token_uri')
 
-        # Ensure token_expiry is timezone-aware for Google Auth
-        # library (Google uses UTC)
+        # Google Auth library expects NAIVE UTC datetimes, not aware!
+        # Convert timezone-aware datetime to naive UTC
         token_expiry = oauth_creds.token_expiry
         if token_expiry:
-            # Check both Django's is_naive and direct tzinfo check
-            is_naive = (
-                token_expiry.tzinfo is None or
-                token_expiry.tzinfo.utcoffset(token_expiry) is None
+            is_aware = (
+                token_expiry.tzinfo is not None and
+                token_expiry.tzinfo.utcoffset(token_expiry) is not None
             )
-            if is_naive:
-                logger.warning(
-                    f'Converting naive token_expiry to UTC-aware for '
-                    f'user {user.username}. '
-                    f'tzinfo={token_expiry.tzinfo}'
+            if is_aware:
+                logger.info(
+                    f'Converting timezone-aware to naive UTC for '
+                    f'user {user.username}. tzinfo={token_expiry.tzinfo}'
                 )
-                # Google Auth library expects UTC timezone
-                token_expiry = token_expiry.replace(tzinfo=dt_timezone.utc)
+                # Convert to UTC and remove timezone info
+                token_expiry = token_expiry.astimezone(dt_timezone.utc)
+                token_expiry = token_expiry.replace(tzinfo=None)
             else:
                 logger.info(
-                    f'token_expiry already timezone-aware for user '
-                    f'{user.username}. tzinfo={token_expiry.tzinfo}'
+                    f'token_expiry already naive for user '
+                    f'{user.username}'
                 )
 
         tzinfo_str = (
@@ -283,23 +282,20 @@ def get_user_credentials(user, scopes=None):
             expiry=token_expiry,
         )
 
-        # Double-check: if creds.expiry is still naive, fix it
-        creds_is_naive = (
-            creds.expiry and (
-                creds.expiry.tzinfo is None or
-                creds.expiry.tzinfo.utcoffset(creds.expiry) is None
-            )
+        # Double-check: creds.expiry should be naive UTC
+        creds_is_aware = (
+            creds.expiry and
+            creds.expiry.tzinfo is not None and
+            creds.expiry.tzinfo.utcoffset(creds.expiry) is not None
         )
-        if creds_is_naive:
-            logger.error(
-                'Credentials object has naive expiry after creation! '
-                f'Fixing directly. expiry={creds.expiry}'
+        if creds_is_aware:
+            logger.warning(
+                'Credentials object has timezone-aware expiry! '
+                f'Converting to naive UTC. expiry={creds.expiry}'
             )
-            # Directly modify the credentials object's expiry
-            creds.expiry = creds.expiry.replace(tzinfo=dt_timezone.utc)
-            # Also update the database
-            oauth_creds.token_expiry = creds.expiry
-            oauth_creds.save()
+            # Convert to naive UTC
+            creds.expiry = creds.expiry.astimezone(dt_timezone.utc)
+            creds.expiry = creds.expiry.replace(tzinfo=None)
 
         # Refresh if expired - wrap in try/except to catch timezone errors
         try:
@@ -311,11 +307,13 @@ def get_user_credentials(user, scopes=None):
                     f'creds.expiry={creds.expiry}, '
                     f'tzinfo={creds.expiry.tzinfo if creds.expiry else None}'
                 )
-                # Fix the expiry and try again
+                # Convert to naive UTC and try again
                 if creds.expiry:
-                    creds.expiry = creds.expiry.replace(tzinfo=dt_timezone.utc)
-                    oauth_creds.token_expiry = creds.expiry
-                    oauth_creds.save()
+                    if creds.expiry.tzinfo:
+                        creds.expiry = creds.expiry.astimezone(
+                            dt_timezone.utc
+                        )
+                    creds.expiry = creds.expiry.replace(tzinfo=None)
                     is_expired = creds.expired
                 else:
                     is_expired = True
@@ -327,11 +325,14 @@ def get_user_credentials(user, scopes=None):
             creds.refresh(Request())
 
             # Update database with new token
-            # Ensure expiry is timezone-aware
+            # Google returns naive UTC, Django needs timezone-aware
             refreshed_expiry = creds.expiry
-            if refreshed_expiry and (refreshed_expiry.tzinfo is None or refreshed_expiry.tzinfo.utcoffset(refreshed_expiry) is None):
-                logger.warning('Refresh returned naive expiry, converting to UTC')
-                refreshed_expiry = refreshed_expiry.replace(tzinfo=dt_timezone.utc)
+            if refreshed_expiry:
+                if refreshed_expiry.tzinfo is None:
+                    # Naive datetime from Google, assume UTC
+                    refreshed_expiry = refreshed_expiry.replace(
+                        tzinfo=dt_timezone.utc
+                    )
             
             oauth_creds.access_token = creds.token
             oauth_creds.token_expiry = refreshed_expiry
