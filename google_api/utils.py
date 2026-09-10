@@ -15,7 +15,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from django.utils import timezone
 from langdetect import detect, DetectorFactory, LangDetectException
 from bs4 import BeautifulSoup
@@ -243,10 +243,21 @@ def get_user_credentials(user, scopes=None):
         token_uri = data.get('web', {}).get('token_uri')
 
         # Ensure token_expiry is timezone-aware for Google Auth
-        # library
+        # library (Google uses UTC)
         token_expiry = oauth_creds.token_expiry
-        if token_expiry and timezone.is_naive(token_expiry):
-            token_expiry = timezone.make_aware(token_expiry)
+        if token_expiry:
+            if timezone.is_naive(token_expiry):
+                logger.info(
+                    f'Converting naive token_expiry to UTC-aware for '
+                    f'user {user.username}'
+                )
+                # Google Auth library expects UTC timezone
+                token_expiry = token_expiry.replace(tzinfo=dt_timezone.utc)
+            else:
+                logger.debug(
+                    f'token_expiry already timezone-aware for user '
+                    f'{user.username}'
+                )
 
         creds = Credentials(
             token=oauth_creds.access_token,
@@ -336,10 +347,11 @@ def google_auth(creds=None, scopes=None, user=None):
             creds = None
         else:
             logger.info('All required scopes are granted')
-            # Parse expiry and ensure it's timezone-aware
+            # Parse expiry and ensure it's timezone-aware (UTC)
             expiry = datetime.fromisoformat(creds['expiry'])
             if timezone.is_naive(expiry):
-                expiry = timezone.make_aware(expiry)
+                # Google Auth library expects UTC timezone
+                expiry = expiry.replace(tzinfo=dt_timezone.utc)
             
             creds = Credentials(
                 token=creds['token'],
