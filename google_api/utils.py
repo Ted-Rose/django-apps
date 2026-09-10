@@ -247,10 +247,15 @@ def get_user_credentials(user, scopes=None):
         token_expiry = oauth_creds.token_expiry
         if token_expiry:
             # Check both Django's is_naive and direct tzinfo check
-            if token_expiry.tzinfo is None or token_expiry.tzinfo.utcoffset(token_expiry) is None:
+            is_naive = (
+                token_expiry.tzinfo is None or
+                token_expiry.tzinfo.utcoffset(token_expiry) is None
+            )
+            if is_naive:
                 logger.warning(
                     f'Converting naive token_expiry to UTC-aware for '
-                    f'user {user.username}. tzinfo={token_expiry.tzinfo}'
+                    f'user {user.username}. '
+                    f'tzinfo={token_expiry.tzinfo}'
                 )
                 # Google Auth library expects UTC timezone
                 token_expiry = token_expiry.replace(tzinfo=dt_timezone.utc)
@@ -259,10 +264,13 @@ def get_user_credentials(user, scopes=None):
                     f'token_expiry already timezone-aware for user '
                     f'{user.username}. tzinfo={token_expiry.tzinfo}'
                 )
-        
+
+        tzinfo_str = (
+            token_expiry.tzinfo if token_expiry else None
+        )
         logger.info(
             f'Creating Credentials for {user.username} with '
-            f'expiry={token_expiry}, tzinfo={token_expiry.tzinfo if token_expiry else None}'
+            f'expiry={token_expiry}, tzinfo={tzinfo_str}'
         )
 
         creds = Credentials(
@@ -274,11 +282,17 @@ def get_user_credentials(user, scopes=None):
             scopes=oauth_creds.scopes,
             expiry=token_expiry,
         )
-        
-        # Double-check: if creds.expiry is still naive, fix it directly
-        if creds.expiry and (creds.expiry.tzinfo is None or creds.expiry.tzinfo.utcoffset(creds.expiry) is None):
+
+        # Double-check: if creds.expiry is still naive, fix it
+        creds_is_naive = (
+            creds.expiry and (
+                creds.expiry.tzinfo is None or
+                creds.expiry.tzinfo.utcoffset(creds.expiry) is None
+            )
+        )
+        if creds_is_naive:
             logger.error(
-                f'Credentials object has naive expiry after creation! '
+                'Credentials object has naive expiry after creation! '
                 f'Fixing directly. expiry={creds.expiry}'
             )
             # Directly modify the credentials object's expiry
@@ -578,16 +592,19 @@ def callback(request, scopes=None):
         )
     # Add BASE_SCOPES to match what google_auth requests
     scopes = list(set(scopes) | set(BASE_SCOPES))
+    default_path = os.path.join(
+        settings.BASE_DIR, 'google_api/app_secrets.json'
+    )
     client_secrets_path = getattr(
-        settings, 'GOOGLE_APP_SECRETS_PATH',
-        os.path.join(settings.BASE_DIR, 'google_api/app_secrets.json'),
+        settings, 'GOOGLE_APP_SECRETS_PATH', default_path
     )
 
+    redirect_uri = f"{settings.BASE_URL}/google/callback"
     flow = InstalledAppFlow.from_client_secrets_file(
-                client_secrets_path,
-                scopes,
-                redirect_uri=f"{settings.BASE_URL}/google/callback"
-            )
+        client_secrets_path,
+        scopes,
+        redirect_uri=redirect_uri
+    )
     flow.fetch_token(authorization_response=request.build_absolute_uri())
     credentials = flow.credentials
 
