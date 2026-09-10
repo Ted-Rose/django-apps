@@ -287,8 +287,28 @@ def get_user_credentials(user, scopes=None):
             oauth_creds.token_expiry = creds.expiry
             oauth_creds.save()
 
-        # Refresh if expired
-        if creds.expired and creds.refresh_token:
+        # Refresh if expired - wrap in try/except to catch timezone errors
+        try:
+            is_expired = creds.expired
+        except TypeError as e:
+            if 'offset-naive and offset-aware' in str(e):
+                logger.error(
+                    f'TypeError when checking creds.expired: {e}. '
+                    f'creds.expiry={creds.expiry}, '
+                    f'tzinfo={creds.expiry.tzinfo if creds.expiry else None}'
+                )
+                # Fix the expiry and try again
+                if creds.expiry:
+                    creds.expiry = creds.expiry.replace(tzinfo=dt_timezone.utc)
+                    oauth_creds.token_expiry = creds.expiry
+                    oauth_creds.save()
+                    is_expired = creds.expired
+                else:
+                    is_expired = True
+            else:
+                raise
+        
+        if is_expired and creds.refresh_token:
             logger.info(f'Refreshing expired token for user {user.username}')
             creds.refresh(Request())
 
