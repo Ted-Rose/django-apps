@@ -116,7 +116,7 @@ def dashboard(request):
         {'label': 'Sync Now', 'url': '?sync=true',
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
-    
+
     # Add login/logout option
     if creds:
         burger_menu_items.append({
@@ -218,7 +218,7 @@ def starred_tasks(request):
         {'label': 'Sync Now', 'url': '?sync=true',
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
-    
+
     # Add login/logout option
     if creds:
         burger_menu_items.append({
@@ -243,6 +243,111 @@ def starred_tasks(request):
         'selected_list_title': None,
         'has_credentials': bool(creds),
         'is_starred_view': True,
+        'order_by': order_by,
+        'burger_menu_items': burger_menu_items,
+    }
+
+    return render(request, 'google_tasks/dashboard.html', context)
+
+
+@login_required
+def overdue_tasks(request):
+    """View showing only overdue tasks (due_date < today)."""
+    creds = get_creds_dict(request.user)
+
+    if 'sync' in request.GET and creds:
+        result = sync_all(request.user, creds)
+
+        if isinstance(result, dict) and 'authorization_url' in result:
+            request.session['state'] = result['state']
+            request.session['oauth_scopes'] = result.get('scopes', [])
+            current_url = request.get_full_path()
+            request.session['oauth_redirect_url'] = current_url
+            return redirect(result['authorization_url'])
+
+    order_by = request.GET.get('order', 'order_desc')
+
+    today = timezone.now().date()
+    overdue_tasks_qs = GoogleTask.objects.filter(
+        user=request.user,
+        is_archived=False,
+        is_deleted=False,
+        due_date__lt=today
+    )
+    active_tasks = overdue_tasks_qs.filter(status='needsAction')
+    completed_tasks = overdue_tasks_qs.filter(status='completed')
+
+    # Apply ordering
+    if order_by == 'order_desc':
+        active_tasks = active_tasks.order_by(
+            F('task_order').desc(nulls_last=True), '-updated'
+        )
+    elif order_by == 'order_asc':
+        active_tasks = active_tasks.order_by(
+            F('task_order').asc(nulls_last=True), 'updated'
+        )
+    elif order_by == 'created_desc':
+        active_tasks = active_tasks.order_by(
+            F('created').desc(nulls_last=True), '-updated'
+        )
+    elif order_by == 'created_asc':
+        active_tasks = active_tasks.order_by(
+            F('created').asc(nulls_last=True), 'updated'
+        )
+    elif order_by == 'completed_last':
+        active_tasks = active_tasks.order_by(
+            F('completed').asc(nulls_first=True), '-updated'
+        )
+    elif order_by == 'completed_first':
+        active_tasks = active_tasks.order_by(
+            F('completed').desc(nulls_last=True), '-updated'
+        )
+
+    # Apply ordering to completed tasks
+    if order_by == 'completed_last':
+        completed_tasks = completed_tasks.order_by('-completed')
+    elif order_by == 'completed_first':
+        completed_tasks = completed_tasks.order_by('completed')
+    else:
+        completed_tasks = completed_tasks.order_by('-updated')
+
+    task_lists = GoogleTaskList.objects.filter(user=request.user)
+
+    burger_menu_items = [
+        {'label': 'Home', 'url': '/', 'icon': 'house',
+         'btn_class': 'btn-light'},
+        {'label': 'Add Divider', 'onclick': 'createDivider()',
+         'icon': 'dash-lg', 'btn_class': 'btn-primary'},
+        {'label': 'Process Labels', 'onclick': 'processLabels()',
+         'icon': 'tags', 'btn_class': 'btn-success'},
+        {'label': 'Sync Now', 'url': '?sync=true',
+         'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
+    ]
+
+    # Add login/logout option
+    if creds:
+        burger_menu_items.append({
+            'label': f'Logout ({request.user.email or request.user.username})',
+            'url': '/admin/logout/',
+            'icon': 'box-arrow-right',
+            'btn_class': 'btn-outline-light'
+        })
+    else:
+        burger_menu_items.append({
+            'label': 'Login with Google',
+            'url': f"/login/?next={request.get_full_path()}",
+            'icon': 'google',
+            'btn_class': 'btn-warning'
+        })
+
+    context = {
+        'tasks': active_tasks,
+        'completed_tasks': completed_tasks,
+        'task_lists': task_lists,
+        'selected_list': None,
+        'selected_list_title': None,
+        'has_credentials': bool(creds),
+        'is_overdue_view': True,
         'order_by': order_by,
         'burger_menu_items': burger_menu_items,
     }

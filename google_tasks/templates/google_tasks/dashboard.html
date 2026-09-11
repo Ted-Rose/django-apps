@@ -263,6 +263,11 @@
                     </a>
                 </li>
                 <li>
+                    <a class="dropdown-item {% if is_overdue_view %}active{% endif %}" href="{% url 'google_tasks:overdue' %}">
+                        <i class="bi bi-exclamation-triangle text-danger"></i> Overdue
+                    </a>
+                </li>
+                <li>
                     <a class="dropdown-item {% if is_archived_view %}active{% endif %}" href="{% url 'google_tasks:archived' %}">
                         <i class="bi bi-archive"></i> Archive
                     </a>
