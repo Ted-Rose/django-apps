@@ -60,7 +60,7 @@
 
     <div class="container-fluid task-detail-container">
         <div class="d-flex align-items-center mb-3 header-section">
-            <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-secondary btn-sm me-2">
+            <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-secondary btn-sm me-2" id="back-btn">
                 <i class="bi bi-arrow-left"></i> Back to Dashboard
             </a>
             <h5 class="mb-0">Edit Task</h5>
@@ -138,7 +138,7 @@
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-save"></i> Save Changes
                 </button>
-                <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-outline-secondary">
+                <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-outline-secondary" id="cancel-btn">
                     <i class="bi bi-x-circle"></i> Cancel
                 </a>
             </div>
@@ -216,7 +216,10 @@
                 if (data.success) {
                     showAlert('Task updated successfully!', 'success');
                     setTimeout(() => {
-                        window.location.href = '{% url "google_tasks:dashboard" %}';
+                        const referrer = localStorage.getItem(
+                            'taskListReferrer'
+                        ) || '{% url "google_tasks:dashboard" %}';
+                        window.location.href = referrer;
                     }, 1500);
                 } else {
                     showAlert(data.error || 'Failed to update task', 'danger');
@@ -247,6 +250,21 @@
         
         textarea.addEventListener('input', autoResize);
         window.addEventListener('load', autoResize);
+
+        // Update back and cancel buttons with saved referrer URL
+        window.addEventListener('DOMContentLoaded', function() {
+            const referrer = localStorage.getItem('taskListReferrer');
+            if (referrer) {
+                const backBtn = document.getElementById('back-btn');
+                const cancelBtn = document.getElementById('cancel-btn');
+                if (backBtn) {
+                    backBtn.href = referrer;
+                }
+                if (cancelBtn) {
+                    cancelBtn.href = referrer;
+                }
+            }
+        });
     </script>
 </body>
 </html>

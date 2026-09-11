@@ -299,6 +299,10 @@
                             Created Desc
                         {% elif order_by == 'created_asc' %}
                             Created Asc
+                        {% elif order_by == 'due_desc' %}
+                            Due Desc
+                        {% elif order_by == 'due_asc' %}
+                            Due Asc
                         {% elif order_by == 'completed_last' %}
                             Completed Last
                         {% elif order_by == 'completed_first' %}
@@ -327,6 +331,17 @@
                         <li>
                             <a class="dropdown-item {% if order_by == 'created_asc' %}active{% endif %}" href="#" onclick="changeOrder('created_asc'); return false;">
                                 <i class="bi bi-calendar-plus"></i> Created Asc
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item {% if order_by == 'due_desc' %}active{% endif %}" href="#" onclick="changeOrder('due_desc'); return false;">
+                                <i class="bi bi-calendar-event"></i> Due Desc
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if order_by == 'due_asc' %}active{% endif %}" href="#" onclick="changeOrder('due_asc'); return false;">
+                                <i class="bi bi-calendar-event"></i> Due Asc
                             </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
@@ -1220,6 +1235,12 @@
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
+            }
+            
+            // Save current URL to localStorage for back navigation
+            if (link && !isDragging) {
+                localStorage.setItem('taskListReferrer', 
+                    window.location.pathname + window.location.search);
             }
         }, true);
 
