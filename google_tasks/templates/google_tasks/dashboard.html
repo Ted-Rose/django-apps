@@ -245,6 +245,12 @@
             <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
                 {% if is_starred_view %}
                     <i class="bi bi-star-fill text-warning"></i> Starred
+                {% elif is_overdue_view %}
+                    <i class="bi bi-exclamation-triangle text-danger"></i> Overdue
+                {% elif is_archived_view %}
+                    <i class="bi bi-archive"></i> Archive
+                {% elif is_trash_view %}
+                    <i class="bi bi-trash"></i> Trash
                 {% elif selected_list %}
                     <i class="bi bi-folder"></i> {{ selected_list_title }}
                 {% else %}
@@ -253,7 +259,7 @@
             </button>
             <ul class="dropdown-menu">
                 <li>
-                    <a class="dropdown-item {% if not selected_list and not is_starred_view %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}">
+                    <a class="dropdown-item {% if not selected_list and not is_starred_view and not is_overdue_view and not is_archived_view and not is_trash_view %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}" onclick="localStorage.removeItem('lastTasksView');">
                         <i class="bi bi-list-task"></i> All Tasks
                     </a>
                 </li>
@@ -931,7 +937,7 @@
         }
 
         function selectList(listId) {
-            {% if is_starred_view %}
+            {% if is_starred_view or is_overdue_view or is_archived_view or is_trash_view %}
             // Navigate to dashboard with list filter
             const params = new URLSearchParams();
             if (listId) params.set('list', listId);
