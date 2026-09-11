@@ -51,7 +51,10 @@
             <a class="navbar-brand" href="{% url 'google_tasks:archived' %}">
                 <i class="bi bi-archive"></i> Archived Tasks
             </a>
-            <div class="navbar-nav ms-auto">
+            <div class="navbar-nav ms-auto d-flex flex-row align-items-center gap-2">
+                <a href="{% url 'google_tasks:search' %}" class="btn btn-outline-light btn-sm" title="Search tasks">
+                    <i class="bi bi-search"></i> Search
+                </a>
                 {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
             </div>
         </div>

@@ -44,7 +44,10 @@
             <a class="navbar-brand" href="{% url 'google_tasks:trash' %}">
                 <i class="bi bi-trash"></i> Trash
             </a>
-            <div class="navbar-nav ms-auto">
+            <div class="navbar-nav ms-auto d-flex flex-row align-items-center gap-2">
+                <a href="{% url 'google_tasks:search' %}" class="btn btn-outline-light btn-sm" title="Search tasks">
+                    <i class="bi bi-search"></i> Search
+                </a>
                 {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
             </div>
         </div>

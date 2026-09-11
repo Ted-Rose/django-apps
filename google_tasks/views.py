@@ -924,7 +924,7 @@ def archived_tasks(request):
         {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
          'btn_class': 'btn-primary'},
     ]
-    
+
     # Add logout option
     burger_menu_items.append({
         'label': f'Logout ({request.user.email or request.user.username})',
@@ -971,7 +971,7 @@ def trash_tasks(request):
         {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
          'btn_class': 'btn-primary'},
     ]
-    
+
     # Add logout option
     burger_menu_items.append({
         'label': f'Logout ({request.user.email or request.user.username})',
@@ -1004,7 +1004,7 @@ def task_detail(request, task_id):
         {'label': 'Dashboard', 'url': '/tasks/', 'icon': 'list-task',
          'btn_class': 'btn-primary'},
     ]
-    
+
     # Add logout option
     burger_menu_items.append({
         'label': f'Logout ({request.user.email or request.user.username})',
@@ -1168,3 +1168,81 @@ def update_task_view(request, task_id):
             'success': False,
             'error': str(e)
         }, status=400)
+
+
+@login_required
+def search_tasks(request):
+    """Search tasks by title and/or notes."""
+    creds = get_creds_dict(request.user)
+
+    title_query = request.GET.get('title', '').strip()
+    notes_query = request.GET.get('notes', '').strip()
+
+    # Start with all non-deleted tasks
+    tasks = GoogleTask.objects.filter(
+        user=request.user,
+        is_deleted=False
+    )
+
+    # Apply filters
+    if title_query:
+        tasks = tasks.filter(title__icontains=title_query)
+
+    if notes_query:
+        tasks = tasks.filter(notes__icontains=notes_query)
+
+    # Only show results if at least one search parameter is provided
+    if not title_query and not notes_query:
+        tasks = GoogleTask.objects.none()
+
+    # Group tasks by task list
+    task_lists = GoogleTaskList.objects.filter(user=request.user)
+    grouped_tasks = {}
+
+    for task_list in task_lists:
+        list_tasks = tasks.filter(
+            task_list__list_id=task_list.list_id
+        ).order_by('-updated')
+        if list_tasks.exists():
+            grouped_tasks[task_list] = list_tasks
+
+    # Build sync URL
+    from urllib.parse import urlencode
+    sync_params = {'sync': 'true'}
+    sync_url = f'?{urlencode(sync_params)}'
+
+    burger_menu_items = [
+        {'label': 'Home', 'url': '/', 'icon': 'house',
+         'btn_class': 'btn-light'},
+        {'label': 'Dashboard', 'url': '/google-tasks/',
+         'icon': 'list-task', 'btn_class': 'btn-light'},
+        {'label': 'Sync Now', 'url': sync_url,
+         'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
+    ]
+
+    # Add login/logout option
+    if creds:
+        burger_menu_items.append({
+            'label': f'Logout ({request.user.email or request.user.username})',
+            'url': '/admin/logout/',
+            'icon': 'box-arrow-right',
+            'btn_class': 'btn-outline-light'
+        })
+    else:
+        burger_menu_items.append({
+            'label': 'Login with Google',
+            'url': f"/login/?next={request.get_full_path()}",
+            'icon': 'google',
+            'btn_class': 'btn-warning'
+        })
+
+    context = {
+        'grouped_tasks': grouped_tasks,
+        'title_query': title_query,
+        'notes_query': notes_query,
+        'has_credentials': creds is not None,
+        'burger_menu_items': burger_menu_items,
+        'total_results': tasks.count(),
+    }
+
+    return render(request, 'google_tasks/search.html', context)

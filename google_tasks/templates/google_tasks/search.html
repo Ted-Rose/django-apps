@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "pwa/head.html" %}
+    <title>Search Tasks - Google Tasks</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        .task-card {
+            transition: all 0.2s ease;
+        }
+        .task-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .task-card .card-body {
+            padding: 0.55rem 1rem;
+        }
+        .star-btn {
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        .star-btn.starred {
+            color: #ffc107;
+        }
+        .card-title, .card-text, .text-muted {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        .task-card .card-title {
+            font-size: 0.8em;
+            margin-bottom: 0.35rem;
+        }
+        .task-title-link {
+            color: inherit;
+            text-decoration: none;
+            transition: color 0.2s ease;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+            display: inline;
+        }
+        .task-title-link:hover {
+            color: #0d6efd;
+            text-decoration: underline;
+        }
+        .task-card .card-text {
+            font-size: 0.8em;
+            margin-bottom: 0.35rem;
+        }
+        .task-card small {
+            font-size: 0.8em;
+        }
+        .task-card p:last-child {
+            margin-bottom: 0;
+        }
+        .list-divider {
+            background: linear-gradient(to right, #0d6efd, #6c757d);
+            color: white;
+            padding: 0.5rem 1rem;
+            margin: 1.5rem 0 1rem 0;
+            border-radius: 0.25rem;
+            font-weight: 500;
+        }
+        .search-form {
+            background-color: #f8f9fa;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary" style="padding: 0.1rem 0; min-height: auto;">
+        <div class="container-fluid" style="padding: 0 0.5rem;">
+            <div class="d-flex align-items-center gap-1 flex-wrap flex-grow-1">
+                <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-outline-light btn-sm" style="padding: 0.15rem 0.4rem;" id="back-to-dashboard-btn">
+                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+            <div class="ms-auto d-flex flex-row align-items-center gap-2">
+                {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Search Form -->
+        <div class="search-form">
+            <h4 class="mb-3">
+                <i class="bi bi-search"></i> Search Tasks
+                <small class="text-muted ms-2" id="search-status" style="display: none;">
+                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                    Searching...
+                </small>
+            </h4>
+            <form method="get" action="{% url 'google_tasks:search' %}">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="title" class="form-label">
+                            Task Title
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="title" 
+                               name="title" 
+                               value="{{ title_query }}" 
+                               placeholder="Enter task title...">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="notes" class="form-label">
+                            Task Notes
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="notes" 
+                               name="notes" 
+                               value="{{ notes_query }}" 
+                               placeholder="Enter task notes...">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                        <a href="{% url 'google_tasks:search' %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Clear
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Search Results -->
+        {% if title_query or notes_query %}
+            {% if total_results > 0 %}
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle"></i> 
+                    Found {{ total_results }} task{{ total_results|pluralize }}
+                </div>
+
+                {% for task_list, tasks in grouped_tasks.items %}
+                    <div class="list-divider">
+                        <i class="bi bi-folder"></i> {{ task_list.title }}
+                    </div>
+
+                    {% for task in tasks %}
+                        <div class="card task-card mb-2">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="d-flex align-items-start flex-grow-1">
+                                        <div class="flex-grow-1">
+                                            <h5 class="card-title">
+                                                <span class="star-btn me-1 {% if task.is_starred %}starred{% endif %}" onclick="toggleStar('{{ task.task_id }}'); event.stopPropagation();" title="{% if task.is_starred %}Unstar{% else %}Star{% endif %}">
+                                                    <i class="bi {% if task.is_starred %}bi-star-fill{% else %}bi-star{% endif %}"></i>
+                                                </span>
+                                                <a href="{% url 'google_tasks:task_detail' task.task_id %}" class="task-title-link">
+                                                    {{ task.title }}
+                                                </a>
+                                                {% if task.status == 'completed' %}
+                                                    <span class="badge bg-success ms-2">
+                                                        Completed
+                                                    </span>
+                                                {% endif %}
+                                                {% if task.is_archived %}
+                                                    <span class="badge bg-secondary ms-2">
+                                                        Archived
+                                                    </span>
+                                                {% endif %}
+                                            </h5>
+                                            {% if task.notes %}
+                                            <p class="card-text text-muted">
+                                                {{ task.notes|truncatewords:30 }}
+                                            </p>
+                                            {% endif %}
+                                            {% if task.due_date %}
+                                            <small class="text-muted">
+                                                <i class="bi bi-calendar"></i> 
+                                                Due: {{ task.due_date|date:"M d, Y" }}
+                                            </small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-warning text-center py-5">
+                    <i class="bi bi-exclamation-triangle fs-1 d-block mb-3"></i>
+                    <h5>No tasks found</h5>
+                    <p class="mb-0">
+                        Try different search terms or check your filters.
+                    </p>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-info text-center py-5">
+                <i class="bi bi-info-circle fs-1 d-block mb-3"></i>
+                <h5>Enter search criteria</h5>
+                <p class="mb-0">
+                    Enter a task title and/or notes to search for tasks.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Restore the "Back to Dashboard" link to the last view
+        document.addEventListener('DOMContentLoaded', function() {
+            const lastViewUrl = localStorage.getItem('lastTasksView');
+            const backBtn = document.getElementById('back-to-dashboard-btn');
+            
+            if (lastViewUrl && backBtn) {
+                backBtn.href = lastViewUrl;
+            }
+        });
+
+        function toggleStar(taskId) {
+            fetch(`/google-tasks/task/${taskId}/toggle-star/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload to update star status
+                    location.reload();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Live search - search as user types
+        const titleInput = document.getElementById('title');
+        const notesInput = document.getElementById('notes');
+        const searchStatus = document.getElementById('search-status');
+        let searchTimeout;
+
+        function performSearch() {
+            const titleValue = titleInput.value.trim();
+            const notesValue = notesInput.value.trim();
+
+            // Show searching indicator
+            if (searchStatus) {
+                searchStatus.style.display = 'inline-block';
+            }
+
+            // Only search if at least one field has content
+            if (titleValue || notesValue) {
+                const params = new URLSearchParams();
+                if (titleValue) params.append('title', titleValue);
+                if (notesValue) params.append('notes', notesValue);
+                
+                // Update URL and reload
+                window.location.href = '{% url "google_tasks:search" %}?' + params.toString();
+            } else if (titleValue === '' && notesValue === '') {
+                // Clear search if both fields are empty
+                window.location.href = '{% url "google_tasks:search" %}';
+            }
+        }
+
+        function debounceSearch() {
+            // Show typing indicator
+            if (searchStatus) {
+                searchStatus.style.display = 'inline-block';
+            }
+            
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(performSearch, 500); // Wait 500ms after user stops typing
+        }
+
+        if (titleInput) {
+            titleInput.addEventListener('input', debounceSearch);
+        }
+
+        if (notesInput) {
+            notesInput.addEventListener('input', debounceSearch);
+        }
+
+        // Prevent form submission on Enter, use live search instead
+        const searchForm = document.querySelector('form');
+        if (searchForm) {
+            searchForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                performSearch();
+            });
+        }
+    </script>
+</body>
+</html>

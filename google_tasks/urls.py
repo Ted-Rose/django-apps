@@ -5,6 +5,7 @@ app_name = 'google_tasks'
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
+    path('search/', views.search_tasks, name='search'),
     path('starred/', views.starred_tasks, name='starred'),
     path('overdue/', views.overdue_tasks, name='overdue'),
     path('starred/reorder/', views.reorder_starred, name='reorder_starred'),

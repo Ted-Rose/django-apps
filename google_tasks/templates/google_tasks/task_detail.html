@@ -33,6 +33,11 @@
         }
         #task-title {
             border: none;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            resize: none;
+            min-height: 2.5rem;
         }
         #task-title:focus {
             border: none;
@@ -109,15 +114,14 @@
                 <label for="task-title" class="form-label fw-bold">
                     <i class="bi bi-text-left"></i> Title
                 </label>
-                <input 
-                    type="text" 
+                <textarea 
                     class="form-control form-control-lg" 
                     id="task-title" 
                     name="title"
-                    value="{{ task.title }}"
                     required
                     maxlength="500"
-                    placeholder="Enter task title">
+                    rows="1"
+                    placeholder="Enter task title">{{ task.title }}</textarea>
                 <div class="form-text">Required field (max 500 characters)</div>
             </div>
 
@@ -235,21 +239,26 @@
             });
         });
 
-        document.getElementById('task-title').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                document.getElementById('task-form').dispatchEvent(new Event('submit'));
-            }
-        });
-
-        const textarea = document.getElementById('task-notes');
-        function autoResize() {
-            textarea.style.height = 'auto';
-            textarea.style.height = textarea.scrollHeight + 'px';
+        const titleTextarea = document.getElementById('task-title');
+        const notesTextarea = document.getElementById('task-notes');
+        
+        function autoResizeTitle() {
+            titleTextarea.style.height = 'auto';
+            titleTextarea.style.height = titleTextarea.scrollHeight + 'px';
         }
         
-        textarea.addEventListener('input', autoResize);
-        window.addEventListener('load', autoResize);
+        function autoResizeNotes() {
+            notesTextarea.style.height = 'auto';
+            notesTextarea.style.height = notesTextarea.scrollHeight + 'px';
+        }
+        
+        titleTextarea.addEventListener('input', autoResizeTitle);
+        notesTextarea.addEventListener('input', autoResizeNotes);
+        
+        window.addEventListener('load', function() {
+            autoResizeTitle();
+            autoResizeNotes();
+        });
 
         // Update back and cancel buttons with saved referrer URL
         window.addEventListener('DOMContentLoaded', function() {
