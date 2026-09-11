@@ -31,6 +31,19 @@
         .task-meta .badge {
             font-size: 0.9rem;
         }
+        #task-title {
+            border: none;
+        }
+        #task-title:focus {
+            border: none;
+            box-shadow: none;
+        }
+        .header-section .btn-sm {
+            font-size: 0.75rem;
+        }
+        .header-section h5 {
+            font-size: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -46,33 +59,33 @@
     </nav>
 
     <div class="container-fluid task-detail-container">
-        <div class="d-flex align-items-center mb-3">
-            <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-outline-secondary me-3">
+        <div class="d-flex align-items-center mb-3 header-section">
+            <a href="{% url 'google_tasks:dashboard' %}" class="btn btn-secondary btn-sm me-2">
                 <i class="bi bi-arrow-left"></i> Back to Dashboard
             </a>
-            <h2 class="mb-0">Edit Task</h2>
+            <h5 class="mb-0">Edit Task</h5>
         </div>
 
         <div class="task-meta">
             <div class="d-flex flex-wrap gap-2 align-items-center">
                 {% if task.status == 'completed' %}
-                    <span class="badge bg-success">
+                    <span class="badge bg-secondary">
                         <i class="bi bi-check-circle"></i> Completed
                     </span>
                 {% else %}
-                    <span class="badge bg-warning text-dark">
+                    <span class="badge bg-secondary">
                         <i class="bi bi-circle"></i> Needs Action
                     </span>
                 {% endif %}
                 
                 {% if task.is_starred %}
-                    <span class="badge bg-warning">
+                    <span class="badge bg-secondary">
                         <i class="bi bi-star-fill"></i> Starred
                     </span>
                 {% endif %}
                 
                 {% if task.due_date %}
-                    <span class="badge bg-info">
+                    <span class="badge bg-secondary">
                         <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
                     </span>
                 {% endif %}
@@ -116,7 +129,7 @@
                     class="form-control" 
                     id="task-notes" 
                     name="notes"
-                    rows="10"
+                    rows="3"
                     placeholder="Enter task notes or details...">{{ task.notes|default:"" }}</textarea>
                 <div class="form-text">Optional field for additional details</div>
             </div>
@@ -225,6 +238,15 @@
                 document.getElementById('task-form').dispatchEvent(new Event('submit'));
             }
         });
+
+        const textarea = document.getElementById('task-notes');
+        function autoResize() {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+        
+        textarea.addEventListener('input', autoResize);
+        window.addEventListener('load', autoResize);
     </script>
 </body>
 </html>
