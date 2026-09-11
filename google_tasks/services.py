@@ -1,5 +1,6 @@
 import logging
 import re
+import socket
 from datetime import datetime
 from django.utils import timezone
 from google_api.utils import google_auth
@@ -10,6 +11,9 @@ from google_tasks.models import GoogleTaskList, GoogleTask
 logger = logging.getLogger('django')
 
 TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks'
+
+# Set default socket timeout to prevent indefinite hangs
+socket.setdefaulttimeout(30)
 
 
 def get_tasks_service(creds):
@@ -33,6 +37,7 @@ def get_tasks_service(creds):
     try:
         # Use cache_discovery=False to avoid potential hanging
         # on discovery document fetch
+        # Build with credentials directly (google-auth handles timeout)
         service = build(
             'tasks', 'v1',
             credentials=credentials,
@@ -72,8 +77,10 @@ def sync_task_lists(user, creds):
         if isinstance(service, dict) and 'authorization_url' in service:
             return service
 
+        logger.info(f'Fetching task lists for user {user.username}')
         results = service.tasklists().list(maxResults=100).execute()
         task_lists = results.get('items', [])
+        logger.info(f'Retrieved {len(task_lists)} task lists from API')
 
         for task_list_data in task_lists:
             GoogleTaskList.objects.update_or_create(
@@ -92,8 +99,23 @@ def sync_task_lists(user, creds):
         )
         return True
 
+    except socket.timeout:
+        logger.error(
+            f'Timeout syncing task lists for user {user.username}'
+        )
+        return False
     except HttpError as error:
-        logger.error(f'Error syncing task lists: {error}')
+        logger.error(
+            f'HttpError syncing task lists: '
+            f'Status={error.resp.status}, Content={error.content}'
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f'Unexpected error syncing task lists: '
+            f'{type(e).__name__}: {str(e)}',
+            exc_info=True
+        )
         return False
 
 
@@ -114,13 +136,24 @@ def sync_tasks(user, creds, task_list_id=None):
             task_lists = [
                 GoogleTaskList.objects.get(user=user, list_id=task_list_id)
             ]
+            logger.info(
+                f'Syncing tasks for specific list: {task_list_id}'
+            )
         else:
             task_lists = GoogleTaskList.objects.filter(user=user)
+            logger.info(
+                f'Syncing tasks for all {task_lists.count()} lists'
+            )
 
         total_synced = 0
 
         for task_list in task_lists:
+            logger.info(
+                f'Fetching tasks from list: {task_list.title} '
+                f'({task_list.list_id})'
+            )
             page_token = None
+            list_task_count = 0
             while True:
                 results = service.tasks().list(
                     tasklist=task_list.list_id,
@@ -131,6 +164,7 @@ def sync_tasks(user, creds, task_list_id=None):
                 ).execute()
 
                 tasks = results.get('items', [])
+                list_task_count += len(tasks)
 
                 for task_data in tasks:
                     defaults = {
@@ -167,17 +201,37 @@ def sync_tasks(user, creds, task_list_id=None):
                 if not page_token:
                     break
 
+            logger.info(
+                f'Synced {list_task_count} tasks from '
+                f'{task_list.title}'
+            )
+
         logger.info(
             f'Synced {total_synced} tasks for user {user.username}'
         )
         return True
 
+    except socket.timeout:
+        logger.error(
+            f'Timeout syncing tasks for user {user.username}'
+        )
+        return False
     except HttpError as error:
-        logger.error(f'Error syncing tasks: {error}')
+        logger.error(
+            f'HttpError syncing tasks: '
+            f'Status={error.resp.status}, Content={error.content}'
+        )
         return False
     except GoogleTaskList.DoesNotExist:
         logger.error(
             f'Task list {task_list_id} not found for user {user.username}'
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f'Unexpected error syncing tasks: '
+            f'{type(e).__name__}: {str(e)}',
+            exc_info=True
         )
         return False
 
@@ -257,6 +311,11 @@ def create_task(user, creds, title, notes=None, task_list_id=None):
         )
         return response
 
+    except socket.timeout:
+        logger.error(
+            f'Timeout creating task "{title}" for user {user.username}'
+        )
+        return None
     except HttpError as error:
         logger.error(
             f'HttpError creating task: '
@@ -268,7 +327,8 @@ def create_task(user, creds, title, notes=None, task_list_id=None):
     except Exception as e:
         logger.error(
             f'Unexpected error creating task: '
-            f'{type(e).__name__}: {str(e)}'
+            f'{type(e).__name__}: {str(e)}',
+            exc_info=True
         )
         return None
 
@@ -328,6 +388,11 @@ def complete_task(user, creds, task_id):
         )
         return True
 
+    except socket.timeout:
+        logger.error(
+            f'Timeout completing task {task_id} for user {user.username}'
+        )
+        return False
     except HttpError as error:
         logger.error(
             f'HttpError completing task {task_id}: '
@@ -344,7 +409,8 @@ def complete_task(user, creds, task_id):
     except Exception as e:
         logger.error(
             f'Unexpected error completing task {task_id}: '
-            f'{type(e).__name__}: {str(e)}'
+            f'{type(e).__name__}: {str(e)}',
+            exc_info=True
         )
         return False
 
@@ -406,6 +472,12 @@ def uncomplete_task(user, creds, task_id):
         )
         return True
 
+    except socket.timeout:
+        logger.error(
+            f'Timeout uncompleting task {task_id} '
+            f'for user {user.username}'
+        )
+        return False
     except HttpError as error:
         logger.error(
             f'HttpError uncompleting task {task_id}: '
@@ -422,7 +494,8 @@ def uncomplete_task(user, creds, task_id):
     except Exception as e:
         logger.error(
             f'Unexpected error uncompleting task {task_id}: '
-            f'{type(e).__name__}: {str(e)}'
+            f'{type(e).__name__}: {str(e)}',
+            exc_info=True
         )
         return False
 
@@ -518,13 +591,45 @@ def move_task_to_list(user, creds, task, target_list):
         service = get_tasks_service(creds)
 
         if isinstance(service, dict) and 'authorization_url' in service:
+            logger.warning('Reauth required in move_task_to_list')
             return service
 
+        # Validate task list IDs before making API calls
+        if not task.task_list or not task.task_list.list_id:
+            logger.error(
+                f'Task {task.task_id} has no valid source list'
+            )
+            return False
+
+        if not target_list or not target_list.list_id:
+            logger.error(
+                f'Target list is invalid for task {task.task_id}'
+            )
+            return False
+
         # Get full task data from source list
-        source_task = service.tasks().get(
-            tasklist=task.task_list.list_id,
-            task=task.task_id
-        ).execute()
+        logger.info(
+            f'Fetching task {task.task_id} from source list '
+            f'{task.task_list.list_id}'
+        )
+        try:
+            source_task = service.tasks().get(
+                tasklist=task.task_list.list_id,
+                task=task.task_id
+            ).execute()
+            logger.info(
+                f'Successfully fetched source task: {source_task.get("title")}'
+            )
+        except HttpError as e:
+            if e.resp.status == 404:
+                logger.error(
+                    f'Task {task.task_id} not found in Google Tasks '
+                    f'(may have been deleted). Marking as deleted locally.'
+                )
+                task.is_deleted = True
+                task.save()
+                return False
+            raise
 
         # Create task in target list
         new_task_body = {
@@ -536,16 +641,28 @@ def move_task_to_list(user, creds, task, target_list):
         if 'due' in source_task:
             new_task_body['due'] = source_task['due']
 
+        logger.info(
+            f'Creating task in target list {target_list.list_id}'
+        )
         new_task = service.tasks().insert(
             tasklist=target_list.list_id,
             body=new_task_body
         ).execute()
+        logger.info(
+            f'Successfully created task in target list, '
+            f'new ID: {new_task["id"]}'
+        )
 
         # Delete task from source list
+        logger.info(
+            f'Deleting task {task.task_id} from source list '
+            f'{task.task_list.list_id}'
+        )
         service.tasks().delete(
             tasklist=task.task_list.list_id,
             task=task.task_id
         ).execute()
+        logger.info('Successfully deleted task from source list')
 
         # Update local database
         task.task_id = new_task['id']
@@ -559,17 +676,25 @@ def move_task_to_list(user, creds, task, target_list):
         )
         return True
 
+    except socket.timeout:
+        logger.error(
+            f'Timeout moving task {task.task_id} from '
+            f'{task.task_list.title} to {target_list.title}'
+        )
+        return False
     except HttpError as error:
         logger.error(
-            f'HttpError moving task: '
+            f'HttpError moving task {task.task_id}: '
             f'Status={error.resp.status}, '
+            f'Reason={error.resp.reason}, '
             f'Content={error.content}'
         )
         return False
     except Exception as e:
         logger.error(
-            f'Unexpected error moving task: '
-            f'{type(e).__name__}: {str(e)}'
+            f'Unexpected error moving task {task.task_id}: '
+            f'{type(e).__name__}: {str(e)}',
+            exc_info=True
         )
         return False
 
