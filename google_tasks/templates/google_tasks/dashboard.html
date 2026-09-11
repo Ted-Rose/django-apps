@@ -227,132 +227,128 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'google_tasks:dashboard' %}">
-                <i class="bi bi-check2-square"></i> Google Tasks
-            </a>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary" style="padding: 0.1rem 0; min-height: auto;">
+        <div class="container-fluid" style="padding: 0 0.5rem;">
+            {% if has_credentials %}
+            <div class="d-flex align-items-center gap-1 flex-wrap flex-grow-1">
+                <!-- View dropdown: All Tasks + Starred + Task Lists -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" style="padding: 0.15rem 0.4rem;">
+                        {% if is_starred_view %}
+                            <i class="bi bi-star-fill text-warning"></i> Starred
+                        {% elif is_overdue_view %}
+                            <i class="bi bi-exclamation-triangle text-warning"></i> Overdue
+                        {% elif is_archived_view %}
+                            <i class="bi bi-archive"></i> Archive
+                        {% elif is_trash_view %}
+                            <i class="bi bi-trash"></i> Trash
+                        {% elif selected_list %}
+                            <i class="bi bi-folder"></i> {{ selected_list_title }}
+                        {% else %}
+                            <i class="bi bi-list-task"></i> All Tasks
+                        {% endif %}
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item {% if not selected_list and not is_starred_view and not is_overdue_view and not is_archived_view and not is_trash_view %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}" onclick="localStorage.removeItem('lastTasksView');">
+                                <i class="bi bi-list-task"></i> All Tasks
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if is_starred_view %}active{% endif %}" href="{% url 'google_tasks:starred' %}">
+                                <i class="bi bi-star-fill text-warning"></i> Starred
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if is_overdue_view %}active{% endif %}" href="{% url 'google_tasks:overdue' %}">
+                                <i class="bi bi-exclamation-triangle text-danger"></i> Overdue
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if is_archived_view %}active{% endif %}" href="{% url 'google_tasks:archived' %}">
+                                <i class="bi bi-archive"></i> Archive
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if is_trash_view %}active{% endif %}" href="{% url 'google_tasks:trash' %}">
+                                <i class="bi bi-trash"></i> Trash
+                            </a>
+                        </li>
+                        {% if task_lists %}
+                        <li><hr class="dropdown-divider"></li>
+                        {% for list in task_lists %}
+                        <li>
+                            <a class="dropdown-item {% if selected_list == list.list_id %}active{% endif %}" href="#" onclick="selectList('{{ list.list_id }}'); return false;">
+                                <i class="bi bi-folder"></i> {{ list.title }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                        {% endif %}
+                    </ul>
+                </div>
+
+                <!-- Ordering dropdown -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" style="padding: 0.15rem 0.4rem;">
+                        <i class="bi bi-sort-down"></i>
+                        {% if order_by == 'order_desc' %}
+                            Order Desc
+                        {% elif order_by == 'order_asc' %}
+                            Order Asc
+                        {% elif order_by == 'created_desc' %}
+                            Created Desc
+                        {% elif order_by == 'created_asc' %}
+                            Created Asc
+                        {% elif order_by == 'completed_last' %}
+                            Completed Last
+                        {% elif order_by == 'completed_first' %}
+                            Completed First
+                        {% else %}
+                            Order Desc
+                        {% endif %}
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item {% if order_by == 'order_desc' or not order_by %}active{% endif %}" href="#" onclick="changeOrder('order_desc'); return false;">
+                                <i class="bi bi-sort-numeric-down"></i> Order Desc
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if order_by == 'order_asc' %}active{% endif %}" href="#" onclick="changeOrder('order_asc'); return false;">
+                                <i class="bi bi-sort-numeric-up"></i> Order Asc
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item {% if order_by == 'created_desc' %}active{% endif %}" href="#" onclick="changeOrder('created_desc'); return false;">
+                                <i class="bi bi-calendar-plus"></i> Created Desc
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if order_by == 'created_asc' %}active{% endif %}" href="#" onclick="changeOrder('created_asc'); return false;">
+                                <i class="bi bi-calendar-plus"></i> Created Asc
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item {% if order_by == 'completed_last' %}active{% endif %}" href="#" onclick="changeOrder('completed_last'); return false;">
+                                <i class="bi bi-check-circle"></i> Completed Last
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if order_by == 'completed_first' %}active{% endif %}" href="#" onclick="changeOrder('completed_first'); return false;">
+                                <i class="bi bi-check-circle-fill"></i> Completed First
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
             <div class="navbar-nav ms-auto">
                 {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
             </div>
         </div>
     </nav>
-
-    {% if has_credentials %}
-    <div class="filter-bar py-2 px-3 d-flex align-items-center gap-2 flex-wrap">
-        <!-- View dropdown: All Tasks + Starred + Task Lists -->
-        <div class="dropdown">
-            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                {% if is_starred_view %}
-                    <i class="bi bi-star-fill text-warning"></i> Starred
-                {% elif is_overdue_view %}
-                    <i class="bi bi-exclamation-triangle text-danger"></i> Overdue
-                {% elif is_archived_view %}
-                    <i class="bi bi-archive"></i> Archive
-                {% elif is_trash_view %}
-                    <i class="bi bi-trash"></i> Trash
-                {% elif selected_list %}
-                    <i class="bi bi-folder"></i> {{ selected_list_title }}
-                {% else %}
-                    <i class="bi bi-list-task"></i> All Tasks
-                {% endif %}
-            </button>
-            <ul class="dropdown-menu">
-                <li>
-                    <a class="dropdown-item {% if not selected_list and not is_starred_view and not is_overdue_view and not is_archived_view and not is_trash_view %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}" onclick="localStorage.removeItem('lastTasksView');">
-                        <i class="bi bi-list-task"></i> All Tasks
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item {% if is_starred_view %}active{% endif %}" href="{% url 'google_tasks:starred' %}">
-                        <i class="bi bi-star-fill text-warning"></i> Starred
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item {% if is_overdue_view %}active{% endif %}" href="{% url 'google_tasks:overdue' %}">
-                        <i class="bi bi-exclamation-triangle text-danger"></i> Overdue
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item {% if is_archived_view %}active{% endif %}" href="{% url 'google_tasks:archived' %}">
-                        <i class="bi bi-archive"></i> Archive
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item {% if is_trash_view %}active{% endif %}" href="{% url 'google_tasks:trash' %}">
-                        <i class="bi bi-trash"></i> Trash
-                    </a>
-                </li>
-                {% if task_lists %}
-                <li><hr class="dropdown-divider"></li>
-                {% for list in task_lists %}
-                <li>
-                    <a class="dropdown-item {% if selected_list == list.list_id %}active{% endif %}" href="#" onclick="selectList('{{ list.list_id }}'); return false;">
-                        <i class="bi bi-folder"></i> {{ list.title }}
-                    </a>
-                </li>
-                {% endfor %}
-                {% endif %}
-            </ul>
-        </div>
-
-        <!-- Ordering dropdown -->
-        <div class="dropdown">
-            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                <i class="bi bi-sort-down"></i>
-                {% if order_by == 'order_desc' %}
-                    Order Desc
-                {% elif order_by == 'order_asc' %}
-                    Order Asc
-                {% elif order_by == 'created_desc' %}
-                    Created Desc
-                {% elif order_by == 'created_asc' %}
-                    Created Asc
-                {% elif order_by == 'completed_last' %}
-                    Completed Last
-                {% elif order_by == 'completed_first' %}
-                    Completed First
-                {% else %}
-                    Order Desc
-                {% endif %}
-            </button>
-            <ul class="dropdown-menu">
-                <li>
-                    <a class="dropdown-item {% if order_by == 'order_desc' or not order_by %}active{% endif %}" href="#" onclick="changeOrder('order_desc'); return false;">
-                        <i class="bi bi-sort-numeric-down"></i> Order Desc
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item {% if order_by == 'order_asc' %}active{% endif %}" href="#" onclick="changeOrder('order_asc'); return false;">
-                        <i class="bi bi-sort-numeric-up"></i> Order Asc
-                    </a>
-                </li>
-                <li><hr class="dropdown-divider"></li>
-                <li>
-                    <a class="dropdown-item {% if order_by == 'created_desc' %}active{% endif %}" href="#" onclick="changeOrder('created_desc'); return false;">
-                        <i class="bi bi-calendar-plus"></i> Created Desc
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item {% if order_by == 'created_asc' %}active{% endif %}" href="#" onclick="changeOrder('created_asc'); return false;">
-                        <i class="bi bi-calendar-plus"></i> Created Asc
-                    </a>
-                </li>
-                <li><hr class="dropdown-divider"></li>
-                <li>
-                    <a class="dropdown-item {% if order_by == 'completed_last' %}active{% endif %}" href="#" onclick="changeOrder('completed_last'); return false;">
-                        <i class="bi bi-check-circle"></i> Completed Last
-                    </a>
-                </li>
-                <li>
-                    <a class="dropdown-item {% if order_by == 'completed_first' %}active{% endif %}" href="#" onclick="changeOrder('completed_first'); return false;">
-                        <i class="bi bi-check-circle-fill"></i> Completed First
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </div>
-    {% endif %}
 
     <div class="container-fluid px-2 py-4">
         {% if tasks %}
