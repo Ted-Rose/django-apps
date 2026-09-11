@@ -106,6 +106,15 @@ def dashboard(request):
             list_id=task_list_filter
         ).values_list('title', flat=True).first()
 
+    # Build sync URL preserving current parameters
+    from urllib.parse import urlencode
+    sync_params = {'sync': 'true'}
+    if task_list_filter:
+        sync_params['list'] = task_list_filter
+    if order_by:
+        sync_params['order'] = order_by
+    sync_url = f'?{urlencode(sync_params)}'
+
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
          'btn_class': 'btn-light'},
@@ -113,7 +122,7 @@ def dashboard(request):
          'icon': 'dash-lg', 'btn_class': 'btn-primary'},
         {'label': 'Process Labels', 'onclick': 'processLabels()',
          'icon': 'tags', 'btn_class': 'btn-success'},
-        {'label': 'Sync Now', 'url': '?sync=true',
+        {'label': 'Sync Now', 'url': sync_url,
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
 
@@ -208,6 +217,13 @@ def starred_tasks(request):
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
 
+    # Build sync URL preserving current parameters
+    from urllib.parse import urlencode
+    sync_params = {'sync': 'true'}
+    if order_by:
+        sync_params['order'] = order_by
+    sync_url = f'?{urlencode(sync_params)}'
+
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
          'btn_class': 'btn-light'},
@@ -215,7 +231,7 @@ def starred_tasks(request):
          'icon': 'dash-lg', 'btn_class': 'btn-primary'},
         {'label': 'Process Labels', 'onclick': 'processLabels()',
          'icon': 'tags', 'btn_class': 'btn-success'},
-        {'label': 'Sync Now', 'url': '?sync=true',
+        {'label': 'Sync Now', 'url': sync_url,
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
 
@@ -313,6 +329,13 @@ def overdue_tasks(request):
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
 
+    # Build sync URL preserving current parameters
+    from urllib.parse import urlencode
+    sync_params = {'sync': 'true'}
+    if order_by:
+        sync_params['order'] = order_by
+    sync_url = f'?{urlencode(sync_params)}'
+
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
          'btn_class': 'btn-light'},
@@ -320,7 +343,7 @@ def overdue_tasks(request):
          'icon': 'dash-lg', 'btn_class': 'btn-primary'},
         {'label': 'Process Labels', 'onclick': 'processLabels()',
          'icon': 'tags', 'btn_class': 'btn-success'},
-        {'label': 'Sync Now', 'url': '?sync=true',
+        {'label': 'Sync Now', 'url': sync_url,
          'icon': 'arrow-repeat', 'btn_class': 'btn-light'},
     ]
 
