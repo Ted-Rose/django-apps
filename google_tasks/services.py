@@ -30,7 +30,22 @@ def get_tasks_service(creds):
         return credentials
 
     logger.info('Successfully obtained credentials, building service')
-    return build('tasks', 'v1', credentials=credentials)
+    try:
+        # Use cache_discovery=False to avoid potential hanging
+        # on discovery document fetch
+        service = build(
+            'tasks', 'v1',
+            credentials=credentials,
+            cache_discovery=False
+        )
+        logger.info('Service built successfully')
+        return service
+    except Exception as e:
+        logger.error(
+            f'Error building Google Tasks service: '
+            f'{type(e).__name__}: {str(e)}'
+        )
+        raise
 
 
 def parse_datetime(date_string):
@@ -609,6 +624,12 @@ def process_task_labels(user, creds, task_id=None):
     # Get all task lists for matching
     task_lists = GoogleTaskList.objects.filter(user=user)
 
+    # Pre-calculate max starred_order to avoid repeated queries
+    from django.db.models import Max
+    max_starred_order = GoogleTask.objects.filter(
+        user=user, is_starred=True
+    ).aggregate(Max('starred_order'))['starred_order__max'] or 0
+
     for task in tasks:
         stats['processed'] += 1
         detail = {
@@ -632,6 +653,29 @@ def process_task_labels(user, creds, task_id=None):
             f'Task "{task.title}" has hashtags: {hashtags}'
         )
 
+        # Check for special keywords first
+        if hashtags[0] == 'starred':
+            logger.info(
+                'Special keyword #starred found, marking task as '
+                'starred'
+            )
+            if not task.is_starred:
+                # Use pre-calculated max and increment
+                max_starred_order += 1
+                task.is_starred = True
+                task.starred_order = max_starred_order
+                task.save()
+                stats['starred'] += 1
+                detail['action'] = 'starred'
+                detail['message'] = (
+                    f'Marked as starred with priority '
+                    f'{task.starred_order}'
+                )
+            else:
+                detail['message'] = 'Already starred'
+            stats['details'].append(detail)
+            continue
+
         # Try to match first hashtag
         target_list = match_task_list(hashtags[0], task_lists)
 
@@ -649,12 +693,16 @@ def process_task_labels(user, creds, task_id=None):
                 f'just starring it'
             )
             if not task.is_starred:
+                # Use pre-calculated max and increment
+                max_starred_order += 1
                 task.is_starred = True
+                task.starred_order = max_starred_order
                 task.save()
                 stats['starred'] += 1
                 detail['action'] = 'starred'
                 detail['message'] = (
-                    f'Already in {target_list.title}, starred'
+                    f'Already in {target_list.title}, starred with '
+                    f'priority {task.starred_order}'
                 )
             else:
                 detail['message'] = (
@@ -671,14 +719,17 @@ def process_task_labels(user, creds, task_id=None):
             return result
 
         if result:
-            # Star the task
+            # Star the task with highest priority
+            max_starred_order += 1
             task.is_starred = True
+            task.starred_order = max_starred_order
             task.save()
             stats['moved'] += 1
             stats['starred'] += 1
             detail['action'] = 'moved_and_starred'
             detail['message'] = (
-                f'Moved to {target_list.title} and starred'
+                f'Moved to {target_list.title} and starred with '
+                f'priority {task.starred_order}'
             )
         else:
             stats['errors'] += 1

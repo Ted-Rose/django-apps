@@ -181,14 +181,14 @@ def starred_tasks(request):
     active_tasks = starred_tasks_qs.filter(status='needsAction')
     completed_tasks = starred_tasks_qs.filter(status='completed')
 
-    # Apply ordering
+    # Apply ordering (use starred_order for starred view)
     if order_by == 'order_desc':
         active_tasks = active_tasks.order_by(
-            F('task_order').desc(nulls_last=True), '-updated'
+            F('starred_order').desc(nulls_last=True), '-updated'
         )
     elif order_by == 'order_asc':
         active_tasks = active_tasks.order_by(
-            F('task_order').asc(nulls_last=True), 'updated'
+            F('starred_order').asc(nulls_last=True), 'updated'
         )
     elif order_by == 'created_desc':
         active_tasks = active_tasks.order_by(
@@ -395,7 +395,7 @@ def reorder_starred(request):
         inverted_position = max_position - position
         GoogleTask.objects.filter(
             task_id=task_id, user=request.user
-        ).update(task_order=inverted_position)
+        ).update(starred_order=inverted_position)
 
     return JsonResponse({'success': True})
 
@@ -442,8 +442,15 @@ def reorder_tasks(request):
 @require_POST
 def toggle_star(request, task_id):
     """Toggle the starred status of a task."""
+    from django.db.models import Max
     task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
     task.is_starred = not task.is_starred
+    if task.is_starred:
+        # Get max starred_order and add 1 to put at top
+        max_order = GoogleTask.objects.filter(
+            user=request.user, is_starred=True
+        ).aggregate(Max('starred_order'))['starred_order__max']
+        task.starred_order = (max_order or 0) + 1
     task.save()
 
     return JsonResponse({
@@ -720,6 +727,19 @@ def create_divider(request):
                 user=request.user
             )
 
+        # Calculate appropriate order based on view
+        task_order = None
+        starred_order = None
+        if is_starred:
+            # Get max starred_order and add 1
+            from django.db.models import Max
+            max_order = GoogleTask.objects.filter(
+                user=request.user, is_starred=True
+            ).aggregate(Max('starred_order'))['starred_order__max']
+            starred_order = (max_order or 0) + 1
+        else:
+            task_order = position
+
         divider = GoogleTask.objects.create(
             user=request.user,
             task_id=f'divider_{uuid.uuid4().hex[:16]}',
@@ -728,7 +748,8 @@ def create_divider(request):
             status='needsAction',
             is_divider=True,
             is_starred=is_starred,
-            task_order=position,
+            task_order=task_order,
+            starred_order=starred_order,
             created=timezone.now()
         )
 
@@ -1095,6 +1116,15 @@ def create_task_view(request):
                 user=request.user
             ).first()
 
+        # Calculate starred_order if task is starred
+        starred_order = None
+        if is_starred:
+            from django.db.models import Max
+            max_order = GoogleTask.objects.filter(
+                user=request.user, is_starred=True
+            ).aggregate(Max('starred_order'))['starred_order__max']
+            starred_order = (max_order or 0) + 1
+
         task = GoogleTask.objects.create(
             user=request.user,
             task_id=result['id'],
@@ -1103,6 +1133,7 @@ def create_task_view(request):
             notes=result.get('notes'),
             status=result.get('status', 'needsAction'),
             is_starred=is_starred,
+            starred_order=starred_order,
             is_divider=False,
             updated=timezone.now(),
             created=timezone.now()
