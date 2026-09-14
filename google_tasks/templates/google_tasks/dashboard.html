@@ -433,22 +433,42 @@
                                 {% endif %}
                                 </div>
                             </div>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-three-dots-vertical"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li>
-                                        <a class="dropdown-item" href="#" onclick="archiveTask('{{ task.task_id }}'); return false;">
-                                            <i class="bi bi-archive"></i> Archive
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item text-danger" href="#" onclick="deleteTask('{{ task.task_id }}'); return false;">
-                                            <i class="bi bi-trash"></i> Delete
-                                        </a>
-                                    </li>
-                                </ul>
+                            <div class="d-flex align-items-center gap-1">
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.75rem; padding: 0.1rem 0.3rem;" title="Change order">
+                                        {% if is_starred_view %}
+                                            {{ task.starred_order|default:"—" }}
+                                        {% else %}
+                                            {{ task.task_order|default:"—" }}
+                                        {% endif %}
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 1); return false;">1</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 5); return false;">5</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 10); return false;">10</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 15); return false;">15</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 20); return false;">20</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 50); return false;">50</a></li>
+                                    </ul>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-three-dots-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="#" onclick="archiveTask('{{ task.task_id }}'); return false;">
+                                                <i class="bi bi-archive"></i> Archive
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="#" onclick="deleteTask('{{ task.task_id }}'); return false;">
+                                                <i class="bi bi-trash"></i> Delete
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -904,6 +924,139 @@
                 }
             }
             return cookieValue;
+        }
+
+        function setTaskOrder(taskId, order) {
+            const csrftoken = getCookie('csrftoken');
+            {% if is_starred_view %}
+            const isStarredView = true;
+            {% else %}
+            const isStarredView = false;
+            {% endif %}
+            
+            // Optimistic update: Update UI immediately
+            const taskCard = document.querySelector(
+                `[data-task-id="${taskId}"]`
+            );
+            const orderBtn = taskCard?.querySelector(
+                '.btn-outline-secondary'
+            );
+            const oldOrder = orderBtn?.textContent;
+            
+            // Move task to correct position BEFORE updating the button
+            const taskList = document.getElementById('task-list');
+            if (taskList && taskCard) {
+                const allTasks = Array.from(
+                    taskList.querySelectorAll('[data-task-id]')
+                );
+                
+                // Remove current task from array for comparison
+                const otherTasks = allTasks.filter(t => t !== taskCard);
+                
+                // Find the correct position for this task
+                let insertBefore = null;
+                
+                {% if order_by == 'order_asc' %}
+                // For ascending order: 1, 2, 3... (lower first)
+                for (let i = 0; i < otherTasks.length; i++) {
+                    // Skip dividers - they don't participate in ordering
+                    if (otherTasks[i].classList.contains('divider-card')) {
+                        continue;
+                    }
+                    
+                    const otherOrderBtn = otherTasks[i].querySelector(
+                        '.btn-outline-secondary'
+                    );
+                    const otherOrderText = otherOrderBtn?.textContent.trim();
+                    
+                    // Tasks with no order (—) or no button go to end
+                    if (!otherOrderBtn || !otherOrderText || 
+                        otherOrderText === '—') {
+                        insertBefore = otherTasks[i];
+                        break;
+                    }
+                    
+                    const otherOrder = parseInt(otherOrderText);
+                    // Insert before first task with HIGHER order
+                    if (!isNaN(otherOrder) && order < otherOrder) {
+                        insertBefore = otherTasks[i];
+                        break;
+                    }
+                }
+                {% else %}
+                // For descending order: 50, 20, 15... (higher first)
+                for (let i = 0; i < otherTasks.length; i++) {
+                    // Skip dividers - they don't participate in ordering
+                    if (otherTasks[i].classList.contains('divider-card')) {
+                        continue;
+                    }
+                    
+                    const otherOrderBtn = otherTasks[i].querySelector(
+                        '.btn-outline-secondary'
+                    );
+                    const otherOrderText = otherOrderBtn?.textContent.trim();
+                    
+                    // Tasks with no order (—) or no button go to end
+                    if (!otherOrderBtn || !otherOrderText || 
+                        otherOrderText === '—') {
+                        insertBefore = otherTasks[i];
+                        break;
+                    }
+                    
+                    const otherOrder = parseInt(otherOrderText);
+                    // Insert before first task with LOWER order
+                    if (!isNaN(otherOrder) && otherOrder < order) {
+                        insertBefore = otherTasks[i];
+                        break;
+                    }
+                }
+                {% endif %}
+                
+                if (insertBefore) {
+                    taskList.insertBefore(taskCard, insertBefore);
+                } else {
+                    taskList.appendChild(taskCard);
+                }
+            }
+            
+            // Update the button text AFTER repositioning
+            if (orderBtn) {
+                orderBtn.textContent = order;
+            }
+            
+            // Perform API call in background
+            fetch(`/tasks/task/${taskId}/set-order/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    order: order,
+                    is_starred_view: isStarredView
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    // Revert on error
+                    if (orderBtn && oldOrder) {
+                        orderBtn.textContent = oldOrder;
+                    }
+                    alert('Failed to update task order: ' + 
+                        (data.error || 'Unknown error'));
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Revert on error
+                if (orderBtn && oldOrder) {
+                    orderBtn.textContent = oldOrder;
+                }
+                alert('An error occurred while updating task order');
+                location.reload();
+            });
         }
 
         function toggleStar(taskId, skipHistory = false) {

@@ -390,12 +390,11 @@ def reorder_starred(request):
             {'success': False, 'error': 'Invalid JSON'}, status=400
         )
 
-    max_position = len(ordered_ids) - 1
+    # Update order based on position in the list
     for position, task_id in enumerate(ordered_ids):
-        inverted_position = max_position - position
         GoogleTask.objects.filter(
             task_id=task_id, user=request.user
-        ).update(starred_order=inverted_position)
+        ).update(starred_order=position)
 
     return JsonResponse({'success': True})
 
@@ -436,6 +435,40 @@ def reorder_tasks(request):
         ).update(task_order=position)
 
     return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def set_task_order(request, task_id):
+    """Set the order of a specific task."""
+    try:
+        data = json.loads(request.body)
+        order = data.get('order')
+        is_starred_view = data.get('is_starred_view', False)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse(
+            {'success': False, 'error': 'Invalid JSON'}, status=400
+        )
+
+    if order is None:
+        return JsonResponse(
+            {'success': False, 'error': 'Order is required'}, status=400
+        )
+
+    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+
+    if is_starred_view:
+        task.starred_order = order
+    else:
+        task.task_order = order
+
+    task.save()
+
+    return JsonResponse({
+        'success': True,
+        'task_id': task_id,
+        'order': order
+    })
 
 
 @login_required
