@@ -52,7 +52,7 @@ def dashboard(request):
             return redirect(result['authorization_url'])
 
     task_list_filter = request.GET.get('list')
-    order_by = request.GET.get('order', 'order_desc')
+    order_by = request.GET.get('order', 'order_asc')
 
     tasks = GoogleTask.objects.filter(
         user=request.user, is_archived=False, is_deleted=False
@@ -172,7 +172,7 @@ def starred_tasks(request):
             request.session['oauth_redirect_url'] = current_url
             return redirect(result['authorization_url'])
 
-    order_by = request.GET.get('order', 'order_desc')
+    order_by = request.GET.get('order', 'order_asc')
 
     starred_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_starred=True, is_archived=False,
@@ -281,7 +281,7 @@ def overdue_tasks(request):
             request.session['oauth_redirect_url'] = current_url
             return redirect(result['authorization_url'])
 
-    order_by = request.GET.get('order', 'order_desc')
+    order_by = request.GET.get('order', 'order_asc')
 
     today = timezone.now().date()
     overdue_tasks_qs = GoogleTask.objects.filter(
@@ -938,7 +938,7 @@ def permanent_delete_task_view(request, task_id):
 def archived_tasks(request):
     """View showing archived tasks."""
     creds = get_creds_dict(request.user)
-    order_by = request.GET.get('order', 'order_desc')
+    order_by = request.GET.get('order', 'order_asc')
 
     archived_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_archived=True, is_deleted=False

@@ -102,6 +102,27 @@
         .task-card p:last-child {
             margin-bottom: 0;
         }
+        .task-container {
+            align-items: stretch;
+        }
+        .task-content {
+            cursor: grab;
+            margin-bottom: 0 !important;
+        }
+        .task-content:active {
+            cursor: grabbing;
+        }
+        .task-order-badge {
+            display: flex;
+            align-items: center;
+        }
+        .task-order-badge .order-btn {
+            font-size: 0.875rem;
+            padding: 0.25rem 0.5rem;
+            min-width: 40px;
+            height: 100%;
+            border-radius: 0.25rem;
+        }
         .divider-card {
             background-color: transparent;
             border: none;
@@ -110,7 +131,6 @@
         .divider-drag-handle {
             cursor: grab;
             padding: 0.25rem;
-            margin-right: 0.5rem;
         }
         .divider-drag-handle:active {
             cursor: grabbing;
@@ -314,17 +334,17 @@
                         {% elif order_by == 'completed_first' %}
                             Completed First
                         {% else %}
-                            Order Desc
+                            Order Asc
                         {% endif %}
                     </button>
                     <ul class="dropdown-menu">
                         <li>
-                            <a class="dropdown-item {% if order_by == 'order_desc' or not order_by %}active{% endif %}" href="#" onclick="changeOrder('order_desc'); return false;">
+                            <a class="dropdown-item {% if order_by == 'order_desc' %}active{% endif %}" href="#" onclick="changeOrder('order_desc'); return false;">
                                 <i class="bi bi-sort-numeric-down"></i> Order Desc
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item {% if order_by == 'order_asc' %}active{% endif %}" href="#" onclick="changeOrder('order_asc'); return false;">
+                            <a class="dropdown-item {% if order_by == 'order_asc' or not order_by %}active{% endif %}" href="#" onclick="changeOrder('order_asc'); return false;">
                                 <i class="bi bi-sort-numeric-up"></i> Order Asc
                             </a>
                         </li>
@@ -407,10 +427,10 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="card task-card mb-2" data-task-id="{{ task.task_id }}">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="d-flex align-items-start flex-grow-1">
+                <div class="task-container d-flex mb-2" data-task-id="{{ task.task_id }}">
+                    <div class="card task-card flex-grow-1 task-content">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
                                 <div class="flex-grow-1">
                                     <h5 class="card-title">
                                         <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}'); event.stopPropagation();">
@@ -432,26 +452,7 @@
                                 </small>
                                 {% endif %}
                                 </div>
-                            </div>
-                            <div class="d-flex align-items-center gap-1">
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.75rem; padding: 0.1rem 0.3rem;" title="Change order">
-                                        {% if is_starred_view %}
-                                            {{ task.starred_order|default:"—" }}
-                                        {% else %}
-                                            {{ task.task_order|default:"—" }}
-                                        {% endif %}
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 1); return false;">1</a></li>
-                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 5); return false;">5</a></li>
-                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 10); return false;">10</a></li>
-                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 15); return false;">15</a></li>
-                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 20); return false;">20</a></li>
-                                        <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 50); return false;">50</a></li>
-                                    </ul>
-                                </div>
-                                <div class="dropdown">
+                                <div class="dropdown ms-2">
                                     <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                         <i class="bi bi-three-dots-vertical"></i>
                                     </button>
@@ -469,7 +470,25 @@
                                     </ul>
                                 </div>
                             </div>
-                            </div>
+                        </div>
+                    </div>
+                    <div class="task-order-badge ms-2">
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary order-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Change order">
+                                {% if is_starred_view %}
+                                    {{ task.starred_order|default:"—" }}
+                                {% else %}
+                                    {{ task.task_order|default:"—" }}
+                                {% endif %}
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 1); event.stopPropagation(); return false;">1</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 5); event.stopPropagation(); return false;">5</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 10); event.stopPropagation(); return false;">10</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 15); event.stopPropagation(); return false;">15</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 20); event.stopPropagation(); return false;">20</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 50); event.stopPropagation(); return false;">50</a></li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -1418,7 +1437,8 @@
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
-                handle: '.divider-drag-handle, .task-card:not(.divider-card)',
+                handle: '.divider-drag-handle, .task-content',
+                draggable: '.task-container, .divider-card',
                 delay: 200,
                 delayOnTouchOnly: true,
                 onStart: function() {
@@ -1500,11 +1520,13 @@
         }
         
         function getNextPosition() {
-            const taskCards = document.querySelectorAll('.task-card');
+            const taskContainers = document.querySelectorAll(
+                '[data-task-id]'
+            );
             let maxOrder = 0;
-            taskCards.forEach(card => {
-                const taskId = card.getAttribute('data-task-id');
-                const orderAttr = card.getAttribute('data-order');
+            taskContainers.forEach(container => {
+                const taskId = container.getAttribute('data-task-id');
+                const orderAttr = container.getAttribute('data-order');
                 if (orderAttr) {
                     maxOrder = Math.max(maxOrder, parseInt(orderAttr));
                 }
