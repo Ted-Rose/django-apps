@@ -59,13 +59,11 @@ class GoogleTask(models.Model):
         help_text='If True, this task acts as a visual divider'
     )
     task_order = models.PositiveIntegerField(
-        null=True,
-        blank=True,
+        default=1,
         help_text='Manual ordering for tasks in task list view'
     )
     starred_order = models.PositiveIntegerField(
-        null=True,
-        blank=True,
+        default=1,
         help_text='Manual ordering for starred tasks in starred view'
     )
     is_archived = models.BooleanField(
