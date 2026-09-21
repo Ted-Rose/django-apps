@@ -1273,6 +1273,7 @@ def task_detail(request, task_id):
         user=request.user
     )
     creds = get_creds_dict(request.user)
+    labels = TaskLabel.objects.filter(user=request.user)
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
@@ -1291,6 +1292,7 @@ def task_detail(request, task_id):
 
     context = {
         'task': task,
+        'labels': labels,
         'has_credentials': bool(creds),
         'burger_menu_items': burger_menu_items,
     }
@@ -1483,7 +1485,7 @@ def create_task_view(request):
 @login_required
 @require_POST
 def update_task_view(request, task_id):
-    """Update task title and notes."""
+    """Update task title, notes, and labels."""
     import logging
     logger = logging.getLogger('django')
 
@@ -1491,6 +1493,7 @@ def update_task_view(request, task_id):
         data = json.loads(request.body)
         title = data.get('title', '').strip()
         notes = data.get('notes', '').strip()
+        label_ids = data.get('label_ids', None)
 
         logger.info(
             f'Updating task {task_id} for user {request.user.username}'
@@ -1510,6 +1513,25 @@ def update_task_view(request, task_id):
 
         task.title = title
         task.notes = notes if notes else None
+        
+        # Update labels if provided
+        if label_ids is not None:
+            # Validate that all label IDs belong to the user
+            user_labels = TaskLabel.objects.filter(
+                id__in=label_ids,
+                user=request.user
+            )
+            if len(user_labels) != len(label_ids):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Invalid label IDs'
+                }, status=400)
+            
+            task.labels.set(user_labels)
+            logger.info(
+                f'Updated labels for task {task_id}: {label_ids}'
+            )
+        
         task.save()
 
         logger.info(f'Successfully updated task {task_id}')
