@@ -88,16 +88,10 @@
                         <i class="bi bi-star-fill"></i> Starred
                     </span>
                 {% endif %}
-                
+
                 {% if task.due_date %}
                     <span class="badge bg-secondary">
                         <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
-                    </span>
-                {% endif %}
-                
-                {% if task.task_list %}
-                    <span class="badge bg-secondary">
-                        <i class="bi bi-folder"></i> {{ task.task_list.title }}
                     </span>
                 {% endif %}
 
@@ -107,7 +101,7 @@
                     </span>
                 {% endfor %}
             </div>
-            
+
             {% if task.updated %}
                 <small class="text-muted d-block mt-2">
                     <i class="bi bi-clock"></i> Last updated: {{ task.updated|date:"M d, Y g:i A" }}
