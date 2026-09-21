@@ -1285,7 +1285,8 @@ def task_detail(request, task_id):
 @login_required
 @require_POST
 def create_task_view(request):
-    """Create a new task with title, notes, and starred status."""
+    """Create a new task with title, notes, labels, and starred
+    status."""
     import logging
     logger = logging.getLogger('django')
 
@@ -1303,13 +1304,16 @@ def create_task_view(request):
     try:
         data = json.loads(request.body)
         title = data.get('title', '').strip()
-        notes = data.get('notes', '').strip()
+        notes_raw = data.get('notes')
+        notes = notes_raw.strip() if notes_raw else ''
         is_starred = data.get('is_starred', False)
         task_list_id = data.get('task_list_id')
+        label_ids = data.get('label_ids', [])
 
         logger.info(
             f'Creating task for user {request.user.username}: '
-            f'title={title}, starred={is_starred}'
+            f'title={title}, starred={is_starred}, '
+            f'labels={label_ids}'
         )
 
         if not title:
@@ -1356,13 +1360,15 @@ def create_task_view(request):
             ).first()
 
         # Calculate starred_order if task is starred
-        starred_order = None
         if is_starred:
             from django.db.models import Max
             max_order = GoogleTask.objects.filter(
                 user=request.user, is_starred=True
             ).aggregate(Max('starred_order'))['starred_order__max']
             starred_order = (max_order or 0) + 1
+        else:
+            # For non-starred tasks, use default value of 1
+            starred_order = 1
 
         task = GoogleTask.objects.create(
             user=request.user,
@@ -1378,13 +1384,50 @@ def create_task_view(request):
             created=timezone.now()
         )
 
+        # Associate labels with the task
+        if label_ids:
+            labels = TaskLabel.objects.filter(
+                id__in=label_ids,
+                user=request.user
+            )
+            task.labels.set(labels)
+            logger.info(
+                f'Associated {labels.count()} labels with task '
+                f'{task.task_id}'
+            )
+
         logger.info(
             f'Successfully created task {task.task_id} in Google Tasks'
         )
 
+        # Prepare task data for frontend
+        task_data = {
+            'task_id': task.task_id,
+            'title': task.title,
+            'notes': task.notes or '',
+            'status': task.status,
+            'is_starred': task.is_starred,
+            'starred_order': task.starred_order,
+            'task_order': task.task_order,
+            'due_date': task.due_date.isoformat() if task.due_date else None,
+            'labels': [
+                {
+                    'id': label.id,
+                    'name': label.name,
+                    'color': label.color
+                }
+                for label in task.labels.all()
+            ],
+            'task_list': {
+                'list_id': task.task_list.list_id,
+                'title': task.task_list.title
+            } if task.task_list else None
+        }
+
         return JsonResponse({
             'success': True,
-            'task_id': task.task_id
+            'task_id': task.task_id,
+            'task': task_data
         })
     except Exception as e:
         logger.error(f'Error creating task: {e}')

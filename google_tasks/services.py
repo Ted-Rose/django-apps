@@ -295,9 +295,17 @@ def create_task(user, creds, title, notes=None, task_list_id=None):
             return service
 
         if not task_list_id:
+            # Try to find "Reminders" list first, otherwise use first
             default_list = GoogleTaskList.objects.filter(
-                user=user
+                user=user,
+                title__iexact='Reminders'
             ).first()
+
+            if not default_list:
+                default_list = GoogleTaskList.objects.filter(
+                    user=user
+                ).first()
+
             if not default_list:
                 logger.error(
                     f'No task list found for user {user.username}'

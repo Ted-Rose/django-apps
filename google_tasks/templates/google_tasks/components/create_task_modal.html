@@ -1,0 +1,78 @@
+<!-- Create Task Modal -->
+<div class="modal fade" id="createTaskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Task</h5>
+                <button type="button" class="btn-close"
+                    data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="taskTitle" class="form-label">
+                        Title <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" class="form-control"
+                        id="taskTitle"
+                        placeholder="Enter task title" required>
+                </div>
+                <div class="mb-3">
+                    <label for="taskNotes" class="form-label">
+                        Notes
+                    </label>
+                    <textarea class="form-control" id="taskNotes"
+                        rows="4"
+                        placeholder="Enter task notes (optional)">
+                    </textarea>
+                </div>
+                
+                <!-- Label Selection -->
+                {% if labels %}
+                <div class="mb-3">
+                    <label class="form-label">Labels</label>
+                    <div id="labelSelection"
+                        class="border rounded p-2"
+                        style="max-height: 150px; overflow-y: auto;">
+                        {% for label in labels %}
+                        <div class="form-check">
+                            <input class="form-check-input"
+                                type="checkbox"
+                                id="label_{{ label.id }}"
+                                value="{{ label.id }}"
+                                name="task_labels">
+                            <label class="form-check-label"
+                                for="label_{{ label.id }}">
+                                <span class="badge"
+                                    style="background-color: {{ label.color }}">
+                                    {{ label.name }}
+                                </span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <small class="text-muted">
+                        Select labels to organize this task
+                    </small>
+                </div>
+                {% endif %}
+                
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                        id="taskStarred">
+                    <label class="form-check-label" for="taskStarred">
+                        <i class="bi bi-star-fill text-warning"></i>
+                        Star this task
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary"
+                    onclick="createTask()">
+                    <i class="bi bi-plus-circle"></i> Create Task
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
