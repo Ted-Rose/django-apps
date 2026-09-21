@@ -3,6 +3,28 @@ from django.db import models
 from django.db.models import F
 
 
+class TaskLabel(models.Model):
+    """User-defined labels for organizing tasks (app-level only)."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+    name = models.CharField(max_length=255)
+    color = models.CharField(
+        max_length=7,
+        default='#0d6efd',
+        help_text='Hex color code for label badge'
+    )
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'name']
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.user.username})'
+
+
 class GoogleTaskList(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -78,6 +100,11 @@ class GoogleTask(models.Model):
         null=True,
         blank=True,
         help_text='When the task was moved to trash'
+    )
+    labels = models.ManyToManyField(
+        TaskLabel,
+        blank=True,
+        related_name='tasks'
     )
 
     class Meta:

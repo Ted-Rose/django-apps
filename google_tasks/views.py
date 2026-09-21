@@ -6,13 +6,14 @@ from django.db.models import F
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
-from google_tasks.models import GoogleTask, GoogleTaskList
+from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
 from google_tasks.services import (
     sync_all,
     create_task,
     complete_task,
     uncomplete_task,
-    process_task_labels
+    process_task_labels,
+    UnmatchedHashtagsError
 )
 from google_api.utils import get_user_credentials
 
@@ -52,14 +53,18 @@ def dashboard(request):
             return redirect(result['authorization_url'])
 
     task_list_filter = request.GET.get('list')
+    label_filter = request.GET.get('label')
     order_by = request.GET.get('order', 'order_asc')
 
     tasks = GoogleTask.objects.filter(
         user=request.user, is_archived=False, is_deleted=False
-    )
+    ).select_related('task_list').prefetch_related('labels')
 
     if task_list_filter:
         tasks = tasks.filter(task_list__list_id=task_list_filter)
+
+    if label_filter:
+        tasks = tasks.filter(labels__name=label_filter)
 
     active_tasks = tasks.filter(status='needsAction')
     completed_tasks = tasks.filter(status='completed')
@@ -99,18 +104,26 @@ def dashboard(request):
         completed_tasks = completed_tasks.order_by('-updated')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
+    labels = TaskLabel.objects.filter(user=request.user)
 
     selected_list_title = None
+    selected_label_name = None
+
     if task_list_filter:
         selected_list_title = task_lists.filter(
             list_id=task_list_filter
         ).values_list('title', flat=True).first()
+
+    if label_filter:
+        selected_label_name = label_filter
 
     # Build sync URL preserving current parameters
     from urllib.parse import urlencode
     sync_params = {'sync': 'true'}
     if task_list_filter:
         sync_params['list'] = task_list_filter
+    if label_filter:
+        sync_params['label'] = label_filter
     if order_by:
         sync_params['order'] = order_by
     sync_url = f'?{urlencode(sync_params)}'
@@ -146,8 +159,11 @@ def dashboard(request):
         'tasks': active_tasks,
         'completed_tasks': completed_tasks,
         'task_lists': task_lists,
+        'labels': labels,
         'selected_list': task_list_filter,
         'selected_list_title': selected_list_title,
+        'selected_label': label_filter,
+        'selected_label_name': selected_label_name,
         'has_credentials': bool(creds),
         'order_by': order_by,
         'burger_menu_items': burger_menu_items,
@@ -177,7 +193,7 @@ def starred_tasks(request):
     starred_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_starred=True, is_archived=False,
         is_deleted=False
-    )
+    ).select_related('task_list').prefetch_related('labels')
     active_tasks = starred_tasks_qs.filter(status='needsAction')
     completed_tasks = starred_tasks_qs.filter(status='completed')
 
@@ -216,6 +232,7 @@ def starred_tasks(request):
         completed_tasks = completed_tasks.order_by('-updated')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
+    labels = TaskLabel.objects.filter(user=request.user)
 
     # Build sync URL preserving current parameters
     from urllib.parse import urlencode
@@ -255,6 +272,7 @@ def starred_tasks(request):
         'tasks': active_tasks,
         'completed_tasks': completed_tasks,
         'task_lists': task_lists,
+        'labels': labels,
         'selected_list': None,
         'selected_list_title': None,
         'has_credentials': bool(creds),
@@ -289,7 +307,7 @@ def overdue_tasks(request):
         is_archived=False,
         is_deleted=False,
         due_date__lt=today
-    )
+    ).select_related('task_list').prefetch_related('labels')
     active_tasks = overdue_tasks_qs.filter(status='needsAction')
     completed_tasks = overdue_tasks_qs.filter(status='completed')
 
@@ -328,6 +346,7 @@ def overdue_tasks(request):
         completed_tasks = completed_tasks.order_by('-updated')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
+    labels = TaskLabel.objects.filter(user=request.user)
 
     # Build sync URL preserving current parameters
     from urllib.parse import urlencode
@@ -367,6 +386,7 @@ def overdue_tasks(request):
         'tasks': active_tasks,
         'completed_tasks': completed_tasks,
         'task_lists': task_lists,
+        'labels': labels,
         'selected_list': None,
         'selected_list_title': None,
         'has_credentials': bool(creds),
@@ -657,7 +677,15 @@ def process_labels_view(request):
             'error': 'No credentials found'
         }, status=401)
 
-    result = process_task_labels(request.user, creds)
+    try:
+        result = process_task_labels(request.user, creds)
+    except UnmatchedHashtagsError as e:
+        logger.warning(f'Unmatched hashtags: {e}')
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'unmatched': e.unmatched
+        }, status=400)
 
     if isinstance(result, dict) and 'authorization_url' in result:
         logger.warning('Reauth required, returning authorization URL')
@@ -710,7 +738,17 @@ def process_task_label_view(request, task_id):
         user=request.user
     )
 
-    result = process_task_labels(request.user, creds, task_id=task_id)
+    try:
+        result = process_task_labels(
+            request.user, creds, task_id=task_id
+        )
+    except UnmatchedHashtagsError as e:
+        logger.warning(f'Unmatched hashtags: {e}')
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'unmatched': e.unmatched
+        }, status=400)
 
     if isinstance(result, dict) and 'authorization_url' in result:
         logger.warning('Reauth required, returning authorization URL')
@@ -942,7 +980,7 @@ def archived_tasks(request):
 
     archived_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_archived=True, is_deleted=False
-    )
+    ).select_related('task_list').prefetch_related('labels')
     active_tasks = archived_tasks_qs.filter(status='needsAction')
     completed_tasks = archived_tasks_qs.filter(status='completed')
 
@@ -971,6 +1009,7 @@ def archived_tasks(request):
         completed_tasks = completed_tasks.order_by('-updated')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
+    labels = TaskLabel.objects.filter(user=request.user)
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
@@ -991,6 +1030,7 @@ def archived_tasks(request):
         'tasks': active_tasks,
         'completed_tasks': completed_tasks,
         'task_lists': task_lists,
+        'labels': labels,
         'has_credentials': bool(creds),
         'is_archived_view': True,
         'order_by': order_by,
@@ -1008,7 +1048,7 @@ def trash_tasks(request):
 
     deleted_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_deleted=True
-    )
+    ).select_related('task_list').prefetch_related('labels')
 
     if order_by == 'deleted_desc':
         deleted_tasks_qs = deleted_tasks_qs.order_by('-deleted_at')
@@ -1018,6 +1058,7 @@ def trash_tasks(request):
         deleted_tasks_qs = deleted_tasks_qs.order_by('-deleted_at')
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
+    labels = TaskLabel.objects.filter(user=request.user)
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
@@ -1037,6 +1078,7 @@ def trash_tasks(request):
     context = {
         'tasks': deleted_tasks_qs,
         'task_lists': task_lists,
+        'labels': labels,
         'has_credentials': bool(creds),
         'is_trash_view': True,
         'order_by': order_by,
@@ -1049,7 +1091,13 @@ def trash_tasks(request):
 @login_required
 def task_detail(request, task_id):
     """View showing task details with edit capability."""
-    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+    task = get_object_or_404(
+        GoogleTask.objects.select_related('task_list').prefetch_related(
+            'labels'
+        ),
+        task_id=task_id,
+        user=request.user
+    )
     creds = get_creds_dict(request.user)
 
     burger_menu_items = [
@@ -1246,7 +1294,7 @@ def search_tasks(request):
     tasks = GoogleTask.objects.filter(
         user=request.user,
         is_deleted=False
-    )
+    ).select_related('task_list').prefetch_related('labels')
 
     # Apply filters
     if title_query:

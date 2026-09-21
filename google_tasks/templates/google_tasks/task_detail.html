@@ -100,6 +100,12 @@
                         <i class="bi bi-folder"></i> {{ task.task_list.title }}
                     </span>
                 {% endif %}
+
+                {% for label in task.labels.all %}
+                    <span class="badge" style="background-color: {{ label.color }}">
+                        <i class="bi bi-tag"></i> {{ label.name }}
+                    </span>
+                {% endfor %}
             </div>
             
             {% if task.updated %}

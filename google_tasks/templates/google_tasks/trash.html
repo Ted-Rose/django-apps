@@ -70,6 +70,13 @@
                                     <h5 class="card-title text-muted">
                                         {{ task.title }}
                                     </h5>
+                                {% if task.labels.all %}
+                                <div class="mb-2">
+                                    {% for label in task.labels.all %}
+                                    <span class="badge me-1" style="background-color: {{ label.color }}">{{ label.name }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
                                 {% if task.notes %}
                                 <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
                                 {% endif %}

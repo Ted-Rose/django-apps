@@ -269,13 +269,15 @@
                             <i class="bi bi-trash"></i> Trash
                         {% elif selected_list %}
                             <i class="bi bi-folder"></i> {{ selected_list_title }}
+                        {% elif selected_label %}
+                            <i class="bi bi-tag"></i> {{ selected_label_name }}
                         {% else %}
                             <i class="bi bi-list-task"></i> All Tasks
                         {% endif %}
                     </button>
                     <ul class="dropdown-menu">
                         <li>
-                            <a class="dropdown-item {% if not selected_list and not is_starred_view and not is_overdue_view and not is_archived_view and not is_trash_view %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}">
+                            <a class="dropdown-item {% if not selected_list and not selected_label and not is_starred_view and not is_overdue_view and not is_archived_view and not is_trash_view %}active{% endif %}" href="{% url 'google_tasks:dashboard' %}">
                                 <i class="bi bi-list-task"></i> All Tasks
                             </a>
                         </li>
@@ -300,8 +302,20 @@
                                 <i class="bi bi-trash"></i> Trash
                             </a>
                         </li>
+                        {% if labels %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Labels</h6></li>
+                        {% for label in labels %}
+                        <li>
+                            <a class="dropdown-item {% if selected_label == label.name %}active{% endif %}" href="#" onclick="selectLabel('{{ label.name }}'); return false;">
+                                <span class="badge" style="background-color: {{ label.color }}">{{ label.name }}</span>
+                            </a>
+                        </li>
+                        {% endfor %}
+                        {% endif %}
                         {% if task_lists %}
                         <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Google Lists</h6></li>
                         {% for list in task_lists %}
                         <li>
                             <a class="dropdown-item {% if selected_list == list.list_id %}active{% endif %}" href="#" onclick="selectList('{{ list.list_id }}'); return false;">
@@ -443,6 +457,13 @@
                                             {{ task.title }}
                                         </a>
                                     </h5>
+                                {% if task.labels.all %}
+                                <div class="mb-2">
+                                    {% for label in task.labels.all %}
+                                    <span class="badge me-1" style="background-color: {{ label.color }}">{{ label.name }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
                                 {% if task.notes %}
                                 <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
                                 {% endif %}
@@ -546,6 +567,9 @@
                                     <a href="{% url 'google_tasks:task_detail' task.task_id %}" class="task-title-link text-decoration-line-through text-muted">
                                         {{ task.title }}
                                     </a>
+                                    {% for label in task.labels.all %}
+                                    <span class="badge ms-1" style="background-color: {{ label.color }}">{{ label.name }}</span>
+                                    {% endfor %}
                                     {% if task.completed %}
                                     <small class="text-muted ms-2">
                                         {{ task.completed|date:"M d" }}
@@ -1139,8 +1163,30 @@
             {% else %}
             const params = new URLSearchParams(window.location.search);
             params.delete('list');
+            params.delete('label');
             params.delete('sync');
             if (listId) params.set('list', listId);
+            const url = '?' + params.toString();
+            saveCurrentView();
+            window.location.href = url;
+            {% endif %}
+        }
+
+        function selectLabel(labelName) {
+            {% if is_starred_view or is_overdue_view or is_archived_view or is_trash_view %}
+            // Navigate to dashboard with label filter
+            const params = new URLSearchParams();
+            if (labelName) params.set('label', labelName);
+            const url = 
+                '{% url "google_tasks:dashboard" %}?' + params.toString();
+            saveCurrentView();
+            window.location.href = url;
+            {% else %}
+            const params = new URLSearchParams(window.location.search);
+            params.delete('list');
+            params.delete('label');
+            params.delete('sync');
+            if (labelName) params.set('label', labelName);
             const url = '?' + params.toString();
             saveCurrentView();
             window.location.href = url;

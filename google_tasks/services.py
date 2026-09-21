@@ -2,11 +2,12 @@ import logging
 import re
 import socket
 from datetime import datetime
+from difflib import SequenceMatcher
 from django.utils import timezone
 from google_api.utils import google_auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google_tasks.models import GoogleTaskList, GoogleTask
+from google_tasks.models import GoogleTaskList, GoogleTask, TaskLabel
 
 logger = logging.getLogger('django')
 
@@ -14,6 +15,24 @@ TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks'
 
 # Set default socket timeout to prevent indefinite hangs
 socket.setdefaulttimeout(30)
+
+# Label matching configuration
+LABEL_SIMILARITY_THRESHOLD = 0.80  # 80% similarity required
+LABEL_AUTO_CREATE = False          # Auto-create new labels
+LABEL_MIN_PREFIX_LENGTH = 4        # Min chars for prefix match
+LABEL_CAPITALIZE_NEW = True        # Capitalize new label names
+
+
+class UnmatchedHashtagsError(Exception):
+    """Raised when hashtags cannot be matched to existing labels."""
+
+    def __init__(self, unmatched):
+        self.unmatched = unmatched
+        details = '; '.join(
+            f'#{u["hashtag"]} (task: "{u["task_title"]}")'
+            for u in unmatched
+        )
+        super().__init__(f'Unmatched hashtags: {details}')
 
 
 def get_tasks_service(creds):
@@ -513,6 +532,98 @@ def extract_hashtags(text):
     return [match.lower() for match in matches]
 
 
+def match_label(hashtag, user, create_if_missing=None):
+    """
+    Smart label matching for voice-to-text input.
+
+    Matching priority:
+    1. Exact match (case-insensitive)
+    2. Starts-with match (first 4+ chars)
+    3. Fuzzy match using similarity ratio (>80%)
+    4. Starts-with match (first 3 chars) - fallback for short names
+    5. Create new label if no match found and creation allowed
+
+    Args:
+        hashtag: String hashtag (without #)
+        user: User object
+        create_if_missing: Auto-create label if no match.
+            Defaults to LABEL_AUTO_CREATE setting.
+
+    Returns: TaskLabel object (existing or newly created),
+        or None if no match and creation not allowed
+    """
+    if create_if_missing is None:
+        create_if_missing = LABEL_AUTO_CREATE
+
+    hashtag_lower = hashtag.lower()
+    user_labels = TaskLabel.objects.filter(user=user)
+
+    # 1. Exact match (case-insensitive)
+    exact_match = user_labels.filter(name__iexact=hashtag).first()
+    if exact_match:
+        logger.info(f'Exact match: #{hashtag} -> {exact_match.name}')
+        return exact_match
+
+    # 2. Starts-with match (first 4+ chars)
+    if len(hashtag_lower) >= LABEL_MIN_PREFIX_LENGTH:
+        for label in user_labels:
+            if label.name.lower().startswith(
+                hashtag_lower[:LABEL_MIN_PREFIX_LENGTH]
+            ):
+                logger.info(
+                    f'Prefix match: #{hashtag} -> {label.name}'
+                )
+                return label
+
+    # 3. Fuzzy match using similarity ratio
+    best_match = None
+    best_ratio = 0.0
+
+    for label in user_labels:
+        ratio = SequenceMatcher(
+            None,
+            hashtag_lower,
+            label.name.lower()
+        ).ratio()
+
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_match = label
+
+    if best_ratio >= LABEL_SIMILARITY_THRESHOLD:
+        logger.info(
+            f'Fuzzy match ({best_ratio:.0%}): '
+            f'#{hashtag} -> {best_match.name}'
+        )
+        return best_match
+
+    # 4. Fallback: 3-letter prefix match (for short hashtags)
+    if len(hashtag_lower) >= 3:
+        for label in user_labels:
+            if label.name.lower().startswith(hashtag_lower[:3]):
+                logger.info(
+                    f'3-letter prefix match: #{hashtag} -> {label.name}'
+                )
+                return label
+
+    # 5. Create new label if no match and creation allowed
+    if create_if_missing:
+        label_name = (
+            hashtag.capitalize()
+            if LABEL_CAPITALIZE_NEW
+            else hashtag
+        )
+        new_label = TaskLabel.objects.create(
+            user=user,
+            name=label_name
+        )
+        logger.info(f'Created new label: {new_label.name}')
+        return new_label
+
+    logger.info(f'No match found for #{hashtag}')
+    return None
+
+
 def match_task_list(hashtag, task_lists):
     """
     Match hashtag with task list.
@@ -704,22 +815,27 @@ def process_task_labels(user, creds, task_id=None):
     Process labels for one or all tasks.
 
     For each task:
-    1. Extract hashtags from title and notes
-    2. Match hashtags with task lists
-    3. Move task if match found and not already in target list
-    4. Star the task
-    5. Log the action
+    1. Extract ALL hashtags from title and notes
+    2. Match hashtags to existing TaskLabels (many-to-many)
+    3. Use FIRST hashtag to determine GoogleTaskList (for Google sync)
+    4. Move task to GoogleTaskList if needed (Google API)
+    5. Star the task
 
     Args:
         user: User object
         creds: Google credentials
         task_id: Optional specific task ID to process
 
+    Raises:
+        UnmatchedHashtagsError: If any hashtag cannot be matched
+            to an existing label. No tasks are modified in this case.
+
     Returns: Dict with stats
         {
             'processed': int,
             'moved': int,
             'starred': int,
+            'labels_assigned': int,
             'errors': int,
             'details': [...]
         }
@@ -733,17 +849,23 @@ def process_task_labels(user, creds, task_id=None):
         'processed': 0,
         'moved': 0,
         'starred': 0,
+        'labels_assigned': 0,
         'errors': 0,
         'details': []
     }
 
-    # Get tasks to process
+    # Get tasks to process (exclude dividers)
     if task_id:
-        tasks = GoogleTask.objects.filter(user=user, task_id=task_id)
+        tasks = GoogleTask.objects.filter(
+            user=user,
+            task_id=task_id,
+            is_divider=False
+        )
     else:
         tasks = GoogleTask.objects.filter(
             user=user,
-            status='needsAction'
+            status='needsAction',
+            is_divider=False
         )
 
     # Get all task lists for matching
@@ -754,6 +876,58 @@ def process_task_labels(user, creds, task_id=None):
     max_starred_order = GoogleTask.objects.filter(
         user=user, is_starred=True
     ).aggregate(Max('starred_order'))['starred_order__max'] or 0
+
+    # Pre-pass: match all hashtags to existing labels before
+    # modifying anything. Collect unmatched hashtags so they can
+    # be reported all at once.
+    task_labels_map = {}
+    unmatched = []
+
+    for task in tasks:
+        hashtags = extract_hashtags(task.title)
+        hashtags += extract_hashtags(task.notes or '')
+
+        # Skip if no hashtags or first is starred-related
+        if not hashtags:
+            continue
+
+        # Check if first hashtag is starred-related (fuzzy match)
+        first_hashtag_lower = hashtags[0].lower()
+        is_starred_keyword = (
+            first_hashtag_lower == 'starred' or
+            first_hashtag_lower == 'star' or
+            first_hashtag_lower == 'start' or  # voice-to-text error
+            first_hashtag_lower.startswith('starr')
+        )
+
+        if is_starred_keyword:
+            continue
+
+        labels = []
+        for hashtag in dict.fromkeys(hashtags):
+            # Skip starred-related hashtags
+            hashtag_lower = hashtag.lower()
+            if (hashtag_lower == 'starred' or
+                    hashtag_lower == 'star' or
+                    hashtag_lower == 'start' or
+                    hashtag_lower.startswith('starr')):
+                continue
+
+            label = match_label(
+                hashtag, user, create_if_missing=False
+            )
+            if label:
+                labels.append(label)
+            else:
+                unmatched.append({
+                    'task_title': task.title,
+                    'hashtag': hashtag
+                })
+
+        task_labels_map[task.task_id] = labels
+
+    if unmatched:
+        raise UnmatchedHashtagsError(unmatched)
 
     for task in tasks:
         stats['processed'] += 1
@@ -778,11 +952,19 @@ def process_task_labels(user, creds, task_id=None):
             f'Task "{task.title}" has hashtags: {hashtags}'
         )
 
-        # Check for special keywords first
-        if hashtags[0] == 'starred':
+        # Check for special keywords first (fuzzy match for starred)
+        first_hashtag_lower = hashtags[0].lower()
+        is_starred_keyword = (
+            first_hashtag_lower == 'starred' or
+            first_hashtag_lower == 'star' or
+            first_hashtag_lower == 'start' or  # voice-to-text error
+            first_hashtag_lower.startswith('starr')
+        )
+
+        if is_starred_keyword:
             logger.info(
-                'Special keyword #starred found, marking task as '
-                'starred'
+                f'Special keyword #{hashtags[0]} found, marking task '
+                f'as starred'
             )
             if not task.is_starred:
                 # Use pre-calculated max and increment
@@ -801,7 +983,18 @@ def process_task_labels(user, creds, task_id=None):
             stats['details'].append(detail)
             continue
 
-        # Try to match first hashtag
+        # Assign pre-matched TaskLabels for ALL hashtags
+        assigned_labels = []
+        for label in task_labels_map.get(task.task_id, []):
+            task.labels.add(label)
+            assigned_labels.append(label.name)
+            stats['labels_assigned'] += 1
+
+        logger.info(
+            f'Task "{task.title}" assigned labels: {assigned_labels}'
+        )
+
+        # EXISTING: Use first hashtag for GoogleTaskList (Google sync)
         target_list = match_task_list(hashtags[0], task_lists)
 
         if not target_list:
@@ -866,6 +1059,7 @@ def process_task_labels(user, creds, task_id=None):
     logger.info(
         f'Label processing complete: {stats["processed"]} processed, '
         f'{stats["moved"]} moved, {stats["starred"]} starred, '
+        f'{stats["labels_assigned"]} labels assigned, '
         f'{stats["errors"]} errors'
     )
 
