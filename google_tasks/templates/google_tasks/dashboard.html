@@ -1272,8 +1272,12 @@
             if (!currentTaskId) return;
             
             const taskId = currentTaskId;
-            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
-            const taskTitle = taskCard ? taskCard.querySelector('.card-title')?.textContent.trim() : '';
+            const taskCard = document.querySelector(
+                `[data-task-id="${taskId}"]`
+            );
+            const taskTitle = taskCard ? 
+                taskCard.querySelector('.card-title')?.textContent.trim() : 
+                '';
             
             if (!skipHistory) {
                 actionHistory.recordAction({
@@ -1305,8 +1309,11 @@
                             'opacity 0.3s ease';
                         taskCard.style.opacity = '0';
                         setTimeout(() => {
-                            location.reload();
-                        }, 300);
+                            // Force reload with cache busting
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('_t', Date.now());
+                            window.location.href = url.toString();
+                        }, 500);
                     }
                 } else if (data.reauth_required) {
                     completeTaskModalInstance.hide();
@@ -1328,7 +1335,9 @@
             if (!currentTaskId) return;
             
             const taskId = currentTaskId;
-            const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskCard = document.querySelector(
+                `[data-task-id="${taskId}"]`
+            );
             const taskTitle = taskCard ? taskCard.textContent.trim() : '';
             
             if (!skipHistory) {
@@ -1361,8 +1370,11 @@
                             'opacity 0.3s ease';
                         taskCard.style.opacity = '0';
                         setTimeout(() => {
-                            location.reload();
-                        }, 300);
+                            // Force reload with cache busting
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('_t', Date.now());
+                            window.location.href = url.toString();
+                        }, 500);
                     }
                 } else if (data.reauth_required) {
                     uncompleteTaskModalInstance.hide();
