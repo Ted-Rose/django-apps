@@ -1,0 +1,124 @@
+name: Cleanup Artifact Registry
+
+on:
+  # Run after successful deployments
+  workflow_run:
+    workflows: ["Deploy to Cloud Run"]
+    types:
+      - completed
+  # Run daily to catch any stragglers
+  schedule:
+    - cron: '0 2 * * *'  # 2 AM UTC daily
+  # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: gmail-vercel
+  GCP_REGION: europe-west3
+  WIF_PROVIDER: projects/383533976302/locations/global/workloadIdentityPools/github-actions/providers/github
+  DEPLOY_SA: github-deployer@gmail-vercel.iam.gserviceaccount.com
+  ARTIFACT_REGISTRY: europe-west3-docker.pkg.dev/gmail-vercel/gae-standard
+  SERVICE_NAME: django-apps
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    # Only run if the deployment succeeded or on schedule/manual trigger
+    if: |
+      github.event_name == 'schedule' || 
+      github.event_name == 'workflow_dispatch' || 
+      github.event.workflow_run.conclusion == 'success'
+    
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Cleanup old images
+        run: |
+          echo "Cleaning up old images from Artifact Registry..."
+          
+          # Get all image digests sorted by creation time (newest first)
+          # Format: digest timestamp
+          IMAGES=$(gcloud artifacts docker images list \
+            ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
+            --format="value(digest,createTime)" \
+            --sort-by=~createTime \
+            --project=${{ env.GCP_PROJECT_ID }})
+          
+          if [ -z "$IMAGES" ]; then
+            echo "No images found in registry"
+            exit 0
+          fi
+          
+          # Count total images
+          TOTAL_COUNT=$(echo "$IMAGES" | wc -l | tr -d ' ')
+          echo "Found $TOTAL_COUNT image(s) in registry"
+          
+          # Keep only the most recent image (skip first line)
+          IMAGES_TO_DELETE=$(echo "$IMAGES" | tail -n +2)
+          
+          if [ -z "$IMAGES_TO_DELETE" ]; then
+            echo "Only 1 image exists. Nothing to delete."
+            exit 0
+          fi
+          
+          DELETE_COUNT=$(echo "$IMAGES_TO_DELETE" | wc -l | tr -d ' ')
+          echo "Deleting $DELETE_COUNT old image(s)..."
+          
+          # Delete each old image
+          echo "$IMAGES_TO_DELETE" | while read -r digest timestamp; do
+            if [ -n "$digest" ]; then
+              IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}@${digest}"
+              echo "Deleting: $IMAGE_PATH (created: $timestamp)"
+              
+              gcloud artifacts docker images delete "$IMAGE_PATH" \
+                --quiet \
+                --project=${{ env.GCP_PROJECT_ID }} || {
+                echo "Warning: Failed to delete $IMAGE_PATH"
+              }
+            fi
+          done
+          
+          echo "Cleanup complete!"
+          
+          # Show remaining images
+          echo ""
+          echo "Remaining images:"
+          gcloud artifacts docker images list \
+            ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
+            --format="table(digest.slice(7:19),createTime,updateTime)" \
+            --sort-by=~createTime \
+            --project=${{ env.GCP_PROJECT_ID }}
+
+      - name: Report storage usage
+        run: |
+          echo "Current Artifact Registry storage usage:"
+          gcloud artifacts repositories describe gae-standard \
+            --location=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --format="value(sizeBytes)" | awk '{
+              size=$1
+              if (size == "") {
+                print "0 bytes"
+              } else if (size < 1024) {
+                printf "%.2f bytes\n", size
+              } else if (size < 1048576) {
+                printf "%.2f KB\n", size/1024
+              } else if (size < 1073741824) {
+                printf "%.2f MB\n", size/1048576
+              } else {
+                printf "%.2f GB\n", size/1073741824
+              }
+            }' || echo "Unable to retrieve storage size"
