@@ -47,13 +47,15 @@ jobs:
 
       - name: Cleanup old images
         run: |
+          set -e  # Exit on any error
           echo "Cleaning up old images from Artifact Registry..."
           
-          # Get all image digests sorted by creation time (newest first)
-          # Format: digest timestamp
+          # Get all image versions sorted by creation time (newest first)
+          # Use --include-tags to get full image references
           IMAGES=$(gcloud artifacts docker images list \
             ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
-            --format="value(digest,createTime)" \
+            --include-tags \
+            --format="value(version,createTime)" \
             --sort-by=~createTime \
             --project=${{ env.GCP_PROJECT_ID }})
           
@@ -77,28 +79,44 @@ jobs:
           DELETE_COUNT=$(echo "$IMAGES_TO_DELETE" | wc -l | tr -d ' ')
           echo "Deleting $DELETE_COUNT old image(s)..."
           
-          # Delete each old image
-          echo "$IMAGES_TO_DELETE" | while read -r digest timestamp; do
-            if [ -n "$digest" ]; then
-              IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}@${digest}"
+          # Track failures
+          FAILED=0
+          
+          # Delete each old image by version (digest)
+          while IFS=$'\t' read -r version timestamp; do
+            if [ -n "$version" ]; then
+              # Build full image path with digest
+              IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}@${version}"
               echo "Deleting: $IMAGE_PATH (created: $timestamp)"
               
-              gcloud artifacts docker images delete "$IMAGE_PATH" \
+              if ! gcloud artifacts docker images delete "$IMAGE_PATH" \
                 --quiet \
-                --project=${{ env.GCP_PROJECT_ID }} || {
-                echo "Warning: Failed to delete $IMAGE_PATH"
-              }
+                --project=${{ env.GCP_PROJECT_ID }} 2>&1; then
+                echo "ERROR: Failed to delete $IMAGE_PATH"
+                FAILED=$((FAILED + 1))
+              else
+                echo "Successfully deleted $IMAGE_PATH"
+              fi
             fi
-          done
+          done <<< "$IMAGES_TO_DELETE"
           
-          echo "Cleanup complete!"
+          # Fail the job if any deletions failed
+          if [ $FAILED -gt 0 ]; then
+            echo ""
+            echo "ERROR: $FAILED image(s) failed to delete"
+            exit 1
+          fi
+          
+          echo ""
+          echo "Cleanup complete! All old images deleted successfully."
           
           # Show remaining images
           echo ""
           echo "Remaining images:"
           gcloud artifacts docker images list \
             ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
-            --format="table(digest.slice(7:19),createTime,updateTime)" \
+            --include-tags \
+            --format="table(version.slice(7:26),createTime,updateTime)" \
             --sort-by=~createTime \
             --project=${{ env.GCP_PROJECT_ID }}
 
