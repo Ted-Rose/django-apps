@@ -50,60 +50,81 @@ jobs:
           set -e  # Exit on any error
           echo "Cleaning up old images from Artifact Registry..."
           
-          # Get all image versions sorted by creation time (newest first)
-          # Use --include-tags to get full image references
-          IMAGES=$(gcloud artifacts docker images list \
+          # Get all tags sorted by creation time (newest first)
+          TAGS=$(gcloud artifacts docker tags list \
             ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
-            --include-tags \
-            --format="value(version,createTime)" \
-            --sort-by=~createTime \
+            --format="value(tag,version)" \
+            --sort-by=~UPDATE_TIME \
             --project=${{ env.GCP_PROJECT_ID }})
           
-          if [ -z "$IMAGES" ]; then
-            echo "No images found in registry"
+          if [ -z "$TAGS" ]; then
+            echo "No tagged images found in registry"
             exit 0
           fi
           
-          # Count total images
-          TOTAL_COUNT=$(echo "$IMAGES" | wc -l | tr -d ' ')
-          echo "Found $TOTAL_COUNT image(s) in registry"
+          # Count total tags
+          TOTAL_COUNT=$(echo "$TAGS" | wc -l | tr -d ' ')
+          echo "Found $TOTAL_COUNT tagged image(s) in registry"
           
-          # Keep only the most recent image (skip first line)
-          IMAGES_TO_DELETE=$(echo "$IMAGES" | tail -n +2)
+          # Keep only the most recent tag (skip first line)
+          TAGS_TO_DELETE=$(echo "$TAGS" | tail -n +2)
           
-          if [ -z "$IMAGES_TO_DELETE" ]; then
-            echo "Only 1 image exists. Nothing to delete."
+          if [ -z "$TAGS_TO_DELETE" ]; then
+            echo "Only 1 tagged image exists. Nothing to delete."
             exit 0
           fi
           
-          DELETE_COUNT=$(echo "$IMAGES_TO_DELETE" | wc -l | tr -d ' ')
-          echo "Deleting $DELETE_COUNT old image(s)..."
+          DELETE_COUNT=$(echo "$TAGS_TO_DELETE" | wc -l | tr -d ' ')
+          echo "Deleting $DELETE_COUNT old tagged image(s)..."
           
           # Track failures
           FAILED=0
+          DELETED_DIGESTS=()
           
-          # Delete each old image by version (digest)
-          while IFS=$'\t' read -r version timestamp; do
-            if [ -n "$version" ]; then
-              # Build full image path with digest
-              IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}@${version}"
-              echo "Deleting: $IMAGE_PATH (created: $timestamp)"
+          # First, delete all old tags
+          while IFS=$'\t' read -r tag version; do
+            if [ -n "$tag" ]; then
+              TAG_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${tag}"
+              echo "Deleting tag: $TAG_PATH"
+              
+              if ! gcloud artifacts docker tags delete "$TAG_PATH" \
+                --quiet \
+                --project=${{ env.GCP_PROJECT_ID }} 2>&1; then
+                echo "ERROR: Failed to delete tag $TAG_PATH"
+                FAILED=$((FAILED + 1))
+              else
+                echo "Successfully deleted tag $TAG_PATH"
+                # Store the digest for later cleanup
+                if [ -n "$version" ]; then
+                  DELETED_DIGESTS+=("$version")
+                fi
+              fi
+            fi
+          done <<< "$TAGS_TO_DELETE"
+          
+          # Now delete untagged images (those we just untagged)
+          echo ""
+          echo "Deleting untagged images..."
+          for digest in "${DELETED_DIGESTS[@]}"; do
+            if [ -n "$digest" ]; then
+              IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}@${digest}"
+              echo "Deleting untagged image: $IMAGE_PATH"
               
               if ! gcloud artifacts docker images delete "$IMAGE_PATH" \
                 --quiet \
                 --project=${{ env.GCP_PROJECT_ID }} 2>&1; then
-                echo "ERROR: Failed to delete $IMAGE_PATH"
-                FAILED=$((FAILED + 1))
+                echo "WARNING: Failed to delete untagged image $IMAGE_PATH (may have been auto-cleaned)"
+                # Don't count as failure - GCP may have auto-cleaned it
               else
-                echo "Successfully deleted $IMAGE_PATH"
+                echo "Successfully deleted untagged image"
               fi
             fi
-          done <<< "$IMAGES_TO_DELETE"
+          done
           
-          # Fail the job if any deletions failed
+          # Fail the job if any tag deletions failed
           if [ $FAILED -gt 0 ]; then
             echo ""
-            echo "ERROR: $FAILED image(s) failed to delete"
+            echo "ERROR: $FAILED tag(s) failed to delete"
             exit 1
           fi
           
@@ -112,12 +133,11 @@ jobs:
           
           # Show remaining images
           echo ""
-          echo "Remaining images:"
-          gcloud artifacts docker images list \
+          echo "Remaining tagged images:"
+          gcloud artifacts docker tags list \
             ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
-            --include-tags \
-            --format="table(version.slice(7:26),createTime,updateTime)" \
-            --sort-by=~createTime \
+            --format="table(tag,version.slice(7:26),UPDATE_TIME)" \
+            --sort-by=~UPDATE_TIME \
             --project=${{ env.GCP_PROJECT_ID }}
 
       - name: Report storage usage
