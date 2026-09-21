@@ -54,6 +54,17 @@ def dashboard(request):
             request.session['oauth_redirect_url'] = current_url
             return redirect(result['authorization_url'])
 
+        # Automatically process labels after successful sync
+        if result:
+            try:
+                process_task_labels(request.user, creds)
+            except UnmatchedHashtagsError:
+                # Silently ignore unmatched hashtags during auto-processing
+                pass
+            except Exception:
+                # Silently ignore other errors during auto-processing
+                pass
+
     task_list_filter = request.GET.get('list')
     label_filter = request.GET.get('label')
     secondary_label_filter = request.GET.get('secondary_label')
@@ -221,6 +232,17 @@ def starred_tasks(request):
             request.session['oauth_redirect_url'] = current_url
             return redirect(result['authorization_url'])
 
+        # Automatically process labels after successful sync
+        if result:
+            try:
+                process_task_labels(request.user, creds)
+            except UnmatchedHashtagsError:
+                # Silently ignore unmatched hashtags during auto-processing
+                pass
+            except Exception:
+                # Silently ignore other errors during auto-processing
+                pass
+
     label_filter = request.GET.get('label')
     secondary_label_filter = request.GET.get('secondary_label')
     order_by = request.GET.get('order', 'order_asc')
@@ -366,6 +388,17 @@ def overdue_tasks(request):
             current_url = request.get_full_path()
             request.session['oauth_redirect_url'] = current_url
             return redirect(result['authorization_url'])
+
+        # Automatically process labels after successful sync
+        if result:
+            try:
+                process_task_labels(request.user, creds)
+            except UnmatchedHashtagsError:
+                # Silently ignore unmatched hashtags during auto-processing
+                pass
+            except Exception:
+                # Silently ignore other errors during auto-processing
+                pass
 
     label_filter = request.GET.get('label')
     secondary_label_filter = request.GET.get('secondary_label')
@@ -639,6 +672,17 @@ def sync_view(request):
             'reauth_required': True,
             'authorization_url': result['authorization_url']
         })
+
+    # Automatically process labels after successful sync
+    if result:
+        try:
+            process_task_labels(request.user, creds)
+        except UnmatchedHashtagsError:
+            # Silently ignore unmatched hashtags during auto-processing
+            pass
+        except Exception:
+            # Silently ignore other errors during auto-processing
+            pass
 
     return JsonResponse({'success': result})
 
@@ -1513,7 +1557,7 @@ def update_task_view(request, task_id):
 
         task.title = title
         task.notes = notes if notes else None
-        
+
         # Update labels if provided
         if label_ids is not None:
             # Validate that all label IDs belong to the user
@@ -1526,12 +1570,12 @@ def update_task_view(request, task_id):
                     'success': False,
                     'error': 'Invalid label IDs'
                 }, status=400)
-            
+
             task.labels.set(user_labels)
             logger.info(
                 f'Updated labels for task {task_id}: {label_ids}'
             )
-        
+
         task.save()
 
         logger.info(f'Successfully updated task {task_id}')

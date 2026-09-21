@@ -252,6 +252,17 @@
         .task-hidden {
             display: none !important;
         }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            z-index: 1030;
+        }
+        body {
+            padding-top: 60px;
+        }
     </style>
 </head>
 <body>
@@ -1553,14 +1564,6 @@
         }
 
         function processLabels() {
-            if (!confirm(
-                'Process labels for all active tasks? ' +
-                'This will match hashtags in task notes with task lists ' +
-                'and move tasks accordingly.'
-            )) {
-                return;
-            }
-
             const csrftoken = getCookie('csrftoken');
             const button = event.target.closest('button');
             const originalText = button.innerHTML;
