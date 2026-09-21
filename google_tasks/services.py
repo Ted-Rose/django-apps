@@ -812,7 +812,8 @@ def move_task_to_list(user, creds, task, target_list):
 
 def process_task_labels(user, creds, task_id=None):
     """
-    Process labels for one or all tasks.
+    Check if notes contain multiple hashtags - if they do then assign
+    multiple labels to the tasks.
 
     For each task:
     1. Extract ALL hashtags from title and notes
@@ -887,20 +888,8 @@ def process_task_labels(user, creds, task_id=None):
         hashtags = extract_hashtags(task.title)
         hashtags += extract_hashtags(task.notes or '')
 
-        # Skip if no hashtags or first is starred-related
+        # Skip if no hashtags
         if not hashtags:
-            continue
-
-        # Check if first hashtag is starred-related (fuzzy match)
-        first_hashtag_lower = hashtags[0].lower()
-        is_starred_keyword = (
-            first_hashtag_lower == 'starred' or
-            first_hashtag_lower == 'star' or
-            first_hashtag_lower == 'start' or  # voice-to-text error
-            first_hashtag_lower.startswith('starr')
-        )
-
-        if is_starred_keyword:
             continue
 
         labels = []
@@ -952,22 +941,45 @@ def process_task_labels(user, creds, task_id=None):
             f'Task "{task.title}" has hashtags: {hashtags}'
         )
 
-        # Check for special keywords first (fuzzy match for starred)
-        first_hashtag_lower = hashtags[0].lower()
-        is_starred_keyword = (
-            first_hashtag_lower == 'starred' or
-            first_hashtag_lower == 'star' or
-            first_hashtag_lower == 'start' or  # voice-to-text error
-            first_hashtag_lower.startswith('starr')
-        )
+        # Check if any hashtag is starred-related (fuzzy match)
+        should_star = False
+        for hashtag in hashtags:
+            hashtag_lower = hashtag.lower()
+            if (hashtag_lower == 'starred' or
+                    hashtag_lower == 'star' or
+                    hashtag_lower == 'start' or
+                    hashtag_lower.startswith('starr')):
+                should_star = True
+                logger.info(
+                    f'Special keyword #{hashtag} found, will mark '
+                    f'task as starred'
+                )
+                break
 
-        if is_starred_keyword:
+        # Filter out starred-related hashtags for label processing
+        non_starred_hashtags = [
+            h for h in hashtags
+            if not (h.lower() == 'starred' or
+                    h.lower() == 'star' or
+                    h.lower() == 'start' or
+                    h.lower().startswith('starr'))
+        ]
+
+        # Assign pre-matched TaskLabels for ALL non-starred hashtags
+        assigned_labels = []
+        for label in task_labels_map.get(task.task_id, []):
+            task.labels.add(label)
+            assigned_labels.append(label.name)
+            stats['labels_assigned'] += 1
+
+        if assigned_labels:
             logger.info(
-                f'Special keyword #{hashtags[0]} found, marking task '
-                f'as starred'
+                f'Task "{task.title}" assigned labels: {assigned_labels}'
             )
+
+        # If only starred keyword and no other hashtags, just star it
+        if should_star and not non_starred_hashtags:
             if not task.is_starred:
-                # Use pre-calculated max and increment
                 max_starred_order += 1
                 task.is_starred = True
                 task.starred_order = max_starred_order
@@ -983,23 +995,17 @@ def process_task_labels(user, creds, task_id=None):
             stats['details'].append(detail)
             continue
 
-        # Assign pre-matched TaskLabels for ALL hashtags
-        assigned_labels = []
-        for label in task_labels_map.get(task.task_id, []):
-            task.labels.add(label)
-            assigned_labels.append(label.name)
-            stats['labels_assigned'] += 1
+        # Use first non-starred hashtag for GoogleTaskList (Google sync)
+        if not non_starred_hashtags:
+            detail['message'] = 'No hashtags for list matching'
+            stats['details'].append(detail)
+            continue
 
-        logger.info(
-            f'Task "{task.title}" assigned labels: {assigned_labels}'
-        )
-
-        # EXISTING: Use first hashtag for GoogleTaskList (Google sync)
-        target_list = match_task_list(hashtags[0], task_lists)
+        target_list = match_task_list(non_starred_hashtags[0], task_lists)
 
         if not target_list:
             detail['message'] = (
-                f'No matching list for #{hashtags[0]}'
+                f'No matching list for #{non_starred_hashtags[0]}'
             )
             stats['details'].append(detail)
             continue
@@ -1007,11 +1013,10 @@ def process_task_labels(user, creds, task_id=None):
         # Check if task is already in target list
         if task.task_list.list_id == target_list.list_id:
             logger.info(
-                f'Task already in {target_list.title}, '
-                f'just starring it'
+                f'Task already in {target_list.title}'
             )
-            if not task.is_starred:
-                # Use pre-calculated max and increment
+            # Star it only if should_star flag is set
+            if should_star and not task.is_starred:
                 max_starred_order += 1
                 task.is_starred = True
                 task.starred_order = max_starred_order
@@ -1022,9 +1027,13 @@ def process_task_labels(user, creds, task_id=None):
                     f'Already in {target_list.title}, starred with '
                     f'priority {task.starred_order}'
                 )
-            else:
+            elif should_star and task.is_starred:
                 detail['message'] = (
                     f'Already in {target_list.title} and starred'
+                )
+            else:
+                detail['message'] = (
+                    f'Already in {target_list.title}, labels assigned'
                 )
             stats['details'].append(detail)
             continue
@@ -1037,18 +1046,24 @@ def process_task_labels(user, creds, task_id=None):
             return result
 
         if result:
-            # Star the task with highest priority
-            max_starred_order += 1
-            task.is_starred = True
-            task.starred_order = max_starred_order
-            task.save()
             stats['moved'] += 1
-            stats['starred'] += 1
-            detail['action'] = 'moved_and_starred'
-            detail['message'] = (
-                f'Moved to {target_list.title} and starred with '
-                f'priority {task.starred_order}'
-            )
+            # Star the task only if should_star flag is set
+            if should_star:
+                max_starred_order += 1
+                task.is_starred = True
+                task.starred_order = max_starred_order
+                task.save()
+                stats['starred'] += 1
+                detail['action'] = 'moved_and_starred'
+                detail['message'] = (
+                    f'Moved to {target_list.title} and starred with '
+                    f'priority {task.starred_order}'
+                )
+            else:
+                detail['action'] = 'moved'
+                detail['message'] = (
+                    f'Moved to {target_list.title}, labels assigned'
+                )
         else:
             stats['errors'] += 1
             detail['action'] = 'error'
