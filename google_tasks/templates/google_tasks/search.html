@@ -159,11 +159,6 @@
                                                 <a href="{% url 'google_tasks:task_detail' task.task_id %}" class="task-title-link">
                                                     {{ task.title }}
                                                 </a>
-                                                {% if task.status == 'completed' %}
-                                                    <span class="badge bg-success ms-2">
-                                                        Completed
-                                                    </span>
-                                                {% endif %}
                                                 {% if task.is_archived %}
                                                     <span class="badge bg-secondary ms-2">
                                                         Archived

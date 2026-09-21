@@ -90,16 +90,6 @@
 
         <div class="task-meta">
             <div class="d-flex flex-wrap gap-2 align-items-center">
-                {% if task.status == 'completed' %}
-                    <span class="badge bg-secondary">
-                        <i class="bi bi-check-circle"></i> Completed
-                    </span>
-                {% else %}
-                    <span class="badge bg-secondary">
-                        <i class="bi bi-circle"></i> Needs Action
-                    </span>
-                {% endif %}
-                
                 {% if task.is_starred %}
                     <span class="badge bg-secondary">
                         <i class="bi bi-star-fill"></i> Starred
