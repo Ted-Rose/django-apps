@@ -13,6 +13,8 @@ from google_tasks.services import (
     complete_task,
     uncomplete_task,
     process_task_labels,
+    delete_task_google,
+    match_task_list,
     UnmatchedHashtagsError
 )
 from google_api.utils import get_user_credentials
@@ -1036,6 +1038,20 @@ def unarchive_task_view(request, task_id):
 def delete_task_view(request, task_id):
     """Move task to trash (soft delete)."""
     task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
+
+    # Delete from Google Tasks API
+    creds = get_creds_dict(request.user)
+    result = delete_task_google(request.user, creds, task)
+
+    # Check if reauth is needed
+    if isinstance(result, dict) and 'authorization_url' in result:
+        return JsonResponse({
+            'success': False,
+            'reauth_required': True,
+            'authorization_url': result['authorization_url']
+        })
+
+    # Mark as deleted locally (soft delete)
     task.is_deleted = True
     task.deleted_at = timezone.now()
     task.save()
@@ -1321,6 +1337,33 @@ def create_task_view(request):
                 'success': False,
                 'error': 'Title cannot be empty'
             }, status=400)
+
+        # If no task_list_id provided but labels are selected,
+        # try to match the first label to a task list
+        if not task_list_id and label_ids:
+            try:
+                first_label = TaskLabel.objects.get(
+                    id=label_ids[0],
+                    user=request.user
+                )
+                task_lists = GoogleTaskList.objects.filter(
+                    user=request.user
+                )
+                matched_list = match_task_list(
+                    first_label.name,
+                    task_lists
+                )
+                if matched_list:
+                    task_list_id = matched_list.list_id
+                    logger.info(
+                        f'Matched label "{first_label.name}" to '
+                        f'task list "{matched_list.title}"'
+                    )
+            except TaskLabel.DoesNotExist:
+                logger.warning(
+                    f'Label ID {label_ids[0]} not found for user '
+                    f'{request.user.username}'
+                )
 
         result = create_task(
             request.user,

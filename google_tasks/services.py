@@ -818,6 +818,127 @@ def move_task_to_list(user, creds, task, target_list):
         return False
 
 
+def delete_task_google(user, creds, task):
+    """
+    Delete a task via Google Tasks API.
+
+    Args:
+        user: User object
+        creds: Google credentials
+        task: GoogleTask object
+
+    Returns: True on success, False or auth dict on failure
+    """
+    logger.info(
+        f'Deleting task {task.task_id} from Google Tasks API'
+    )
+
+    try:
+        service = get_tasks_service(creds)
+
+        if isinstance(service, dict) and 'authorization_url' in service:
+            logger.warning('Reauth required in delete_task_google')
+            return service
+
+        # Validate task list ID before making API call
+        if not task.task_list or not task.task_list.list_id:
+            logger.error(
+                f'Task {task.task_id} has no valid task list'
+            )
+            return False
+
+        # Try to delete task from expected list
+        logger.info(
+            f'Deleting task {task.task_id} from list '
+            f'{task.task_list.list_id} ({task.task_list.title})'
+        )
+        try:
+            service.tasks().delete(
+                tasklist=task.task_list.list_id,
+                task=task.task_id
+            ).execute()
+            logger.info(
+                'Successfully deleted task from Google Tasks API'
+            )
+            return True
+        except HttpError as e:
+            if e.resp.status == 404:
+                # Task not found in expected list
+                # Try to find it in other lists
+                logger.warning(
+                    f'Task {task.task_id} not found in expected list '
+                    f'{task.task_list.title}. '
+                    f'Searching in other lists...'
+                )
+
+                # Get all task lists for this user
+                all_lists = GoogleTaskList.objects.filter(user=user)
+                for task_list in all_lists:
+                    if task_list.list_id == task.task_list.list_id:
+                        continue  # Already tried this one
+
+                    try:
+                        # Try to get the task from this list
+                        service.tasks().get(
+                            tasklist=task_list.list_id,
+                            task=task.task_id
+                        ).execute()
+
+                        # Task found! Delete it from this list
+                        logger.info(
+                            f'Found task in list {task_list.title}, '
+                            f'deleting...'
+                        )
+                        service.tasks().delete(
+                            tasklist=task_list.list_id,
+                            task=task.task_id
+                        ).execute()
+                        logger.info(
+                            f'Successfully deleted task from '
+                            f'{task_list.title}'
+                        )
+
+                        # Update local task list reference
+                        task.task_list = task_list
+                        task.save()
+
+                        return True
+                    except HttpError as inner_e:
+                        if inner_e.resp.status == 404:
+                            continue  # Not in this list, try next
+                        raise
+
+                # Task not found in any list
+                logger.warning(
+                    f'Task {task.task_id} not found in any list '
+                    f'(may have been already deleted). '
+                    f'Continuing with local deletion.'
+                )
+                return True
+            raise
+
+    except socket.timeout:
+        logger.error(
+            f'Timeout deleting task {task.task_id} from Google Tasks'
+        )
+        return False
+    except HttpError as error:
+        logger.error(
+            f'HttpError deleting task {task.task_id}: '
+            f'Status={error.resp.status}, '
+            f'Reason={error.resp.reason}, '
+            f'Content={error.content}'
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f'Unexpected error deleting task {task.task_id}: '
+            f'{type(e).__name__}: {str(e)}',
+            exc_info=True
+        )
+        return False
+
+
 def process_task_labels(user, creds, task_id=None):
     """
     Check if notes contain multiple hashtags - if they do then assign
