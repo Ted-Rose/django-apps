@@ -15,7 +15,9 @@ from google_tasks.services import (
     process_task_labels,
     delete_task_google,
     match_task_list,
-    UnmatchedHashtagsError
+    UnmatchedHashtagsError,
+    remove_starred_hashtags,
+    get_tasks_service
 )
 from google_api.utils import get_user_credentials
 
@@ -633,14 +635,55 @@ def set_task_order(request, task_id):
 def toggle_star(request, task_id):
     """Toggle the starred status of a task."""
     from django.db.models import Max
+    import logging
+
+    logger = logging.getLogger('django')
     task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
     task.is_starred = not task.is_starred
+
     if task.is_starred:
         # Get max starred_order and add 1 to put at top
         max_order = GoogleTask.objects.filter(
             user=request.user, is_starred=True
         ).aggregate(Max('starred_order'))['starred_order__max']
         task.starred_order = (max_order or 0) + 1
+    else:
+        # Unstarring: remove hashtags with words starting with 'sta'
+        if task.notes:
+            cleaned_notes = remove_starred_hashtags(task.notes)
+            if cleaned_notes != task.notes:
+                logger.info(
+                    f'Removing starred hashtags from task {task_id}'
+                )
+                task.notes = cleaned_notes
+
+                # Update notes in Google Tasks API
+                creds = get_creds_dict(request.user)
+                if creds and task.task_list:
+                    try:
+                        service = get_tasks_service(creds)
+                        if not (isinstance(service, dict) and
+                                'authorization_url' in service):
+                            task_body = {
+                                'id': task.task_id,
+                                'notes': cleaned_notes
+                            }
+                            service.tasks().patch(
+                                tasklist=task.task_list.list_id,
+                                task=task.task_id,
+                                body=task_body
+                            ).execute()
+                            logger.info(
+                                f'Updated notes in Google Tasks API '
+                                f'for task {task_id}'
+                            )
+                    except Exception as e:
+                        logger.error(
+                            f'Failed to update notes in Google Tasks '
+                            f'API: {type(e).__name__}: {str(e)}'
+                        )
+                        # Continue anyway - local update is more important
+
     task.save()
 
     return JsonResponse({

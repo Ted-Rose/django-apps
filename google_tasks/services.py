@@ -540,6 +540,36 @@ def extract_hashtags(text):
     return [match.lower() for match in matches]
 
 
+def remove_starred_hashtags(notes):
+    """
+    Remove starred-related hashtags from notes.
+    Matches: #star, #starred, #start, #starr (and variations)
+
+    This prevents auto-starring when periodic hashtag checks run.
+
+    Args:
+        notes: String containing task notes
+
+    Returns: String with starred-related hashtags removed
+    """
+    if not notes:
+        return notes
+
+    # Pattern matches the same starred-related hashtags that
+    # process_task_labels checks for:
+    # - #star (exactly)
+    # - #starred (exactly)
+    # - #start (exactly)
+    # - #starr* (starr followed by any letters)
+    pattern = r'#(star(?:red)?|start|starr[a-z]*)\b'
+    cleaned_notes = re.sub(pattern, '', notes, flags=re.IGNORECASE)
+
+    # Clean up any double spaces left by removal
+    cleaned_notes = re.sub(r'\s+', ' ', cleaned_notes).strip()
+
+    return cleaned_notes
+
+
 def match_label(hashtag, user, create_if_missing=None):
     """
     Smart label matching for voice-to-text input.
