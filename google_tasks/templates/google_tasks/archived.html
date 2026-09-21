@@ -46,14 +46,48 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'google_tasks:archived' %}">
-                <i class="bi bi-archive"></i> Archived Tasks
-            </a>
-            <div class="navbar-nav ms-auto d-flex flex-row align-items-center gap-2">
-                <a href="{% url 'google_tasks:search' %}" class="btn btn-outline-light btn-sm" title="Search tasks">
-                    <i class="bi bi-search"></i> Search
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary" style="padding: 0.1rem 0; min-height: auto;">
+        <div class="container-fluid" style="padding: 0 0.5rem;">
+            <div class="d-flex align-items-center gap-1 flex-wrap flex-grow-1">
+                <a class="navbar-brand mb-0" href="{% url 'google_tasks:archived' %}" style="font-size: 1rem; padding: 0.25rem 0.5rem;">
+                    <i class="bi bi-archive"></i> Archived Tasks
+                </a>
+                
+                <!-- Secondary Label Filter dropdown -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" style="padding: 0.15rem 0.4rem;">
+                        {% if secondary_label %}
+                            <i class="bi bi-funnel"></i> {{ secondary_label }}
+                        {% else %}
+                            <i class="bi bi-funnel"></i> All
+                        {% endif %}
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item {% if not secondary_label %}active{% endif %}" href="#" onclick="selectSecondaryLabel(''); return false;">
+                                <i class="bi bi-funnel"></i> All Labels
+                            </a>
+                        </li>
+                        {% if labels %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Filter by Label</h6></li>
+                        {% for label in labels %}
+                        <li>
+                            <a class="dropdown-item {% if secondary_label == label.name %}active{% endif %}" href="#" onclick="selectSecondaryLabel('{{ label.name }}'); return false;">
+                                <span class="badge" style="background-color: {{ label.color }}">{{ label.name }}</span>
+                                {% if label.task_count %}
+                                    <span class="badge bg-secondary ms-1">{{ label.task_count }}</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        {% endfor %}
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+            <div class="ms-auto d-flex flex-row align-items-center gap-2">
+                <a href="{% url 'google_tasks:search' %}" class="btn btn-outline-light btn-sm" style="padding: 0.25rem 0.5rem;" title="Search tasks">
+                    <i class="bi bi-search"></i>
                 </a>
                 {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
             </div>
@@ -238,6 +272,118 @@
             });
         }
 
+        function selectSecondaryLabel(labelName) {
+            // Filter tasks client-side instead of reloading
+            // Select active tasks and completed tasks separately
+            const activeTasks = document.querySelectorAll(
+                '#task-list .task-card'
+            );
+            const completedTasks = document.querySelectorAll(
+                '#completedTasksCollapse .task-card'
+            );
+            
+            // Filter active tasks
+            activeTasks.forEach(task => {
+                if (!labelName) {
+                    task.style.display = '';
+                } else {
+                    // Only check label badges (those with background-color)
+                    const labels = task.querySelectorAll(
+                        '.badge[style*="background-color"]'
+                    );
+                    let hasLabel = false;
+                    
+                    labels.forEach(badge => {
+                        if (badge.textContent.trim() === labelName) {
+                            hasLabel = true;
+                        }
+                    });
+                    
+                    task.style.display = hasLabel ? '' : 'none';
+                }
+            });
+            
+            // Filter completed tasks
+            let hasVisibleCompletedTasks = false;
+            completedTasks.forEach(task => {
+                if (!labelName) {
+                    task.style.display = '';
+                    hasVisibleCompletedTasks = true;
+                } else {
+                    // Only check label badges (those with background-color)
+                    const labels = task.querySelectorAll(
+                        '.badge[style*="background-color"]'
+                    );
+                    let hasLabel = false;
+                    
+                    labels.forEach(badge => {
+                        if (badge.textContent.trim() === labelName) {
+                            hasLabel = true;
+                        }
+                    });
+                    
+                    task.style.display = hasLabel ? '' : 'none';
+                    if (hasLabel) {
+                        hasVisibleCompletedTasks = true;
+                    }
+                }
+            });
+            
+            // Auto-expand completed section if it has matching tasks
+            const completedCollapse = document.getElementById(
+                'completedTasksCollapse'
+            );
+            if (completedCollapse && hasVisibleCompletedTasks && labelName) {
+                const bsCollapse = bootstrap.Collapse.getInstance(
+                    completedCollapse
+                ) || new bootstrap.Collapse(completedCollapse, {
+                    toggle: false
+                });
+                bsCollapse.show();
+            }
+            
+            // Find the secondary label dropdown button specifically
+            const allDropdowns = document.querySelectorAll(
+                '.dropdown button[data-bs-toggle="dropdown"]'
+            );
+            let secondaryDropdownBtn = null;
+            
+            allDropdowns.forEach(btn => {
+                if (btn.innerHTML.includes('bi-funnel')) {
+                    secondaryDropdownBtn = btn;
+                }
+            });
+            
+            if (secondaryDropdownBtn) {
+                if (labelName) {
+                    secondaryDropdownBtn.innerHTML = 
+                        `<i class="bi bi-funnel"></i> ${labelName}`;
+                } else {
+                    secondaryDropdownBtn.innerHTML = 
+                        '<i class="bi bi-funnel"></i> All';
+                }
+            }
+            
+            // Update active state in dropdown items
+            const dropdownItems = document.querySelectorAll(
+                '.dropdown-menu .dropdown-item'
+            );
+            dropdownItems.forEach(item => {
+                const onclick = item.getAttribute('onclick');
+                if (onclick && onclick.includes('selectSecondaryLabel')) {
+                    const match = 
+                        onclick.match(/selectSecondaryLabel\('([^']*)'\)/);
+                    const itemLabel = match ? match[1] : '';
+                    
+                    if (itemLabel === labelName) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                }
+            });
+        }
+
         // Save current view to localStorage on page load
         document.addEventListener('DOMContentLoaded', function() {
             try {
@@ -247,6 +393,13 @@
                 localStorage.setItem('lastTasksView', fullUrl);
             } catch (e) {
                 console.warn('Failed to save view to localStorage:', e);
+            }
+            
+            // Apply secondary label filter if URL parameter exists
+            const params = new URLSearchParams(window.location.search);
+            const secondaryLabel = params.get('secondary_label');
+            if (secondaryLabel) {
+                selectSecondaryLabel(secondaryLabel);
             }
         });
     </script>

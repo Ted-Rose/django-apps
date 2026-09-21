@@ -54,6 +54,7 @@ def dashboard(request):
 
     task_list_filter = request.GET.get('list')
     label_filter = request.GET.get('label')
+    secondary_label_filter = request.GET.get('secondary_label')
     order_by = request.GET.get('order', 'order_asc')
 
     tasks = GoogleTask.objects.filter(
@@ -65,6 +66,10 @@ def dashboard(request):
 
     if label_filter:
         tasks = tasks.filter(labels__name=label_filter)
+
+    # Note: secondary_label_filter is handled client-side for
+    # performance. We still pass it to template for initial
+    # client-side filtering
 
     active_tasks = tasks.filter(status='needsAction')
     completed_tasks = tasks.filter(status='completed')
@@ -106,6 +111,29 @@ def dashboard(request):
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
 
+    # Calculate task counts for each label (for secondary filter)
+    if label_filter:
+        # Get base queryset without secondary label filter
+        # Only count uncompleted tasks
+        base_tasks = GoogleTask.objects.filter(
+            user=request.user,
+            is_archived=False,
+            is_deleted=False,
+            status='needsAction'
+        )
+        if task_list_filter:
+            base_tasks = base_tasks.filter(
+                task_list__list_id=task_list_filter
+            )
+        if label_filter:
+            base_tasks = base_tasks.filter(labels__name=label_filter)
+
+        # Add task count to each label (uncompleted only)
+        for label in labels:
+            label.task_count = base_tasks.filter(
+                labels__name=label.name
+            ).count()
+
     selected_list_title = None
     selected_label_name = None
 
@@ -124,6 +152,8 @@ def dashboard(request):
         sync_params['list'] = task_list_filter
     if label_filter:
         sync_params['label'] = label_filter
+    if secondary_label_filter:
+        sync_params['secondary_label'] = secondary_label_filter
     if order_by:
         sync_params['order'] = order_by
     sync_url = f'?{urlencode(sync_params)}'
@@ -164,6 +194,7 @@ def dashboard(request):
         'selected_list_title': selected_list_title,
         'selected_label': label_filter,
         'selected_label_name': selected_label_name,
+        'secondary_label': secondary_label_filter,
         'has_credentials': bool(creds),
         'order_by': order_by,
         'burger_menu_items': burger_menu_items,
@@ -188,12 +219,22 @@ def starred_tasks(request):
             request.session['oauth_redirect_url'] = current_url
             return redirect(result['authorization_url'])
 
+    label_filter = request.GET.get('label')
+    secondary_label_filter = request.GET.get('secondary_label')
     order_by = request.GET.get('order', 'order_asc')
 
     starred_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_starred=True, is_archived=False,
         is_deleted=False
     ).select_related('task_list').prefetch_related('labels')
+
+    if label_filter:
+        starred_tasks_qs = starred_tasks_qs.filter(labels__name=label_filter)
+
+    # Note: secondary_label_filter is handled client-side for
+    # performance. We still pass it to template for initial
+    # client-side filtering
+
     active_tasks = starred_tasks_qs.filter(status='needsAction')
     completed_tasks = starred_tasks_qs.filter(status='completed')
 
@@ -234,9 +275,31 @@ def starred_tasks(request):
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
 
+    # Calculate task counts for each label (for secondary filter)
+    # Always show counts in starred view (uncompleted only)
+    base_tasks = GoogleTask.objects.filter(
+        user=request.user,
+        is_starred=True,
+        is_archived=False,
+        is_deleted=False,
+        status='needsAction'
+    )
+    if label_filter:
+        base_tasks = base_tasks.filter(labels__name=label_filter)
+
+    # Add task count to each label (uncompleted only)
+    for label in labels:
+        label.task_count = base_tasks.filter(
+            labels__name=label.name
+        ).count()
+
     # Build sync URL preserving current parameters
     from urllib.parse import urlencode
     sync_params = {'sync': 'true'}
+    if label_filter:
+        sync_params['label'] = label_filter
+    if secondary_label_filter:
+        sync_params['secondary_label'] = secondary_label_filter
     if order_by:
         sync_params['order'] = order_by
     sync_url = f'?{urlencode(sync_params)}'
@@ -275,6 +338,9 @@ def starred_tasks(request):
         'labels': labels,
         'selected_list': None,
         'selected_list_title': None,
+        'selected_label': label_filter,
+        'selected_label_name': label_filter,
+        'secondary_label': secondary_label_filter,
         'has_credentials': bool(creds),
         'is_starred_view': True,
         'order_by': order_by,
@@ -299,6 +365,8 @@ def overdue_tasks(request):
             request.session['oauth_redirect_url'] = current_url
             return redirect(result['authorization_url'])
 
+    label_filter = request.GET.get('label')
+    secondary_label_filter = request.GET.get('secondary_label')
     order_by = request.GET.get('order', 'order_asc')
 
     today = timezone.now().date()
@@ -308,6 +376,14 @@ def overdue_tasks(request):
         is_deleted=False,
         due_date__lt=today
     ).select_related('task_list').prefetch_related('labels')
+
+    if label_filter:
+        overdue_tasks_qs = overdue_tasks_qs.filter(labels__name=label_filter)
+
+    # Note: secondary_label_filter is handled client-side for
+    # performance. We still pass it to template for initial
+    # client-side filtering
+
     active_tasks = overdue_tasks_qs.filter(status='needsAction')
     completed_tasks = overdue_tasks_qs.filter(status='completed')
 
@@ -348,9 +424,32 @@ def overdue_tasks(request):
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
 
+    # Calculate task counts for each label (for secondary filter)
+    # Always show counts in overdue view (uncompleted only)
+    today = timezone.now().date()
+    base_tasks = GoogleTask.objects.filter(
+        user=request.user,
+        is_archived=False,
+        is_deleted=False,
+        due_date__lt=today,
+        status='needsAction'
+    )
+    if label_filter:
+        base_tasks = base_tasks.filter(labels__name=label_filter)
+
+    # Add task count to each label (uncompleted only)
+    for label in labels:
+        label.task_count = base_tasks.filter(
+            labels__name=label.name
+        ).count()
+
     # Build sync URL preserving current parameters
     from urllib.parse import urlencode
     sync_params = {'sync': 'true'}
+    if label_filter:
+        sync_params['label'] = label_filter
+    if secondary_label_filter:
+        sync_params['secondary_label'] = secondary_label_filter
     if order_by:
         sync_params['order'] = order_by
     sync_url = f'?{urlencode(sync_params)}'
@@ -389,6 +488,9 @@ def overdue_tasks(request):
         'labels': labels,
         'selected_list': None,
         'selected_list_title': None,
+        'selected_label': label_filter,
+        'selected_label_name': label_filter,
+        'secondary_label': secondary_label_filter,
         'has_credentials': bool(creds),
         'is_overdue_view': True,
         'order_by': order_by,
@@ -976,11 +1078,21 @@ def permanent_delete_task_view(request, task_id):
 def archived_tasks(request):
     """View showing archived tasks."""
     creds = get_creds_dict(request.user)
+    label_filter = request.GET.get('label')
+    secondary_label_filter = request.GET.get('secondary_label')
     order_by = request.GET.get('order', 'order_asc')
 
     archived_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_archived=True, is_deleted=False
     ).select_related('task_list').prefetch_related('labels')
+
+    if label_filter:
+        archived_tasks_qs = archived_tasks_qs.filter(labels__name=label_filter)
+
+    # Note: secondary_label_filter is handled client-side for
+    # performance. We still pass it to template for initial
+    # client-side filtering
+
     active_tasks = archived_tasks_qs.filter(status='needsAction')
     completed_tasks = archived_tasks_qs.filter(status='completed')
 
@@ -1011,6 +1123,23 @@ def archived_tasks(request):
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
 
+    # Calculate task counts for each label (for secondary filter)
+    # Always show counts in archived view (uncompleted only)
+    base_tasks = GoogleTask.objects.filter(
+        user=request.user,
+        is_archived=True,
+        is_deleted=False,
+        status='needsAction'
+    )
+    if label_filter:
+        base_tasks = base_tasks.filter(labels__name=label_filter)
+
+    # Add task count to each label (uncompleted only)
+    for label in labels:
+        label.task_count = base_tasks.filter(
+            labels__name=label.name
+        ).count()
+
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
          'btn_class': 'btn-light'},
@@ -1031,6 +1160,9 @@ def archived_tasks(request):
         'completed_tasks': completed_tasks,
         'task_lists': task_lists,
         'labels': labels,
+        'selected_label': label_filter,
+        'selected_label_name': label_filter,
+        'secondary_label': secondary_label_filter,
         'has_credentials': bool(creds),
         'is_archived_view': True,
         'order_by': order_by,
@@ -1044,11 +1176,20 @@ def archived_tasks(request):
 def trash_tasks(request):
     """View showing deleted tasks (trash)."""
     creds = get_creds_dict(request.user)
+    label_filter = request.GET.get('label')
+    secondary_label_filter = request.GET.get('secondary_label')
     order_by = request.GET.get('order', 'deleted_desc')
 
     deleted_tasks_qs = GoogleTask.objects.filter(
         user=request.user, is_deleted=True
     ).select_related('task_list').prefetch_related('labels')
+
+    if label_filter:
+        deleted_tasks_qs = deleted_tasks_qs.filter(labels__name=label_filter)
+
+    # Note: secondary_label_filter is handled client-side for
+    # performance. We still pass it to template for initial
+    # client-side filtering
 
     if order_by == 'deleted_desc':
         deleted_tasks_qs = deleted_tasks_qs.order_by('-deleted_at')
@@ -1059,6 +1200,20 @@ def trash_tasks(request):
 
     task_lists = GoogleTaskList.objects.filter(user=request.user)
     labels = TaskLabel.objects.filter(user=request.user)
+
+    # Calculate task counts for each label (for secondary filter)
+    # Always show counts in trash view (uncompleted only)
+    base_tasks = GoogleTask.objects.filter(
+        user=request.user, is_deleted=True, status='needsAction'
+    )
+    if label_filter:
+        base_tasks = base_tasks.filter(labels__name=label_filter)
+
+    # Add task count to each label (uncompleted only)
+    for label in labels:
+        label.task_count = base_tasks.filter(
+            labels__name=label.name
+        ).count()
 
     burger_menu_items = [
         {'label': 'Home', 'url': '/', 'icon': 'house',
@@ -1079,6 +1234,9 @@ def trash_tasks(request):
         'tasks': deleted_tasks_qs,
         'task_lists': task_lists,
         'labels': labels,
+        'selected_label': label_filter,
+        'selected_label_name': label_filter,
+        'secondary_label': secondary_label_filter,
         'has_credentials': bool(creds),
         'is_trash_view': True,
         'order_by': order_by,
