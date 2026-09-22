@@ -69,7 +69,24 @@ class GoogleTask(models.Model):
         default='needsAction'
     )
     completed = models.DateTimeField(null=True, blank=True)
-    updated = models.DateTimeField(null=True, blank=True)
+    updated = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Last update timestamp from Google Tasks API'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text='When this task was last modified in our database'
+    )
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When we last synced this task with Google Tasks'
+    )
+    needs_push = models.BooleanField(
+        default=False,
+        help_text='Local changes pending push to Google Tasks'
+    )
     created = models.DateTimeField(
         null=True,
         blank=True,

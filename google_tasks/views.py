@@ -656,6 +656,7 @@ def toggle_star(request, task_id):
                     f'Removing starred hashtags from task {task_id}'
                 )
                 task.notes = cleaned_notes
+                task.needs_push = True
 
                 # Update notes in Google Tasks API
                 creds = get_creds_dict(request.user)
@@ -673,6 +674,7 @@ def toggle_star(request, task_id):
                                 task=task.task_id,
                                 body=task_body
                             ).execute()
+                            task.needs_push = False
                             logger.info(
                                 f'Updated notes in Google Tasks API '
                                 f'for task {task_id}'
@@ -682,7 +684,8 @@ def toggle_star(request, task_id):
                             f'Failed to update notes in Google Tasks '
                             f'API: {type(e).__name__}: {str(e)}'
                         )
-                        # Continue anyway - local update is more important
+                        # Continue anyway - local update is more
+                        # important; needs_push stays True for retry
 
     task.save()
 
@@ -1138,10 +1141,17 @@ def delete_task_view(request, task_id):
             'authorization_url': result['authorization_url']
         })
 
-    # Mark as deleted locally (soft delete)
+    # Mark as deleted locally (soft delete). Only mark as synced if the
+    # remote delete succeeded; otherwise flag for retry on next sync.
+    sync_time = timezone.now()
     task.is_deleted = True
-    task.deleted_at = timezone.now()
-    task.save()
+    task.deleted_at = sync_time
+    task.needs_push = not result
+    if result:
+        task.last_synced_at = sync_time
+    task.save(update_fields=[
+        'is_deleted', 'deleted_at', 'needs_push', 'last_synced_at'
+    ])
 
     return JsonResponse({
         'success': True,
@@ -1156,6 +1166,9 @@ def restore_task_view(request, task_id):
     task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
     task.is_deleted = False
     task.deleted_at = None
+    # Flag for push: if the task was already deleted on Google,
+    # push_local_changes will recreate it via insert.
+    task.needs_push = True
     task.save()
 
     return JsonResponse({
@@ -1513,6 +1526,7 @@ def create_task_view(request):
             starred_order=starred_order,
             is_divider=False,
             updated=timezone.now(),
+            last_synced_at=timezone.now(),
             created=timezone.now()
         )
 
@@ -1598,8 +1612,11 @@ def update_task_view(request, task_id):
                 'error': 'Title cannot be empty'
             }, status=400)
 
+        new_notes = notes if notes else None
+        if title != task.title or new_notes != task.notes:
+            task.needs_push = True
         task.title = title
-        task.notes = notes if notes else None
+        task.notes = new_notes
 
         # Update labels if provided
         if label_ids is not None:

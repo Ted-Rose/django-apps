@@ -138,14 +138,220 @@ def sync_task_lists(user, creds):
         return False
 
 
+def push_local_changes(user, creds):
+    """
+    Push local task changes to Google Tasks API.
+    Finds tasks where needs_push=True and pushes changes.
+
+    Handles:
+    - Field changes (title, notes, due, status)
+    - Task deletions (is_deleted=True)
+    - Tasks deleted remotely are recreated via insert (e.g. restores)
+    - Note: Archived tasks are app-level only, not synced to Google
+
+    Args:
+        user: User object
+        creds: Google credentials
+
+    Returns: Dict with push stats or auth dict if reauth needed
+    """
+    logger.info(f'Pushing local changes for user {user.username}')
+
+    stats = {
+        'pushed': 0,
+        'deleted': 0,
+        'completed': 0,
+        'uncompleted': 0,
+        'recreated': 0,
+        'errors': 0
+    }
+
+    try:
+        service = get_tasks_service(creds)
+
+        if isinstance(service, dict) and 'authorization_url' in service:
+            return service
+
+        # Find tasks with local changes not yet pushed to Google
+        tasks_to_push = GoogleTask.objects.filter(
+            user=user,
+            is_divider=False,
+            needs_push=True
+        )
+
+        logger.info(
+            f'Found {tasks_to_push.count()} tasks with local changes'
+        )
+
+        for task in tasks_to_push:
+            try:
+                # Handle deleted tasks
+                if task.is_deleted:
+                    logger.info(
+                        f'Deleting task {task.task_id} from Google Tasks'
+                    )
+                    result = delete_task_google(user, creds, task)
+                    if isinstance(result, dict) and \
+                            'authorization_url' in result:
+                        return result
+                    if result:
+                        stats['deleted'] += 1
+                        stats['pushed'] += 1
+                        task.needs_push = False
+                        task.last_synced_at = timezone.now()
+                        task.save(update_fields=[
+                            'needs_push', 'last_synced_at'
+                        ])
+                    else:
+                        stats['errors'] += 1
+                    continue
+
+                # Handle field changes for existing tasks
+                if not task.task_list or not task.task_list.list_id:
+                    logger.warning(
+                        f'Task {task.task_id} has no valid task list, '
+                        f'skipping'
+                    )
+                    continue
+
+                task_body = {
+                    'id': task.task_id,
+                    'title': task.title,
+                    'status': task.status
+                }
+                if task.notes:
+                    task_body['notes'] = task.notes
+                if task.due_date:
+                    task_body['due'] = task.due_date.isoformat()
+
+                logger.info(
+                    f'Pushing local changes for task {task.task_id} '
+                    f'to Google Tasks'
+                )
+
+                try:
+                    service.tasks().patch(
+                        tasklist=task.task_list.list_id,
+                        task=task.task_id,
+                        body=task_body
+                    ).execute()
+
+                    if task.status == 'completed':
+                        stats['completed'] += 1
+                    else:
+                        stats['uncompleted'] += 1
+
+                    stats['pushed'] += 1
+                    task.needs_push = False
+                    task.last_synced_at = timezone.now()
+                    task.save(update_fields=[
+                        'needs_push', 'last_synced_at'
+                    ])
+
+                    logger.info(
+                        f'Successfully pushed changes for task '
+                        f'{task.task_id}'
+                    )
+
+                except HttpError as e:
+                    if e.resp.status == 404:
+                        # Task missing remotely (e.g. was deleted on
+                        # Google while locally restored). App is the
+                        # source of truth, so recreate it.
+                        logger.warning(
+                            f'Task {task.task_id} not found in Google '
+                            f'Tasks. Recreating via insert.'
+                        )
+                        insert_body = {
+                            k: v for k, v in task_body.items()
+                            if k != 'id'
+                        }
+                        new_task = service.tasks().insert(
+                            tasklist=task.task_list.list_id,
+                            body=insert_body
+                        ).execute()
+                        task.task_id = new_task['id']
+                        task.updated = parse_datetime(
+                            new_task.get('updated')
+                        )
+                        task.needs_push = False
+                        task.last_synced_at = timezone.now()
+                        task.save(update_fields=[
+                            'task_id', 'updated', 'needs_push',
+                            'last_synced_at'
+                        ])
+                        stats['recreated'] += 1
+                        stats['pushed'] += 1
+                    else:
+                        raise
+
+            except Exception as e:
+                logger.error(
+                    f'Error pushing task {task.task_id}: '
+                    f'{type(e).__name__}: {str(e)}'
+                )
+                stats['errors'] += 1
+                continue
+
+        logger.info(
+            f'Push complete: {stats["pushed"]} pushed, '
+            f'{stats["deleted"]} deleted, {stats["completed"]} completed, '
+            f'{stats["uncompleted"]} uncompleted, '
+            f'{stats["recreated"]} recreated, '
+            f'{stats["errors"]} errors'
+        )
+        return stats
+
+    except socket.timeout:
+        logger.error(
+            f'Timeout pushing local changes for user {user.username}'
+        )
+        return {'error': 'timeout'}
+    except HttpError as error:
+        logger.error(
+            f'HttpError pushing local changes: '
+            f'Status={error.resp.status}, Content={error.content}'
+        )
+        return {'error': 'http_error'}
+    except Exception as e:
+        logger.error(
+            f'Unexpected error pushing local changes: '
+            f'{type(e).__name__}: {str(e)}',
+            exc_info=True
+        )
+        return {'error': 'unexpected'}
+
+
 def sync_tasks(user, creds, task_list_id=None):
     """
-    Sync tasks from Google Tasks API.
-    If task_list_id is provided, sync only that list.
-    Otherwise, sync all lists for the user.
-    Returns True on success, or auth dict if reauth needed.
+    Bidirectional sync between local DB and Google Tasks API.
+
+    Process:
+    1. Push local changes to Google (field changes, deletions)
+    2. Pull updates from Google Tasks API
+
+    Sync tracking:
+    - needs_push: Local changes pending push to Google
+    - last_synced_at: When we last synced with Google
+
+    Args:
+        user: User object
+        creds: Google credentials
+        task_list_id: Optional - sync only this list, else sync all
+
+    Returns: True on success, or auth dict if reauth needed
     """
     try:
+        # First, push any local changes to Google
+        logger.info('Step 1: Pushing local changes to Google Tasks')
+        push_result = push_local_changes(user, creds)
+
+        if isinstance(push_result, dict) and 'authorization_url' in \
+                push_result:
+            return push_result
+
+        # Now pull updates from Google
+        logger.info('Step 2: Pulling updates from Google Tasks')
         service = get_tasks_service(creds)
 
         if isinstance(service, dict) and 'authorization_url' in service:
@@ -186,6 +392,7 @@ def sync_tasks(user, creds, task_list_id=None):
                 list_task_count += len(tasks)
 
                 for task_data in tasks:
+                    sync_time = timezone.now()
                     defaults = {
                         'task_list': task_list,
                         'title': task_data.get('title', 'Untitled'),
@@ -202,6 +409,7 @@ def sync_tasks(user, creds, task_list_id=None):
                         'updated': parse_datetime(
                             task_data.get('updated')
                         ),
+                        'last_synced_at': sync_time,
                     }
 
                     task, created = GoogleTask.objects.update_or_create(
@@ -405,9 +613,17 @@ def complete_task(user, creds, task_id):
         ).execute()
         logger.info(f'Google API response: {response}')
 
+        # Update local DB and mark as synced since we just pushed to
+        # Google. needs_push is left untouched: if other local field
+        # changes were pending, they still need to be pushed.
+        sync_time = timezone.now()
         task.status = 'completed'
-        task.completed = timezone.now()
-        task.save()
+        task.completed = sync_time
+        task.updated = parse_datetime(response.get('updated'))
+        task.last_synced_at = sync_time
+        task.save(update_fields=[
+            'status', 'completed', 'updated', 'last_synced_at'
+        ])
 
         logger.info(
             f'Successfully completed task {task_id} '
@@ -489,9 +705,17 @@ def uncomplete_task(user, creds, task_id):
         ).execute()
         logger.info(f'Google API response: {response}')
 
+        # Update local DB and mark as synced since we just pushed to
+        # Google. needs_push is left untouched: if other local field
+        # changes were pending, they still need to be pushed.
+        sync_time = timezone.now()
         task.status = 'needsAction'
         task.completed = None
-        task.save()
+        task.updated = parse_datetime(response.get('updated'))
+        task.last_synced_at = sync_time
+        task.save(update_fields=[
+            'status', 'completed', 'updated', 'last_synced_at'
+        ])
 
         logger.info(
             f'Successfully uncompleted task {task_id} '
@@ -813,11 +1037,16 @@ def move_task_to_list(user, creds, task, target_list):
         ).execute()
         logger.info('Successfully deleted task from source list')
 
-        # Update local database
+        # Update local database. needs_push is left untouched: any
+        # pending local field changes still need to be pushed to the
+        # task's new remote ID.
         task.task_id = new_task['id']
         task.task_list = target_list
         task.updated = parse_datetime(new_task.get('updated'))
-        task.save()
+        task.last_synced_at = timezone.now()
+        task.save(update_fields=[
+            'task_id', 'task_list', 'updated', 'last_synced_at'
+        ])
 
         logger.info(
             f'Successfully moved task to {target_list.title}, '

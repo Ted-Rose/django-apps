@@ -62,6 +62,9 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 - `status`: 'needsAction' or 'completed'
 - `completed`: Completion timestamp (optional)
 - `updated`: Last update timestamp
+- `updated_at`: When the row was last modified locally (auto_now)
+- `last_synced_at`: When the task was last synced with Google
+- `needs_push`: Local changes pending push to Google (default: False)
 - `is_starred`: Local-only starred status (default: False)
 - `is_divider`: Local-only divider status (default: False)
 - `task_order`: Custom manual ordering for all tasks (optional)
