@@ -1,0 +1,29 @@
+<div id="save-indicator">
+    <span class="badge bg-success fs-6 px-3 py-2">
+        <i class="bi bi-check-circle"></i> Order saved
+    </span>
+</div>
+
+{% if has_credentials %}
+<button class="floating-add-btn" onclick="showCreateTaskModal()" title="Create new task">
+    <i class="bi bi-plus"></i>
+</button>
+
+<div class="undo-redo-controls">
+{% else %}
+<div class="undo-redo-controls" style="display: none;">
+{% endif %}
+    <button id="undo-btn" class="btn btn-primary" title="Undo (Ctrl+Z)" disabled>
+        <i class="bi bi-arrow-counterclockwise"></i>
+    </button>
+    <button id="redo-btn" class="btn btn-secondary" title="Redo (Ctrl+Y)" disabled>
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+</div>
+
+<div id="action-toast" class="action-toast">
+    <div class="alert alert-info mb-0">
+        <i class="bi bi-info-circle"></i>
+        <span id="toast-message"></span>
+    </div>
+</div>

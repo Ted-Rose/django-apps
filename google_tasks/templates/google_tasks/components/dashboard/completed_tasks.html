@@ -1,0 +1,45 @@
+{% if completed_tasks %}
+<div class="mt-2">
+    <button class="btn btn-link text-muted text-decoration-none ps-0"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#completedTasksCollapse"
+            aria-expanded="false">
+        <i class="bi bi-chevron-right" id="completedChevron"></i>
+        Completed tasks ({{ completed_tasks.count }})
+    </button>
+    <div class="collapse" id="completedTasksCollapse">
+        <div class="mt-2">
+            {% for task in completed_tasks %}
+            <div class="card task-card mb-1 border-0 bg-light" data-task-id="{{ task.task_id }}">
+                <div class="card-body py-1">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="flex-grow-1">
+                            <a href="{% url 'google_tasks:task_detail' task.task_id %}" class="task-title-link text-decoration-line-through text-muted">
+                                {{ task.title }}
+                            </a>
+                            {% for label in task.labels.all %}
+                            <span class="badge ms-1" style="background-color: {{ label.color }}">{{ label.name }}</span>
+                            {% endfor %}
+                            {% if task.completed %}
+                            <small class="text-muted ms-2">
+                                {{ task.completed|date:"M d" }}
+                            </small>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="star-btn {% if task.is_starred %}starred{% endif %}" onclick="toggleStar('{{ task.task_id }}'); event.stopPropagation();" title="{% if task.is_starred %}Unstar{% else %}Star{% endif %}">
+                                <i class="bi {% if task.is_starred %}bi-star-fill{% else %}bi-star{% endif %}"></i>
+                            </span>
+                            <span class="uncomplete-btn" onclick="showUncompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}'); event.stopPropagation();" title="Mark as not completed">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,25 @@
+<div class="card task-card divider-card mb-2" data-task-id="{{ task.task_id }}">
+    <div class="card-body divider-body">
+        <div class="d-flex align-items-center">
+            <span class="divider-drag-handle" title="Drag to reorder">
+                <i class="bi bi-grip-vertical text-muted"></i>
+            </span>
+            <hr class="flex-grow-1 my-0 me-2">
+            <input type="text" 
+                   class="divider-text" 
+                   value="{{ task.title }}"
+                   placeholder="Click to label..."
+                   data-task-id="{{ task.task_id }}"
+                   onblur="updateDividerText(this)"
+                   onkeypress="if(event.key==='Enter') this.blur()"
+                   onclick="event.stopPropagation()">
+            <hr class="flex-grow-1 my-0 ms-2">
+            <button class="btn btn-sm btn-link text-danger delete-divider-btn"
+                    data-task-id="{{ task.task_id }}"
+                    onclick="deleteDivider('{{ task.task_id }}'); event.stopPropagation();"
+                    title="Delete divider">
+                <i class="bi bi-x-circle"></i>
+            </button>
+        </div>
+    </div>
+</div>

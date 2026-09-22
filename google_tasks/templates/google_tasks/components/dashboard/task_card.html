@@ -1,0 +1,72 @@
+<div class="task-container d-flex mb-2" data-task-id="{{ task.task_id }}">
+    <div class="card task-card flex-grow-1 task-content">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <h5 class="card-title">
+                        <span class="complete-btn me-1" onclick="showCompleteModal('{{ task.task_id }}', '{{ task.title|escapejs }}'); event.stopPropagation();">
+                            <i class="bi bi-check-circle"></i>
+                        </span>
+                        <span class="star-btn me-1 {% if task.is_starred %}starred{% endif %}" onclick="toggleStar('{{ task.task_id }}'); event.stopPropagation();" title="{% if task.is_starred %}Unstar{% else %}Star{% endif %}">
+                            <i class="bi {% if task.is_starred %}bi-star-fill{% else %}bi-star{% endif %}"></i>
+                        </span>
+                        <a href="{% url 'google_tasks:task_detail' task.task_id %}" class="task-title-link">
+                            {{ task.title }}
+                        </a>
+                    </h5>
+                {% if task.labels.all %}
+                <div class="mb-2">
+                    {% for label in task.labels.all %}
+                    <span class="badge me-1" style="background-color: {{ label.color }}">{{ label.name }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if task.notes %}
+                <p class="card-text text-muted">{{ task.notes|truncatewords:20 }}</p>
+                {% endif %}
+                {% if task.due_date %}
+                <small class="text-muted">
+                    <i class="bi bi-calendar"></i> Due: {{ task.due_date|date:"M d, Y" }}
+                </small>
+                {% endif %}
+                </div>
+                <div class="dropdown ms-2">
+                    <button class="btn btn-sm btn-link text-muted" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" href="#" onclick="archiveTask('{{ task.task_id }}'); return false;">
+                                <i class="bi bi-archive"></i> Archive
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item text-danger" href="#" onclick="deleteTask('{{ task.task_id }}'); return false;">
+                                <i class="bi bi-trash"></i> Delete
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="task-order-badge ms-2">
+        <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary order-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Change order">
+                {% if is_starred_view %}
+                    {{ task.starred_order|default:"—" }}
+                {% else %}
+                    {{ task.task_order|default:"—" }}
+                {% endif %}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 1); event.stopPropagation(); return false;">1</a></li>
+                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 5); event.stopPropagation(); return false;">5</a></li>
+                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 10); event.stopPropagation(); return false;">10</a></li>
+                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 15); event.stopPropagation(); return false;">15</a></li>
+                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 20); event.stopPropagation(); return false;">20</a></li>
+                <li><a class="dropdown-item" href="#" onclick="setTaskOrder('{{ task.task_id }}', 50); event.stopPropagation(); return false;">50</a></li>
+            </ul>
+        </div>
+    </div>
+</div>

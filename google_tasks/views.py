@@ -1,6 +1,7 @@
 import json
 import uuid
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.db.models import F
 from django.http import JsonResponse
@@ -38,6 +39,37 @@ def get_creds_dict(user):
             'scopes': list(creds.scopes or []),
         }
     return None
+
+
+def get_dashboard_js_config(context):
+    """
+    Build a JSON-serializable config consumed by the dashboard's static
+    JS files via {{ dashboard_js_config|json_script:"dashboard-config" }}.
+    """
+    is_starred_view = bool(context.get('is_starred_view'))
+    task_lists = context.get('task_lists')
+    first_list = task_lists[0] if task_lists else None
+    return {
+        'urls': {
+            'reorder': reverse(
+                'google_tasks:reorder_starred' if is_starred_view
+                else 'google_tasks:reorder_tasks'
+            ),
+            'createDivider': reverse('google_tasks:create_divider'),
+            'sync': reverse('google_tasks:sync'),
+            'processLabels': reverse('google_tasks:process_labels'),
+            'dashboard': reverse('google_tasks:dashboard'),
+        },
+        'flags': {
+            'is_starred_view': is_starred_view,
+            'is_overdue_view': bool(context.get('is_overdue_view')),
+            'is_archived_view': bool(context.get('is_archived_view')),
+            'is_trash_view': bool(context.get('is_trash_view')),
+            'has_credentials': bool(context.get('has_credentials')),
+        },
+        'order_by': context.get('order_by'),
+        'first_list_id': first_list.list_id if first_list else None,
+    }
 
 
 @login_required
@@ -214,6 +246,7 @@ def dashboard(request):
         'order_by': order_by,
         'burger_menu_items': burger_menu_items,
     }
+    context['dashboard_js_config'] = get_dashboard_js_config(context)
 
     return render(request, 'google_tasks/dashboard.html', context)
 
@@ -372,6 +405,7 @@ def starred_tasks(request):
         'order_by': order_by,
         'burger_menu_items': burger_menu_items,
     }
+    context['dashboard_js_config'] = get_dashboard_js_config(context)
 
     return render(request, 'google_tasks/dashboard.html', context)
 
@@ -533,6 +567,7 @@ def overdue_tasks(request):
         'order_by': order_by,
         'burger_menu_items': burger_menu_items,
     }
+    context['dashboard_js_config'] = get_dashboard_js_config(context)
 
     return render(request, 'google_tasks/dashboard.html', context)
 
