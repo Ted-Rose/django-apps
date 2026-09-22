@@ -1,8 +1,10 @@
 import json
+import math
 import uuid
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
+from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -21,6 +23,15 @@ from google_tasks.services import (
     get_tasks_service
 )
 from google_api.utils import get_user_credentials
+
+# Maximum number of position updates accepted by a single reorder
+# request (task lists exceed bible's 100-note scale).
+REORDER_CAP = 500
+
+ORDER_CONSTRAINT_NAMES = (
+    'unique_task_order_per_user',
+    'unique_starred_order_per_user',
+)
 
 
 def get_creds_dict(user):
@@ -572,97 +583,122 @@ def overdue_tasks(request):
     return render(request, 'google_tasks/dashboard.html', context)
 
 
-@login_required
-@require_POST
-def reorder_starred(request):
-    """Save local ordering of starred tasks."""
+def _apply_reorder(request, order_field, list_id=None):
+    """Validate a positional reorder payload and apply it with a
+    two-phase bulk update.
+
+    Payload: {"updates": [{"task_id": ..., "position": ...}, ...],
+              "task_list_id": optional validation scope}
+
+    Phase 1 assigns temporary negative positions so two rows swapping
+    positions cannot trip the per-user unique constraint mid-flight;
+    phase 2 writes the final positions.
+    """
     try:
         data = json.loads(request.body)
-        ordered_ids = data.get('order', [])
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse(
             {'success': False, 'error': 'Invalid JSON'}, status=400
         )
 
-    # Update order based on position in the list
-    for position, task_id in enumerate(ordered_ids):
-        GoogleTask.objects.filter(
-            task_id=task_id, user=request.user
-        ).update(starred_order=position)
+    updates = data.get('updates')
+    task_list_id = list_id or data.get('task_list_id')
+
+    if not isinstance(updates, list) or not updates:
+        return JsonResponse({
+            'success': False,
+            'error': 'updates must be a non-empty list'
+        }, status=400)
+
+    if len(updates) > REORDER_CAP:
+        return JsonResponse({
+            'success': False,
+            'error': f'Too many updates (max {REORDER_CAP})'
+        }, status=400)
+
+    position_map = {}
+    positions = set()
+    for item in updates:
+        if not isinstance(item, dict):
+            return JsonResponse({
+                'success': False,
+                'error': 'Each update must be an object'
+            }, status=400)
+        task_id = item.get('task_id')
+        position = item.get('position')
+        if (not isinstance(task_id, str) or not task_id or
+                isinstance(position, bool) or
+                not isinstance(position, (int, float)) or
+                not math.isfinite(position)):
+            return JsonResponse({
+                'success': False,
+                'error': 'Each update requires a task_id and a '
+                         'numeric position'
+            }, status=400)
+        if task_id in position_map:
+            return JsonResponse({
+                'success': False,
+                'error': 'Duplicate task IDs'
+            }, status=400)
+        if position in positions:
+            return JsonResponse({
+                'success': False,
+                'error': 'Duplicate positions'
+            }, status=400)
+        position_map[task_id] = float(position)
+        positions.add(position)
+
+    tasks_qs = GoogleTask.objects.filter(
+        user=request.user,
+        task_id__in=position_map.keys()
+    )
+    if order_field == 'starred_order':
+        tasks_qs = tasks_qs.filter(is_starred=True)
+    if task_list_id:
+        tasks_qs = tasks_qs.filter(task_list__list_id=task_list_id)
+
+    try:
+        with transaction.atomic():
+            tasks = list(tasks_qs.select_for_update())
+            if len(tasks) != len(position_map):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Invalid task IDs'
+                }, status=400)
+
+            # Phase 1: temporary negative positions avoid transient
+            # unique-constraint violations when rows swap positions.
+            for idx, task in enumerate(tasks):
+                setattr(task, order_field, -(idx + 1))
+            GoogleTask.objects.bulk_update(tasks, [order_field])
+
+            # Phase 2: final positions.
+            for task in tasks:
+                setattr(task, order_field, position_map[task.task_id])
+            GoogleTask.objects.bulk_update(tasks, [order_field])
+    except IntegrityError as e:
+        if any(name in str(e) for name in ORDER_CONSTRAINT_NAMES):
+            return JsonResponse({
+                'success': False,
+                'error': 'position_conflict'
+            }, status=409)
+        raise
 
     return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def reorder_starred(request):
+    """Save local ordering of starred tasks."""
+    return _apply_reorder(request, 'starred_order')
 
 
 @login_required
 @require_POST
 def reorder_tasks(request):
     """Save manual ordering of tasks."""
-    try:
-        data = json.loads(request.body)
-        ordered_ids = data.get('order', [])
-        task_list_id = data.get('task_list_id')
-    except (json.JSONDecodeError, AttributeError):
-        return JsonResponse(
-            {'success': False, 'error': 'Invalid JSON'}, status=400
-        )
-
-    # Validate all tasks belong to user
-    tasks = GoogleTask.objects.filter(
-        task_id__in=ordered_ids,
-        user=request.user
-    )
-
-    if task_list_id:
-        tasks = tasks.filter(task_list__list_id=task_list_id)
-
-    if tasks.count() != len(ordered_ids):
-        return JsonResponse({
-            'success': False,
-            'error': 'Invalid task IDs'
-        }, status=400)
-
-    # Update order
-    for position, task_id in enumerate(ordered_ids):
-        GoogleTask.objects.filter(
-            task_id=task_id,
-            user=request.user
-        ).update(task_order=position)
-
-    return JsonResponse({'success': True})
-
-
-@login_required
-@require_POST
-def set_task_order(request, task_id):
-    """Set the order of a specific task."""
-    try:
-        data = json.loads(request.body)
-        order = data.get('order')
-        is_starred_view = data.get('is_starred_view', False)
-    except (json.JSONDecodeError, AttributeError):
-        return JsonResponse(
-            {'success': False, 'error': 'Invalid JSON'}, status=400
-        )
-
-    if order is None:
-        return JsonResponse(
-            {'success': False, 'error': 'Order is required'}, status=400
-        )
-
-    task = get_object_or_404(GoogleTask, task_id=task_id, user=request.user)
-
-    if is_starred_view:
-        task.starred_order = order
-    else:
-        task.task_order = order
-
-    task.save()
-
-    return JsonResponse({
-        'success': True,
-        'task_id': task_id,
-        'order': order
-    })
+    return _apply_reorder(request, 'task_order')
 
 
 @login_required
@@ -683,7 +719,10 @@ def toggle_star(request, task_id):
         ).aggregate(Max('starred_order'))['starred_order__max']
         task.starred_order = (max_order or 0) + 1
     else:
-        # Unstarring: remove hashtags with words starting with 'sta'
+        # Unstarring: leave the starred ordering scope so the
+        # conditional unique constraint stays clean.
+        task.starred_order = None
+        # Remove hashtags with words starting with 'sta'
         if task.notes:
             cleaned_notes = remove_starred_hashtags(task.notes)
             if cleaned_notes != task.notes:
@@ -1010,13 +1049,11 @@ def create_divider(request):
     try:
         data = json.loads(request.body)
         task_list_id = data.get('task_list_id')
-        position = data.get('position', 0)
         is_starred = data.get('is_starred', False)
 
         logger.info(
             f'Creating divider for user {request.user.username} '
-            f'in list {task_list_id} at position {position}, '
-            f'starred={is_starred}'
+            f'in list {task_list_id}, starred={is_starred}'
         )
 
         task_list = None
@@ -1027,18 +1064,15 @@ def create_divider(request):
                 user=request.user
             )
 
-        # Calculate appropriate order based on view
-        task_order = None
+        # task_order uses the timestamp default (lands at the
+        # bottom); starred dividers get max+1 for the starred view.
         starred_order = None
         if is_starred:
-            # Get max starred_order and add 1
             from django.db.models import Max
             max_order = GoogleTask.objects.filter(
                 user=request.user, is_starred=True
             ).aggregate(Max('starred_order'))['starred_order__max']
             starred_order = (max_order or 0) + 1
-        else:
-            task_order = position
 
         divider = GoogleTask.objects.create(
             user=request.user,
@@ -1048,7 +1082,6 @@ def create_divider(request):
             status='needsAction',
             is_divider=True,
             is_starred=is_starred,
-            task_order=task_order,
             starred_order=starred_order,
             created=timezone.now()
         )
@@ -1539,16 +1572,15 @@ def create_task_view(request):
                 user=request.user
             ).first()
 
-        # Calculate starred_order if task is starred
+        # Calculate starred_order if task is starred; non-starred
+        # tasks stay NULL (outside the conditional constraint).
+        starred_order = None
         if is_starred:
             from django.db.models import Max
             max_order = GoogleTask.objects.filter(
                 user=request.user, is_starred=True
             ).aggregate(Max('starred_order'))['starred_order__max']
             starred_order = (max_order or 0) + 1
-        else:
-            # For non-starred tasks, use default value of 1
-            starred_order = 1
 
         task = GoogleTask.objects.create(
             user=request.user,

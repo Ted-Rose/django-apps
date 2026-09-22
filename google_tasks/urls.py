@@ -12,11 +12,6 @@ urlpatterns = [
     path('tasks/reorder/', views.reorder_tasks, name='reorder_tasks'),
     path('sync/', views.sync_view, name='sync'),
     path(
-        'task/<str:task_id>/set-order/',
-        views.set_task_order,
-        name='set_task_order'
-    ),
-    path(
         'task/<str:task_id>/toggle-star/',
         views.toggle_star,
         name='toggle_star'

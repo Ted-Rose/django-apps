@@ -1,4 +1,4 @@
-<div class="card task-card divider-card mb-2" data-task-id="{{ task.task_id }}">
+<div class="card task-card divider-card mb-2" data-task-id="{{ task.task_id }}" data-position="{% if is_starred_view %}{{ task.starred_order|default_if_none:'' }}{% else %}{{ task.task_order|default_if_none:'' }}{% endif %}">
     <div class="card-body divider-body">
         <div class="d-flex align-items-center">
             <span class="divider-drag-handle" title="Drag to reorder">

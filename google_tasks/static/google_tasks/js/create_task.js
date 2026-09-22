@@ -147,16 +147,17 @@ function addTaskToDOM(task) {
         </small>`;
     }
     
-    // Determine order value to display
-    const isStarredView = typeof IS_STARRED_VIEW !== 'undefined' && 
+    // Determine position value for data-position (used by reorder
+    // midpoint math); the badge itself shows the rank in the list.
+    const isStarredView = typeof IS_STARRED_VIEW !== 'undefined' &&
         IS_STARRED_VIEW;
-    const orderValue = isStarredView ? 
-        (task.starred_order || '—') : 
-        (task.task_order || '—');
-    
+    const positionValue = isStarredView ?
+        (task.starred_order ?? '') :
+        (task.task_order ?? '');
+
     // Build task HTML
     const taskHTML = `
-    <div class="task-container d-flex mb-2" data-task-id="${task.task_id}">
+    <div class="task-container d-flex mb-2" data-task-id="${task.task_id}" data-position="${positionValue}">
         <div class="card task-card flex-grow-1 task-content">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
@@ -212,10 +213,10 @@ function addTaskToDOM(task) {
         </div>
         <div class="task-order-badge ms-2">
             <div class="dropdown">
-                <button class="btn btn-sm btn-outline-secondary order-btn" 
-                    type="button" data-bs-toggle="dropdown" 
+                <button class="btn btn-sm btn-outline-secondary order-btn"
+                    type="button" data-bs-toggle="dropdown"
                     title="Change order">
-                    ${orderValue}
+                    1
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
                     <li><a class="dropdown-item" href="#" 
@@ -243,7 +244,12 @@ function addTaskToDOM(task) {
     
     // Insert at the beginning of the task list
     taskList.insertAdjacentHTML('afterbegin', taskHTML);
-    
+
+    // Rank badges mirror DOM order
+    if (typeof renumberOrderBadges === 'function') {
+        renumberOrderBadges();
+    }
+
     // Apply secondary label filter if active
     if (secondaryLabelFilter) {
         const newTaskElement = taskList.querySelector(

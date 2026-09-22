@@ -178,134 +178,41 @@ function uncompleteTask(skipHistory = false) {
     });
 }
 
-function setTaskOrder(taskId, order) {
-    const csrftoken = getCookie('csrftoken');
-    const isStarredView = !!(
-        DASHBOARD_CONFIG.flags && DASHBOARD_CONFIG.flags.is_starred_view
-    );
-
-    // Optimistic update: Update UI immediately
+function setTaskOrder(taskId, rank) {
     const taskCard = document.querySelector(
         `[data-task-id="${taskId}"]`
     );
-    const orderBtn = taskCard?.querySelector(
-        '.btn-outline-secondary'
-    );
-    const oldOrder = orderBtn?.textContent;
-
-    // Move task to correct position BEFORE updating the button
     const taskList = document.getElementById('task-list');
-    if (taskList && taskCard) {
-        const allTasks = Array.from(
-            taskList.querySelectorAll('[data-task-id]')
-        );
+    if (!taskCard || !taskList) return;
 
-        // Remove current task from array for comparison
-        const otherTasks = allTasks.filter(t => t !== taskCard);
+    // `rank` is the 1-based target position in the rendered list,
+    // clamped to the list length.
+    const others = Array.from(
+        taskList.querySelectorAll('[data-task-id]')
+    ).filter(el => el !== taskCard);
+    const clamped = Math.max(1, Math.min(rank, others.length + 1));
+    const prevEl = others[clamped - 2] || null;
+    const nextEl = others[clamped - 1] || null;
 
-        // Find the correct position for this task
-        let insertBefore = null;
-
-        if (DASHBOARD_CONFIG.order_by === 'order_asc') {
-            // For ascending order: 1, 2, 3... (lower first)
-            for (let i = 0; i < otherTasks.length; i++) {
-                // Skip dividers - they don't participate in ordering
-                if (otherTasks[i].classList.contains('divider-card')) {
-                    continue;
-                }
-
-                const otherOrderBtn = otherTasks[i].querySelector(
-                    '.btn-outline-secondary'
-                );
-                const otherOrderText = otherOrderBtn?.textContent.trim();
-
-                // Tasks with no order (—) or no button go to end
-                if (!otherOrderBtn || !otherOrderText ||
-                    otherOrderText === '—') {
-                    insertBefore = otherTasks[i];
-                    break;
-                }
-
-                const otherOrder = parseInt(otherOrderText);
-                // Insert before first task with HIGHER order
-                if (!isNaN(otherOrder) && order < otherOrder) {
-                    insertBefore = otherTasks[i];
-                    break;
-                }
-            }
-        } else {
-            // For descending order: 50, 20, 15... (higher first)
-            for (let i = 0; i < otherTasks.length; i++) {
-                // Skip dividers - they don't participate in ordering
-                if (otherTasks[i].classList.contains('divider-card')) {
-                    continue;
-                }
-
-                const otherOrderBtn = otherTasks[i].querySelector(
-                    '.btn-outline-secondary'
-                );
-                const otherOrderText = otherOrderBtn?.textContent.trim();
-
-                // Tasks with no order (—) or no button go to end
-                if (!otherOrderBtn || !otherOrderText ||
-                    otherOrderText === '—') {
-                    insertBefore = otherTasks[i];
-                    break;
-                }
-
-                const otherOrder = parseInt(otherOrderText);
-                // Insert before first task with LOWER order
-                if (!isNaN(otherOrder) && otherOrder < order) {
-                    insertBefore = otherTasks[i];
-                    break;
-                }
-            }
-        }
-
-        if (insertBefore) {
-            taskList.insertBefore(taskCard, insertBefore);
-        } else {
-            taskList.appendChild(taskCard);
-        }
+    // Optimistic DOM move to index rank-1
+    if (nextEl) {
+        taskList.insertBefore(taskCard, nextEl);
+    } else {
+        taskList.appendChild(taskCard);
     }
 
-    // Update the button text AFTER repositioning
-    if (orderBtn) {
-        orderBtn.textContent = order;
-    }
+    const position = midpointPosition(prevEl, nextEl);
+    taskCard.dataset.position = position;
+    renumberOrderBadges();
 
-    // Perform API call in background
-    fetch(`/tasks/task/${taskId}/set-order/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': csrftoken,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            order: order,
-            is_starred_view: isStarredView
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (!data.success) {
-            // Revert on error
-            if (orderBtn && oldOrder) {
-                orderBtn.textContent = oldOrder;
-            }
-            alert('Failed to update task order: ' +
-                (data.error || 'Unknown error'));
+    postReorderUpdates([{
+        task_id: taskId,
+        position: position
+    }]).then(data => {
+        if (data && !data.success &&
+                data.error !== 'position_conflict') {
             location.reload();
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        // Revert on error
-        if (orderBtn && oldOrder) {
-            orderBtn.textContent = oldOrder;
-        }
-        alert('An error occurred while updating task order');
-        location.reload();
     });
 }
 

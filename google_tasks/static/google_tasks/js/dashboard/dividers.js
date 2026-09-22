@@ -18,29 +18,9 @@ function getCurrentTaskListId() {
     return null;
 }
 
-function getNextPosition() {
-    const taskContainers = document.querySelectorAll(
-        '[data-task-id]'
-    );
-    let maxOrder = 0;
-    taskContainers.forEach(container => {
-        const taskId = container.getAttribute('data-task-id');
-        const orderAttr = container.getAttribute('data-order');
-        if (orderAttr) {
-            maxOrder = Math.max(maxOrder, parseInt(orderAttr));
-        }
-    });
-    return maxOrder + 1;
-}
-
 function createDivider() {
     if (DASHBOARD_CONFIG.flags && DASHBOARD_CONFIG.flags.is_starred_view) {
-        const position = getNextPosition();
-
-        console.log('Creating starred divider:', {
-            position: position,
-            is_starred: true
-        });
+        console.log('Creating starred divider');
 
         fetch(DASHBOARD_CONFIG.urls.createDivider, {
             method: 'POST',
@@ -49,7 +29,6 @@ function createDivider() {
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: JSON.stringify({
-                position: position,
                 is_starred: true
             })
         })
@@ -80,11 +59,8 @@ function createDivider() {
             return false;
         }
 
-        const position = getNextPosition();
-
         console.log('Creating divider:', {
-            taskListId: taskListId,
-            position: position
+            taskListId: taskListId
         });
 
         fetch(DASHBOARD_CONFIG.urls.createDivider, {
@@ -94,8 +70,7 @@ function createDivider() {
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: JSON.stringify({
-                task_list_id: taskListId,
-                position: position
+                task_list_id: taskListId
             })
         })
         .then(response => {

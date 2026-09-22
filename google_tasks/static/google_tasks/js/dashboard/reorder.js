@@ -44,33 +44,22 @@ function reorderTasksToOrder(order) {
         taskCards[card.dataset.taskId] = card;
     });
 
+    // Full-order submission (undo/redo): assign sequential positions
+    // 1.0 ... n.0 — the two-phase swap on the server keeps this safe
+    // under the per-user unique constraint.
+    const updates = [];
     order.forEach(taskId => {
-        if (taskCards[taskId]) {
-            taskList.appendChild(taskCards[taskId]);
+        const card = taskCards[taskId];
+        if (card) {
+            taskList.appendChild(card);
+            const position = updates.length + 1;
+            card.dataset.position = position;
+            updates.push({ task_id: taskId, position: position });
         }
     });
 
-    const url = DASHBOARD_CONFIG.urls.reorder;
-    let body;
-    if (DASHBOARD_CONFIG.flags && DASHBOARD_CONFIG.flags.is_starred_view) {
-        body = JSON.stringify({ order: order });
-    } else {
-        const params = new URLSearchParams(window.location.search);
-        const taskListId = params.get('list');
-        body = JSON.stringify({
-            order: order,
-            task_list_id: taskListId
-        });
-    }
-
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/json'
-        },
-        body: body
-    });
+    renumberOrderBadges();
+    postReorderUpdates(updates);
 }
 
 // Initialize SortableJS for drag-to-reorder tasks
@@ -96,7 +85,7 @@ if (taskList) {
                 taskList.querySelectorAll('[data-task-id]')
             ).map(el => el.dataset.taskId);
         },
-        onEnd: function () {
+        onEnd: function (evt) {
             const order = Array.from(
                 taskList.querySelectorAll('[data-task-id]')
             ).map(el => el.dataset.taskId);
@@ -107,33 +96,24 @@ if (taskList) {
                 newOrder: order
             });
 
-            let body;
-            if (DASHBOARD_CONFIG.flags &&
-                    DASHBOARD_CONFIG.flags.is_starred_view) {
-                // Use starred reorder endpoint
-                body = JSON.stringify({ order: order });
-            } else {
-                // Use regular task reorder endpoint
-                const params = new URLSearchParams(window.location.search);
-                const taskListId = params.get('list');
-                body = JSON.stringify({
-                    order: order,
-                    task_list_id: taskListId
-                });
-            }
-            const url = DASHBOARD_CONFIG.urls.reorder;
+            // Send only what moved: compute a midpoint position from
+            // the dropped card's new neighbours.
+            const item = evt.item;
+            const prevEl = siblingWithPosition(
+                item, 'previousElementSibling'
+            );
+            const nextEl = siblingWithPosition(
+                item, 'nextElementSibling'
+            );
+            const position = midpointPosition(prevEl, nextEl);
+            item.dataset.position = position;
+            renumberOrderBadges();
 
-            fetch(url, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                    'Content-Type': 'application/json'
-                },
-                body: body
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
+            postReorderUpdates([{
+                task_id: item.dataset.taskId,
+                position: position
+            }]).then(data => {
+                if (data && data.success) {
                     const indicator =
                         document.getElementById('save-indicator');
                     indicator.style.display = 'block';

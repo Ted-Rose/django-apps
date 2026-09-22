@@ -1,6 +1,12 @@
+import time
+
 from django.conf import settings
 from django.db import models
 from django.db.models import F
+
+
+def get_unix_timestamp():
+    return time.time()
 
 
 class TaskLabel(models.Model):
@@ -97,12 +103,13 @@ class GoogleTask(models.Model):
         default=False,
         help_text='If True, this task acts as a visual divider'
     )
-    task_order = models.PositiveIntegerField(
-        default=1,
+    task_order = models.FloatField(
+        default=get_unix_timestamp,
         help_text='Manual ordering for tasks in task list view'
     )
-    starred_order = models.PositiveIntegerField(
-        default=1,
+    starred_order = models.FloatField(
+        null=True,
+        blank=True,
         help_text='Manual ordering for starred tasks in starred view'
     )
     is_archived = models.BooleanField(
@@ -130,6 +137,22 @@ class GoogleTask(models.Model):
             '-updated'
         ]
         unique_together = ['user', 'task_id']
+        # NOTE: the unique constraints on (user, task_order) and
+        # (user, starred_order WHERE is_starred) are intentionally
+        # deferred to a follow-up migration — deploy the float fields
+        # + dedupe + new reorder code first, then add the constraints
+        # once no old code can write duplicate positions.
+        # constraints = [
+        #     models.UniqueConstraint(
+        #         fields=['user', 'task_order'],
+        #         name='unique_task_order_per_user',
+        #     ),
+        #     models.UniqueConstraint(
+        #         fields=['user', 'starred_order'],
+        #         name='unique_starred_order_per_user',
+        #         condition=Q(is_starred=True),
+        #     ),
+        # ]
 
     def __str__(self):
         return f'{self.title} ({self.user.username})'
