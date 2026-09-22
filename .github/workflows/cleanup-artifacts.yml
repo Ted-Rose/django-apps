@@ -49,44 +49,76 @@ jobs:
         run: |
           set -e  # Exit on any error
           echo "Cleaning up old images from Artifact Registry..."
-          
+
+          # Digests pinned by Cloud Run Jobs must survive cleanup:
+          # jobs resolve the image to a digest at update time, so
+          # deleting that digest breaks the next scheduled execution.
+          PROTECTED_DIGESTS=""
+          for JOB in sync-bank-transactions evaluate-spending-limits; do
+            JOB_IMAGE=$(gcloud run jobs describe "$JOB" \
+              --region=${{ env.GCP_REGION }} \
+              --project=${{ env.GCP_PROJECT_ID }} \
+              --format=yaml 2>/dev/null \
+              | awk '/^[[:space:]]*image: /{print $2; exit}' || true)
+            if [ -n "$JOB_IMAGE" ]; then
+              case "$JOB_IMAGE" in
+                *@*)
+                  DIGEST="${JOB_IMAGE##*@}"
+                  ;;
+                *)
+                  DIGEST=$(gcloud artifacts docker images describe \
+                    "$JOB_IMAGE" \
+                    --project=${{ env.GCP_PROJECT_ID }} \
+                    --format='value(image_summary.digest)' \
+                    2>/dev/null || true)
+                  ;;
+              esac
+              if [ -n "$DIGEST" ]; then
+                PROTECTED_DIGESTS="$PROTECTED_DIGESTS $DIGEST"
+                echo "Protected digest (job $JOB): $DIGEST"
+              fi
+            fi
+          done
+
           # Get all tags sorted by creation time (newest first)
           TAGS=$(gcloud artifacts docker tags list \
             ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
             --format="value(tag,version)" \
             --sort-by=~UPDATE_TIME \
             --project=${{ env.GCP_PROJECT_ID }})
-          
+
           if [ -z "$TAGS" ]; then
             echo "No tagged images found in registry"
             exit 0
           fi
-          
+
           # Count total tags
           TOTAL_COUNT=$(echo "$TAGS" | wc -l | tr -d ' ')
           echo "Found $TOTAL_COUNT tagged image(s) in registry"
-          
-          # Keep only the most recent tag (skip first line)
-          TAGS_TO_DELETE=$(echo "$TAGS" | tail -n +2)
-          
+
+          # Keep the most recent tag and 'latest' (terraform and the
+          # Cloud Run resources resolve through it)
+          TAGS_TO_DELETE=$(echo "$TAGS" | tail -n +2 \
+            | awk -F'\t' '$1 != "latest"')
+
           if [ -z "$TAGS_TO_DELETE" ]; then
-            echo "Only 1 tagged image exists. Nothing to delete."
+            echo "Nothing to delete."
             exit 0
           fi
-          
+
           DELETE_COUNT=$(echo "$TAGS_TO_DELETE" | wc -l | tr -d ' ')
           echo "Deleting $DELETE_COUNT old tagged image(s)..."
-          
+
           # Track failures
           FAILED=0
           DELETED_DIGESTS=()
-          
+
           # First, delete all old tags
           while IFS=$'\t' read -r tag version; do
             if [ -n "$tag" ]; then
               TAG_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${tag}"
               echo "Deleting tag: $TAG_PATH"
-              
+
               if ! gcloud artifacts docker tags delete "$TAG_PATH" \
                 --quiet \
                 --project=${{ env.GCP_PROJECT_ID }} 2>&1; then
@@ -101,23 +133,44 @@ jobs:
               fi
             fi
           done <<< "$TAGS_TO_DELETE"
-          
+
+          # Re-list remaining tag digests: a deleted sha tag can share
+          # its digest with 'latest', and deleting that digest would
+          # wipe the just-deployed image.
+          REMAINING_DIGESTS=$(gcloud artifacts docker tags list \
+            ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
+            --format="value(version)" \
+            --project=${{ env.GCP_PROJECT_ID }} | sort -u)
+
           # Now delete untagged images (those we just untagged)
           echo ""
           echo "Deleting untagged images..."
           for digest in "${DELETED_DIGESTS[@]}"; do
-            if [ -n "$digest" ]; then
-              IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}@${digest}"
-              echo "Deleting untagged image: $IMAGE_PATH"
-              
-              if ! gcloud artifacts docker images delete "$IMAGE_PATH" \
-                --quiet \
-                --project=${{ env.GCP_PROJECT_ID }} 2>&1; then
-                echo "WARNING: Failed to delete untagged image $IMAGE_PATH (may have been auto-cleaned)"
-                # Don't count as failure - GCP may have auto-cleaned it
-              else
-                echo "Successfully deleted untagged image"
-              fi
+            if [ -z "$digest" ]; then
+              continue
+            fi
+
+            if echo "$REMAINING_DIGESTS" | grep -qxF "$digest"; then
+              echo "Skipping $digest (still has tags)"
+              continue
+            fi
+
+            if echo "$PROTECTED_DIGESTS" | tr ' ' '\n' \
+                | grep -qxF "$digest"; then
+              echo "Skipping $digest (in use by a Cloud Run job)"
+              continue
+            fi
+
+            IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}@${digest}"
+            echo "Deleting untagged image: $IMAGE_PATH"
+
+            if ! gcloud artifacts docker images delete "$IMAGE_PATH" \
+              --quiet \
+              --project=${{ env.GCP_PROJECT_ID }} 2>&1; then
+              echo "WARNING: Failed to delete untagged image $IMAGE_PATH (may have been auto-cleaned)"
+              # Don't count as failure - GCP may have auto-cleaned it
+            else
+              echo "Successfully deleted untagged image"
             fi
           done
           
