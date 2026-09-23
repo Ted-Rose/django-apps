@@ -3,6 +3,8 @@ import re
 import socket
 from datetime import datetime
 from difflib import SequenceMatcher
+from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from google_api.utils import google_auth
 from googleapiclient.discovery import build
@@ -1198,6 +1200,21 @@ def delete_task_google(user, creds, task):
         return False
 
 
+def _star_task_at_top(task):
+    """
+    Star a task and place it at the top of the starred view:
+    existing starred tasks shift down one position and the new
+    task takes starred_order 1.
+    """
+    with transaction.atomic():
+        GoogleTask.objects.filter(
+            user=task.user, is_starred=True
+        ).update(starred_order=F('starred_order') + 1)
+        task.is_starred = True
+        task.starred_order = 1
+        task.save()
+
+
 def process_task_labels(user, creds, task_id=None):
     """
     Check if notes contain multiple hashtags - if they do then assign
@@ -1259,12 +1276,6 @@ def process_task_labels(user, creds, task_id=None):
 
     # Get all task lists for matching
     task_lists = GoogleTaskList.objects.filter(user=user)
-
-    # Pre-calculate max starred_order to avoid repeated queries
-    from django.db.models import Max
-    max_starred_order = GoogleTask.objects.filter(
-        user=user, is_starred=True
-    ).aggregate(Max('starred_order'))['starred_order__max'] or 0
 
     # Pre-pass: match all hashtags to existing labels before
     # modifying anything. Collect unmatched hashtags so they can
@@ -1368,10 +1379,7 @@ def process_task_labels(user, creds, task_id=None):
         # If only starred keyword and no other hashtags, just star it
         if should_star and not non_starred_hashtags:
             if not task.is_starred:
-                max_starred_order += 1
-                task.is_starred = True
-                task.starred_order = max_starred_order
-                task.save()
+                _star_task_at_top(task)
                 stats['starred'] += 1
                 detail['action'] = 'starred'
                 detail['message'] = (
@@ -1405,10 +1413,7 @@ def process_task_labels(user, creds, task_id=None):
             )
             # Star it only if should_star flag is set
             if should_star and not task.is_starred:
-                max_starred_order += 1
-                task.is_starred = True
-                task.starred_order = max_starred_order
-                task.save()
+                _star_task_at_top(task)
                 stats['starred'] += 1
                 detail['action'] = 'starred'
                 detail['message'] = (
@@ -1437,10 +1442,7 @@ def process_task_labels(user, creds, task_id=None):
             stats['moved'] += 1
             # Star the task only if should_star flag is set
             if should_star:
-                max_starred_order += 1
-                task.is_starred = True
-                task.starred_order = max_starred_order
-                task.save()
+                _star_task_at_top(task)
                 stats['starred'] += 1
                 detail['action'] = 'moved_and_starred'
                 detail['message'] = (

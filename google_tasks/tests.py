@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from google_tasks.models import GoogleTask, GoogleTaskList
+from google_tasks.services import process_task_labels
 from google_tasks.views import REORDER_CAP
 
 
@@ -294,3 +295,48 @@ class ToggleStarOrderTests(TestCase):
         task.refresh_from_db()
         self.assertTrue(task.is_starred)
         self.assertEqual(task.starred_order, 5.0)
+
+
+class ProcessTaskLabelsStarTests(TestCase):
+    """Starring via hashtags places the task at the top of the
+    starred view (starred_order=1) and shifts existing starred
+    tasks down."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.task_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-1', title='List 1'
+        )
+
+    def make_task(self, task_id, title, starred=False,
+                  starred_order=None):
+        return GoogleTask.objects.create(
+            user=self.user, task_id=task_id, title=title,
+            task_list=self.task_list, is_starred=starred,
+            starred_order=starred_order,
+        )
+
+    def test_starred_hashtag_assigns_order_one(self):
+        task = self.make_task('a', 'call bob #starred')
+        stats = process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertTrue(task.is_starred)
+        self.assertEqual(task.starred_order, 1.0)
+        self.assertEqual(stats['starred'], 1)
+
+    def test_new_star_shifts_existing_positions_down(self):
+        old = self.make_task(
+            'old', 'old', starred=True, starred_order=1.0
+        )
+        mid = self.make_task(
+            'mid', 'mid', starred=True, starred_order=2.0
+        )
+        new = self.make_task('new', 'do it #star')
+        process_task_labels(self.user, creds=None)
+        for task in (old, mid, new):
+            task.refresh_from_db()
+        self.assertEqual(new.starred_order, 1.0)
+        self.assertEqual(old.starred_order, 2.0)
+        self.assertEqual(mid.starred_order, 3.0)
