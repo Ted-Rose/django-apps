@@ -48,6 +48,9 @@ if IS_GCP_ENVIRONMENT:
     db_config['CONN_MAX_AGE'] = 600  # 10 minutes
     DATABASES = {'default': db_config}
 
+    GOCARDLESS_SECRET_ID = get_env_str('GOCARDLESS_SECRET_ID')
+    GOCARDLESS_SECRET_KEY = get_env_str('GOCARDLESS_SECRET_KEY')
+
     GOOGLE_APP_SECRETS_PATH = '/tmp/app_secrets.json'
     if not os.path.exists(GOOGLE_APP_SECRETS_PATH):
         with open(GOOGLE_APP_SECRETS_PATH, 'w') as f:
@@ -61,6 +64,12 @@ elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
         BASE_URL = private_settings.get('BASE_URL')
         DATABASES = private_settings.get('DATABASES')
         ESV_KEY = private_settings.get('ESV_KEY')
+        GOCARDLESS_SECRET_ID = private_settings.get(
+            'GOCARDLESS_SECRET_ID'
+        )
+        GOCARDLESS_SECRET_KEY = private_settings.get(
+            'GOCARDLESS_SECRET_KEY'
+        )
     GOOGLE_APP_SECRETS_PATH = os.path.join(
         BASE_DIR, 'google_api', 'app_secrets.json'
     )
@@ -100,6 +109,7 @@ INSTALLED_APPS = [
     'sslserver',
     'google_api',
     'google_tasks',
+    'finance',
     'single_pages',
     'tv_archive',
     'bible_research',

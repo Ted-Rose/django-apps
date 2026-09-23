@@ -1,0 +1,85 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "pwa/head.html" %}
+    <title>Accounts - Finance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body>
+    {% include "finance/components/nav.html" %}
+
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">Accounts</h1>
+            <a href="{% url 'finance:connect' %}" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> Connect Bank
+            </a>
+        </div>
+
+        {% if accounts %}
+        <div class="list-group">
+            {% for account in accounts %}
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="mb-1">
+                            {{ account.name|default:account.iban|default:account.account_id }}
+                        </h5>
+                        <p class="mb-1 text-muted">
+                            {{ account.iban }} &middot;
+                            {{ account.institution_id }} &middot;
+                            {{ account.currency }}
+                        </p>
+                        {% if account.owner != request.user %}
+                        <span class="badge bg-info text-dark">
+                            Shared by {{ account.owner.username }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="toggle_account"
+                                   value="{{ account.pk }}">
+                            <button type="submit"
+                                    class="btn btn-sm {% if account.pref.included_in_balance_check %}btn-success{% else %}btn-outline-secondary{% endif %}"
+                                    title="Include in balance check">
+                                <i class="bi bi-check-circle"></i>
+                                Balance check
+                            </button>
+                        </form>
+                        {% if account.owner == request.user %}
+                        <form method="post"
+                              action="{% url 'finance:share_account' account.pk %}"
+                              class="d-flex gap-1">
+                            {% csrf_token %}
+                            <input type="text" name="username"
+                                   class="form-control form-control-sm"
+                                   placeholder="Username" required>
+                            <button type="submit"
+                                    class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-share"></i> Share
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            No accounts yet.
+            <a href="{% url 'finance:connect' %}">Connect a bank</a>
+            to get started.
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -32,6 +32,7 @@ locals {
     "logging.googleapis.com",
     "monitoring.googleapis.com",
     "tasks.googleapis.com",
+    "cloudscheduler.googleapis.com",
   ]
 }
 

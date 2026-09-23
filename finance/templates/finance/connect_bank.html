@@ -1,0 +1,60 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "pwa/head.html" %}
+    <title>Connect Bank - Finance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body>
+    {% include "finance/components/nav.html" %}
+
+    <div class="container">
+        <h1 class="mb-4">Connect a Bank</h1>
+
+        <form method="get" class="row g-2 align-items-end mb-4">
+            <div class="col-auto">
+                <label for="id_country" class="form-label">Country</label>
+                <input type="text" name="country" id="id_country"
+                       class="form-control" maxlength="2"
+                       value="{{ form.country.value|default:'lv' }}">
+                <div class="form-text">{{ form.fields.country.help_text }}</div>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> Find Banks
+                </button>
+            </div>
+        </form>
+
+        {% if institutions %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="country"
+                   value="{{ form.country.value }}">
+            <div class="mb-3">
+                <label for="id_institution_id" class="form-label">
+                    Select your bank
+                </label>
+                <select name="institution_id" id="id_institution_id"
+                        class="form-select" required>
+                    {% for institution in institutions %}
+                    <option value="{{ institution.id }}">
+                        {{ institution.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-link-45deg"></i> Connect
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

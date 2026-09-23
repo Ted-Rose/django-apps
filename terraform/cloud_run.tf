@@ -68,6 +68,26 @@ resource "google_cloud_run_v2_service" "django_app" {
       }
 
       env {
+        name = "GOCARDLESS_SECRET_ID"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.app["GOCARDLESS_SECRET_ID"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOCARDLESS_SECRET_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.app["GOCARDLESS_SECRET_KEY"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
         name  = "GCS_AUDIO_BUCKET"
         value = google_storage_bucket.audio_recordings.name
       }

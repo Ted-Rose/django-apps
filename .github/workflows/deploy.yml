@@ -105,6 +105,16 @@ jobs:
             --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},GCS_AUDIO_BUCKET=gmail-vercel-audio-recordings \
             --project=${{ env.GCP_PROJECT_ID }}
 
+      - name: Update Cloud Run Jobs image
+        run: |
+          for JOB in sync-bank-transactions evaluate-spending-limits; do
+            gcloud run jobs update $JOB \
+              --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+              --region=${{ env.GCP_REGION }} \
+              --project=${{ env.GCP_PROJECT_ID }} \
+              || echo "Job $JOB not yet created (terraform pending)"
+          done
+
       - name: Show service URL
         run: |
           gcloud run services describe ${{ env.SERVICE_NAME }} \

@@ -1,0 +1,94 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "pwa/head.html" %}
+    <title>Spending Limits - Finance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body>
+    {% include "finance/components/nav.html" %}
+
+    <div class="container">
+        <h1 class="mb-4">Spending Limits</h1>
+        <p class="text-muted">
+            Outgoing spending limits per account. You are alerted when
+            the total spent within the last 7 or 30 days exceeds the
+            limit.
+        </p>
+
+        <div class="row">
+            <div class="col-md-5">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Set a limit</h5>
+                        <form method="post">
+                            {% csrf_token %}
+                            {% for field in form %}
+                            <div class="mb-3">
+                                <label class="form-label"
+                                       for="{{ field.id_for_label }}">
+                                    {{ field.label }}
+                                </label>
+                                {{ field }}
+                                {% for error in field.errors %}
+                                <div class="text-danger">
+                                    {{ error }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endfor %}
+                            <button type="submit" class="btn btn-primary">
+                                Save
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-7">
+                {% if limits %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Account</th>
+                            <th class="text-end">7-day limit</th>
+                            <th class="text-end">30-day limit</th>
+                            <th>Active</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for limit in limits %}
+                        <tr>
+                            <td>
+                                {{ limit.account.name|default:limit.account.iban }}
+                            </td>
+                            <td class="text-end">
+                                {{ limit.limit_7_days|default:'-' }}
+                            </td>
+                            <td class="text-end">
+                                {{ limit.limit_30_days|default:'-' }}
+                            </td>
+                            <td>
+                                {% if limit.is_active %}
+                                <i class="bi bi-check-circle text-success"></i>
+                                {% else %}
+                                <i class="bi bi-x-circle text-muted"></i>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="alert alert-info">No limits set yet.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

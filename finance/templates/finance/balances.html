@@ -1,0 +1,68 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "pwa/head.html" %}
+    <title>Balances - Finance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body>
+    {% include "finance/components/nav.html" %}
+
+    <div class="container">
+        <h1 class="mb-4">Live Balances</h1>
+
+        {% if rows %}
+        <div class="row row-cols-1 row-cols-md-2 g-3">
+            {% for row in rows %}
+            <div class="col">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            {{ row.account.name|default:row.account.iban|default:row.account.account_id }}
+                        </h5>
+                        <p class="card-text text-muted mb-2">
+                            {{ row.account.iban }}
+                        </p>
+                        {% if row.result.ok %}
+                            {% if row.result.balance %}
+                            <p class="fs-3 mb-0">
+                                {{ row.result.balance.balanceAmount.amount }}
+                                {{ row.result.balance.balanceAmount.currency }}
+                            </p>
+                            <p class="text-muted mb-0">
+                                <small>
+                                    {{ row.result.balance.balanceType }}
+                                </small>
+                            </p>
+                            {% else %}
+                            <p class="text-warning mb-0">
+                                No balance data returned.
+                            </p>
+                            {% endif %}
+                        {% else %}
+                        <p class="text-danger mb-0">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            {{ row.result.error }}
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            No accounts are included in the balance check. Enable them
+            on the
+            <a href="{% url 'finance:accounts' %}">Accounts</a> page.
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
