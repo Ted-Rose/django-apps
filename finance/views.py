@@ -56,11 +56,10 @@ def connect_bank(request):
                 return redirect(data['link'])
     else:
         form = RequisitionForm(request.GET or None)
-        if form.is_valid():
+        country = request.GET.get('country', '').strip()
+        if country:
             try:
-                institutions = client.list_institutions(
-                    form.cleaned_data['country']
-                )
+                institutions = client.list_institutions(country)
             except GoCardlessError as exc:
                 messages.error(
                     request, f'Could not load institutions: {exc}'
