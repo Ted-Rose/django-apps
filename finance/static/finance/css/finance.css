@@ -1,0 +1,17 @@
+.navbar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    z-index: 1030 !important;
+}
+body {
+    padding-top: 60px;
+    padding-bottom: 100px;
+}
+.burger-menu .burger-menu-items {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 0.25rem;
+}

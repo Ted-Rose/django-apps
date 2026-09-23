@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from finance.forms import (
@@ -20,6 +21,28 @@ from finance.models import (
     UserAccountPreference,
 )
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
+
+
+def _burger_menu_items(request):
+    return [
+        {'label': 'Home', 'url': '/', 'icon': 'house',
+         'btn_class': 'btn-light'},
+        {'label': 'Connect Bank', 'url': reverse('finance:connect'),
+         'icon': 'bank', 'btn_class': 'btn-light'},
+        {'label': 'Accounts', 'url': reverse('finance:accounts'),
+         'icon': 'wallet2', 'btn_class': 'btn-light'},
+        {'label': 'Transactions',
+         'url': reverse('finance:transactions'),
+         'icon': 'arrow-left-right', 'btn_class': 'btn-light'},
+        {'label': 'Balances', 'url': reverse('finance:balances'),
+         'icon': 'cash-coin', 'btn_class': 'btn-light'},
+        {'label': 'Limits', 'url': reverse('finance:limits'),
+         'icon': 'speedometer2', 'btn_class': 'btn-light'},
+        {'label': (
+            f'Logout ({request.user.email or request.user.username})'
+        ), 'url': '/admin/logout/', 'icon': 'box-arrow-right',
+         'btn_class': 'btn-outline-light'},
+    ]
 
 
 @login_required
@@ -68,6 +91,7 @@ def connect_bank(request):
     return render(request, 'finance/connect_bank.html', {
         'form': form,
         'institutions': institutions,
+        'burger_menu_items': _burger_menu_items(request),
     })
 
 
@@ -159,6 +183,7 @@ def account_list(request):
     return render(request, 'finance/accounts.html', {
         'accounts': accounts,
         'share_form': ShareAccountForm(),
+        'burger_menu_items': _burger_menu_items(request),
     })
 
 
@@ -206,6 +231,7 @@ def transaction_list(request):
         'transactions': transactions.order_by('-booking_date'),
         'accounts': accounts,
         'selected_account': account_id,
+        'burger_menu_items': _burger_menu_items(request),
     })
 
 
@@ -230,7 +256,10 @@ def live_balances(request):
         }
         for account in accounts
     ]
-    return render(request, 'finance/balances.html', {'rows': rows})
+    return render(request, 'finance/balances.html', {
+        'rows': rows,
+        'burger_menu_items': _burger_menu_items(request),
+    })
 
 
 @login_required
@@ -260,4 +289,5 @@ def limits_view(request):
         'limits': request.user.transactionlimit_set.select_related(
             'account'
         ),
+        'burger_menu_items': _burger_menu_items(request),
     })

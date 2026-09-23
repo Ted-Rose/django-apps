@@ -1,13 +1,11 @@
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="{% url 'finance:accounts' %}">Finance</a>
-        <div class="navbar-nav">
-            <a class="nav-link" href="{% url 'finance:connect' %}">Connect Bank</a>
-            <a class="nav-link" href="{% url 'finance:accounts' %}">Accounts</a>
-            <a class="nav-link" href="{% url 'finance:transactions' %}">Transactions</a>
-            <a class="nav-link" href="{% url 'finance:balances' %}">Balances</a>
-            <a class="nav-link" href="{% url 'finance:limits' %}">Limits</a>
-            <a class="nav-link" href="/">Home</a>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary"
+     style="padding: 0.1rem 0; min-height: auto;">
+    <div class="container-fluid" style="padding: 0 0.5rem;">
+        <a class="navbar-brand" href="{% url 'finance:accounts' %}">
+            Finance
+        </a>
+        <div class="ms-auto d-flex flex-row align-items-center gap-2">
+            {% include "components/burger_menu.html" with menu_items=burger_menu_items %}
         </div>
     </div>
 </nav>
