@@ -84,7 +84,7 @@ class GoCardlessClient:
         )
 
     def create_requisition(self, institution_id, redirect_url,
-                           reference):
+                           reference, access_valid_for_days=180):
         return self._request(
             'POST',
             'requisitions/',
@@ -92,6 +92,7 @@ class GoCardlessClient:
                 'institution_id': institution_id,
                 'redirect': redirect_url,
                 'reference': reference,
+                'access_valid_for_days': str(access_valid_for_days),
             },
         )
 
