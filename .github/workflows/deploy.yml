@@ -9,6 +9,10 @@ permissions:
   contents: read
   id-token: write
 
+# Serialize with terraform.yml: both mutate the same Cloud Run
+# service/jobs and race when triggered by the same push.
+concurrency: gcp-main
+
 env:
   GCP_PROJECT_ID: gmail-vercel
   GCP_REGION: europe-west3

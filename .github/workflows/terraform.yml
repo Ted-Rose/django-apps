@@ -18,6 +18,10 @@ permissions:
   id-token: write
   pull-requests: write
 
+# Serialize with deploy.yml: both mutate the same Cloud Run
+# service/jobs and race when triggered by the same push.
+concurrency: gcp-main
+
 env:
   GCP_PROJECT_ID: gmail-vercel
   TF_VAR_region: europe-west3

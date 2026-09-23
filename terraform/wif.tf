@@ -34,8 +34,8 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 
 resource "google_service_account_iam_member" "github_wif" {
   service_account_id = google_service_account.github_deployer.name
-  role                = "roles/iam.workloadIdentityUser"
-  member              = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.repository/${var.github_repo}"
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.repository/${var.github_repo}"
 
   depends_on = [
     google_iam_workload_identity_pool_provider.github,
