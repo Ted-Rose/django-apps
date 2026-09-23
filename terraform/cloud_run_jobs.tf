@@ -226,6 +226,7 @@ resource "google_cloud_scheduler_job" "sync_transactions_schedule" {
   project   = var.project_id
   schedule  = "0 2 * * *"
   time_zone = "UTC"
+  paused    = true
 
   http_target {
     http_method = "POST"
@@ -245,6 +246,7 @@ resource "google_cloud_scheduler_job" "evaluate_limits_schedule" {
   project   = var.project_id
   schedule  = "30 2 * * *"
   time_zone = "UTC"
+  paused    = true
 
   http_target {
     http_method = "POST"
