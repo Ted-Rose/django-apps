@@ -83,8 +83,24 @@ class GoCardlessClient:
             'GET', 'institutions/', params={'country': country}
         )
 
+    def create_agreement(self, institution_id,
+                         max_historical_days=730,
+                         access_valid_for_days=180):
+        """Create an end-user agreement (max access window + history)."""
+        return self._request(
+            'POST',
+            'agreements/enduser/',
+            json={
+                'institution_id': institution_id,
+                'max_historical_days': str(max_historical_days),
+                'access_valid_for_days': str(access_valid_for_days),
+                'access_scope': ['balances', 'details', 'transactions'],
+            },
+        )
+
     def create_requisition(self, institution_id, redirect_url,
-                           reference, access_valid_for_days=180):
+                           reference):
+        agreement = self.create_agreement(institution_id)
         return self._request(
             'POST',
             'requisitions/',
@@ -92,7 +108,8 @@ class GoCardlessClient:
                 'institution_id': institution_id,
                 'redirect': redirect_url,
                 'reference': reference,
-                'access_valid_for_days': str(access_valid_for_days),
+                'agreement': agreement['id'],
+                'user_language': 'EN',
             },
         )
 
