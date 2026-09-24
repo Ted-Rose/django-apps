@@ -74,9 +74,38 @@ elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
         BASE_DIR, 'google_api', 'app_secrets.json'
     )
 else:
-    raise FileNotFoundError(
-        'Private settings do not exist. '
-        'Please provide private settings.'
+    # Local fallback when neither GCP env vars nor
+    # private_settings.json are available (fresh clones, CI).
+    # Uses safe dev defaults so manage.py commands still work.
+    import warnings
+    warnings.warn(
+        'private_settings.json not found and no GCP environment '
+        'detected - falling back to insecure local dev defaults '
+        '(sqlite db.sqlite3, DEBUG=True).'
+    )
+    SECRET_KEY = os.environ.get(
+        'DJANGO_SECRET_KEY', 'dev-only-insecure-secret-key'
+    )
+    DEBUG = os.environ.get('DEBUG', 'true').lower() in (
+        'true', '1', 'yes'
+    )
+    BASE_URL = os.environ.get('APP_BASE_URL', 'http://127.0.0.1:8000')
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url:
+        import dj_database_url
+        DATABASES = {'default': dj_database_url.parse(db_url)}
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+    ESV_KEY = os.environ.get('ESV_KEY', '')
+    GOCARDLESS_SECRET_ID = os.environ.get('GOCARDLESS_SECRET_ID', '')
+    GOCARDLESS_SECRET_KEY = os.environ.get('GOCARDLESS_SECRET_KEY', '')
+    GOOGLE_APP_SECRETS_PATH = os.path.join(
+        BASE_DIR, 'google_api', 'app_secrets.json'
     )
 
 LOGIN_URL = '/login/'
@@ -209,7 +238,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-print("MEDIA_ROOT: ", MEDIA_ROOT)
 
 
 def create_log_handler(
