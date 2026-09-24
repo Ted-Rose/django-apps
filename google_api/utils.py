@@ -442,7 +442,12 @@ def google_auth(creds=None, scopes=None, user=None):
     
     if not is_valid:
         if creds and creds.expired and creds.refresh_token:
-            can_refresh = creds.expiry > timezone.now()
+            # creds.expiry is naive UTC; timezone.now() is aware -
+            # compare against naive UTC to avoid TypeError.
+            now_naive_utc = datetime.now(
+                dt_timezone.utc
+            ).replace(tzinfo=None)
+            can_refresh = creds.expiry > now_naive_utc
             if can_refresh:
                 creds.refresh(Request())
             else:
@@ -489,7 +494,7 @@ def get_messages(query, creds):
         message_details = []
 
         if not messages:
-            print("No messages found.")
+            logger.info('No messages found.')
             return []
 
         for message in messages:
@@ -576,7 +581,7 @@ def get_messages(query, creds):
 
     except HttpError as error:
         # Handle errors from Gmail API.
-        print(f"An error occurred: {error}")
+        logger.error(f'Gmail API error: {error}')
     return message_details
 
 
