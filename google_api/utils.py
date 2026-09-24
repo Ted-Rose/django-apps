@@ -16,7 +16,6 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import re
 from datetime import datetime, timedelta, timezone as dt_timezone
-from django.utils import timezone
 from langdetect import detect, DetectorFactory, LangDetectException
 from bs4 import BeautifulSoup
 import tempfile
