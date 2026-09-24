@@ -15,4 +15,7 @@ class Content(models.Model):
     ratio = models.FloatField(blank=True, null=True)
 
     def __str__(self):
-        return f"{self.title} ({self.type}) - Rating: {self.rating_value}"
+        return (
+            f"{self.title_lv} ({self.type}) - "
+            f"Rating: {self.rating_value}"
+        )
