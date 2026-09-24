@@ -39,9 +39,10 @@ used for logout via `/admin/logout/`).
     `GOOGLE_OAUTH_CLIENT_JSON` is written to `/tmp/app_secrets.json`
     at settings import.
   - Local: reads `private_settings.json` at repo root (gitignored;
-    template: `private_settings_template.json`). **Without it, every
-    `manage.py` command — including tests — raises
-    `FileNotFoundError`.**
+    template: `private_settings_template.json`). If the file is
+    missing, settings fall back to env vars, then insecure dev
+    defaults (sqlite `db.sqlite3`, `DEBUG=True`) with a warning —
+    enough for `check`/`test`, not for real data work.
 - Google OAuth client secrets live in `google_api/app_secrets.json`
   locally (gitignored); DB CA cert in `ca.pem` (gitignored).
 - Virtualenv is at `venv/` (VS Code already points at it).
@@ -142,8 +143,6 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 
 ## Gotchas
 
-- `settings.py` prints `MEDIA_ROOT:` on every import — expected noise,
-  not an error.
 - Google credential datetimes: Google auth lib expects **naive UTC**,
   Django stores **aware** — `google_api/utils.py` converts both
   directions. Reuse `get_user_credentials()` / `get_creds_dict()`;
@@ -161,8 +160,6 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 - google_tasks trash is advertised as "auto-purged after 30 days" in UI
   text and model help_text, but **no purge job exists** — items stay
   until `permanent_delete_task_view` runs.
-- `Content.__str__` in tv_archive references `self.title` which doesn't
-  exist on the model (latent bug — admin display will error).
 
 ## Where to look first
 
