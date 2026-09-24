@@ -7,14 +7,17 @@ from .serializers import esv_passages_to_json
 
 def get_verses(passage, passages_format, response_format='text'):
     url = f'https://api.esv.org/v3/passage/{response_format}/'
-    params = {
-        'q': passage,
-        'include-headings': False,
-        'include-footnotes': False,
-        'include-verse-numbers': True,
-        'include-short-copyright': False,
-        'include-passage-references': False
-    }
+    # Formatting params only apply to text/html/audio endpoints;
+    # passage/search rejects unknown params.
+    params = {'q': passage}
+    if response_format != 'search':
+        params.update({
+            'include-headings': False,
+            'include-footnotes': False,
+            'include-verse-numbers': True,
+            'include-short-copyright': False,
+            'include-passage-references': False
+        })
 
     headers = {
         'Authorization': 'Token %s' % settings.ESV_KEY
@@ -48,12 +51,13 @@ def get_verses(passage, passages_format, response_format='text'):
 
 
 def search_bible(text, get_audio=False):
-    response_format = "search"
-    search_results = get_verses(text, response_format)
+    search_results = get_verses(text, 'raw', response_format='search')
     if get_audio:
         for passage in search_results['results']:
             print("Passage:\n", passage)
-            get_verses(passage['reference'], response_format='audio')
+            get_verses(
+                passage['reference'], 'raw', response_format='audio'
+            )
     return search_results
 
 
@@ -93,7 +97,7 @@ def get_bible_chapters_and_verses():
                 last_chapter = next_chapter_number
 
             print(f"\n\nsearching for {book} {last_chapter}")
-            passage = get_verses(f"{book} {last_chapter}")
+            passage = get_verses(f"{book} {last_chapter}", 'raw')
             last_verse = passage['passage_meta'][0]['chapter_end'][1]
             last_verse_number = str(last_verse)[-3:].zfill(3)
             next_book = passage['passage_meta'][0]['next_chapter'][1]
