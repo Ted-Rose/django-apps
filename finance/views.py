@@ -420,6 +420,7 @@ def limits_view(request):
             TransactionLimit.objects.update_or_create(
                 account=form.cleaned_data['account'],
                 user=request.user,
+                category=form.cleaned_data['category'],
                 defaults={
                     'limit_7_days': form.cleaned_data['limit_7_days'],
                     'limit_30_days': (
@@ -436,7 +437,7 @@ def limits_view(request):
     return render(request, 'finance/limits.html', {
         'form': form,
         'limits': request.user.transactionlimit_set.select_related(
-            'account'
+            'account', 'category'
         ),
         'burger_menu_items': _burger_menu_items(request),
     })

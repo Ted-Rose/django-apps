@@ -25,7 +25,7 @@ class Command(BaseCommand):
         today = timezone.now().date()
         limits = TransactionLimit.objects.filter(
             is_active=True
-        ).select_related('account', 'user')
+        ).select_related('account', 'user', 'category')
 
         alerts = 0
         for limit in limits:
@@ -34,21 +34,33 @@ class Command(BaseCommand):
                 if threshold is None:
                     continue
 
-                spent = Transaction.objects.filter(
+                transactions = Transaction.objects.filter(
                     account=limit.account,
                     amount__lt=0,
                     booking_date__gte=(
                         today - timezone.timedelta(days=days)
                     ),
-                ).aggregate(total=Sum('amount'))['total'] or Decimal(0)
+                )
+                if limit.category_id:
+                    transactions = transactions.filter(
+                        category=limit.category
+                    )
+                spent = transactions.aggregate(
+                    total=Sum('amount')
+                )['total'] or Decimal(0)
 
                 if abs(spent) > threshold:
                     alerts += 1
                     logger.warning(
                         'SPENDING_LIMIT_EXCEEDED user=%s account=%s '
-                        'window=%sd spent=%s limit=%s currency=%s',
+                        'category=%s window=%sd spent=%s limit=%s '
+                        'currency=%s',
                         limit.user.username,
                         limit.account.account_id,
+                        (
+                            limit.category.name
+                            if limit.category else '*'
+                        ),
                         days,
                         abs(spent),
                         threshold,

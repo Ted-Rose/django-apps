@@ -56,14 +56,19 @@ class TransactionLimitForm(forms.ModelForm):
     class Meta:
         model = TransactionLimit
         fields = [
-            'account', 'limit_7_days', 'limit_30_days', 'is_active',
+            'account', 'category', 'limit_7_days', 'limit_30_days',
+            'is_active',
         ]
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['category'].empty_label = 'All categories'
         if user is not None:
             self.fields['account'].queryset = (
                 Account.objects.for_user(user)
+            )
+            self.fields['category'].queryset = Category.objects.filter(
+                user=user
             )
         for name, field in self.fields.items():
             if isinstance(field.widget, forms.CheckboxInput):

@@ -78,7 +78,7 @@ class CategoryRuleAdmin(admin.ModelAdmin):
 @admin.register(TransactionLimit)
 class TransactionLimitAdmin(admin.ModelAdmin):
     list_display = [
-        'user', 'account', 'limit_7_days', 'limit_30_days',
-        'is_active', 'updated_at',
+        'user', 'account', 'category', 'limit_7_days',
+        'limit_30_days', 'is_active', 'updated_at',
     ]
     list_filter = ['is_active', 'user']

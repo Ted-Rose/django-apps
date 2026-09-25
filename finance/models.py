@@ -239,7 +239,11 @@ class CategoryRule(models.Model):
 
 
 class TransactionLimit(models.Model):
-    """Per user+account outgoing-spending limits (7/30 days)."""
+    """Per user+account outgoing-spending limits (7/30 days).
+
+    When ``category`` is set, only transactions in that category count
+    towards the limit; when null, all outgoing spending counts.
+    """
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
@@ -248,6 +252,14 @@ class TransactionLimit(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE
+    )
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name='limits',
+        null=True,
+        blank=True,
+        help_text='Optional: limit only spending in this category'
     )
     limit_7_days = models.DecimalField(
         max_digits=12,
@@ -266,7 +278,10 @@ class TransactionLimit(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('account', 'user')
+        unique_together = ('account', 'user', 'category')
 
     def __str__(self):
-        return f'Limits for {self.account} ({self.user.username})'
+        scope = self.category.name if self.category else 'All'
+        return (
+            f'{scope} limits for {self.account} ({self.user.username})'
+        )

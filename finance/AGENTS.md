@@ -42,8 +42,9 @@ transactions, and get spending-limit alerts.
 - `Transaction` — booked transactions; `amount < 0` = outgoing.
   Unique per `(account, transaction_id)`. `category` is assigned by
   rules unless `is_manual_category` is set (manual override).
-- `TransactionLimit` — per `(account, user)` 7-/30-day outgoing
-  spending limits.
+- `TransactionLimit` — per `(account, user, category)` 7-/30-day
+  outgoing spending limits; `category` is optional — when set, only
+  spending in that category counts.
 - `Category` — per-user, unique on `(user, name)`, optional hex color.
 - `CategoryRule` — per-user auto-categorization rule; patterns match
   debtor/creditor name (`sender_receiver_pattern`) and remittance
@@ -67,7 +68,8 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   rows are auto-categorized by the **account owner's** rules via
   `categorize_transaction()`.
 - `evaluate_spending_limits`: sums negative amounts per active limit
-  window; logs `SPENDING_LIMIT_EXCEEDED ...` warnings (email sending is
+  window (filtered to the limit's category when set); logs
+  `SPENDING_LIMIT_EXCEEDED ...` warnings (email sending is
   a TODO — no `EMAIL_*` settings configured).
 - Terraform (`terraform/cloud_run_jobs.tf`) maps these to Cloud Run
   jobs with Cloud Scheduler triggers — schedulers are **paused**, so

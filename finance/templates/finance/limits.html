@@ -16,9 +16,9 @@
     <div class="container-fluid px-2 py-4">
         <h1 class="mb-4">Spending Limits</h1>
         <p class="text-muted">
-            Outgoing spending limits per account. You are alerted when
-            the total spent within the last 7 or 30 days exceeds the
-            limit.
+            Outgoing spending limits per account, optionally scoped to
+            a single category. You are alerted when the total spent
+            within the last 7 or 30 days exceeds the limit.
         </p>
 
         <div class="row g-3">
@@ -55,6 +55,7 @@
                     <thead>
                         <tr>
                             <th>Account</th>
+                            <th>Category</th>
                             <th class="text-end">7-day limit</th>
                             <th class="text-end">30-day limit</th>
                             <th>Active</th>
@@ -65,6 +66,16 @@
                         <tr>
                             <td>
                                 {{ limit.account.name|default:limit.account.iban }}
+                            </td>
+                            <td>
+                                {% if limit.category %}
+                                <span class="badge"
+                                      {% if limit.category.color %}style="background-color: {{ limit.category.color }}"{% else %}style="background-color: #6c757d"{% endif %}>
+                                    {{ limit.category.name }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">All</span>
+                                {% endif %}
                             </td>
                             <td class="text-end">
                                 {{ limit.limit_7_days|default:'-' }}

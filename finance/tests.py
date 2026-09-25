@@ -243,6 +243,49 @@ class EvaluateSpendingLimitsTests(TestCase):
         mock_logger = self.run_command()
         mock_logger.warning.assert_not_called()
 
+    def test_category_limit_exceeded_logs_warning(self):
+        groceries = make_category(self.user)
+        TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            category=groceries,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-60.00', days_ago=1,
+            category=groceries,
+        )
+        make_transaction(
+            self.account, 't-2', '-50.00', days_ago=2,
+            category=groceries,
+        )
+
+        mock_logger = self.run_command()
+        mock_logger.warning.assert_called_once()
+        self.assertIn(
+            'Groceries', str(mock_logger.warning.call_args)
+        )
+
+    def test_category_limit_ignores_other_categories(self):
+        groceries = make_category(self.user)
+        dining = make_category(self.user, 'Dining')
+        TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            category=groceries,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-150.00', days_ago=1,
+            category=dining,
+        )
+        make_transaction(
+            self.account, 't-2', '-150.00', days_ago=1,
+        )
+
+        mock_logger = self.run_command()
+        mock_logger.warning.assert_not_called()
+
 
 class SyncBankTransactionsTests(TestCase):
     def setUp(self):
