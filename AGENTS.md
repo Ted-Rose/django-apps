@@ -66,9 +66,11 @@ quotes vs single quotes are mixed — match the surrounding file.
 ## Hard rules
 
 ### Database migrations
-Never run database migrations (`python manage.py migrate`,
-`makemigrations`, or any equivalent command). Migrations are managed
-outside of agent sessions. (Note: CI deploy runs `migrate` via a Cloud
+Always generate migration files for model changes
+(`python manage.py makemigrations`) — the user commits them. Never
+run `python manage.py migrate` (or any equivalent command that
+applies migrations to a real database) — that is managed outside of
+agent sessions. (Note: CI deploy runs `migrate` via a Cloud
 Run job — that's fine, it happens in the workflow, not here.)
 
 ### Documentation and planning
