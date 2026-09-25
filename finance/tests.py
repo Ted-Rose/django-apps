@@ -6,13 +6,23 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
+from django.urls import reverse
+
 from finance.models import (
     Account,
     AccountShare,
+    Category,
+    CategoryRule,
     Requisition,
     Transaction,
     TransactionLimit,
     UserAccountPreference,
+)
+from finance.services.rules import (
+    apply_rules,
+    first_matching_rule,
+    preview_rule,
+    rule_matches,
 )
 
 
@@ -35,7 +45,8 @@ def make_account(owner, requisition, account_id='acc-1'):
     )
 
 
-def make_transaction(account, transaction_id, amount, days_ago=0):
+def make_transaction(account, transaction_id, amount, days_ago=0,
+                     **fields):
     return Transaction.objects.create(
         account=account,
         transaction_id=transaction_id,
@@ -44,6 +55,25 @@ def make_transaction(account, transaction_id, amount, days_ago=0):
             timezone.now().date()
             - timezone.timedelta(days=days_ago)
         ),
+        **fields,
+    )
+
+
+def make_category(user, name='Groceries', color=''):
+    return Category.objects.create(user=user, name=name, color=color)
+
+
+def make_rule(user, category, priority=1, sender='', description='',
+              match_type='contains', operator='AND', is_active=True):
+    return CategoryRule.objects.create(
+        user=user,
+        category=category,
+        priority=priority,
+        sender_receiver_pattern=sender,
+        description_pattern=description,
+        match_type=match_type,
+        operator=operator,
+        is_active=is_active,
     )
 
 
@@ -300,3 +330,376 @@ class SyncBankTransactionsTests(TestCase):
         self.req.save()
         client = self.run_command([])
         client.fetch_transactions.assert_not_called()
+
+    def test_sync_assigns_category_via_owner_rules(self):
+        category = make_category(self.user)
+        make_rule(self.user, category, sender='Shop')
+        self.run_command([
+            {
+                'transactionId': 'tx-1',
+                'bookingDate': '2026-09-20',
+                'transactionAmount': {
+                    'amount': '-12.34', 'currency': 'EUR',
+                },
+                'creditorName': 'Shop',
+            },
+        ])
+        tx = Transaction.objects.get(
+            account=self.account, transaction_id='tx-1'
+        )
+        self.assertEqual(tx.category, category)
+
+
+class RuleMatchingTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.category = make_category(self.user)
+
+    def test_contains_matches_description(self):
+        rule = make_rule(self.user, self.category,
+                         description='grocery')
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='Weekly grocery run',
+        )
+        self.assertTrue(rule_matches(rule, tx))
+
+    def test_equals_and_starts_with(self):
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='rent september',
+        )
+        self.assertTrue(rule_matches(
+            make_rule(self.user, self.category, description='rent',
+                      match_type='starts_with'),
+            tx,
+        ))
+        self.assertTrue(rule_matches(
+            make_rule(self.user, self.category,
+                      description='Rent September',
+                      match_type='equals'),
+            tx,
+        ))
+        self.assertFalse(rule_matches(
+            make_rule(self.user, self.category,
+                      description='september', match_type='equals'),
+            tx,
+        ))
+        self.assertTrue(rule_matches(
+            make_rule(self.user, self.category,
+                      description='September', match_type='ends_with'),
+            tx,
+        ))
+        self.assertFalse(rule_matches(
+            make_rule(self.user, self.category,
+                      description='rent', match_type='ends_with'),
+            tx,
+        ))
+
+    def test_sender_receiver_matches_debtor_or_creditor(self):
+        rule = make_rule(self.user, self.category, sender='employer')
+        incoming = make_transaction(
+            self.account, 't-1', '500.00', debtor_name='Employer Ltd',
+        )
+        outgoing = make_transaction(
+            self.account, 't-2', '-5.00', creditor_name='Employer Ltd',
+        )
+        self.assertTrue(rule_matches(rule, incoming))
+        self.assertTrue(rule_matches(rule, outgoing))
+
+    def test_and_requires_both_or_accepts_either(self):
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            creditor_name='Shop',
+            remittance_information='card payment',
+        )
+        and_rule = make_rule(
+            self.user, self.category,
+            sender='shop', description='invoice', operator='AND',
+        )
+        or_rule = make_rule(
+            self.user, self.category, priority=2,
+            sender='shop', description='invoice', operator='OR',
+        )
+        self.assertFalse(rule_matches(and_rule, tx))
+        self.assertTrue(rule_matches(or_rule, tx))
+
+    def test_rule_with_no_patterns_never_matches(self):
+        rule = make_rule(self.user, self.category)
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='anything',
+        )
+        self.assertFalse(rule_matches(rule, tx))
+
+
+class ApplyRulesTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.groceries = make_category(self.user)
+        self.other_cat = make_category(self.user, 'Other')
+
+    def test_first_match_wins_by_priority(self):
+        make_rule(self.user, self.groceries, priority=1,
+                  description='shop')
+        make_rule(self.user, self.other_cat, priority=2,
+                  description='shop')
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        changed = apply_rules(self.user)
+        tx.refresh_from_db()
+        self.assertEqual(tx.category, self.groceries)
+        self.assertEqual(changed, 1)
+
+    def test_unmatched_transaction_category_cleared(self):
+        tx = make_transaction(
+            self.account, 't-1', '-10.00', category=self.groceries,
+        )
+        make_rule(self.user, self.other_cat, description='nomatch')
+        apply_rules(self.user)
+        tx.refresh_from_db()
+        self.assertIsNone(tx.category)
+
+    def test_manual_category_never_overwritten(self):
+        make_rule(self.user, self.other_cat, description='shop')
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+            category=self.groceries, is_manual_category=True,
+        )
+        apply_rules(self.user)
+        tx.refresh_from_db()
+        self.assertEqual(tx.category, self.groceries)
+
+    def test_inactive_rules_skipped(self):
+        make_rule(self.user, self.groceries, description='shop',
+                  is_active=False)
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        apply_rules(self.user)
+        tx.refresh_from_db()
+        self.assertIsNone(tx.category)
+
+    def test_shared_account_uses_owner_rules_not_viewers(self):
+        AccountShare.objects.create(
+            account=self.account, shared_with=self.other
+        )
+        viewer_cat = make_category(self.other, 'ViewerCat')
+        make_rule(self.other, viewer_cat, description='shop')
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        apply_rules(self.other)
+        tx.refresh_from_db()
+        self.assertIsNone(tx.category)
+
+
+class PreviewRuleTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.groceries = make_category(self.user)
+        self.other_cat = make_category(self.user, 'Other')
+
+    def preview_data(self, **overrides):
+        data = {
+            'category_id': str(self.groceries.pk),
+            'priority': '1',
+            'sender_receiver_pattern': '',
+            'description_pattern': 'shop',
+            'match_type': 'contains',
+            'operator': 'AND',
+            'is_active': 'on',
+        }
+        data.update(overrides)
+        return data
+
+    def test_reports_match_and_change_counts(self):
+        make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop run',
+        )
+        make_transaction(
+            self.account, 't-2', '-5.00',
+            remittance_information='rent',
+        )
+        result = preview_rule(self.user, self.preview_data())
+        self.assertEqual(result['match_count'], 1)
+        self.assertEqual(result['apply_count'], 1)
+        self.assertEqual(result['changes_total'], 1)
+        self.assertEqual(
+            result['changes'][0]['new_category'], 'Groceries'
+        )
+
+    def test_lower_priority_loses_first_match(self):
+        make_rule(self.user, self.other_cat, priority=1,
+                  description='shop')
+        make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        result = preview_rule(
+            self.user, self.preview_data(priority='2')
+        )
+        self.assertEqual(result['match_count'], 1)
+        self.assertEqual(result['apply_count'], 0)
+
+    def test_edit_replaces_existing_rule(self):
+        rule = make_rule(self.user, self.other_cat, priority=1,
+                         description='shop')
+        make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        result = preview_rule(
+            self.user,
+            self.preview_data(rule_id=str(rule.pk)),
+        )
+        self.assertEqual(result['apply_count'], 1)
+        self.assertEqual(
+            result['changes'][0]['old_category'], None
+        )
+        self.assertEqual(
+            result['changes'][0]['new_category'], 'Groceries'
+        )
+
+    def test_error_without_category(self):
+        result = preview_rule(
+            self.user, self.preview_data(category_id='')
+        )
+        self.assertIn('error', result)
+
+    def test_preview_writes_nothing(self):
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        preview_rule(self.user, self.preview_data())
+        tx.refresh_from_db()
+        self.assertIsNone(tx.category)
+
+
+class RuleViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.category = make_category(self.user)
+
+    def test_preview_endpoint_requires_login(self):
+        response = self.client.post(reverse('finance:preview_rule'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_preview_endpoint_returns_json(self):
+        self.client.force_login(self.user)
+        make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        response = self.client.post(
+            reverse('finance:preview_rule'),
+            {
+                'category_id': self.category.pk,
+                'priority': 1,
+                'description_pattern': 'shop',
+                'match_type': 'contains',
+                'operator': 'AND',
+                'is_active': 'on',
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['changes_total'], 1)
+
+    def test_preview_endpoint_rejects_missing_category(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('finance:preview_rule'),
+            {'description_pattern': 'shop'},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.json())
+
+    def test_save_rule_scoped_to_owner(self):
+        rule = make_rule(self.user, self.category,
+                         description='shop')
+        self.client.force_login(self.other)
+        response = self.client.post(
+            reverse('finance:save_rule'),
+            {
+                'rule_id': rule.pk,
+                'category': self.category.pk,
+                'priority': 1,
+                'description_pattern': 'hijack',
+                'match_type': 'contains',
+                'operator': 'AND',
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+        rule.refresh_from_db()
+        self.assertEqual(rule.description_pattern, 'shop')
+
+    def test_save_rule_applies_to_history(self):
+        self.client.force_login(self.user)
+        make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        response = self.client.post(
+            reverse('finance:save_rule'),
+            {
+                'category': self.category.pk,
+                'priority': 1,
+                'description_pattern': 'shop',
+                'match_type': 'contains',
+                'operator': 'AND',
+                'is_active': 'on',
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        tx = Transaction.objects.get(transaction_id='t-1')
+        self.assertEqual(tx.category, self.category)
+
+    def test_move_rule_swaps_priority(self):
+        other_cat = make_category(self.user, 'Other')
+        first = make_rule(self.user, self.category, priority=1,
+                          description='a')
+        second = make_rule(self.user, other_cat, priority=2,
+                           description='b')
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('finance:move_rule', args=[second.pk]),
+            {'direction': 'up'},
+        )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual((second.priority, first.priority), (1, 2))

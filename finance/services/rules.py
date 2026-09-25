@@ -27,6 +27,8 @@ def _matches_value(value, pattern, match_type):
         return value == pattern
     if match_type == 'starts_with':
         return value.startswith(pattern)
+    if match_type == 'ends_with':
+        return value.endswith(pattern)
     return pattern in value
 
 

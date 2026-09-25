@@ -187,6 +187,7 @@ class CategoryRule(models.Model):
         ('contains', 'Contains'),
         ('equals', 'Equals'),
         ('starts_with', 'Starts with'),
+        ('ends_with', 'Ends with'),
     ]
     OPERATORS = [
         ('AND', 'AND'),
