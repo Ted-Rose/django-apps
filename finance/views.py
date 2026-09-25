@@ -1,13 +1,16 @@
 import logging
 import uuid
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from finance.forms import (
@@ -43,6 +46,9 @@ def _burger_menu_items(request):
         {'label': 'Transactions',
          'url': reverse('finance:transactions'),
          'icon': 'arrow-left-right', 'btn_class': 'btn-light'},
+        {'label': 'Categories',
+         'url': reverse('finance:categories'),
+         'icon': 'pie-chart', 'btn_class': 'btn-light'},
         {'label': 'Balances', 'url': reverse('finance:balances'),
          'icon': 'cash-coin', 'btn_class': 'btn-light'},
         {'label': 'Limits', 'url': reverse('finance:limits'),
@@ -241,6 +247,93 @@ def transaction_list(request):
     return render(request, 'finance/transactions.html', {
         'transactions': transactions.order_by('-booking_date'),
         'accounts': accounts,
+        'selected_account': account_id,
+        'burger_menu_items': _burger_menu_items(request),
+    })
+
+
+def _parse_date(value):
+    try:
+        return datetime.strptime(value or '', '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
+@login_required
+def category_overview(request):
+    """Per-category spending totals over a selectable time window."""
+    transactions = Transaction.objects.for_user(request.user)
+
+    today = timezone.localdate()
+    date_from = _parse_date(request.GET.get('from'))
+    date_to = _parse_date(request.GET.get('to'))
+    if date_from:
+        transactions = transactions.filter(
+            booking_date__gte=date_from
+        )
+    if date_to:
+        transactions = transactions.filter(booking_date__lte=date_to)
+
+    account_id = request.GET.get('account')
+    if account_id:
+        transactions = transactions.filter(account_id=account_id)
+
+    grouped = (
+        transactions
+        .values('category__name', 'category__color', 'currency')
+        .annotate(
+            spent=Sum('amount', filter=Q(amount__lt=0)),
+            received=Sum('amount', filter=Q(amount__gt=0)),
+            tx_count=Count('pk'),
+        )
+    )
+    rows = []
+    totals = {}
+    for row in grouped:
+        currency = row['currency']
+        row['spent'] = -(row['spent'] or 0)
+        row['received'] = row['received'] or 0
+        row['net'] = row['received'] - row['spent']
+        row['category_name'] = (
+            row.pop('category__name') or 'Uncategorized'
+        )
+        row['category_color'] = row.pop('category__color') or '#6c757d'
+        rows.append(row)
+        total = totals.setdefault(
+            currency, {'spent': 0, 'received': 0}
+        )
+        total['spent'] += row['spent']
+        total['received'] += row['received']
+    rows.sort(key=lambda row: row['spent'], reverse=True)
+    for row in rows:
+        total = totals[row['currency']]['spent']
+        row['share'] = row['spent'] / total * 100 if total else 0
+
+    presets = [
+        ('Last 7 days', today - timedelta(days=6), today),
+        ('Last 30 days', today - timedelta(days=29), today),
+        ('Last 90 days', today - timedelta(days=89), today),
+        ('Last 365 days', today - timedelta(days=364), today),
+        ('All time', None, None),
+    ]
+    current = (date_from, date_to)
+    periods = [
+        {
+            'label': label,
+            'from': start.isoformat() if start else '',
+            'to': end.isoformat() if end else '',
+            'active': (start, end) == current,
+        }
+        for label, start, end in presets
+    ]
+
+    return render(request, 'finance/category_overview.html', {
+        'rows': rows,
+        'totals': totals,
+        'periods': periods,
+        'date_from': date_from.isoformat() if date_from else '',
+        'date_to': date_to.isoformat() if date_to else '',
+        'accounts': Account.objects.for_user(request.user),
         'selected_account': account_id,
         'burger_menu_items': _burger_menu_items(request),
     })

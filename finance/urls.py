@@ -40,6 +40,11 @@ urlpatterns = [
         name='preview_rule',
     ),
     path(
+        'categories/',
+        views.category_overview,
+        name='categories',
+    ),
+    path(
         'categories/save/',
         views.save_category,
         name='save_category',
