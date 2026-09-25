@@ -769,11 +769,14 @@ def preview_rule_view(request):
 
 def _json_body(request):
     try:
-        return json.loads(request.body or b'{}'), None
+        data = json.loads(request.body or b'{}')
     except (json.JSONDecodeError, UnicodeDecodeError):
+        data = None
+    if not isinstance(data, dict):
         return None, JsonResponse(
             {'error': 'Invalid JSON body.'}, status=400
         )
+    return data, None
 
 
 @login_required
@@ -789,7 +792,9 @@ def push_subscribe(request):
     if error:
         return error
     endpoint = data.get('endpoint') or ''
-    keys = data.get('keys') or {}
+    keys = data.get('keys')
+    if not isinstance(keys, dict):
+        keys = {}
     p256dh = keys.get('p256dh') or ''
     auth = keys.get('auth') or ''
     if (

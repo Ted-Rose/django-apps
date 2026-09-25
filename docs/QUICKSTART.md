@@ -63,10 +63,22 @@ https://YOUR-CLOUD-RUN-URL/google/callback
 Terraform references `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and
 `VAPID_SUBJECT` via data sources, so the secrets must exist in
 Secret Manager **before** `terraform apply`. Generate a keypair once
-(`pip install pywebpush`, then `vapid --gen` writes PEM files; the
-base64url pair from `vapid --applicationServerKey` and a raw-key
-export are what go in the secrets — use the same values as in local
-`private_settings.json`) and create them like the bootstrap script:
+with the `vapid` tool bundled with `pywebpush`. `vapid --gen` writes
+`private_key.pem`/`public_key.pem`; `VAPID_PUBLIC_KEY` comes from
+`vapid --applicationServerKey`, and `VAPID_PRIVATE_KEY` is the raw
+32-byte key base64url-encoded (the format `webpush()` expects when
+given a string rather than a PEM path):
+
+```bash
+vapid --gen
+vapid --applicationServerKey   # -> VAPID_PUBLIC_KEY
+openssl ec -in private_key.pem -outform DER \
+    | tail -c +8 | head -c 32 | base64 | tr '+/' '-_' | tr -d '='
+                               # -> VAPID_PRIVATE_KEY
+```
+
+Put the same values in local `private_settings.json`, then create
+the secrets like the bootstrap script:
 
 ```bash
 printf '%s' 'YOUR_VAPID_PUBLIC_KEY' | gcloud secrets create VAPID_PUBLIC_KEY \

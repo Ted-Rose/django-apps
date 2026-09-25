@@ -58,7 +58,7 @@ transactions, and get spending-limit alerts.
 - `PushSubscription` — one row per subscribed browser (`endpoint`
   unique); feeds Web Push spending alerts via `services/push.py`
   (`send_limit_alert`, uses `VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`
-  settings; 404/410 responses delete stale rows). Browsers
+  settings; 403/404/410 responses delete stale rows). Browsers
   subscribe via `POST /finance/push/subscribe/` (+ `unsubscribe/`)
   from the limits page; no-op when `VAPID_*` settings are empty.
 - `Category` — per-user, unique on `(user, name)`, optional hex color.

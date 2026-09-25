@@ -1358,6 +1358,25 @@ class LimitPushAlertCommandTests(TestCase):
         self.assertIsNotNone(limit.alerted_7d_at)
         self.assertIsNotNone(limit.alerted_30d_at)
 
+    def test_flag_cleared_when_threshold_removed(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+        self.run_command()
+        limit.refresh_from_db()
+        self.assertIsNotNone(limit.alerted_7d_at)
+
+        limit.limit_7_days = None
+        limit.save()
+        mock_send = self.run_command()
+
+        mock_send.assert_not_called()
+        limit.refresh_from_db()
+        self.assertIsNone(limit.alerted_7d_at)
+
 
 class PushSubscriptionEndpointTests(TestCase):
     def setUp(self):
@@ -1406,6 +1425,27 @@ class PushSubscriptionEndpointTests(TestCase):
     def test_subscribe_400_on_missing_fields(self):
         self.client.force_login(self.user)
         response = self.post_json(self.subscribe_url, {})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(PushSubscription.objects.exists())
+
+    @override_settings(VAPID_PUBLIC_KEY='pub')
+    def test_subscribe_400_on_non_dict_body(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.subscribe_url,
+            data='[1, 2]',
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(PushSubscription.objects.exists())
+
+    @override_settings(VAPID_PUBLIC_KEY='pub')
+    def test_subscribe_400_on_non_dict_keys(self):
+        self.client.force_login(self.user)
+        response = self.post_json(self.subscribe_url, {
+            'endpoint': 'https://push.example.com/sub/1',
+            'keys': 'not-a-dict',
+        })
         self.assertEqual(response.status_code, 400)
         self.assertFalse(PushSubscription.objects.exists())
 

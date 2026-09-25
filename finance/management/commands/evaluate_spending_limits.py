@@ -46,6 +46,11 @@ class Command(BaseCommand):
             for field, alert_field, days in WINDOWS:
                 threshold = getattr(limit, field)
                 if threshold is None:
+                    # Threshold removed while flagged: reset so a
+                    # re-added threshold starts a fresh episode.
+                    if getattr(limit, alert_field) is not None:
+                        setattr(limit, alert_field, None)
+                        dirty.add(alert_field)
                     continue
 
                 transactions = Transaction.objects.filter(
