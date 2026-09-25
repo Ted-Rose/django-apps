@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from django.conf import settings
@@ -21,6 +22,9 @@ from finance.models import (
     UserAccountPreference,
 )
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
+from finance.services.sync import sync_account_transactions
+
+logger = logging.getLogger('django')
 
 
 def _burger_menu_items(request):
@@ -233,6 +237,51 @@ def transaction_list(request):
         'selected_account': account_id,
         'burger_menu_items': _burger_menu_items(request),
     })
+
+
+@login_required
+@require_POST
+def sync_transactions(request):
+    """Fetch latest transactions for the user's linked accounts."""
+    accounts = Account.objects.for_user(request.user).filter(
+        requisition__status='LN'
+    )
+    if not accounts.exists():
+        messages.warning(request, 'No linked bank accounts to sync.')
+        return redirect('finance:transactions')
+
+    client = GoCardlessClient()
+    created = updated = failed = 0
+    for account in accounts:
+        try:
+            c, u = sync_account_transactions(client, account)
+            created += c
+            updated += u
+        except Exception as exc:
+            failed += 1
+            logger.exception(
+                'Transaction sync failed for account %s: %s',
+                account.account_id, exc,
+            )
+
+    if failed:
+        messages.warning(
+            request,
+            f'Synced {created} new transactions, but '
+            f'{failed} account(s) failed.',
+        )
+    else:
+        messages.success(
+            request,
+            f'Synced {created} new transactions '
+            f'({updated} updated).',
+        )
+
+    url = reverse('finance:transactions')
+    account_id = request.POST.get('account')
+    if account_id:
+        url += f'?account={account_id}'
+    return redirect(url)
 
 
 @login_required

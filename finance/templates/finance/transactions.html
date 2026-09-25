@@ -16,28 +16,59 @@
     <div class="container-fluid px-2 py-4">
         <h1 class="mb-4">Transactions</h1>
 
-        <form method="get" class="row g-2 align-items-end mb-4">
-            <div class="col-auto">
-                <label for="account-filter" class="form-label">
-                    Account
-                </label>
-                <select name="account" id="account-filter"
-                        class="form-select">
-                    <option value="">All accounts</option>
-                    {% for account in accounts %}
-                    <option value="{{ account.pk }}"
-                        {% if selected_account == account.pk|stringformat:"s" %}selected{% endif %}>
-                        {{ account.name|default:account.iban|default:account.account_id }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-primary">
-                    Filter
+        <div class="row g-2 align-items-end mb-4">
+            <form method="get" class="col-auto">
+                <div class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <label for="account-filter" class="form-label">
+                            Account
+                        </label>
+                        <select name="account" id="account-filter"
+                                class="form-select">
+                            <option value="">All accounts</option>
+                            {% for account in accounts %}
+                            <option value="{{ account.pk }}"
+                                {% if selected_account == account.pk|stringformat:"s" %}selected{% endif %}>
+                                {{ account.name|default:account.iban|default:account.account_id }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary">
+                            Filter
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <form method="post" class="col-auto"
+                  action="{% url 'finance:sync_transactions' %}"
+                  id="sync-form">
+                {% csrf_token %}
+                {% if selected_account %}
+                <input type="hidden" name="account"
+                       value="{{ selected_account }}">
+                {% endif %}
+                <button type="submit" id="sync-btn"
+                        class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-repeat"></i>
+                    Sync transactions
                 </button>
-            </div>
-        </form>
+            </form>
+        </div>
+
+        <script>
+            document.getElementById('sync-form').addEventListener(
+                'submit',
+                function () {
+                    var btn = document.getElementById('sync-btn');
+                    btn.disabled = true;
+                    btn.innerHTML =
+                        '<span class="spinner-border spinner-border-sm" '
+                        + 'role="status"></span> Syncing...';
+                }
+            );
+        </script>
 
         {% if transactions %}
         <div class="table-responsive">

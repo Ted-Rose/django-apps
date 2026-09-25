@@ -14,6 +14,11 @@ urlpatterns = [
         name='share_account',
     ),
     path('transactions/', views.transaction_list, name='transactions'),
+    path(
+        'transactions/sync/',
+        views.sync_transactions,
+        name='sync_transactions',
+    ),
     path('balances/', views.live_balances, name='balances'),
     path('limits/', views.limits_view, name='limits'),
 ]

@@ -1,11 +1,13 @@
 import logging
-from decimal import Decimal, InvalidOperation
 
 from django.core.management.base import BaseCommand
-from django.db.models import Max
 
-from finance.models import Account, Transaction
+from finance.models import Account
 from finance.services.gocardless import GoCardlessClient
+from finance.services.sync import (
+    iter_booked_transactions,
+    sync_account_transactions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,64 +60,17 @@ class Command(BaseCommand):
         )
 
     def _sync_account(self, client, account, dry_run):
-        date_from = account.transactions.aggregate(
-            Max('booking_date')
-        )['booking_date__max']
+        if not dry_run:
+            return sync_account_transactions(client, account)
 
-        data = client.fetch_transactions(
-            account.account_id, date_from=date_from
-        )
-        booked = data.get('booked', [])
-
-        created = 0
-        updated = 0
-        for entry in booked:
-            transaction_id = (
-                entry.get('transactionId')
-                or entry.get('internalTransactionId')
+        count = 0
+        for transaction_id, defaults in iter_booked_transactions(
+            client, account
+        ):
+            self.stdout.write(
+                f'[dry-run] {account.account_id} '
+                f'{transaction_id} {defaults["amount"]} '
+                f'{defaults["currency"]}'
             )
-            if not transaction_id:
-                logger.warning(
-                    'Skipping transaction without id on account %s',
-                    account.account_id,
-                )
-                continue
-
-            amount_data = entry.get('transactionAmount') or {}
-            try:
-                amount = Decimal(str(amount_data.get('amount', '0')))
-            except InvalidOperation:
-                logger.warning(
-                    'Skipping transaction %s with bad amount %r',
-                    transaction_id, amount_data.get('amount'),
-                )
-                continue
-
-            defaults = {
-                'amount': amount,
-                'currency': amount_data.get('currency', 'EUR'),
-                'booking_date': entry.get('bookingDate'),
-                'remittance_information': entry.get(
-                    'remittanceInformationUnstructured'
-                ),
-            }
-
-            if dry_run:
-                self.stdout.write(
-                    f'[dry-run] {account.account_id} '
-                    f'{transaction_id} {defaults["amount"]} '
-                    f'{defaults["currency"]}'
-                )
-                continue
-
-            _, was_created = Transaction.objects.update_or_create(
-                account=account,
-                transaction_id=transaction_id,
-                defaults=defaults,
-            )
-            if was_created:
-                created += 1
-            else:
-                updated += 1
-
-        return created, updated
+            count += 1
+        return 0, count
