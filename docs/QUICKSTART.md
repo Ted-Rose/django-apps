@@ -58,6 +58,30 @@ Edit OAuth 2.0 Client ID → Add redirect URI:
 https://YOUR-CLOUD-RUN-URL/google/callback
 ```
 
+## VAPID secrets (spending-limit push alerts)
+
+Terraform references `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and
+`VAPID_SUBJECT` via data sources, so the secrets must exist in
+Secret Manager **before** `terraform apply`. Generate a keypair once
+(`pip install pywebpush`, then `vapid --gen` writes PEM files; the
+base64url pair from `vapid --applicationServerKey` and a raw-key
+export are what go in the secrets — use the same values as in local
+`private_settings.json`) and create them like the bootstrap script:
+
+```bash
+printf '%s' 'YOUR_VAPID_PUBLIC_KEY' | gcloud secrets create VAPID_PUBLIC_KEY \
+    --project=gmail-vercel --data-file=- --replication-policy=automatic
+
+printf '%s' 'YOUR_VAPID_PRIVATE_KEY' | gcloud secrets create VAPID_PRIVATE_KEY \
+    --project=gmail-vercel --data-file=- --replication-policy=automatic
+
+printf '%s' 'mailto:you@example.com' | gcloud secrets create VAPID_SUBJECT \
+    --project=gmail-vercel --data-file=- --replication-policy=automatic
+```
+
+If they don't exist yet, `terraform plan` fails on the missing
+data sources — create the three secrets, then re-run.
+
 ## Monitor Deployment
 
 ```bash

@@ -50,6 +50,9 @@ if IS_GCP_ENVIRONMENT:
 
     GOCARDLESS_SECRET_ID = get_env_str('GOCARDLESS_SECRET_ID')
     GOCARDLESS_SECRET_KEY = get_env_str('GOCARDLESS_SECRET_KEY')
+    VAPID_PUBLIC_KEY = get_env_str('VAPID_PUBLIC_KEY')
+    VAPID_PRIVATE_KEY = get_env_str('VAPID_PRIVATE_KEY')
+    VAPID_SUBJECT = get_env_str('VAPID_SUBJECT')
 
     GOOGLE_APP_SECRETS_PATH = '/tmp/app_secrets.json'
     if not os.path.exists(GOOGLE_APP_SECRETS_PATH):
@@ -70,6 +73,11 @@ elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
         GOCARDLESS_SECRET_KEY = private_settings.get(
             'GOCARDLESS_SECRET_KEY'
         )
+        VAPID_PUBLIC_KEY = private_settings.get('VAPID_PUBLIC_KEY', '')
+        VAPID_PRIVATE_KEY = private_settings.get(
+            'VAPID_PRIVATE_KEY', ''
+        )
+        VAPID_SUBJECT = private_settings.get('VAPID_SUBJECT', '')
     GOOGLE_APP_SECRETS_PATH = os.path.join(
         BASE_DIR, 'google_api', 'app_secrets.json'
     )
@@ -104,6 +112,9 @@ else:
     ESV_KEY = os.environ.get('ESV_KEY', '')
     GOCARDLESS_SECRET_ID = os.environ.get('GOCARDLESS_SECRET_ID', '')
     GOCARDLESS_SECRET_KEY = os.environ.get('GOCARDLESS_SECRET_KEY', '')
+    VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+    VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+    VAPID_SUBJECT = os.environ.get('VAPID_SUBJECT', '')
     GOOGLE_APP_SECRETS_PATH = os.path.join(
         BASE_DIR, 'google_api', 'app_secrets.json'
     )

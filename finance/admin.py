@@ -5,6 +5,7 @@ from finance.models import (
     AccountShare,
     Category,
     CategoryRule,
+    PushSubscription,
     Requisition,
     Transaction,
     TransactionLimit,
@@ -91,3 +92,14 @@ class TransactionLimitAdmin(admin.ModelAdmin):
         'limit_30_days', 'is_active', 'updated_at',
     ]
     list_filter = ['is_active', 'user']
+    readonly_fields = ['alerted_7d_at', 'alerted_30d_at']
+
+
+@admin.register(PushSubscription)
+class PushSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['user', 'short_endpoint', 'created_at']
+    search_fields = ['user__username', 'endpoint']
+
+    @admin.display(description='Endpoint')
+    def short_endpoint(self, obj):
+        return obj.endpoint[:80]

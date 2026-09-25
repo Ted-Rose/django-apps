@@ -17,3 +17,4 @@ gunicorn
 requests>=2.31,<3
 whitenoise[brotli]
 django-sslserver
+pywebpush==2.5.0

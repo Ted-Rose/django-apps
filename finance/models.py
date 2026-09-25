@@ -301,6 +301,16 @@ class TransactionLimit(models.Model):
         blank=True
     )
     is_active = models.BooleanField(default=True)
+    alerted_7d_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When a push alert was last sent for the 7-day window'
+    )
+    alerted_30d_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When a push alert was last sent for the 30-day window'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -312,3 +322,19 @@ class TransactionLimit(models.Model):
         return (
             f'{scope} limits for {self.account} ({self.user.username})'
         )
+
+
+class PushSubscription(models.Model):
+    """A Web Push subscription for one of the user's browsers."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='push_subscriptions'
+    )
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user.username}: {self.endpoint[:60]}'

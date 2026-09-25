@@ -8,6 +8,9 @@ data "google_secret_manager_secret" "app" {
     "APP_BASE_URL",
     "GOCARDLESS_SECRET_ID",
     "GOCARDLESS_SECRET_KEY",
+    "VAPID_PUBLIC_KEY",
+    "VAPID_PRIVATE_KEY",
+    "VAPID_SUBJECT",
   ])
 
   project   = var.project_id

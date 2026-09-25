@@ -92,6 +92,16 @@ resource "google_cloud_run_v2_service" "django_app" {
         value = google_storage_bucket.audio_recordings.name
       }
 
+      env {
+        name = "VAPID_PUBLIC_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.app["VAPID_PUBLIC_KEY"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
       ports {
         container_port = 8080
       }

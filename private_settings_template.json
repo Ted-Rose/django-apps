@@ -17,5 +17,8 @@
     "SECRET_KEY": "safe_key",
     "base_url": "https://127.0.0.1:8000",
     "GOCARDLESS_SECRET_ID": "your_gocardless_secret_id",
-    "GOCARDLESS_SECRET_KEY": "your_gocardless_secret_key"
+    "GOCARDLESS_SECRET_KEY": "your_gocardless_secret_key",
+    "VAPID_PUBLIC_KEY": "your_vapid_public_key",
+    "VAPID_PRIVATE_KEY": "your_vapid_private_key",
+    "VAPID_SUBJECT": "mailto:you@example.com"
 }

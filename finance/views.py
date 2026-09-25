@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta
@@ -26,6 +27,7 @@ from finance.models import (
     AccountShare,
     Category,
     CategoryRule,
+    PushSubscription,
     Requisition,
     Transaction,
     UserAccountPreference,
@@ -482,11 +484,16 @@ def category_overview(request):
         total = totals[row['currency']]['spent']
         row['share'] = row['spent'] / total * 100 if total else 0
 
+    month_start = today.replace(day=1)
+    prev_month_end = month_start - timedelta(days=1)
+    prev_month_start = prev_month_end.replace(day=1)
     presets = [
         ('Last 7 days', today - timedelta(days=6), today),
         ('Last 30 days', today - timedelta(days=29), today),
         ('Last 90 days', today - timedelta(days=89), today),
         ('Last 365 days', today - timedelta(days=364), today),
+        ('This month', month_start, today),
+        ('Last month', prev_month_start, prev_month_end),
         ('All time', None, None),
     ]
     current = (date_from, date_to)
@@ -607,11 +614,21 @@ def limits_view(request):
     else:
         form = TransactionLimitForm(user=request.user)
 
+    vapid_public_key = getattr(settings, 'VAPID_PUBLIC_KEY', '')
     return render(request, 'finance/limits.html', {
         'form': form,
         'limits': request.user.transactionlimit_set.select_related(
             'account', 'category'
         ),
+        'vapid_public_key': vapid_public_key,
+        'push_subscription_count': (
+            request.user.push_subscriptions.count()
+        ),
+        'push_config': {
+            'vapid_public_key': vapid_public_key,
+            'subscribe_url': reverse('finance:push_subscribe'),
+            'unsubscribe_url': reverse('finance:push_unsubscribe'),
+        },
         'burger_menu_items': _burger_menu_items(request),
     })
 
@@ -748,6 +765,73 @@ def preview_rule_view(request):
     if 'error' in result:
         return JsonResponse({'error': result['error']}, status=400)
     return JsonResponse({'success': True, **result})
+
+
+def _json_body(request):
+    try:
+        return json.loads(request.body or b'{}'), None
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None, JsonResponse(
+            {'error': 'Invalid JSON body.'}, status=400
+        )
+
+
+@login_required
+@require_POST
+def push_subscribe(request):
+    """JSON: register this browser's Web Push subscription."""
+    if not getattr(settings, 'VAPID_PUBLIC_KEY', ''):
+        return JsonResponse(
+            {'error': 'Push notifications are not configured.'},
+            status=400,
+        )
+    data, error = _json_body(request)
+    if error:
+        return error
+    endpoint = data.get('endpoint') or ''
+    keys = data.get('keys') or {}
+    p256dh = keys.get('p256dh') or ''
+    auth = keys.get('auth') or ''
+    if (
+        not endpoint.startswith('https://')
+        or len(endpoint) > 500
+        or not p256dh
+        or not auth
+    ):
+        return JsonResponse(
+            {'error': 'Missing or invalid subscription fields.'},
+            status=400,
+        )
+    # Endpoint is one browser subscription; if it was registered by a
+    # different user (shared browser, changed login), reassign it to
+    # the current user rather than hitting the unique constraint.
+    PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={
+            'user': request.user,
+            'p256dh': p256dh,
+            'auth': auth,
+        },
+    )
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def push_unsubscribe(request):
+    """JSON: drop this browser's Web Push subscription."""
+    data, error = _json_body(request)
+    if error:
+        return error
+    endpoint = data.get('endpoint') or ''
+    deleted, _ = PushSubscription.objects.filter(
+        user=request.user, endpoint=endpoint
+    ).delete()
+    if not deleted:
+        return JsonResponse(
+            {'error': 'Subscription not found.'}, status=404
+        )
+    return JsonResponse({'success': True})
 
 
 @login_required

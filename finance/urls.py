@@ -21,6 +21,16 @@ urlpatterns = [
     ),
     path('balances/', views.live_balances, name='balances'),
     path('limits/', views.limits_view, name='limits'),
+    path(
+        'push/subscribe/',
+        views.push_subscribe,
+        name='push_subscribe',
+    ),
+    path(
+        'push/unsubscribe/',
+        views.push_unsubscribe,
+        name='push_unsubscribe',
+    ),
     path('rules/', views.rules_view, name='rules'),
     path('rules/save/', views.save_rule, name='save_rule'),
     path(

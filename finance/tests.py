@@ -1,9 +1,12 @@
+import json
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+from pywebpush import WebPushException
+
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from django.urls import reverse
@@ -13,19 +16,19 @@ from finance.models import (
     AccountShare,
     Category,
     CategoryRule,
+    PushSubscription,
     Requisition,
     Transaction,
     TransactionLimit,
-    UserAccountPreference,
     UserTransactionCategory,
 )
+from finance.services.push import send_limit_alert
 from finance.services.categories import (
     annotate_effective_category,
     effective_category_for,
 )
 from finance.services.rules import (
     apply_rules,
-    first_matching_rule,
     preview_rule,
     rule_matches,
 )
@@ -74,6 +77,15 @@ def make_assignment(user, transaction, category, is_manual=False):
         transaction=transaction,
         category=category,
         is_manual=is_manual,
+    )
+
+
+def make_subscription(user, endpoint='https://push.example.com/s/1'):
+    return PushSubscription.objects.create(
+        user=user,
+        endpoint=endpoint,
+        p256dh='p256dh-key',
+        auth='auth-secret',
     )
 
 
@@ -1165,3 +1177,281 @@ class RuleViewTests(TestCase):
         first.refresh_from_db()
         second.refresh_from_db()
         self.assertEqual((second.priority, first.priority), (1, 2))
+
+
+class SendLimitAlertTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+
+    def test_sends_to_all_user_subscriptions(self):
+        make_subscription(self.user, 'https://push.example.com/a')
+        make_subscription(self.user, 'https://push.example.com/b')
+
+        with override_settings(
+            VAPID_PRIVATE_KEY='priv', VAPID_SUBJECT='mailto:t@t.dev'
+        ), patch('finance.services.push.webpush') as mock_push:
+            send_limit_alert(
+                self.user, 'Title', 'Body', '/finance/limits/'
+            )
+
+        self.assertEqual(mock_push.call_count, 2)
+        endpoints = {
+            call.kwargs['subscription_info']['endpoint']
+            for call in mock_push.call_args_list
+        }
+        self.assertEqual(
+            endpoints,
+            {
+                'https://push.example.com/a',
+                'https://push.example.com/b',
+            },
+        )
+        payload = json.loads(mock_push.call_args.kwargs['data'])
+        self.assertEqual(payload['url'], '/finance/limits/')
+        self.assertEqual(
+            mock_push.call_args.kwargs['vapid_private_key'], 'priv'
+        )
+        self.assertEqual(
+            mock_push.call_args.kwargs['vapid_claims'],
+            {'sub': 'mailto:t@t.dev'},
+        )
+
+    def test_gone_subscription_row_deleted(self):
+        make_subscription(self.user)
+        response = MagicMock()
+        response.status_code = 410
+
+        with override_settings(VAPID_PRIVATE_KEY='priv'), patch(
+            'finance.services.push.webpush',
+            side_effect=WebPushException('gone', response=response),
+        ):
+            send_limit_alert(self.user, 't', 'b', '/u')
+
+        self.assertFalse(PushSubscription.objects.exists())
+
+    def test_server_error_keeps_row_and_warns(self):
+        make_subscription(self.user)
+        response = MagicMock()
+        response.status_code = 500
+
+        with override_settings(VAPID_PRIVATE_KEY='priv'), patch(
+            'finance.services.push.webpush',
+            side_effect=WebPushException('boom', response=response),
+        ), patch('finance.services.push.logger') as mock_logger:
+            send_limit_alert(self.user, 't', 'b', '/u')
+
+        self.assertTrue(PushSubscription.objects.exists())
+        mock_logger.warning.assert_called_once()
+
+    def test_no_keys_is_noop(self):
+        make_subscription(self.user)
+
+        with override_settings(VAPID_PRIVATE_KEY=''), patch(
+            'finance.services.push.webpush'
+        ) as mock_push:
+            send_limit_alert(self.user, 't', 'b', '/u')
+
+        mock_push.assert_not_called()
+
+    def test_unexpected_error_keeps_row_and_logs(self):
+        make_subscription(self.user)
+
+        with override_settings(VAPID_PRIVATE_KEY='priv'), patch(
+            'finance.services.push.webpush',
+            side_effect=ConnectionError('offline'),
+        ), patch('finance.services.push.logger') as mock_logger:
+            send_limit_alert(self.user, 't', 'b', '/u')
+
+        self.assertTrue(PushSubscription.objects.exists())
+        mock_logger.exception.assert_called_once()
+
+
+class LimitPushAlertCommandTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+
+    def run_command(self):
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert'
+        ) as mock_send:
+            call_command('evaluate_spending_limits')
+        return mock_send
+
+    def test_breach_sends_one_push_and_sets_flag(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+
+        mock_send = self.run_command()
+
+        mock_send.assert_called_once()
+        self.assertEqual(
+            mock_send.call_args[0][0].pk, self.user.pk
+        )
+        limit.refresh_from_db()
+        self.assertIsNotNone(limit.alerted_7d_at)
+
+    def test_second_run_while_exceeded_sends_nothing(self):
+        TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+
+        self.run_command()
+        mock_send = self.run_command()
+
+        mock_send.assert_not_called()
+
+    def test_flag_cleared_when_back_under_then_realerts(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        tx = make_transaction(self.account, 't-1', '-150.00',
+                              days_ago=1)
+        self.run_command()
+
+        tx.amount = Decimal('-50.00')
+        tx.save()
+        self.run_command()
+        limit.refresh_from_db()
+        self.assertIsNone(limit.alerted_7d_at)
+
+        tx.amount = Decimal('-150.00')
+        tx.save()
+        mock_send = self.run_command()
+        mock_send.assert_called_once()
+
+    def test_both_windows_breach_sends_single_push(self):
+        TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+            limit_30_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+
+        mock_send = self.run_command()
+
+        mock_send.assert_called_once()
+        body = mock_send.call_args[0][2]
+        self.assertIn('7 days', body)
+        self.assertIn('30 days', body)
+        limit = TransactionLimit.objects.get(
+            user=self.user, account=self.account
+        )
+        self.assertIsNotNone(limit.alerted_7d_at)
+        self.assertIsNotNone(limit.alerted_30d_at)
+
+
+class PushSubscriptionEndpointTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.subscribe_url = reverse('finance:push_subscribe')
+        self.unsubscribe_url = reverse('finance:push_unsubscribe')
+        self.payload = {
+            'endpoint': 'https://push.example.com/sub/1',
+            'keys': {'p256dh': 'key', 'auth': 'secret'},
+        }
+
+    def post_json(self, url, data):
+        return self.client.post(
+            url,
+            data=json.dumps(data),
+            content_type='application/json',
+        )
+
+    def test_subscribe_requires_login(self):
+        response = self.post_json(self.subscribe_url, self.payload)
+        self.assertEqual(response.status_code, 302)
+
+    @override_settings(VAPID_PUBLIC_KEY='pub')
+    def test_subscribe_saves_and_updates_row(self):
+        self.client.force_login(self.user)
+        response = self.post_json(self.subscribe_url, self.payload)
+        self.assertEqual(response.status_code, 200)
+        sub = PushSubscription.objects.get(user=self.user)
+        self.assertEqual(sub.p256dh, 'key')
+
+        updated = dict(self.payload)
+        updated['keys'] = {'p256dh': 'key2', 'auth': 'secret2'}
+        response = self.post_json(self.subscribe_url, updated)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(PushSubscription.objects.count(), 1)
+        sub.refresh_from_db()
+        self.assertEqual(sub.p256dh, 'key2')
+
+    @override_settings(VAPID_PUBLIC_KEY='pub')
+    def test_subscribe_400_on_missing_fields(self):
+        self.client.force_login(self.user)
+        response = self.post_json(self.subscribe_url, {})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(PushSubscription.objects.exists())
+
+    @override_settings(VAPID_PUBLIC_KEY='')
+    def test_subscribe_400_when_vapid_unconfigured(self):
+        self.client.force_login(self.user)
+        response = self.post_json(self.subscribe_url, self.payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(PushSubscription.objects.exists())
+
+    @override_settings(VAPID_PUBLIC_KEY='pub')
+    def test_subscribe_reassigns_foreign_endpoint(self):
+        make_subscription(self.other, self.payload['endpoint'])
+        self.client.force_login(self.user)
+        response = self.post_json(self.subscribe_url, self.payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(PushSubscription.objects.count(), 1)
+        sub = PushSubscription.objects.get()
+        self.assertEqual(sub.user, self.user)
+
+    def test_unsubscribe_deletes_own_row(self):
+        sub = make_subscription(
+            self.user, self.payload['endpoint']
+        )
+        self.client.force_login(self.user)
+        response = self.post_json(
+            self.unsubscribe_url, {'endpoint': sub.endpoint}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PushSubscription.objects.exists())
+
+    def test_unsubscribe_404_for_foreign_endpoint(self):
+        sub = make_subscription(
+            self.other, self.payload['endpoint']
+        )
+        self.client.force_login(self.user)
+        response = self.post_json(
+            self.unsubscribe_url, {'endpoint': sub.endpoint}
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(PushSubscription.objects.exists())
+
+    def test_unsubscribe_404_when_absent(self):
+        self.client.force_login(self.user)
+        response = self.post_json(
+            self.unsubscribe_url,
+            {'endpoint': 'https://push.example.com/none'},
+        )
+        self.assertEqual(response.status_code, 404)

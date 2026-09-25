@@ -51,7 +51,16 @@ transactions, and get spending-limit alerts.
   for that user — sharers never see the owner's categories.
 - `TransactionLimit` — per `(account, user, category)` 7-/30-day
   outgoing spending limits; `category` is optional — when set, only
-  the limit user's own category assignments count.
+  the limit user's own category assignments count. `alerted_7d_at` /
+  `alerted_30d_at` are per-window episode flags for push alerts: set
+  when a breach notification is sent, cleared once spending falls
+  back under the threshold so the next breach alerts again.
+- `PushSubscription` — one row per subscribed browser (`endpoint`
+  unique); feeds Web Push spending alerts via `services/push.py`
+  (`send_limit_alert`, uses `VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`
+  settings; 404/410 responses delete stale rows). Browsers
+  subscribe via `POST /finance/push/subscribe/` (+ `unsubscribe/`)
+  from the limits page; no-op when `VAPID_*` settings are empty.
 - `Category` — per-user, unique on `(user, name)`, optional hex color.
 - `CategoryRule` — per-user auto-categorization rule; patterns match
   debtor/creditor name (`sender_receiver_pattern`) and remittance
@@ -77,8 +86,10 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   `categorize_transaction()`.
 - `evaluate_spending_limits`: sums negative amounts per active limit
   window (filtered to the limit's category when set); logs
-  `SPENDING_LIMIT_EXCEEDED ...` warnings (email sending is
-  a TODO — no `EMAIL_*` settings configured).
+  `SPENDING_LIMIT_EXCEEDED ...` warnings and sends one Web Push
+  notification per limit per breach episode (both windows naming in
+  a single notification when breached together) to the user's
+  `PushSubscription`s.
 - Terraform (`terraform/cloud_run_jobs.tf`) maps these to Cloud Run
   jobs with Cloud Scheduler triggers — schedulers are **paused**, so
   nothing runs on a schedule until unpaused.

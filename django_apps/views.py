@@ -10,7 +10,7 @@ def home(request):
 # --- Progressive Web App (PWA) endpoints ---
 
 # Bump this to force clients to refresh the service worker cache.
-PWA_CACHE_VERSION = '1'
+PWA_CACHE_VERSION = '2'
 
 
 def manifest(request):
@@ -25,7 +25,7 @@ def manifest(request):
 
 @cache_control(no_cache=True)
 def service_worker(request):
-    """Serve the service worker from the root so its scope is the whole site."""
+    """Serve the worker from the root so its scope is the whole site."""
     context = {
         'cache_version': PWA_CACHE_VERSION,
         'offline_url': '/offline/',

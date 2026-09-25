@@ -181,6 +181,24 @@ resource "google_cloud_run_v2_job" "evaluate_limits_job" {
             }
           }
         }
+        env {
+          name = "VAPID_PRIVATE_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["VAPID_PRIVATE_KEY"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "VAPID_SUBJECT"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["VAPID_SUBJECT"].secret_id
+              version = "latest"
+            }
+          }
+        }
 
         resources {
           limits = {

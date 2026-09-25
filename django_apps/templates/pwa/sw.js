@@ -80,3 +80,30 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+// Web Push: show the notification payload pushed by the server
+// (currently spending-limit alerts from /finance/).
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {};
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Tedis Tools', {
+      body: data.body || '',
+      icon: '{% static "pwa/icons/icon-192.png" %}',
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow(
+      (event.notification.data && event.notification.data.url) || '/'
+    )
+  );
+});
