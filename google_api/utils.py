@@ -41,11 +41,14 @@ BASE_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
 ]
 
+GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify"
+
 # All scopes needed for the application
 ALL_APP_SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/gmail.readonly",
+    GMAIL_MODIFY_SCOPE,
     "https://www.googleapis.com/auth/tasks",
 ]
 
@@ -582,6 +585,39 @@ def get_messages(query, creds):
         # Handle errors from Gmail API.
         logger.error(f'Gmail API error: {error}')
     return message_details
+
+
+def mark_messages_as_read(creds, message_ids):
+    """
+    Remove the UNREAD label from the given Gmail messages.
+
+    Requires the gmail.modify scope. Returns True on success, False on
+    API error, or an auth dict if reauthorization is needed.
+    """
+    if not message_ids:
+        return True
+
+    credentials = google_auth(creds, scopes=[GMAIL_MODIFY_SCOPE])
+    if (isinstance(credentials, dict) and
+            'authorization_url' in credentials):
+        return credentials
+
+    service = build("gmail", "v1", credentials=credentials)
+    try:
+        # batchModify accepts up to 1000 ids per call
+        for i in range(0, len(message_ids), 1000):
+            service.users().messages().batchModify(
+                userId="me",
+                body={
+                    'ids': message_ids[i:i + 1000],
+                    'removeLabelIds': ['UNREAD'],
+                },
+            ).execute()
+        logger.info(f'Marked {len(message_ids)} messages as read')
+        return True
+    except HttpError as error:
+        logger.error(f'Gmail API error marking messages read: {error}')
+        return False
 
 
 def build_google_service(service_name, version, creds, scopes=None):
