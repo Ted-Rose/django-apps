@@ -78,6 +78,7 @@
                     <th>Date</th>
                     <th>Account</th>
                     <th>Description</th>
+                    <th>Creditor</th>
                     <th>Category</th>
                     <th class="text-end">Amount</th>
                 </tr>
@@ -88,6 +89,7 @@
                     <td>{{ tx.booking_date }}</td>
                     <td>{{ tx.account.name|default:tx.account.iban }}</td>
                     <td>{{ tx.remittance_information|default:'-' }}</td>
+                    <td>{{ tx.creditor_name|default:'-' }}</td>
                     <td>
                         {% if tx.category %}
                         <span class="badge"
