@@ -9,6 +9,7 @@ import logging
 import os
 import requests as http_requests
 from django.contrib.auth import get_user_model, login as auth_login
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -324,7 +325,14 @@ def get_user_credentials(user, scopes=None):
 
         if is_expired and creds.refresh_token:
             logger.info(f'Refreshing expired token for user {user.username}')
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except RefreshError as e:
+                logger.warning(
+                    f'Token refresh failed for user {user.username}: '
+                    f'{e}. Re-authentication required.'
+                )
+                return None
 
             # Update database with new token
             # Google returns naive UTC, Django needs timezone-aware
@@ -335,7 +343,7 @@ def get_user_credentials(user, scopes=None):
                     refreshed_expiry = refreshed_expiry.replace(
                         tzinfo=dt_timezone.utc
                     )
-            
+
             oauth_creds.access_token = creds.token
             oauth_creds.token_expiry = refreshed_expiry
             oauth_creds.save()
@@ -441,7 +449,7 @@ def google_auth(creds=None, scopes=None, user=None):
             is_valid = creds and creds.valid
         else:
             raise
-    
+
     if not is_valid:
         if creds and creds.expired and creds.refresh_token:
             # creds.expiry is naive UTC; timezone.now() is aware -

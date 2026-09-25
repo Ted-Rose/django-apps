@@ -52,6 +52,21 @@ def get_creds_dict(user):
     return None
 
 
+def reauth_redirect(request):
+    """
+    Redirect to the Google OAuth flow when the user has stored
+    credentials that are no longer usable (e.g. a revoked refresh
+    token). Returns None when Google was never connected, so callers
+    can still render the page with a "Login with Google" option.
+    """
+    from google_api.models import GoogleOAuthCredentials
+    if GoogleOAuthCredentials.objects.filter(user=request.user).exists():
+        return redirect(
+            f"{reverse('google_api:login')}?next={request.get_full_path()}"
+        )
+    return None
+
+
 def get_dashboard_js_config(context):
     """
     Build a JSON-serializable config consumed by the dashboard's static
@@ -87,6 +102,10 @@ def get_dashboard_js_config(context):
 def dashboard(request):
     """Main dashboard showing all tasks."""
     creds = get_creds_dict(request.user)
+    if creds is None:
+        reauth = reauth_redirect(request)
+        if reauth:
+            return reauth
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -266,6 +285,10 @@ def dashboard(request):
 def starred_tasks(request):
     """View showing only starred tasks."""
     creds = get_creds_dict(request.user)
+    if creds is None:
+        reauth = reauth_redirect(request)
+        if reauth:
+            return reauth
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -425,6 +448,10 @@ def starred_tasks(request):
 def overdue_tasks(request):
     """View showing only overdue tasks (due_date < today)."""
     creds = get_creds_dict(request.user)
+    if creds is None:
+        reauth = reauth_redirect(request)
+        if reauth:
+            return reauth
 
     if 'sync' in request.GET and creds:
         result = sync_all(request.user, creds)
@@ -1262,6 +1289,10 @@ def permanent_delete_task_view(request, task_id):
 def archived_tasks(request):
     """View showing archived tasks."""
     creds = get_creds_dict(request.user)
+    if creds is None:
+        reauth = reauth_redirect(request)
+        if reauth:
+            return reauth
     label_filter = request.GET.get('label')
     secondary_label_filter = request.GET.get('secondary_label')
     order_by = request.GET.get('order', 'order_asc')
@@ -1360,6 +1391,10 @@ def archived_tasks(request):
 def trash_tasks(request):
     """View showing deleted tasks (trash)."""
     creds = get_creds_dict(request.user)
+    if creds is None:
+        reauth = reauth_redirect(request)
+        if reauth:
+            return reauth
     label_filter = request.GET.get('label')
     secondary_label_filter = request.GET.get('secondary_label')
     order_by = request.GET.get('order', 'deleted_desc')
@@ -1441,6 +1476,10 @@ def task_detail(request, task_id):
         user=request.user
     )
     creds = get_creds_dict(request.user)
+    if creds is None:
+        reauth = reauth_redirect(request)
+        if reauth:
+            return reauth
     labels = TaskLabel.objects.filter(user=request.user)
 
     burger_menu_items = [
@@ -1723,6 +1762,10 @@ def update_task_view(request, task_id):
 def search_tasks(request):
     """Search tasks by title and/or notes."""
     creds = get_creds_dict(request.user)
+    if creds is None:
+        reauth = reauth_redirect(request)
+        if reauth:
+            return reauth
 
     title_query = request.GET.get('title', '').strip()
     notes_query = request.GET.get('notes', '').strip()

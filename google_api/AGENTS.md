@@ -20,7 +20,8 @@ docs: `README.md` in this directory.
     Every caller must handle the dict case.
   - `get_user_credentials(user, scopes)` — load creds from DB, refresh
     the token if expired, persist the new token. Returns `None` if
-    missing/scopes insufficient.
+    missing, scopes insufficient, or the refresh fails (e.g. revoked
+    token → `RefreshError` is caught, callers treat as re-auth).
   - `build_google_service(name, version, creds, scopes)` — generic
     API client builder.
   - `callback(request)` — OAuth callback: exchanges code, logs the user
@@ -34,7 +35,8 @@ docs: `README.md` in this directory.
   - `get_messages(query, creds)` — Gmail fetch with MIME parsing; has
     special-case boilerplate stripping for `e-klase.lv` sender.
 - `decorators.py` — `@google_auth_required(scopes=[...])`: redirects to
-  `google_api:login` when unauthenticated or scopes missing.
+  `google_api:login` when unauthenticated, scopes missing, or stored
+  credentials are unusable (e.g. revoked refresh token).
 - `views.py` — `login_view` (unified auth entry),
   `gmail` (`/gmail-to-audio`), `audio` (`/text-to-audio` GET endpoint).
 

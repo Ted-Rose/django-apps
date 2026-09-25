@@ -62,7 +62,10 @@ sync and several local-only features. Full behavior docs:
   `is_overdue_view`) flow to JS via `get_dashboard_js_config` →
   `json_script` → `static/google_tasks/js/dashboard/*.js`.
 - `get_creds_dict(user)` bridges DB credentials → the legacy dict shape
-  services expect.
+  services expect. Page views pair it with `reauth_redirect(request)`:
+  when creds are `None` but a `GoogleOAuthCredentials` row exists
+  (e.g. revoked refresh token), the user is bounced into the OAuth
+  flow automatically instead of seeing a dead dashboard.
 - Client-side undo/redo lives in `js/dashboard/action_history.js`
   (localStorage, 50-action cap).
 - All mutations are AJAX `POST` + `JsonResponse`; templates are
