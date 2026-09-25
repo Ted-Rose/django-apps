@@ -16,7 +16,7 @@ GCP Cloud Run (project `gmail-vercel`, region `europe-west3`); Vercel
 | `django_apps/` | Project settings, root urls, home page, PWA endpoints (`sw.js`, `manifest.webmanifest`, `offline/`), `utils.py` (LV→EN translation via googletrans), `gcp.py` (Secret Manager helper), `console_tasks/build.py` (Vercel build-time file generators) |
 | `google_api/` | Shared Google OAuth2 layer + Gmail reader + text-to-audio (gTTS → GCS signed URLs). See `google_api/AGENTS.md` and `google_api/README.md` |
 | `google_tasks/` | Largest app. Google Tasks bidirectional sync with local-only features (stars, labels, dividers, archive/trash, manual ordering). See `google_tasks/AGENTS.md` and `google_tasks/README.md` |
-| `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits. See `finance/AGENTS.md` |
+| `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits, rule-based auto-categorization (`services/rules.py` + rule sandbox UI). See `finance/AGENTS.md` |
 | `bible_research/` | ESV API wrapper (`api.esv.org`): verse lookup as JSON and passage audio. No models |
 | `tv_archive/` | Latvian TV schedule scraper (tet.lv) enriched with IMDb ratings. `fetch_tv_program_details()` is **not** wired to a URL — run it manually via shell |
 | `single_pages/` | One-off pages that don't merit their own app (twister, spoki.lv proxy) |

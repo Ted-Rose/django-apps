@@ -40,9 +40,18 @@ transactions, and get spending-limit alerts.
 - `UserAccountPreference` — per-user `included_in_balance_check` toggle
   (created automatically on link/share).
 - `Transaction` — booked transactions; `amount < 0` = outgoing.
-  Unique per `(account, transaction_id)`.
+  Unique per `(account, transaction_id)`. `category` is assigned by
+  rules unless `is_manual_category` is set (manual override).
 - `TransactionLimit` — per `(account, user)` 7-/30-day outgoing
   spending limits.
+- `Category` — per-user, unique on `(user, name)`, optional hex color.
+- `CategoryRule` — per-user auto-categorization rule; patterns match
+  debtor/creditor name (`sender_receiver_pattern`) and remittance
+  info (`description_pattern`) via `match_type`
+  (contains/equals/starts_with/ends_with, case-insensitive),
+  combined with
+  `operator` (AND/OR). Evaluated in `(priority, pk)` order —
+  **first match wins**.
 
 **Always** query accounts/transactions through
 `Account.objects.for_user(user)` / `Transaction.objects.for_user(user)`
@@ -54,13 +63,27 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
 - `sync_bank_transactions` (`--dry-run`): incremental sync per
   `status='LN'` account using `Max(booking_date)` as `date_from`;
   `update_or_create` on transaction id; only `booked` transactions;
-  per-account failures are logged and don't abort the run.
+  per-account failures are logged and don't abort the run. Synced
+  rows are auto-categorized by the **account owner's** rules via
+  `categorize_transaction()`.
 - `evaluate_spending_limits`: sums negative amounts per active limit
   window; logs `SPENDING_LIMIT_EXCEEDED ...` warnings (email sending is
   a TODO — no `EMAIL_*` settings configured).
 - Terraform (`terraform/cloud_run_jobs.tf`) maps these to Cloud Run
   jobs with Cloud Scheduler triggers — schedulers are **paused**, so
   nothing runs on a schedule until unpaused.
+
+## Rules engine (`services/rules.py`)
+
+- `rule_matches` / `first_matching_rule` are pure functions;
+  `apply_rules(user)` re-categorizes the user's **owned** accounts
+  (`is_manual_category=False` rows only) — call it after any ruleset
+  mutation (rule save/delete/move, category delete).
+- `preview_rule(user, data)` dry-runs a candidate rule over history
+  and returns match/apply/change counts + a capped `changes` diff —
+  it never writes. Used by the rule sandbox drawer
+  (`rules.html` + `static/finance/js/rule_sandbox.js`), which posts
+  to `rules/preview/` — the app's one AJAX/JSON endpoint.
 
 ## Conventions
 
