@@ -40,11 +40,18 @@ transactions, and get spending-limit alerts.
 - `UserAccountPreference` — per-user `included_in_balance_check` toggle
   (created automatically on link/share).
 - `Transaction` — booked transactions; `amount < 0` = outgoing.
-  Unique per `(account, transaction_id)`. `category` is assigned by
-  rules unless `is_manual_category` is set (manual override).
+  Unique per `(account, transaction_id)`. Raw bank data only —
+  categorization is per-user (below).
+- `UserTransactionCategory` — one user's category assignment for a
+  transaction, unique per `(user, transaction)`. Owner and sharers
+  each have their own rows; `is_manual` is a per-user override rules
+  never touch. A `post_delete` receiver on `AccountShare`
+  (`signals.py`, wired via `FinanceConfig.ready`) deletes the
+  ex-viewer's rows when a share is revoked. No row = uncategorized
+  for that user — sharers never see the owner's categories.
 - `TransactionLimit` — per `(account, user, category)` 7-/30-day
   outgoing spending limits; `category` is optional — when set, only
-  spending in that category counts.
+  the limit user's own category assignments count.
 - `Category` — per-user, unique on `(user, name)`, optional hex color.
 - `CategoryRule` — per-user auto-categorization rule; patterns match
   debtor/creditor name (`sender_receiver_pattern`) and remittance
@@ -65,7 +72,8 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   `status='LN'` account using `Max(booking_date)` as `date_from`;
   `update_or_create` on transaction id; only `booked` transactions;
   per-account failures are logged and don't abort the run. Synced
-  rows are auto-categorized by the **account owner's** rules via
+  rows are auto-categorized per viewer — one pass writes the
+  owner's `UserTransactionCategory` row plus each sharer's via
   `categorize_transaction()`.
 - `evaluate_spending_limits`: sums negative amounts per active limit
   window (filtered to the limit's category when set); logs
@@ -78,14 +86,28 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
 ## Rules engine (`services/rules.py`)
 
 - `rule_matches` / `first_matching_rule` are pure functions;
-  `apply_rules(user)` re-categorizes the user's **owned** accounts
-  (`is_manual_category=False` rows only) — call it after any ruleset
-  mutation (rule save/delete/move, category delete).
+  `apply_rules(user)` re-categorizes **all** transactions the user
+  can see (owned **and** shared — the assignment table keys by user,
+  so a sharer's rules are meaningful on shared accounts). Call it
+  after any ruleset mutation (rule save/delete/move, category
+  delete).
+- `categorize_transaction(tx, rules, user)` upserts/deletes that
+  user's assignment row and skips `is_manual` rows.
 - `preview_rule(user, data)` dry-runs a candidate rule over history
   and returns match/apply/change counts + a capped `changes` diff —
-  it never writes. Used by the rule sandbox drawer
+  it never writes, and the diff's old/new categories are the
+  *previewing user's* assignments. Used by the rule sandbox drawer
   (`rules.html` + `static/finance/js/rule_sandbox.js`), which posts
   to `rules/preview/` — the app's one AJAX/JSON endpoint.
+
+## Effective-category reads (`services/categories.py`)
+
+- Every per-user read of a transaction's category goes through
+  `annotate_effective_category(qs, user)` (adds
+  `effective_category_id`) or `effective_category_for(tx, user)` —
+  never query `category_assignments` ad hoc. There is intentionally
+  no owner-fallback: a user sees exactly the taxonomy their own
+  rules/limits operate on.
 
 ## Conventions
 

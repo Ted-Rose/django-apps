@@ -246,10 +246,10 @@
                     <td>{{ tx.remittance_information|default:'-' }}</td>
                     <td>{{ tx.creditor_name|default:tx.debtor_name|default:'-' }}</td>
                     <td>
-                        {% if tx.category %}
+                        {% if tx.effective_category %}
                         <span class="badge"
-                            {% if tx.category.color %}style="background-color: {{ tx.category.color }}"{% else %}style="background-color: #6c757d"{% endif %}>
-                            {{ tx.category.name }}
+                            {% if tx.effective_category.color %}style="background-color: {{ tx.effective_category.color }}"{% else %}style="background-color: #6c757d"{% endif %}>
+                            {{ tx.effective_category.name }}
                         </span>
                         {% endif %}
                     </td>

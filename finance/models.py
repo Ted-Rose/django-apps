@@ -151,17 +151,6 @@ class Transaction(models.Model):
     proprietary_bank_transaction_code = models.CharField(
         max_length=100, blank=True, null=True
     )
-    category = models.ForeignKey(
-        Category,
-        on_delete=models.SET_NULL,
-        related_name='transactions',
-        null=True,
-        blank=True
-    )
-    is_manual_category = models.BooleanField(
-        default=False,
-        help_text='Manual override; rules never change this category'
-    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = TransactionQuerySet.as_manager()
@@ -174,6 +163,44 @@ class Transaction(models.Model):
         return (
             f'{self.booking_date} {self.amount} {self.currency} '
             f'({self.account})'
+        )
+
+
+class UserTransactionCategory(models.Model):
+    """One user's category assignment for a transaction.
+
+    A transaction has at most one category per user; multiple users
+    (owner + sharers) can each assign their own.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='transaction_categories'
+    )
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name='category_assignments'
+    )
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name='transaction_assignments'
+    )
+    is_manual = models.BooleanField(
+        default=False,
+        help_text='Manual override; rules never change this row'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'transaction')
+
+    def __str__(self):
+        return (
+            f'{self.user.username}: {self.category.name} '
+            f'on {self.transaction}'
         )
 
 

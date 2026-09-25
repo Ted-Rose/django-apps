@@ -72,11 +72,18 @@ def iter_booked_transactions(client, account):
 def sync_account_transactions(client, account):
     """Sync booked transactions for one account.
 
-    Returns (created, updated) counts.
+    Each transaction is categorized per viewer: the account owner's
+    ruleset plus every sharer's. Returns (created, updated) counts.
     """
     created = 0
     updated = 0
-    rules = active_rules_for(account.owner)
+    users = [account.owner] + [
+        share.shared_with
+        for share in account.shares.select_related('shared_with')
+    ]
+    rules_by_user = {
+        user: active_rules_for(user) for user in users
+    }
     for transaction_id, defaults in iter_booked_transactions(
         client, account
     ):
@@ -85,7 +92,8 @@ def sync_account_transactions(client, account):
             transaction_id=transaction_id,
             defaults=defaults,
         )
-        categorize_transaction(transaction, rules)
+        for user, rules in rules_by_user.items():
+            categorize_transaction(transaction, rules, user)
         if was_created:
             created += 1
         else:

@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -28,6 +29,7 @@ from finance.models import (
     Transaction,
     UserAccountPreference,
 )
+from finance.services.categories import annotate_effective_category
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
 from finance.services.rules import apply_rules, preview_rule
 from finance.services.sync import sync_account_transactions
@@ -235,19 +237,63 @@ def share_account(request, account_id):
 
 @login_required
 def transaction_list(request):
-    transactions = Transaction.objects.for_user(
-        request.user
-    ).select_related('account', 'category')
+    user = request.user
+    transactions = annotate_effective_category(
+        Transaction.objects.for_user(user).select_related('account'),
+        user,
+    )
 
     account_id = request.GET.get('account')
     if account_id:
         transactions = transactions.filter(account_id=account_id)
 
-    accounts = Account.objects.for_user(request.user)
+    category_id = request.GET.get('category')
+    if category_id == 'none':
+        transactions = transactions.filter(
+            effective_category_id__isnull=True
+        )
+    elif category_id:
+        transactions = transactions.filter(
+            effective_category_id=category_id
+        )
+
+    categories = list(Category.objects.filter(user=user))
+    category_by_id = {
+        category.pk: category for category in categories
+    }
+    transactions = transactions.order_by('-booking_date')
+    for tx in transactions:
+        tx.effective_category = category_by_id.get(
+            tx.effective_category_id
+        )
+
+    def page_url(category=None):
+        params = {}
+        if account_id:
+            params['account'] = account_id
+        if category:
+            params['category'] = category
+        query = urlencode(params)
+        base = reverse('finance:transactions')
+        return f'{base}?{query}' if query else base
+
+    category_options = [
+        {
+            'name': category.name,
+            'url': page_url(category=str(category.pk)),
+            'selected': category_id == str(category.pk),
+        }
+        for category in categories
+    ]
     return render(request, 'finance/transactions.html', {
-        'transactions': transactions.order_by('-booking_date'),
-        'accounts': accounts,
+        'transactions': transactions,
+        'accounts': Account.objects.for_user(user),
         'selected_account': account_id,
+        'selected_category': category_id,
+        'category_options': category_options,
+        'all_categories_url': page_url(),
+        'uncategorized_url': page_url(category='none'),
+        'filters_active': bool(account_id or category_id),
         'burger_menu_items': _burger_menu_items(request),
     })
 
@@ -262,7 +308,9 @@ def _parse_date(value):
 @login_required
 def category_overview(request):
     """Per-category spending totals over a selectable time window."""
-    transactions = Transaction.objects.for_user(request.user)
+    transactions = annotate_effective_category(
+        Transaction.objects.for_user(request.user), request.user
+    )
 
     today = timezone.localdate()
     date_from = _parse_date(request.GET.get('from'))
@@ -280,7 +328,7 @@ def category_overview(request):
 
     grouped = (
         transactions
-        .values('category__name', 'category__color', 'currency')
+        .values('effective_category_id', 'currency')
         .annotate(
             spent=Sum('amount', filter=Q(amount__lt=0)),
             received=Sum('amount', filter=Q(amount__gt=0)),
@@ -291,6 +339,10 @@ def category_overview(request):
         # per-category aggregates.
         .order_by()
     )
+    category_by_id = {
+        category.pk: category
+        for category in Category.objects.filter(user=request.user)
+    }
     rows = []
     totals = {}
     for row in grouped:
@@ -298,10 +350,16 @@ def category_overview(request):
         row['spent'] = -(row['spent'] or 0)
         row['received'] = row['received'] or 0
         row['net'] = row['received'] - row['spent']
-        row['category_name'] = (
-            row.pop('category__name') or 'Uncategorized'
+        category = category_by_id.get(
+            row.pop('effective_category_id')
         )
-        row['category_color'] = row.pop('category__color') or '#6c757d'
+        row['category_name'] = (
+            category.name if category else 'Uncategorized'
+        )
+        row['category_color'] = (
+            category.color if category and category.color
+            else '#6c757d'
+        )
         rows.append(row)
         total = totals.setdefault(
             currency, {'spent': 0, 'received': 0}

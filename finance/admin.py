@@ -9,6 +9,7 @@ from finance.models import (
     Transaction,
     TransactionLimit,
     UserAccountPreference,
+    UserTransactionCategory,
 )
 
 
@@ -53,6 +54,14 @@ class TransactionAdmin(admin.ModelAdmin):
     list_filter = ['account', 'currency', 'booking_date']
     search_fields = ['transaction_id', 'remittance_information']
     date_hierarchy = 'booking_date'
+
+
+@admin.register(UserTransactionCategory)
+class UserTransactionCategoryAdmin(admin.ModelAdmin):
+    list_display = [
+        'user', 'transaction', 'category', 'is_manual', 'updated_at',
+    ]
+    list_filter = ['user', 'is_manual']
 
 
 @admin.register(Category)

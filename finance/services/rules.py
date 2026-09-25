@@ -1,16 +1,23 @@
 """Rule-based transaction categorization.
 
 Each user's active CategoryRules are evaluated in (priority, pk)
-order; the first matching rule assigns its category. Transactions
-flagged ``is_manual_category`` are never touched by rules.
+order; the first matching rule assigns its category. Categorization
+is per-user: rules write ``UserTransactionCategory`` rows keyed by
+(user, transaction), and rows flagged ``is_manual`` are never
+touched by rules.
 
-Rules only apply to transactions on accounts the user **owns** —
-shared accounts are categorized by the owner's ruleset.
+Rules apply to every transaction the user can see — owned and
+shared accounts alike.
 """
 import logging
 from types import SimpleNamespace
 
-from finance.models import Account, Category, CategoryRule, Transaction
+from finance.models import (
+    Category,
+    CategoryRule,
+    Transaction,
+    UserTransactionCategory,
+)
 
 logger = logging.getLogger('django')
 
@@ -84,40 +91,69 @@ def active_rules_for(user):
     )
 
 
-def owned_transactions(user):
-    """Transactions rules may categorize: owned accounts, non-manual."""
-    return Transaction.objects.filter(
-        account__in=Account.objects.filter(owner=user),
-        is_manual_category=False,
-    ).select_related('account', 'category')
+def categorizable_transactions(user):
+    """Transactions the user's rules may categorize (owned+shared)."""
+    return Transaction.objects.for_user(user).select_related('account')
 
 
-def categorize_transaction(transaction, rules):
-    """Assign the transaction's category by first matching rule.
+_UNSET = object()
 
-    Clears the category when no rule matches. Returns True when the
-    row was changed and saved.
+
+def categorize_transaction(transaction, rules, user, assignment=_UNSET):
+    """Assign ``user``'s category for the tx by first matching rule.
+
+    Creates, updates or deletes the user's
+    ``UserTransactionCategory`` row; rows flagged ``is_manual`` are
+    never touched. ``assignment`` may carry the already-fetched row
+    to skip the lookup. Returns True when the assignment changed.
     """
-    if transaction.is_manual_category:
+    if assignment is _UNSET:
+        assignment = UserTransactionCategory.objects.filter(
+            user=user, transaction=transaction,
+        ).first()
+    if assignment is not None and assignment.is_manual:
         return False
     rule = first_matching_rule(rules, transaction)
-    category_id = rule.category_id if rule else None
-    if transaction.category_id == category_id:
+    if rule is None:
+        if assignment is None:
+            return False
+        assignment.delete()
+        return True
+    if (
+        assignment is not None
+        and assignment.category_id == rule.category_id
+    ):
         return False
-    transaction.category_id = category_id
-    transaction.save(update_fields=['category'])
+    if assignment is None:
+        UserTransactionCategory.objects.create(
+            user=user,
+            transaction=transaction,
+            category=rule.category,
+        )
+    else:
+        assignment.category = rule.category
+        assignment.save(update_fields=['category', 'updated_at'])
     return True
 
 
 def apply_rules(user):
-    """Re-run the user's rules over all owned-account history.
+    """Re-run the user's rules over all accessible history.
 
-    Returns the number of transactions whose category changed.
+    Returns the number of transactions whose assignment changed.
     """
     rules = active_rules_for(user)
+    transactions = categorizable_transactions(user)
+    assignments = {
+        row.transaction_id: row
+        for row in UserTransactionCategory.objects.filter(
+            user=user, transaction__in=transactions,
+        )
+    }
     changed = 0
-    for transaction in owned_transactions(user).iterator():
-        if categorize_transaction(transaction, rules):
+    for transaction in transactions.iterator():
+        if categorize_transaction(
+            transaction, rules, user, assignments.get(transaction.pk)
+        ):
             changed += 1
     return changed
 
@@ -133,7 +169,7 @@ def preview_rule(user, data):
     """Simulate a candidate rule against the user's history.
 
     Read-only: compares the simulated first-match outcome against
-    each transaction's stored category. ``data`` is a dict with the
+    the user's own category assignments. ``data`` is a dict with the
     form fields (``category_id``, ``priority``, the two patterns,
     ``match_type``, ``operator``, ``is_active``) plus optional
     ``rule_id`` when editing an existing rule.
@@ -177,11 +213,22 @@ def preview_rule(user, data):
         rules.append(candidate)
     rules.sort(key=lambda rule: (rule.priority, rule.pk))
 
+    transactions = categorizable_transactions(user)
+    assignments = {
+        row.transaction_id: row
+        for row in UserTransactionCategory.objects.filter(
+            user=user, transaction__in=transactions,
+        ).select_related('category')
+    }
+
     match_count = 0
     apply_count = 0
     changes = []
     changes_total = 0
-    for tx in owned_transactions(user).iterator():
+    for tx in transactions.iterator():
+        assignment = assignments.get(tx.pk)
+        if assignment is not None and assignment.is_manual:
+            continue
         if rule_matches(candidate, tx):
             match_count += 1
         first = first_matching_rule(rules, tx)
@@ -189,7 +236,8 @@ def preview_rule(user, data):
             apply_count += 1
         new_category = first.category if first else None
         new_id = new_category.pk if new_category else None
-        if new_id == tx.category_id:
+        old_id = assignment.category_id if assignment else None
+        if new_id == old_id:
             continue
         changes_total += 1
         if len(changes) < MAX_PREVIEW_CHANGES:
@@ -204,7 +252,7 @@ def preview_rule(user, data):
                 'amount': str(tx.amount),
                 'currency': tx.currency,
                 'old_category': (
-                    tx.category.name if tx.category else None
+                    assignment.category.name if assignment else None
                 ),
                 'new_category': (
                     new_category.name if new_category else None

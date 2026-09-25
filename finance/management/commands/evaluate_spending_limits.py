@@ -43,7 +43,8 @@ class Command(BaseCommand):
                 )
                 if limit.category_id:
                     transactions = transactions.filter(
-                        category=limit.category
+                        category_assignments__user=limit.user,
+                        category_assignments__category=limit.category,
                     )
                 spent = transactions.aggregate(
                     total=Sum('amount')
