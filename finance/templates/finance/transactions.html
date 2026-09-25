@@ -78,6 +78,7 @@
                     <th>Date</th>
                     <th>Account</th>
                     <th>Description</th>
+                    <th>Category</th>
                     <th class="text-end">Amount</th>
                 </tr>
             </thead>
@@ -87,6 +88,14 @@
                     <td>{{ tx.booking_date }}</td>
                     <td>{{ tx.account.name|default:tx.account.iban }}</td>
                     <td>{{ tx.remittance_information|default:'-' }}</td>
+                    <td>
+                        {% if tx.category %}
+                        <span class="badge"
+                            {% if tx.category.color %}style="background-color: {{ tx.category.color }}"{% else %}style="background-color: #6c757d"{% endif %}>
+                            {{ tx.category.name }}
+                        </span>
+                        {% endif %}
+                    </td>
                     <td class="text-end {% if tx.amount < 0 %}text-danger{% else %}text-success{% endif %}">
                         {{ tx.amount }} {{ tx.currency }}
                     </td>

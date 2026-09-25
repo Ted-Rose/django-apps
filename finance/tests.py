@@ -239,17 +239,32 @@ class SyncBankTransactionsTests(TestCase):
             {
                 'transactionId': 'tx-1',
                 'bookingDate': '2026-09-20',
+                'bookingDateTime': '2026-09-20T12:43:03Z',
                 'transactionAmount': {
                     'amount': '-12.34', 'currency': 'EUR',
                 },
-                'remittanceInformationUnstructured': 'Shop',
+                'creditorName': 'Shop',
+                'creditorAccount': {'iban': 'LV80BANK0000435195001'},
+                'remittanceInformationUnstructured': 'Shop purchase',
+                'additionalInformation': 'CARD-123',
+                'proprietaryBankTransactionCode': 'CARD',
+                'internalTransactionId': 'int-tx-1',
             },
         ])
         tx = Transaction.objects.get(
             account=self.account, transaction_id='tx-1'
         )
         self.assertEqual(tx.amount, Decimal('-12.34'))
-        self.assertEqual(tx.remittance_information, 'Shop')
+        self.assertEqual(tx.remittance_information, 'Shop purchase')
+        self.assertEqual(tx.internal_transaction_id, 'int-tx-1')
+        self.assertEqual(tx.booking_date_time.isoformat(),
+                         '2026-09-20T12:43:03+00:00')
+        self.assertEqual(tx.creditor_name, 'Shop')
+        self.assertEqual(
+            tx.creditor_account, {'iban': 'LV80BANK0000435195001'}
+        )
+        self.assertEqual(tx.additional_information, 'CARD-123')
+        self.assertEqual(tx.proprietary_bank_transaction_code, 'CARD')
 
     def test_falls_back_to_internal_transaction_id(self):
         self.run_command([

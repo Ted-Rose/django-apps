@@ -21,4 +21,32 @@ urlpatterns = [
     ),
     path('balances/', views.live_balances, name='balances'),
     path('limits/', views.limits_view, name='limits'),
+    path('rules/', views.rules_view, name='rules'),
+    path('rules/save/', views.save_rule, name='save_rule'),
+    path(
+        'rules/<int:rule_id>/delete/',
+        views.delete_rule,
+        name='delete_rule',
+    ),
+    path(
+        'rules/<int:rule_id>/move/',
+        views.move_rule,
+        name='move_rule',
+    ),
+    path('rules/apply/', views.apply_rules_view, name='apply_rules'),
+    path(
+        'rules/preview/',
+        views.preview_rule_view,
+        name='preview_rule',
+    ),
+    path(
+        'categories/save/',
+        views.save_category,
+        name='save_category',
+    ),
+    path(
+        'categories/<int:category_id>/delete/',
+        views.delete_category,
+        name='delete_category',
+    ),
 ]

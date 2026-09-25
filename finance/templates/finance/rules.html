@@ -1,0 +1,344 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include "pwa/head.html" %}
+    <title>Categorization Rules - Finance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{% static 'finance/css/finance.css' %}">
+</head>
+<body>
+    {% include "finance/components/nav.html" %}
+
+    <div class="container-fluid px-2 py-4">
+        <h1 class="mb-2">Categorization Rules</h1>
+        <p class="text-muted">
+            Rules run top to bottom — the first matching rule assigns
+            its category. Saving a rule re-categorizes your history
+            (manual categories are never overwritten).
+        </p>
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Categories</h5>
+                        <form method="post"
+                              action="{% url 'finance:save_category' %}"
+                              class="row g-2 align-items-end mb-3">
+                            {% csrf_token %}
+                            <div class="col-7">
+                                <label class="form-label" for="cat-name">
+                                    Name
+                                </label>
+                                <input type="text" name="name"
+                                       id="cat-name" maxlength="100"
+                                       class="form-control" required>
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label" for="cat-color">
+                                    Color
+                                </label>
+                                <input type="color" name="color"
+                                       id="cat-color"
+                                       class="form-control form-control-color"
+                                       value="#6c757d">
+                            </div>
+                            <div class="col-2">
+                                <button type="submit"
+                                        class="btn btn-primary">
+                                    Add
+                                </button>
+                            </div>
+                        </form>
+                        {% if categories %}
+                        <ul class="list-group">
+                            {% for category in categories %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                                <span>
+                                    <span class="badge me-1"
+                                        {% if category.color %}style="background-color: {{ category.color }}"{% else %}style="background-color: #6c757d"{% endif %}>
+                                        {{ category.name }}
+                                    </span>
+                                </span>
+                                <form method="post"
+                                      action="{% url 'finance:delete_category' category.pk %}">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger"
+                                            title="Delete category">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="alert alert-info mb-0">
+                            No categories yet — create one, then add
+                            rules that assign it.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <div class="d-flex gap-2 mb-3">
+                    <button type="button" id="new-rule-btn"
+                            class="btn btn-primary"
+                            {% if not categories %}disabled{% endif %}>
+                        <i class="bi bi-plus-lg"></i> New rule
+                    </button>
+                    <form method="post"
+                          action="{% url 'finance:apply_rules' %}">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-repeat"></i>
+                            Re-apply rules
+                        </button>
+                    </form>
+                </div>
+
+                {% if rules %}
+                <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Category</th>
+                            <th>Matches</th>
+                            <th>Active</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rule in rules %}
+                        <tr>
+                            <td>{{ rule.priority }}</td>
+                            <td>
+                                <span class="badge"
+                                    {% if rule.category.color %}style="background-color: {{ rule.category.color }}"{% else %}style="background-color: #6c757d"{% endif %}>
+                                    {{ rule.category.name }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if rule.sender_receiver_pattern %}
+                                <code>sender/receiver
+                                    {{ rule.get_match_type_display|lower }}
+                                    "{{ rule.sender_receiver_pattern }}"
+                                </code>
+                                {% endif %}
+                                {% if rule.sender_receiver_pattern and rule.description_pattern %}
+                                <span class="badge text-bg-light">
+                                    {{ rule.operator }}
+                                </span>
+                                {% endif %}
+                                {% if rule.description_pattern %}
+                                <code>description
+                                    {{ rule.get_match_type_display|lower }}
+                                    "{{ rule.description_pattern }}"
+                                </code>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rule.is_active %}
+                                <i class="bi bi-check-circle text-success"></i>
+                                {% else %}
+                                <i class="bi bi-x-circle text-muted"></i>
+                                {% endif %}
+                            </td>
+                            <td class="text-nowrap text-end">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary edit-rule-btn"
+                                        data-rule-id="{{ rule.pk }}"
+                                        title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form method="post" class="d-inline"
+                                      action="{% url 'finance:move_rule' rule.pk %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="direction"
+                                           value="up">
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-secondary"
+                                            {% if forloop.first %}disabled{% endif %}
+                                            title="Move up">
+                                        <i class="bi bi-arrow-up"></i>
+                                    </button>
+                                </form>
+                                <form method="post" class="d-inline"
+                                      action="{% url 'finance:move_rule' rule.pk %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="direction"
+                                           value="down">
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-secondary"
+                                            {% if forloop.last %}disabled{% endif %}
+                                            title="Move down">
+                                        <i class="bi bi-arrow-down"></i>
+                                    </button>
+                                </form>
+                                <form method="post" class="d-inline"
+                                      action="{% url 'finance:delete_rule' rule.pk %}">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger"
+                                            title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    No rules yet. Rules automatically categorize
+                    transactions during sync based on the sender /
+                    receiver name or the payment description.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1"
+         id="rule-drawer" style="width: 640px;"
+         aria-labelledby="rule-drawer-title">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="rule-drawer-title">
+                New rule
+            </h5>
+            <button type="button" class="btn-close"
+                    data-bs-dismiss="offcanvas"
+                    aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <form id="rule-form" method="post"
+                  action="{% url 'finance:save_rule' %}">
+                {% csrf_token %}
+                <input type="hidden" name="rule_id" id="rule-id">
+                <div class="row g-2 mb-3">
+                    <div class="col-8">
+                        <label class="form-label" for="rule-category">
+                            Category
+                        </label>
+                        <select name="category" id="rule-category"
+                                class="form-select" required>
+                            {% for category in categories %}
+                            <option value="{{ category.pk }}">
+                                {{ category.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label" for="rule-priority">
+                            Priority
+                        </label>
+                        <input type="number" name="priority"
+                               id="rule-priority" min="1"
+                               class="form-control" value="1" required>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"
+                           for="rule-sender-receiver">
+                        Sender / receiver pattern
+                    </label>
+                    <input type="text" name="sender_receiver_pattern"
+                           id="rule-sender-receiver" maxlength="255"
+                           class="form-control"
+                           placeholder="e.g. Rimi, employer name">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="rule-description">
+                        Description pattern
+                    </label>
+                    <input type="text" name="description_pattern"
+                           id="rule-description" maxlength="255"
+                           class="form-control"
+                           placeholder="e.g. grocery purchase">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-4">
+                        <label class="form-label" for="rule-match-type">
+                            Match
+                        </label>
+                        <select name="match_type" id="rule-match-type"
+                                class="form-select">
+                            {% for code, label in match_types %}
+                            <option value="{{ code }}">
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label" for="rule-operator">
+                            Patterns combine
+                        </label>
+                        <select name="operator" id="rule-operator"
+                                class="form-select">
+                            {% for code, label in operators %}
+                            <option value="{{ code }}">
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-4 d-flex align-items-end">
+                        <div class="form-check mb-2">
+                            <input type="checkbox" name="is_active"
+                                   id="rule-is-active"
+                                   class="form-check-input" checked>
+                            <label class="form-check-label"
+                                   for="rule-is-active">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    Save rule
+                </button>
+            </form>
+
+            <hr class="my-4">
+
+            <div id="preview-panel">
+                <h6>Impact preview</h6>
+                <div id="preview-summary" class="text-muted mb-2">
+                    Edit the rule to preview how it would categorize
+                    your transactions.
+                </div>
+                <div class="table-responsive">
+                <table class="table table-sm" id="preview-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Counterparty</th>
+                            <th>Description</th>
+                            <th class="text-end">Amount</th>
+                            <th>Category</th>
+                        </tr>
+                    </thead>
+                    <tbody id="preview-changes"></tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{ sandbox_config|json_script:"sandbox-config" }}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'finance/js/rule_sandbox.js' %}"></script>
+</body>
+</html>

@@ -5,11 +5,13 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from finance.forms import (
+    CategoryRuleForm,
     RequisitionForm,
     ShareAccountForm,
     TransactionLimitForm,
@@ -17,11 +19,14 @@ from finance.forms import (
 from finance.models import (
     Account,
     AccountShare,
+    Category,
+    CategoryRule,
     Requisition,
     Transaction,
     UserAccountPreference,
 )
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
+from finance.services.rules import apply_rules, preview_rule
 from finance.services.sync import sync_account_transactions
 
 logger = logging.getLogger('django')
@@ -42,6 +47,8 @@ def _burger_menu_items(request):
          'icon': 'cash-coin', 'btn_class': 'btn-light'},
         {'label': 'Limits', 'url': reverse('finance:limits'),
          'icon': 'speedometer2', 'btn_class': 'btn-light'},
+        {'label': 'Rules', 'url': reverse('finance:rules'),
+         'icon': 'funnel', 'btn_class': 'btn-light'},
         {'label': (
             f'Logout ({request.user.email or request.user.username})'
         ), 'url': '/admin/logout/', 'icon': 'box-arrow-right',
@@ -224,7 +231,7 @@ def share_account(request, account_id):
 def transaction_list(request):
     transactions = Transaction.objects.for_user(
         request.user
-    ).select_related('account')
+    ).select_related('account', 'category')
 
     account_id = request.GET.get('account')
     if account_id:
@@ -340,3 +347,170 @@ def limits_view(request):
         ),
         'burger_menu_items': _burger_menu_items(request),
     })
+
+
+@login_required
+def rules_view(request):
+    """Rules page: categories, prioritized rules, sandbox drawer."""
+    rules = CategoryRule.objects.filter(
+        user=request.user
+    ).select_related('category')
+    rules_data = [
+        {
+            'id': rule.pk,
+            'category_id': rule.category_id,
+            'priority': rule.priority,
+            'sender_receiver_pattern': rule.sender_receiver_pattern,
+            'description_pattern': rule.description_pattern,
+            'match_type': rule.match_type,
+            'operator': rule.operator,
+            'is_active': rule.is_active,
+        }
+        for rule in rules
+    ]
+    return render(request, 'finance/rules.html', {
+        'rules': rules,
+        'categories': Category.objects.filter(user=request.user),
+        'match_types': CategoryRule.MATCH_TYPES,
+        'operators': CategoryRule.OPERATORS,
+        'sandbox_config': {
+            'preview_url': reverse('finance:preview_rule'),
+            'rules': rules_data,
+        },
+        'burger_menu_items': _burger_menu_items(request),
+    })
+
+
+def _flatten_errors(form):
+    return '; '.join(
+        f'{field}: {", ".join(errors)}'
+        for field, errors in form.errors.items()
+    )
+
+
+@login_required
+@require_POST
+def save_rule(request):
+    """Create or update a rule, then re-apply rules over history."""
+    rule = None
+    if request.POST.get('rule_id'):
+        rule = get_object_or_404(
+            CategoryRule,
+            pk=request.POST['rule_id'],
+            user=request.user,
+        )
+    form = CategoryRuleForm(
+        request.POST, instance=rule, user=request.user
+    )
+    if form.is_valid():
+        rule = form.save(commit=False)
+        rule.user = request.user
+        rule.save()
+        changed = apply_rules(request.user)
+        messages.success(
+            request,
+            f'Rule saved; {changed} transaction(s) recategorized.',
+        )
+    else:
+        messages.error(
+            request, f'Could not save rule: {_flatten_errors(form)}'
+        )
+    return redirect('finance:rules')
+
+
+@login_required
+@require_POST
+def delete_rule(request, rule_id):
+    rule = get_object_or_404(
+        CategoryRule, pk=rule_id, user=request.user
+    )
+    rule.delete()
+    changed = apply_rules(request.user)
+    messages.success(
+        request,
+        f'Rule deleted; {changed} transaction(s) recategorized.',
+    )
+    return redirect('finance:rules')
+
+
+@login_required
+@require_POST
+def move_rule(request, rule_id):
+    """Move a rule up/down; renumbers all priorities to 1..n."""
+    direction = request.POST.get('direction')
+    rules = list(
+        CategoryRule.objects.filter(user=request.user)
+        .order_by('priority', 'pk')
+    )
+    index = next(
+        (i for i, r in enumerate(rules) if r.pk == rule_id), None
+    )
+    if index is None:
+        return redirect('finance:rules')
+    swap = index - 1 if direction == 'up' else index + 1
+    if 0 <= swap < len(rules):
+        rules[index], rules[swap] = rules[swap], rules[index]
+        for position, rule in enumerate(rules, start=1):
+            if rule.priority != position:
+                rule.priority = position
+                rule.save(update_fields=['priority'])
+        changed = apply_rules(request.user)
+        messages.success(
+            request,
+            f'Rule moved; {changed} transaction(s) recategorized.',
+        )
+    return redirect('finance:rules')
+
+
+@login_required
+@require_POST
+def apply_rules_view(request):
+    """Re-run all rules over the user's transaction history."""
+    changed = apply_rules(request.user)
+    messages.success(
+        request, f'{changed} transaction(s) recategorized.'
+    )
+    return redirect('finance:rules')
+
+
+@login_required
+@require_POST
+def preview_rule_view(request):
+    """JSON: dry-run a candidate rule against transaction history."""
+    result = preview_rule(request.user, request.POST)
+    if 'error' in result:
+        return JsonResponse({'error': result['error']}, status=400)
+    return JsonResponse({'success': True, **result})
+
+
+@login_required
+@require_POST
+def save_category(request):
+    """Create a category (or update color when the name exists)."""
+    name = request.POST.get('name', '').strip()
+    color = request.POST.get('color', '').strip()
+    if not name:
+        messages.error(request, 'Category name is required.')
+    else:
+        Category.objects.update_or_create(
+            user=request.user,
+            name=name,
+            defaults={'color': color},
+        )
+        messages.success(request, f'Category "{name}" saved.')
+    return redirect('finance:rules')
+
+
+@login_required
+@require_POST
+def delete_category(request, category_id):
+    category = get_object_or_404(
+        Category, pk=category_id, user=request.user
+    )
+    category.delete()
+    changed = apply_rules(request.user)
+    messages.success(
+        request,
+        f'Category deleted; {changed} transaction(s) recategorized.',
+    )
+    return redirect('finance:rules')

@@ -3,6 +3,8 @@ from django.contrib import admin
 from finance.models import (
     Account,
     AccountShare,
+    Category,
+    CategoryRule,
     Requisition,
     Transaction,
     TransactionLimit,
@@ -51,6 +53,26 @@ class TransactionAdmin(admin.ModelAdmin):
     list_filter = ['account', 'currency', 'booking_date']
     search_fields = ['transaction_id', 'remittance_information']
     date_hierarchy = 'booking_date'
+
+
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'user', 'color', 'created_at']
+    list_filter = ['user']
+    search_fields = ['name', 'user__username']
+
+
+@admin.register(CategoryRule)
+class CategoryRuleAdmin(admin.ModelAdmin):
+    list_display = [
+        'priority', 'user', 'category', 'match_type', 'operator',
+        'is_active', 'created_at',
+    ]
+    list_filter = ['is_active', 'match_type', 'operator']
+    search_fields = [
+        'sender_receiver_pattern', 'description_pattern',
+        'category__name', 'user__username',
+    ]
 
 
 @admin.register(TransactionLimit)

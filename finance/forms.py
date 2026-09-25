@@ -1,6 +1,11 @@
 from django import forms
 
-from finance.models import Account, TransactionLimit
+from finance.models import (
+    Account,
+    Category,
+    CategoryRule,
+    TransactionLimit,
+)
 
 
 class RequisitionForm(forms.Form):
@@ -17,6 +22,34 @@ class ShareAccountForm(forms.Form):
         max_length=150,
         help_text='Username of the user to share this account with'
     )
+
+
+class CategoryRuleForm(forms.ModelForm):
+    class Meta:
+        model = CategoryRule
+        fields = [
+            'category', 'priority', 'sender_receiver_pattern',
+            'description_pattern', 'match_type', 'operator',
+            'is_active',
+        ]
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            self.fields['category'].queryset = Category.objects.filter(
+                user=user
+            )
+
+    def clean(self):
+        cleaned = super().clean()
+        if not (
+            cleaned.get('sender_receiver_pattern')
+            or cleaned.get('description_pattern')
+        ):
+            raise forms.ValidationError(
+                'Set at least one pattern to match on.'
+            )
+        return cleaned
 
 
 class TransactionLimitForm(forms.ModelForm):

@@ -96,6 +96,31 @@ class UserAccountPreference(models.Model):
         return f'{self.user.username} pref for {self.account}'
 
 
+class Category(models.Model):
+    """Per-user transaction category assigned by rules or manually."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='categories'
+    )
+    name = models.CharField(max_length=100)
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        default='',
+        help_text='Optional hex color, e.g. #0d6efd'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'name')
+        ordering = ['name']
+        verbose_name_plural = 'categories'
+
+    def __str__(self):
+        return f'{self.name} ({self.user.username})'
+
+
 class Transaction(models.Model):
     """Booked bank transaction synced from GoCardless."""
     account = models.ForeignKey(
@@ -104,6 +129,9 @@ class Transaction(models.Model):
         related_name='transactions'
     )
     transaction_id = models.CharField(max_length=255)
+    internal_transaction_id = models.CharField(
+        max_length=255, blank=True, null=True
+    )
     amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -111,7 +139,29 @@ class Transaction(models.Model):
     )
     currency = models.CharField(max_length=10, default='EUR')
     booking_date = models.DateField()
+    booking_date_time = models.DateTimeField(blank=True, null=True)
     remittance_information = models.TextField(blank=True, null=True)
+    debtor_name = models.CharField(max_length=255, blank=True, null=True)
+    debtor_account = models.JSONField(blank=True, null=True)
+    creditor_name = models.CharField(
+        max_length=255, blank=True, null=True
+    )
+    creditor_account = models.JSONField(blank=True, null=True)
+    additional_information = models.TextField(blank=True, null=True)
+    proprietary_bank_transaction_code = models.CharField(
+        max_length=100, blank=True, null=True
+    )
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        related_name='transactions',
+        null=True,
+        blank=True
+    )
+    is_manual_category = models.BooleanField(
+        default=False,
+        help_text='Manual override; rules never change this category'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = TransactionQuerySet.as_manager()
@@ -125,6 +175,66 @@ class Transaction(models.Model):
             f'{self.booking_date} {self.amount} {self.currency} '
             f'({self.account})'
         )
+
+
+class CategoryRule(models.Model):
+    """Per-user rule that auto-assigns a category to transactions.
+
+    Lower priority numbers are evaluated first; the first matching
+    active rule wins.
+    """
+    MATCH_TYPES = [
+        ('contains', 'Contains'),
+        ('equals', 'Equals'),
+        ('starts_with', 'Starts with'),
+    ]
+    OPERATORS = [
+        ('AND', 'AND'),
+        ('OR', 'OR'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='category_rules'
+    )
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name='rules'
+    )
+    priority = models.PositiveIntegerField(default=1)
+    sender_receiver_pattern = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Matches debtor or creditor name'
+    )
+    description_pattern = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Matches remittance information'
+    )
+    match_type = models.CharField(
+        max_length=20,
+        choices=MATCH_TYPES,
+        default='contains'
+    )
+    operator = models.CharField(
+        max_length=3,
+        choices=OPERATORS,
+        default='AND',
+        help_text='How the two patterns combine'
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['priority', 'pk']
+
+    def __str__(self):
+        return f'#{self.priority} -> {self.category.name}'
 
 
 class TransactionLimit(models.Model):
