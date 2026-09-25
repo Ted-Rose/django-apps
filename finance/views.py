@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -29,7 +30,10 @@ from finance.models import (
     Transaction,
     UserAccountPreference,
 )
-from finance.services.categories import annotate_effective_category
+from finance.services.categories import (
+    annotate_effective_category,
+    annotate_effective_category_name,
+)
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
 from finance.services.rules import apply_rules, preview_rule
 from finance.services.sync import sync_account_transactions
@@ -235,6 +239,23 @@ def share_account(request, account_id):
     return redirect('finance:accounts')
 
 
+TRANSACTION_SORTS = {
+    'date': 'booking_date',
+    'account': 'account__name',
+    'description': 'remittance_information',
+    'creditor': 'counterparty',
+    'category': 'effective_category_name',
+    'amount': 'amount',
+}
+
+
+def _int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @login_required
 def transaction_list(request):
     user = request.user
@@ -243,11 +264,13 @@ def transaction_list(request):
         user,
     )
 
-    account_id = request.GET.get('account')
-    if account_id:
+    account_id = _int_or_none(request.GET.get('account'))
+    if account_id is not None:
         transactions = transactions.filter(account_id=account_id)
 
-    category_id = request.GET.get('category')
+    category_id = request.GET.get('category') or ''
+    if category_id != 'none' and _int_or_none(category_id) is None:
+        category_id = ''
     if category_id == 'none':
         transactions = transactions.filter(
             effective_category_id__isnull=True
@@ -257,43 +280,131 @@ def transaction_list(request):
             effective_category_id=category_id
         )
 
-    categories = list(Category.objects.filter(user=user))
-    category_by_id = {
-        category.pk: category for category in categories
+    creditor = (request.GET.get('creditor') or '').strip()
+    search_query = (request.GET.get('q') or '').strip()
+    sort = request.GET.get('sort', 'date')
+    if sort not in TRANSACTION_SORTS:
+        sort = 'date'
+    direction = request.GET.get('direction')
+    if direction not in ('asc', 'desc'):
+        direction = 'desc'
+
+    if creditor or sort == 'creditor':
+        # Counterparty is the creditor for outgoing payments, the
+        # debtor for incoming ones.
+        transactions = transactions.annotate(
+            counterparty=Coalesce('creditor_name', 'debtor_name')
+        )
+        if creditor:
+            transactions = transactions.filter(counterparty=creditor)
+    if search_query:
+        transactions = transactions.filter(
+            remittance_information__icontains=search_query
+        )
+    if sort == 'category':
+        transactions = annotate_effective_category_name(
+            transactions, user
+        )
+    field = TRANSACTION_SORTS[sort]
+    ordering = field if direction == 'asc' else f'-{field}'
+    transactions = transactions.order_by(ordering, '-pk')
+
+    params = {}
+    if account_id is not None:
+        params['account'] = account_id
+    if category_id:
+        params['category'] = category_id
+    if creditor:
+        params['creditor'] = creditor
+    if search_query:
+        params['q'] = search_query
+    if sort != 'date' or direction != 'desc':
+        params['sort'] = sort
+        params['direction'] = direction
+
+    def page_url(**overrides):
+        merged = {**params, **overrides}
+        query = urlencode(
+            {k: v for k, v in merged.items() if v not in (None, '')}
+        )
+        base = reverse('finance:transactions')
+        return f'{base}?{query}' if query else base
+
+    sort_links = {
+        key: {
+            'asc': page_url(sort=key, direction='asc'),
+            'desc': page_url(sort=key, direction='desc'),
+        }
+        for key in TRANSACTION_SORTS
     }
-    transactions = transactions.order_by('-booking_date')
+    account_options = [
+        {
+            'label': str(account),
+            'url': page_url(account=account.pk),
+            'selected': account_id == account.pk,
+        }
+        for account in Account.objects.for_user(user)
+    ]
+    categories = list(Category.objects.filter(user=user))
+    category_by_id = {cat.pk: cat for cat in categories}
+    category_options = [
+        {
+            'name': category.name,
+            'url': page_url(category=category.pk),
+            'selected': category_id == str(category.pk),
+        }
+        for category in categories
+    ]
+    counterparties = (
+        Transaction.objects.for_user(user)
+        .annotate(name=Coalesce('creditor_name', 'debtor_name'))
+        .exclude(name__isnull=True)
+        .exclude(name='')
+        .values_list('name', flat=True)
+        .distinct()
+        .order_by('name')
+    )
+    creditor_options = [
+        {
+            'name': name,
+            'url': page_url(creditor=name),
+            'selected': creditor == name,
+        }
+        for name in counterparties
+    ]
+
     for tx in transactions:
         tx.effective_category = category_by_id.get(
             tx.effective_category_id
         )
 
-    def page_url(category=None):
-        params = {}
-        if account_id:
-            params['account'] = account_id
-        if category:
-            params['category'] = category
-        query = urlencode(params)
-        base = reverse('finance:transactions')
-        return f'{base}?{query}' if query else base
-
-    category_options = [
-        {
-            'name': category.name,
-            'url': page_url(category=str(category.pk)),
-            'selected': category_id == str(category.pk),
-        }
-        for category in categories
-    ]
     return render(request, 'finance/transactions.html', {
         'transactions': transactions,
-        'accounts': Account.objects.for_user(user),
+        'sort': sort,
+        'direction': direction,
+        'descending': direction == 'desc',
+        'sort_links': sort_links,
         'selected_account': account_id,
+        'account_options': account_options,
+        'all_accounts_url': page_url(account=None),
+        'selected_creditor': creditor,
+        'creditor_options': creditor_options,
+        'all_creditors_url': page_url(creditor=None),
         'selected_category': category_id,
         'category_options': category_options,
-        'all_categories_url': page_url(),
+        'all_categories_url': page_url(category=None),
         'uncategorized_url': page_url(category='none'),
-        'filters_active': bool(account_id or category_id),
+        'search_query': search_query,
+        'search_params': {
+            key: value for key, value in params.items()
+            if key != 'q'
+        },
+        'filters_active': bool(
+            account_id is not None
+            or category_id
+            or creditor
+            or search_query
+        ),
         'burger_menu_items': _burger_menu_items(request),
     })
 

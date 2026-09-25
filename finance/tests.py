@@ -930,6 +930,109 @@ class TransactionListViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'OwnerCat')
 
+    def test_sort_by_amount(self):
+        small = make_transaction(self.account, 't-1', '-5.00')
+        large = make_transaction(self.account, 't-2', '-50.00')
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('finance:transactions'),
+            {'sort': 'amount', 'direction': 'asc'},
+        )
+        txs = list(response.context['transactions'])
+        self.assertEqual([t.pk for t in txs], [large.pk, small.pk])
+
+    def test_sort_by_category_name(self):
+        cat_b = make_category(self.user, 'Beta')
+        cat_a = make_category(self.user, 'Alpha')
+        tx_b = make_transaction(self.account, 't-1', '-10.00')
+        tx_a = make_transaction(self.account, 't-2', '-5.00')
+        make_assignment(self.user, tx_b, cat_b)
+        make_assignment(self.user, tx_a, cat_a)
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('finance:transactions'),
+            {'sort': 'category', 'direction': 'asc'},
+        )
+        txs = list(response.context['transactions'])
+        self.assertEqual([t.pk for t in txs], [tx_a.pk, tx_b.pk])
+
+    def test_creditor_filter_and_options(self):
+        tx = make_transaction(
+            self.account, 't-1', '-10.00', creditor_name='Rimi'
+        )
+        make_transaction(
+            self.account, 't-2', '-5.00', creditor_name='Maxima'
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('finance:transactions'), {'creditor': 'Rimi'}
+        )
+        self.assertEqual(
+            [t.pk for t in response.context['transactions']],
+            [tx.pk],
+        )
+        response = self.client.get(reverse('finance:transactions'))
+        names = {
+            o['name'] for o in response.context['creditor_options']
+        }
+        self.assertEqual(names, {'Rimi', 'Maxima'})
+
+    def test_creditor_falls_back_to_debtor_name(self):
+        tx = make_transaction(
+            self.account, 't-1', '10.00', debtor_name='Employer'
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('finance:transactions'), {'creditor': 'Employer'}
+        )
+        self.assertEqual(
+            [t.pk for t in response.context['transactions']],
+            [tx.pk],
+        )
+
+    def test_description_search(self):
+        tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='monthly rent',
+        )
+        make_transaction(
+            self.account, 't-2', '-5.00',
+            remittance_information='groceries',
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('finance:transactions'), {'q': 'rent'}
+        )
+        self.assertEqual(
+            [t.pk for t in response.context['transactions']],
+            [tx.pk],
+        )
+        self.assertEqual(response.context['search_query'], 'rent')
+
+    def test_account_options_mark_selected(self):
+        other = make_account(self.user, self.req, 'acc-2')
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('finance:transactions'))
+        self.assertEqual(len(response.context['account_options']), 2)
+        response = self.client.get(
+            reverse('finance:transactions'), {'account': str(other.pk)}
+        )
+        selected = [
+            o['label'] for o in response.context['account_options']
+            if o['selected']
+        ]
+        self.assertEqual(selected, ['acc-2'])
+
+    def test_invalid_params_ignored(self):
+        make_transaction(self.account, 't-1', '-10.00')
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('finance:transactions'),
+            {'account': 'x', 'category': 'x', 'sort': 'x'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['transactions']), 1)
+
 
 class CategoryOverviewViewTests(TestCase):
     def setUp(self):
