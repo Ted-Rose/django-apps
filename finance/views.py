@@ -286,6 +286,10 @@ def category_overview(request):
             received=Sum('amount', filter=Q(amount__gt=0)),
             tx_count=Count('pk'),
         )
+        # Clear Meta.ordering — otherwise 'booking_date' leaks into
+        # GROUP BY (required by SELECT DISTINCT) and splits the
+        # per-category aggregates.
+        .order_by()
     )
     rows = []
     totals = {}
