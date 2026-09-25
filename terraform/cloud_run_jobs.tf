@@ -238,42 +238,46 @@ resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_evaluate" {
   member   = "serviceAccount:${google_service_account.scheduler.email}"
 }
 
-resource "google_cloud_scheduler_job" "sync_transactions_schedule" {
-  name      = "sync-bank-transactions-schedule"
-  region    = var.region
-  project   = var.project_id
-  schedule  = "0 2 * * *"
-  time_zone = "UTC"
-  paused    = true
+# Cloud Scheduler jobs commented out to save costs.
+# The Cloud Run jobs above remain for manual invocation
+# (gcloud run jobs execute sync-bank-transactions / evaluate-spending-limits).
 
-  http_target {
-    http_method = "POST"
-    uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.sync_transactions_job.name}:run"
-
-    oauth_token {
-      service_account_email = google_service_account.scheduler.email
-    }
-  }
-
-  depends_on = [google_project_service.enabled]
-}
-
-resource "google_cloud_scheduler_job" "evaluate_limits_schedule" {
-  name      = "evaluate-spending-limits-schedule"
-  region    = var.region
-  project   = var.project_id
-  schedule  = "30 2 * * *"
-  time_zone = "UTC"
-  paused    = true
-
-  http_target {
-    http_method = "POST"
-    uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.evaluate_limits_job.name}:run"
-
-    oauth_token {
-      service_account_email = google_service_account.scheduler.email
-    }
-  }
-
-  depends_on = [google_project_service.enabled]
-}
+# resource "google_cloud_scheduler_job" "sync_transactions_schedule" {
+#   name      = "sync-bank-transactions-schedule"
+#   region    = var.region
+#   project   = var.project_id
+#   schedule  = "0 2 * * *"
+#   time_zone = "UTC"
+#   paused    = true
+#
+#   http_target {
+#     http_method = "POST"
+#     uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.sync_transactions_job.name}:run"
+#
+#     oauth_token {
+#       service_account_email = google_service_account.scheduler.email
+#     }
+#   }
+#
+#   depends_on = [google_project_service.enabled]
+# }
+#
+# resource "google_cloud_scheduler_job" "evaluate_limits_schedule" {
+#   name      = "evaluate-spending-limits-schedule"
+#   region    = var.region
+#   project   = var.project_id
+#   schedule  = "30 2 * * *"
+#   time_zone = "UTC"
+#   paused    = true
+#
+#   http_target {
+#     http_method = "POST"
+#     uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.evaluate_limits_job.name}:run"
+#
+#     oauth_token {
+#       service_account_email = google_service_account.scheduler.email
+#     }
+#   }
+#
+#   depends_on = [google_project_service.enabled]
+# }
