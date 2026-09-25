@@ -94,9 +94,13 @@ jobs:
             --project=${{ env.GCP_PROJECT_ID }} || true
 
       - name: Deploy to Cloud Run
+        # Deploy :latest, not the SHA tag: the Artifact Registry
+        # cleanup policy deletes versions older than 24h, and a
+        # deployed SHA reference would go stale — terraform then
+        # fails with "image not found" on its next update.
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest \
             --region=${{ env.GCP_REGION }} \
             --platform=managed \
             --allow-unauthenticated \
@@ -113,7 +117,7 @@ jobs:
         run: |
           for JOB in sync-bank-transactions evaluate-spending-limits; do
             gcloud run jobs update $JOB \
-              --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+              --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest \
               --region=${{ env.GCP_REGION }} \
               --project=${{ env.GCP_PROJECT_ID }} \
               || echo "Job $JOB not yet created (terraform pending)"
