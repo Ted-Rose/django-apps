@@ -615,24 +615,22 @@ def refresh_balances(request):
                 account.account_id, result.get('error'),
             )
 
-    problems = []
+    parts = []
+    if updated:
+        parts.append(f'Updated {updated} balance(s)')
     if rate_limited:
-        problems.append(
-            f'{rate_limited} hit the daily API limit '
-            '(available again tomorrow)'
+        parts.append(
+            f'{rate_limited} hit the daily API limit — '
+            'showing last stored balance'
         )
     if failed:
-        problems.append(f'{failed} failed to fetch')
-    if problems:
-        messages.warning(
-            request,
-            f'Updated {updated} balance(s); '
-            + '; '.join(problems) + '.',
-        )
+        parts.append(f'{failed} failed to fetch')
+    if failed:
+        messages.warning(request, '; '.join(parts) + '.')
+    elif rate_limited:
+        messages.info(request, '; '.join(parts) + '.')
     else:
-        messages.success(
-            request, f'Updated balances for {updated} account(s).'
-        )
+        messages.success(request, '; '.join(parts) + '.')
     return redirect('finance:balances')
 
 

@@ -1638,10 +1638,10 @@ class RefreshBalancesViewTests(TestCase):
 
     def test_success_message(self):
         response = self.post_refresh(self.ok_results())
-        self.assertContains(response, 'Updated balances for 1')
+        self.assertContains(response, 'Updated 1 balance(s)')
         self.assertContains(response, '123.45')
 
-    def test_rate_limited_warns_and_keeps_stored_balance(self):
+    def test_rate_limited_falls_back_to_stored_balance(self):
         self.account.last_balance = {
             'balanceAmount': {'amount': '99.00', 'currency': 'EUR'},
             'balanceType': 'interimAvailable',
@@ -1651,6 +1651,7 @@ class RefreshBalancesViewTests(TestCase):
         self.account.save()
         response = self.post_refresh(self.rate_limited_results())
         self.assertContains(response, 'daily API limit')
+        self.assertContains(response, 'last stored balance')
         self.assertContains(response, '99.00')
         self.account.refresh_from_db()
         self.assertEqual(
