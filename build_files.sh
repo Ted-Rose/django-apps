@@ -4,7 +4,9 @@ set -e
 # Vercel's build image uses a uv-managed Python (PEP 668), which refuses
 # pip installs into the system environment — build inside a venv instead.
 if command -v uv >/dev/null 2>&1; then
-  uv venv /tmp/build-venv
+  # Pin to 3.12 (same as the lambda runtime in vercel.json): newer Pythons
+  # have no psycopg2-binary==2.9.9 wheels and Django 4.2 doesn't support them.
+  uv venv --python 3.12 /tmp/build-venv
   source /tmp/build-venv/bin/activate
   uv pip install -r requirements.txt
 else
