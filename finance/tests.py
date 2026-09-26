@@ -1537,19 +1537,80 @@ class LiveBalancesViewTests(TestCase):
         )
         self.req = make_requisition(self.user)
         self.account = make_account(self.user, self.req)
-        UserAccountPreference.objects.create(
+        self.pref = UserAccountPreference.objects.create(
             user=self.user, account=self.account
         )
         self.url = reverse('finance:balances')
         self.client.force_login(self.user)
 
-    def get_page(self, results):
+    def test_page_shows_stored_balance(self):
+        self.account.last_balance = {
+            'balanceAmount': {'amount': '99.00', 'currency': 'EUR'},
+            'balanceType': 'interimAvailable',
+        }
+        self.account.balance_updated_at = timezone.now()
+        self.account.save()
+        response = self.client.get(self.url)
+        self.assertContains(response, '99.00')
+        self.assertContains(response, 'interimAvailable')
+        self.assertContains(response, 'local-datetime')
+
+    def test_page_does_not_call_api(self):
+        with patch('finance.views.GoCardlessClient') as client_cls:
+            response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        client_cls.assert_not_called()
+
+    def test_no_stored_balance_shows_hint(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, 'No balance retrieved yet')
+
+    def test_excluded_accounts_not_listed(self):
+        self.pref.included_in_balance_check = False
+        self.pref.save()
+        response = self.client.get(self.url)
+        self.assertContains(
+            response, 'No accounts are included'
+        )
+
+
+class RefreshBalancesViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.pref = UserAccountPreference.objects.create(
+            user=self.user, account=self.account
+        )
+        self.url = reverse('finance:refresh_balances')
+        self.client.force_login(self.user)
+
+    def post_refresh(self, results, follow=True):
         client = MagicMock()
         client.fetch_balances_parallel.return_value = results
         with patch(
             'finance.views.GoCardlessClient', return_value=client
         ):
-            return self.client.get(self.url)
+            return self.client.post(self.url, follow=follow)
+
+    def ok_results(self, amount='123.45'):
+        return {
+            'acc-1': {
+                'ok': True,
+                'rate_limited': False,
+                'balance': {
+                    'balanceAmount': {
+                        'amount': amount,
+                        'currency': 'EUR',
+                    },
+                    'balanceType': 'interimAvailable',
+                },
+                'error': None,
+            },
+        }
 
     def rate_limited_results(self):
         return {
@@ -1561,23 +1622,13 @@ class LiveBalancesViewTests(TestCase):
             },
         }
 
-    def test_success_stores_balance_on_account(self):
-        response = self.get_page({
-            'acc-1': {
-                'ok': True,
-                'rate_limited': False,
-                'balance': {
-                    'balanceAmount': {
-                        'amount': '123.45',
-                        'currency': 'EUR',
-                    },
-                    'balanceType': 'interimAvailable',
-                },
-                'error': None,
-            },
-        })
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '123.45')
+    def test_requires_post(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 405)
+
+    def test_success_stores_balance_and_redirects(self):
+        response = self.post_refresh(self.ok_results(), follow=False)
+        self.assertRedirects(response, reverse('finance:balances'))
         self.account.refresh_from_db()
         self.assertEqual(
             self.account.last_balance['balanceAmount']['amount'],
@@ -1585,30 +1636,35 @@ class LiveBalancesViewTests(TestCase):
         )
         self.assertIsNotNone(self.account.balance_updated_at)
 
-    def test_rate_limited_shows_stored_balance(self):
+    def test_success_message(self):
+        response = self.post_refresh(self.ok_results())
+        self.assertContains(response, 'Updated balances for 1')
+        self.assertContains(response, '123.45')
+
+    def test_rate_limited_warns_and_keeps_stored_balance(self):
         self.account.last_balance = {
             'balanceAmount': {'amount': '99.00', 'currency': 'EUR'},
             'balanceType': 'interimAvailable',
         }
-        self.account.balance_updated_at = timezone.now()
+        updated_at = timezone.now()
+        self.account.balance_updated_at = updated_at
         self.account.save()
-        response = self.get_page(self.rate_limited_results())
-        self.assertContains(response, 'Daily API limit reached')
+        response = self.post_refresh(self.rate_limited_results())
+        self.assertContains(response, 'daily API limit')
         self.assertContains(response, '99.00')
-        self.assertContains(response, 'local-datetime')
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.last_balance['balanceAmount']['amount'],
+            '99.00',
+        )
+        self.assertEqual(self.account.balance_updated_at, updated_at)
 
-    def test_rate_limited_without_stored_balance(self):
-        response = self.get_page(self.rate_limited_results())
-        self.assertContains(response, 'No earlier')
-        self.assertContains(response, 'balance is stored')
-
-    def test_other_error_shows_error_message(self):
-        response = self.get_page({
-            'acc-1': {
-                'ok': False,
-                'rate_limited': False,
-                'balance': None,
-                'error': 'boom',
-            },
-        })
-        self.assertContains(response, 'boom')
+    def test_no_included_accounts_warns_without_api_call(self):
+        self.pref.included_in_balance_check = False
+        self.pref.save()
+        with patch(
+            'finance.views.GoCardlessClient'
+        ) as client_cls:
+            response = self.client.post(self.url, follow=True)
+        client_cls.assert_not_called()
+        self.assertContains(response, 'No accounts are included')

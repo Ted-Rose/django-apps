@@ -564,39 +564,76 @@ def sync_transactions(request):
     return redirect(url)
 
 
-@login_required
-def live_balances(request):
-    """Live balance check for accounts the user included."""
-    accounts = Account.objects.for_user(request.user).filter(
-        user_preferences__user=request.user,
+def _balance_check_accounts(user):
+    """Accounts the user opted into the balance check."""
+    return Account.objects.for_user(user).filter(
+        user_preferences__user=user,
         user_preferences__included_in_balance_check=True,
     )
+
+
+@login_required
+def live_balances(request):
+    """Stored balances for accounts the user included."""
+    return render(request, 'finance/balances.html', {
+        'accounts': _balance_check_accounts(request.user),
+        'burger_menu_items': _burger_menu_items(request),
+    })
+
+
+@login_required
+@require_POST
+def refresh_balances(request):
+    """Fetch the latest balances from GoCardless on demand."""
+    accounts = _balance_check_accounts(request.user)
+    if not accounts.exists():
+        messages.warning(
+            request, 'No accounts are included in the balance check.'
+        )
+        return redirect('finance:balances')
+
     client = GoCardlessClient()
     results = client.fetch_balances_parallel(
         [a.account_id for a in accounts]
     )
-    rows = []
+    updated = rate_limited = failed = 0
     for account in accounts:
-        result = results.get(
-            account.account_id,
-            {
-                'ok': False,
-                'rate_limited': False,
-                'balance': None,
-                'error': 'no result',
-            },
-        )
-        if result['ok'] and result['balance']:
+        result = results.get(account.account_id, {})
+        if result.get('ok') and result.get('balance'):
             account.last_balance = result['balance']
             account.balance_updated_at = timezone.now()
             account.save(
                 update_fields=['last_balance', 'balance_updated_at']
             )
-        rows.append({'account': account, 'result': result})
-    return render(request, 'finance/balances.html', {
-        'rows': rows,
-        'burger_menu_items': _burger_menu_items(request),
-    })
+            updated += 1
+        elif result.get('rate_limited'):
+            rate_limited += 1
+        else:
+            failed += 1
+            logger.warning(
+                'Balance fetch failed for account %s: %s',
+                account.account_id, result.get('error'),
+            )
+
+    problems = []
+    if rate_limited:
+        problems.append(
+            f'{rate_limited} hit the daily API limit '
+            '(available again tomorrow)'
+        )
+    if failed:
+        problems.append(f'{failed} failed to fetch')
+    if problems:
+        messages.warning(
+            request,
+            f'Updated {updated} balance(s); '
+            + '; '.join(problems) + '.',
+        )
+    else:
+        messages.success(
+            request, f'Updated balances for {updated} account(s).'
+        )
+    return redirect('finance:balances')
 
 
 @login_required

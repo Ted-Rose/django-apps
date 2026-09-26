@@ -14,63 +14,58 @@
     {% include "finance/components/nav.html" %}
 
     <div class="container-fluid px-2 py-4">
-        <h1 class="mb-4">Live Balances</h1>
+        <h1 class="mb-4">Balances</h1>
 
-        {% if rows %}
+        {% if accounts %}
+        <div class="mb-4">
+            <form method="post"
+                  action="{% url 'finance:refresh_balances' %}"
+                  id="refresh-form">
+                {% csrf_token %}
+                <button type="submit" id="refresh-btn"
+                        class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-repeat"></i>
+                    Get latest balance
+                </button>
+            </form>
+        </div>
+
         <div class="row row-cols-1 row-cols-md-2 g-3">
-            {% for row in rows %}
+            {% for account in accounts %}
             <div class="col">
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">
-                            {{ row.account.name|default:row.account.iban|default:row.account.account_id }}
+                            {{ account.name|default:account.iban|default:account.account_id }}
                         </h5>
                         <p class="card-text text-muted mb-2">
-                            {{ row.account.iban }}
+                            {{ account.iban }}
                         </p>
-                        {% if row.result.ok %}
-                            {% if row.result.balance %}
-                            <p class="fs-3 mb-0">
-                                {{ row.result.balance.balanceAmount.amount }}
-                                {{ row.result.balance.balanceAmount.currency }}
-                            </p>
-                            <p class="text-muted mb-0">
-                                <small>
-                                    {{ row.result.balance.balanceType }}
-                                </small>
-                            </p>
-                            {% else %}
-                            <p class="text-warning mb-0">
-                                No balance data returned.
-                            </p>
-                            {% endif %}
-                        {% elif row.result.rate_limited and row.account.last_balance %}
-                        <p class="fs-3 mb-0 text-danger">
-                            {{ row.account.last_balance.balanceAmount.amount }}
-                            {{ row.account.last_balance.balanceAmount.currency }}
+                        {% if account.last_balance %}
+                        <p class="fs-3 mb-0">
+                            {{ account.last_balance.balanceAmount.amount }}
+                            {{ account.last_balance.balanceAmount.currency }}
                         </p>
-                        <p class="text-danger mb-0">
+                        <p class="text-muted mb-0">
                             <small>
-                                <i class="bi bi-exclamation-triangle"></i>
-                                Daily API limit reached — latest data can
-                                be retrieved again tomorrow. Last updated:
+                                {{ account.last_balance.balanceType }}
+                            </small>
+                        </p>
+                        {% if account.balance_updated_at %}
+                        <p class="text-muted mb-0">
+                            <small>
+                                Last updated:
                                 <span class="local-datetime"
-                                      data-utc="{{ row.account.balance_updated_at.isoformat }}">
-                                    {{ row.account.balance_updated_at }}
+                                      data-utc="{{ account.balance_updated_at.isoformat }}">
+                                    {{ account.balance_updated_at }}
                                 </span>
                             </small>
                         </p>
-                        {% elif row.result.rate_limited %}
-                        <p class="text-danger mb-0">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            Daily API limit reached — latest data can
-                            be retrieved again tomorrow. No earlier
-                            balance is stored for this account.
-                        </p>
+                        {% endif %}
                         {% else %}
-                        <p class="text-danger mb-0">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            {{ row.result.error }}
+                        <p class="text-muted mb-0">
+                            No balance retrieved yet. Click
+                            "Get latest balance" to fetch it.
                         </p>
                         {% endif %}
                     </div>
@@ -89,6 +84,16 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        var refreshForm = document.getElementById('refresh-form');
+        if (refreshForm) {
+            refreshForm.addEventListener('submit', function () {
+                var btn = document.getElementById('refresh-btn');
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<span class="spinner-border spinner-border-sm" '
+                    + 'role="status"></span> Fetching...';
+            });
+        }
         document.querySelectorAll(
             '.local-datetime[data-utc]'
         ).forEach(function (el) {

@@ -20,6 +20,11 @@ urlpatterns = [
         name='sync_transactions',
     ),
     path('balances/', views.live_balances, name='balances'),
+    path(
+        'balances/refresh/',
+        views.refresh_balances,
+        name='refresh_balances',
+    ),
     path('limits/', views.limits_view, name='limits'),
     path(
         'push/subscribe/',
