@@ -151,18 +151,21 @@ class GoCardlessClient:
             try:
                 return account_id, {
                     'ok': True,
+                    'rate_limited': False,
                     'balance': self.fetch_account_balance(account_id),
                     'error': None,
                 }
             except requests.HTTPError as exc:
                 return account_id, {
                     'ok': False,
+                    'rate_limited': False,
                     'balance': None,
                     'error': str(exc),
                 }
             except GoCardlessError as exc:
                 return account_id, {
                     'ok': False,
+                    'rate_limited': exc.status_code == 429,
                     'balance': None,
                     'error': str(exc),
                 }

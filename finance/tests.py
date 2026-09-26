@@ -20,7 +20,12 @@ from finance.models import (
     Requisition,
     Transaction,
     TransactionLimit,
+    UserAccountPreference,
     UserTransactionCategory,
+)
+from finance.services.gocardless import (
+    GoCardlessClient,
+    GoCardlessError,
 )
 from finance.services.push import send_limit_alert
 from finance.services.categories import (
@@ -1495,3 +1500,115 @@ class PushSubscriptionEndpointTests(TestCase):
             {'endpoint': 'https://push.example.com/none'},
         )
         self.assertEqual(response.status_code, 404)
+
+
+class FetchBalancesParallelTests(TestCase):
+    def make_client(self):
+        return GoCardlessClient(secret_id='sid', secret_key='key')
+
+    def test_429_flags_result_as_rate_limited(self):
+        client = self.make_client()
+        with patch.object(
+            client,
+            'fetch_account_balance',
+            side_effect=GoCardlessError(429, 'rate limited'),
+        ):
+            results = client.fetch_balances_parallel(['acc-1'])
+        self.assertFalse(results['acc-1']['ok'])
+        self.assertTrue(results['acc-1']['rate_limited'])
+
+    def test_other_errors_are_not_rate_limited(self):
+        client = self.make_client()
+        with patch.object(
+            client,
+            'fetch_account_balance',
+            side_effect=GoCardlessError(500, 'boom'),
+        ):
+            results = client.fetch_balances_parallel(['acc-1'])
+        self.assertFalse(results['acc-1']['ok'])
+        self.assertFalse(results['acc-1']['rate_limited'])
+
+
+class LiveBalancesViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        UserAccountPreference.objects.create(
+            user=self.user, account=self.account
+        )
+        self.url = reverse('finance:balances')
+        self.client.force_login(self.user)
+
+    def get_page(self, results):
+        client = MagicMock()
+        client.fetch_balances_parallel.return_value = results
+        with patch(
+            'finance.views.GoCardlessClient', return_value=client
+        ):
+            return self.client.get(self.url)
+
+    def rate_limited_results(self):
+        return {
+            'acc-1': {
+                'ok': False,
+                'rate_limited': True,
+                'balance': None,
+                'error': 'GoCardless API error 429: rate limited',
+            },
+        }
+
+    def test_success_stores_balance_on_account(self):
+        response = self.get_page({
+            'acc-1': {
+                'ok': True,
+                'rate_limited': False,
+                'balance': {
+                    'balanceAmount': {
+                        'amount': '123.45',
+                        'currency': 'EUR',
+                    },
+                    'balanceType': 'interimAvailable',
+                },
+                'error': None,
+            },
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '123.45')
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.last_balance['balanceAmount']['amount'],
+            '123.45',
+        )
+        self.assertIsNotNone(self.account.balance_updated_at)
+
+    def test_rate_limited_shows_stored_balance(self):
+        self.account.last_balance = {
+            'balanceAmount': {'amount': '99.00', 'currency': 'EUR'},
+            'balanceType': 'interimAvailable',
+        }
+        self.account.balance_updated_at = timezone.now()
+        self.account.save()
+        response = self.get_page(self.rate_limited_results())
+        self.assertContains(response, 'Daily API limit reached')
+        self.assertContains(response, '99.00')
+        self.assertContains(response, 'local-datetime')
+
+    def test_rate_limited_without_stored_balance(self):
+        response = self.get_page(self.rate_limited_results())
+        self.assertContains(response, 'No earlier')
+        self.assertContains(response, 'balance is stored')
+
+    def test_other_error_shows_error_message(self):
+        response = self.get_page({
+            'acc-1': {
+                'ok': False,
+                'rate_limited': False,
+                'balance': None,
+                'error': 'boom',
+            },
+        })
+        self.assertContains(response, 'boom')

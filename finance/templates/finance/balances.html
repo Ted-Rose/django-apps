@@ -44,6 +44,29 @@
                                 No balance data returned.
                             </p>
                             {% endif %}
+                        {% elif row.result.rate_limited and row.account.last_balance %}
+                        <p class="fs-3 mb-0 text-danger">
+                            {{ row.account.last_balance.balanceAmount.amount }}
+                            {{ row.account.last_balance.balanceAmount.currency }}
+                        </p>
+                        <p class="text-danger mb-0">
+                            <small>
+                                <i class="bi bi-exclamation-triangle"></i>
+                                Daily API limit reached — latest data can
+                                be retrieved again tomorrow. Last updated:
+                                <span class="local-datetime"
+                                      data-utc="{{ row.account.balance_updated_at.isoformat }}">
+                                    {{ row.account.balance_updated_at }}
+                                </span>
+                            </small>
+                        </p>
+                        {% elif row.result.rate_limited %}
+                        <p class="text-danger mb-0">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Daily API limit reached — latest data can
+                            be retrieved again tomorrow. No earlier
+                            balance is stored for this account.
+                        </p>
                         {% else %}
                         <p class="text-danger mb-0">
                             <i class="bi bi-exclamation-triangle"></i>
@@ -65,5 +88,15 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.querySelectorAll(
+            '.local-datetime[data-utc]'
+        ).forEach(function (el) {
+            const date = new Date(el.dataset.utc);
+            if (!isNaN(date)) {
+                el.textContent = date.toLocaleString();
+            }
+        });
+    </script>
 </body>
 </html>

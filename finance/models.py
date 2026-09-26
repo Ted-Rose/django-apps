@@ -46,6 +46,16 @@ class Account(models.Model):
     institution_id = models.CharField(max_length=100)
     name = models.CharField(max_length=255, blank=True)
     currency = models.CharField(max_length=10, default='EUR')
+    last_balance = models.JSONField(
+        blank=True,
+        null=True,
+        help_text='Last balance object fetched from GoCardless'
+    )
+    balance_updated_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text='When last_balance was fetched'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = AccountQuerySet.as_manager()

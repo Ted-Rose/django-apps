@@ -575,16 +575,24 @@ def live_balances(request):
     results = client.fetch_balances_parallel(
         [a.account_id for a in accounts]
     )
-    rows = [
-        {
-            'account': account,
-            'result': results.get(
-                account.account_id,
-                {'ok': False, 'balance': None, 'error': 'no result'},
-            ),
-        }
-        for account in accounts
-    ]
+    rows = []
+    for account in accounts:
+        result = results.get(
+            account.account_id,
+            {
+                'ok': False,
+                'rate_limited': False,
+                'balance': None,
+                'error': 'no result',
+            },
+        )
+        if result['ok'] and result['balance']:
+            account.last_balance = result['balance']
+            account.balance_updated_at = timezone.now()
+            account.save(
+                update_fields=['last_balance', 'balance_updated_at']
+            )
+        rows.append({'account': account, 'result': result})
     return render(request, 'finance/balances.html', {
         'rows': rows,
         'burger_menu_items': _burger_menu_items(request),
