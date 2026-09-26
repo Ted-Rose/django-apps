@@ -93,7 +93,8 @@ resource "google_project_iam_member" "github_deployer_service_account_admin_scop
     description = "Limits serviceAccountAdmin to SAs defined in this Terraform config."
     expression  = <<-EOT
       resource.name.endsWith("/serviceAccounts/github-deployer@${var.project_id}.iam.gserviceaccount.com") ||
-      resource.name.endsWith("/serviceAccounts/${local.cloudrun_email}")
+      resource.name.endsWith("/serviceAccounts/${local.cloudrun_email}") ||
+      resource.name.endsWith("/serviceAccounts/cloud-scheduler@${var.project_id}.iam.gserviceaccount.com")
     EOT
   }
 

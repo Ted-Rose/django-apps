@@ -124,7 +124,7 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
   Artifact Registry → one-off Cloud Run job runs `manage.py migrate` →
-  `gcloud run deploy django-apps` → updates job images.
+  `gcloud run deploy django-apps`.
 - `terraform.yml` plans on PRs touching `terraform/`, applies on main.
 - Both workflows share `concurrency: gcp-main` — intentional, they
   mutate the same Cloud Run resources.
@@ -134,9 +134,10 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   allowed (app does its own auth), image tag `latest` is what Cloud Run
   actually runs.
 - Scheduled jobs (`sync-bank-transactions`, `evaluate-spending-limits`)
-  are defined in `terraform/cloud_run_jobs.tf` with Cloud Scheduler
-  triggers — **schedulers are `paused = true`**, so jobs currently only
-  run on manual/CI invocation.
+  are disabled: all of `terraform/cloud_run_jobs.tf` (Cloud Run jobs +
+  Cloud Scheduler triggers) is commented out to save costs — run them
+  manually via `manage.py sync_bank_transactions` /
+  `evaluate_spending_limits`, or uncomment to re-enable.
 - `bootstrap_gcp.sh` = one-time GCP setup; `migrate_to_django_apps.sh` =
   move infra to a new GCP project.
 - Dockerfile builds `collectstatic` against a dummy
