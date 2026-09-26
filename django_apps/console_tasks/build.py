@@ -1,4 +1,5 @@
 import os
+import re
 import textwrap
 import json
 from django.conf import settings
@@ -12,14 +13,27 @@ def create_ca_pem():
     capem_content = os.environ.get('capem')
     if capem_content:
         print("capem_content found")
-        lines = capem_content.replace("-----BEGIN CERTIFICATE----- ", "-----BEGIN CERTIFICATE-----\n")
-        lines = lines.replace(" -----END CERTIFICATE-----", "\n-----END CERTIFICATE-----")
+        blocks = re.findall(
+            r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----",
+            capem_content,
+            re.DOTALL,
+        )
+        if not blocks:
+            print("No certificates found in 'capem'.")
+            return
 
-        base64_content = lines.split("\n", 1)[1].rsplit("\n", 1)[0]
-        formatted_content = textwrap.fill(base64_content, 64)
-
-        # Add the header and footer back with line breaks as required for pem files
-        pem_content = f"-----BEGIN CERTIFICATE-----\n{formatted_content}\n-----END CERTIFICATE-----"
+        pem_parts = []
+        for block in blocks:
+            base64_content = re.sub(r"\s+", "", block)
+            formatted_content = textwrap.fill(base64_content, 64)
+            # Add the header and footer back with line breaks as
+            # required for pem files
+            pem_parts.append(
+                "-----BEGIN CERTIFICATE-----\n"
+                f"{formatted_content}\n"
+                "-----END CERTIFICATE-----"
+            )
+        pem_content = "\n".join(pem_parts)
         file_path = os.path.join(BASE_DIR, 'ca.pem')
 
         with open(file_path, 'w') as file:
