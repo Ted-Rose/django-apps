@@ -9,6 +9,7 @@ import logging
 import os
 import requests as http_requests
 from django.contrib.auth import get_user_model, login as auth_login
+from django.core.exceptions import ImproperlyConfigured
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -464,6 +465,15 @@ def google_auth(creds=None, scopes=None, user=None):
                 # Set creds to None to ensure we run the OAuth flow
                 creds = None
         if not creds or not creds.valid:
+            if not settings.BASE_URL:
+                # Empty BASE_URL produces a relative redirect_uri
+                # ('/google/callback') which Google rejects with an
+                # opaque 'invalid_request' error.
+                raise ImproperlyConfigured(
+                    'BASE_URL is not set - configure APP_BASE_URL '
+                    '(env var or private_settings.json) with the '
+                    'full site URL, e.g. https://example.com'
+                )
             flow = InstalledAppFlow.from_client_secrets_file(
                 client_secrets_path,
                 scopes,
