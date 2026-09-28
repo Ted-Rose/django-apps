@@ -52,15 +52,25 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          // Don't cache failures or pages that redirected into a
-          // bypassed path (e.g. session expiry → login).
-          const finalPath = new URL(res.url).pathname;
+          // Navigation requests have redirect mode 'manual', so a
+          // redirecting response surfaces as 'opaqueredirect'
+          // (status 0, possibly no URL). Hand it back untouched —
+          // the browser follows it as a new navigation that
+          // re-enters this handler at the final URL.
+          if (res.type === 'opaqueredirect') {
+            return res;
+          }
+          // Don't cache failures or pages that ended on a bypassed
+          // path (e.g. session expiry → login). Cache under the
+          // final URL when fetch() followed redirects internally.
+          const finalPath = new URL(res.url || req.url).pathname;
           if (
             res.ok &&
             !BYPASS_PATHS.some((p) => finalPath.startsWith(p))
           ) {
             const copy = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+            const key = res.url || req;
+            caches.open(CACHE_NAME).then((c) => c.put(key, copy));
           }
           return res;
         })
