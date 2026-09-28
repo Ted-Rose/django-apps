@@ -45,23 +45,30 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (BYPASS_PATHS.some((p) => url.pathname.startsWith(p))) return;
 
-  // Navigations: cache-first for instant loading, update cache in background.
+  // Navigations: network-first so pages always render fresh data
+  // (e.g. after a POST-redirect-GET). Cache the response for offline
+  // use; fall back to the cached copy, then the offline page.
   if (req.mode === 'navigate') {
     event.respondWith(
-      caches.match(req).then((cached) => {
-        // Return cached version immediately for instant load
-        const fetchPromise = fetch(req)
-          .then((res) => {
+      fetch(req)
+        .then((res) => {
+          // Don't cache failures or pages that redirected into a
+          // bypassed path (e.g. session expiry → login).
+          const finalPath = new URL(res.url).pathname;
+          if (
+            res.ok &&
+            !BYPASS_PATHS.some((p) => finalPath.startsWith(p))
+          ) {
             const copy = res.clone();
             caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-            return res;
-          })
-          .catch(() => cached || caches.match(OFFLINE_URL));
-        
-        // If we have a cached version, return it immediately
-        // Otherwise wait for network
-        return cached || fetchPromise;
-      })
+          }
+          return res;
+        })
+        .catch(() =>
+          caches.match(req).then(
+            (cached) => cached || caches.match(OFFLINE_URL)
+          )
+        )
     );
     return;
   }
