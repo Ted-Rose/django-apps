@@ -31,13 +31,16 @@ used for logout via `/admin/logout/`).
 ## Environment & settings
 
 - `django_apps/settings.py` has **two modes**:
-  - GCP (`GAE_APPLICATION`, `K_SERVICE`, or `USE_GCP_SECRETS=true` set):
-    secrets come from env vars injected by Cloud Run
-    (`DJANGO_SECRET_KEY`, `DATABASE_URL`, `APP_BASE_URL`, `ESV_KEY`,
-    `GOOGLE_OAUTH_CLIENT_JSON`, `GOCARDLESS_SECRET_ID`,
-    `GOCARDLESS_SECRET_KEY`, `GCS_AUDIO_BUCKET`).
-    `GOOGLE_OAUTH_CLIENT_JSON` is written to `/tmp/app_secrets.json`
-    at settings import.
+  - Cloud — detected by `_is_gcp_environment()` (`GAE_APPLICATION`,
+    `K_SERVICE`, or `USE_GCP_SECRETS=true`) or
+    `_is_vercel_environment()` (`VERCEL` env var, set by Vercel at
+    build and runtime); combined as `IS_CLOUD_ENVIRONMENT`. Secrets
+    come from env vars (`DJANGO_SECRET_KEY`, `DATABASE_URL`,
+    `APP_BASE_URL`, `ESV_KEY`, `GOOGLE_OAUTH_CLIENT_JSON`,
+    `GOCARDLESS_SECRET_ID`, `GOCARDLESS_SECRET_KEY`,
+    `GCS_AUDIO_BUCKET`). `GOOGLE_OAUTH_CLIENT_JSON` is written to
+    `/tmp/app_secrets.json` at settings import (writable on both
+    Cloud Run and Vercel/Lambda).
   - Local: reads `private_settings.json` at repo root (gitignored;
     template: `private_settings_template.json`). If the file is
     missing, settings fall back to env vars, then insecure dev
