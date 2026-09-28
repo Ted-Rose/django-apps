@@ -150,7 +150,21 @@ class Transaction(models.Model):
     currency = models.CharField(max_length=10, default='EUR')
     booking_date = models.DateField()
     booking_date_time = models.DateTimeField(blank=True, null=True)
+    value_date = models.DateField(blank=True, null=True)
+    value_date_time = models.DateTimeField(blank=True, null=True)
+    end_to_end_id = models.CharField(
+        max_length=255, blank=True, null=True
+    )
+    bank_transaction_code = models.CharField(
+        max_length=100, blank=True, null=True,
+        help_text='ISO 20022 code, e.g. PMNT-CCRD-POSD'
+    )
     remittance_information = models.TextField(blank=True, null=True)
+    remittance_information_array = models.JSONField(
+        blank=True,
+        null=True,
+        help_text='Raw remittanceInformationUnstructuredArray'
+    )
     debtor_name = models.CharField(max_length=255, blank=True, null=True)
     debtor_account = models.JSONField(blank=True, null=True)
     creditor_name = models.CharField(
@@ -158,8 +172,18 @@ class Transaction(models.Model):
     )
     creditor_account = models.JSONField(blank=True, null=True)
     additional_information = models.TextField(blank=True, null=True)
+    additional_data_structured = models.JSONField(
+        blank=True,
+        null=True,
+        help_text='Raw additionalDataStructured (e.g. card instrument)'
+    )
     proprietary_bank_transaction_code = models.CharField(
         max_length=100, blank=True, null=True
+    )
+    balance_after_transaction = models.JSONField(
+        blank=True,
+        null=True,
+        help_text='Raw balanceAfterTransaction object'
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

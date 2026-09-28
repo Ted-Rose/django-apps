@@ -45,6 +45,13 @@ def iter_booked_transactions(client, account):
             )
             continue
 
+        remittance_array = entry.get(
+            'remittanceInformationUnstructuredArray'
+        )
+        remittance = entry.get('remittanceInformationUnstructured')
+        if remittance is None and remittance_array:
+            remittance = '\n'.join(remittance_array)
+
         yield transaction_id, {
             'internal_transaction_id': entry.get(
                 'internalTransactionId'
@@ -55,16 +62,27 @@ def iter_booked_transactions(client, account):
             'booking_date_time': parse_datetime(
                 entry.get('bookingDateTime') or ''
             ),
-            'remittance_information': entry.get(
-                'remittanceInformationUnstructured'
+            'value_date': entry.get('valueDate'),
+            'value_date_time': parse_datetime(
+                entry.get('valueDateTime') or ''
             ),
+            'end_to_end_id': entry.get('endToEndId'),
+            'bank_transaction_code': entry.get('bankTransactionCode'),
+            'remittance_information': remittance,
+            'remittance_information_array': remittance_array,
             'debtor_name': entry.get('debtorName'),
             'debtor_account': entry.get('debtorAccount'),
             'creditor_name': entry.get('creditorName'),
             'creditor_account': entry.get('creditorAccount'),
             'additional_information': entry.get('additionalInformation'),
+            'additional_data_structured': entry.get(
+                'additionalDataStructured'
+            ),
             'proprietary_bank_transaction_code': entry.get(
                 'proprietaryBankTransactionCode'
+            ),
+            'balance_after_transaction': entry.get(
+                'balanceAfterTransaction'
             ),
         }
 

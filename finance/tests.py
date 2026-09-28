@@ -407,6 +407,19 @@ class SyncBankTransactionsTests(TestCase):
                 'additionalInformation': 'CARD-123',
                 'proprietaryBankTransactionCode': 'CARD',
                 'internalTransactionId': 'int-tx-1',
+                'valueDate': '2026-09-21',
+                'valueDateTime': '2026-09-21T08:00:00Z',
+                'endToEndId': 'E2E-42',
+                'bankTransactionCode': 'PMNT-CCRD-POSD',
+                'balanceAfterTransaction': {
+                    'balanceAmount': {
+                        'amount': '133.38', 'currency': 'EUR',
+                    },
+                    'balanceType': 'InterimBooked',
+                },
+                'additionalDataStructured': {
+                    'cardInstrument': {'cardSchemeName': 'VISA'},
+                },
             },
         ])
         tx = Transaction.objects.get(
@@ -423,6 +436,50 @@ class SyncBankTransactionsTests(TestCase):
         )
         self.assertEqual(tx.additional_information, 'CARD-123')
         self.assertEqual(tx.proprietary_bank_transaction_code, 'CARD')
+        self.assertEqual(tx.value_date.isoformat(), '2026-09-21')
+        self.assertEqual(tx.value_date_time.isoformat(),
+                         '2026-09-21T08:00:00+00:00')
+        self.assertEqual(tx.end_to_end_id, 'E2E-42')
+        self.assertEqual(tx.bank_transaction_code, 'PMNT-CCRD-POSD')
+        self.assertEqual(
+            tx.balance_after_transaction['balanceAmount']['amount'],
+            '133.38',
+        )
+        self.assertEqual(
+            tx.additional_data_structured['cardInstrument'],
+            {'cardSchemeName': 'VISA'},
+        )
+
+    def test_maps_remittance_array_and_rules_match(self):
+        category = make_category(self.user)
+        make_rule(self.user, category, description='Revolut')
+        self.run_command([
+            {
+                'transactionId': 'tx-2',
+                'bookingDate': '2026-09-24',
+                'transactionAmount': {
+                    'amount': '-10.00', 'currency': 'EUR',
+                },
+                'remittanceInformationUnstructuredArray': [
+                    'To Karlina', 'Sent from Revolut',
+                ],
+            },
+        ])
+        tx = Transaction.objects.get(
+            account=self.account, transaction_id='tx-2'
+        )
+        self.assertEqual(
+            tx.remittance_information,
+            'To Karlina\nSent from Revolut',
+        )
+        self.assertEqual(
+            tx.remittance_information_array,
+            ['To Karlina', 'Sent from Revolut'],
+        )
+        assignment = UserTransactionCategory.objects.get(
+            user=self.user, transaction=tx
+        )
+        self.assertEqual(assignment.category, category)
 
     def test_falls_back_to_internal_transaction_id(self):
         self.run_command([
