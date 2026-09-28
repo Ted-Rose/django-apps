@@ -19,13 +19,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 PRIVATE_SETTINGS_JSON_PATH = os.path.join(BASE_DIR, 'private_settings.json')
 
-IS_GCP_ENVIRONMENT = (
-    os.environ.get('GAE_APPLICATION') is not None
-    or os.environ.get('K_SERVICE') is not None
-    or os.environ.get('USE_GCP_SECRETS') == 'true'
-)
 
-if IS_GCP_ENVIRONMENT:
+def _is_gcp_environment():
+    return (
+        os.environ.get('GAE_APPLICATION') is not None
+        or os.environ.get('K_SERVICE') is not None
+        or os.environ.get('USE_GCP_SECRETS') == 'true'
+    )
+
+
+def _is_vercel_environment():
+    # Vercel exposes VERCEL=1 in both the build step and the
+    # serverless function runtime.
+    return os.environ.get('VERCEL') is not None
+
+
+IS_GCP_ENVIRONMENT = _is_gcp_environment()
+IS_VERCEL_ENVIRONMENT = _is_vercel_environment()
+IS_CLOUD_ENVIRONMENT = IS_GCP_ENVIRONMENT or IS_VERCEL_ENVIRONMENT
+
+if IS_CLOUD_ENVIRONMENT:
     import dj_database_url
 
     # Helper to ensure env vars are strings (defensive against bytes)
@@ -35,7 +48,8 @@ if IS_GCP_ENVIRONMENT:
             return value.decode('utf-8')
         return value
 
-    # Read secrets from environment variables (injected by Cloud Run)
+    # Read secrets from environment variables (injected by Cloud Run
+    # or configured in Vercel project settings)
     SECRET_KEY = get_env_str('DJANGO_SECRET_KEY')
     DEBUG = False
     BASE_URL = get_env_str('APP_BASE_URL')
@@ -43,7 +57,10 @@ if IS_GCP_ENVIRONMENT:
 
     db_config = dj_database_url.parse(get_env_str('DATABASE_URL'))
     db_config.setdefault('OPTIONS', {})
-    db_config['OPTIONS']['sslmode'] = 'require'
+    # sslmode/sslrootcert can be set via DATABASE_URL query params;
+    # 'require' is only the default (Vercel needs e.g. verify-full
+    # with the build-generated ca.pem).
+    db_config['OPTIONS'].setdefault('sslmode', 'require')
     # Enable connection pooling to reuse DB connections
     db_config['CONN_MAX_AGE'] = 600  # 10 minutes
     DATABASES = {'default': db_config}
