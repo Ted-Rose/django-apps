@@ -984,12 +984,12 @@ class TransactionListViewTests(TestCase):
             reverse('finance:transactions'),
             {'category': str(cat.pk)},
         )
-        txs = response.context['transactions']
+        txs = response.context['page_obj']
         self.assertEqual([t.pk for t in txs], [tx.pk])
         response = self.client.get(
             reverse('finance:transactions'), {'category': 'none'}
         )
-        txs = response.context['transactions']
+        txs = response.context['page_obj']
         self.assertEqual([t.pk for t in txs], [other_tx.pk])
 
     def test_sharer_sees_only_own_categories(self):
@@ -1012,7 +1012,7 @@ class TransactionListViewTests(TestCase):
             reverse('finance:transactions'),
             {'sort': 'amount', 'direction': 'asc'},
         )
-        txs = list(response.context['transactions'])
+        txs = list(response.context['page_obj'])
         self.assertEqual([t.pk for t in txs], [large.pk, small.pk])
 
     def test_sort_by_category_name(self):
@@ -1027,7 +1027,7 @@ class TransactionListViewTests(TestCase):
             reverse('finance:transactions'),
             {'sort': 'category', 'direction': 'asc'},
         )
-        txs = list(response.context['transactions'])
+        txs = list(response.context['page_obj'])
         self.assertEqual([t.pk for t in txs], [tx_a.pk, tx_b.pk])
 
     def test_creditor_filter_and_options(self):
@@ -1042,7 +1042,7 @@ class TransactionListViewTests(TestCase):
             reverse('finance:transactions'), {'creditor': 'Rimi'}
         )
         self.assertEqual(
-            [t.pk for t in response.context['transactions']],
+            [t.pk for t in response.context['page_obj']],
             [tx.pk],
         )
         response = self.client.get(reverse('finance:transactions'))
@@ -1060,7 +1060,7 @@ class TransactionListViewTests(TestCase):
             reverse('finance:transactions'), {'creditor': 'Employer'}
         )
         self.assertEqual(
-            [t.pk for t in response.context['transactions']],
+            [t.pk for t in response.context['page_obj']],
             [tx.pk],
         )
 
@@ -1078,7 +1078,7 @@ class TransactionListViewTests(TestCase):
             reverse('finance:transactions'), {'q': 'rent'}
         )
         self.assertEqual(
-            [t.pk for t in response.context['transactions']],
+            [t.pk for t in response.context['page_obj']],
             [tx.pk],
         )
         self.assertEqual(response.context['search_query'], 'rent')
@@ -1105,7 +1105,27 @@ class TransactionListViewTests(TestCase):
             {'account': 'x', 'category': 'x', 'sort': 'x'},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context['transactions']), 1)
+        self.assertEqual(len(response.context['page_obj']), 1)
+
+    def test_pagination(self):
+        for i in range(101):
+            make_transaction(self.account, f't-{i}', '-1.00')
+        self.client.force_login(self.user)
+        url = reverse('finance:transactions')
+
+        response = self.client.get(url)
+        self.assertEqual(len(response.context['page_obj']), 100)
+        self.assertEqual(response.context['page_obj'].number, 1)
+
+        response = self.client.get(url, {'page': '2'})
+        self.assertEqual(len(response.context['page_obj']), 1)
+        self.assertEqual(response.context['page_obj'].number, 2)
+
+        # Out-of-range and invalid pages fall back gracefully.
+        response = self.client.get(url, {'page': '999'})
+        self.assertEqual(response.context['page_obj'].number, 2)
+        response = self.client.get(url, {'page': 'abc'})
+        self.assertEqual(response.context['page_obj'].number, 1)
 
 
 class CategoryOverviewViewTests(TestCase):

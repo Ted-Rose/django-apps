@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
@@ -375,13 +376,37 @@ def transaction_list(request):
         for name in counterparties
     ]
 
-    for tx in transactions:
+    paginator = Paginator(transactions, 100)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    for tx in page_obj:
         tx.effective_category = category_by_id.get(
             tx.effective_category_id
         )
+    page_items = [
+        {
+            'url': (
+                None if number == Paginator.ELLIPSIS
+                else page_url(page=number)
+            ),
+            'label': number,
+            'current': number == page_obj.number,
+        }
+        for number in paginator.get_elided_page_range(
+            page_obj.number, on_each_side=2, on_ends=1
+        )
+    ]
 
     return render(request, 'finance/transactions.html', {
-        'transactions': transactions,
+        'page_obj': page_obj,
+        'page_items': page_items,
+        'prev_page_url': (
+            page_url(page=page_obj.previous_page_number())
+            if page_obj.has_previous() else None
+        ),
+        'next_page_url': (
+            page_url(page=page_obj.next_page_number())
+            if page_obj.has_next() else None
+        ),
         'sort': sort,
         'direction': direction,
         'descending': direction == 'desc',

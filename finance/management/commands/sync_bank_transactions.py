@@ -33,12 +33,22 @@ class Command(BaseCommand):
             requisition__status='LN'
         ).select_related('requisition')
 
+        logger.info(
+            'Starting transaction sync for %d linked account(s)%s',
+            accounts.count(),
+            ' [dry-run]' if dry_run else '',
+        )
+
         total_created = 0
         total_updated = 0
         for account in accounts:
             try:
                 created, updated = self._sync_account(
                     client, account, dry_run
+                )
+                logger.info(
+                    'Synced account %s: %d created, %d updated',
+                    account.account_id, created, updated,
                 )
                 total_created += created
                 total_updated += updated
@@ -53,6 +63,11 @@ class Command(BaseCommand):
                     f'Account {account.account_id}: {exc}'
                 )
 
+        logger.info(
+            'Sync complete: %d created, %d updated%s',
+            total_created, total_updated,
+            ' [dry-run]' if dry_run else '',
+        )
         self.stdout.write(
             f'Sync complete: {total_created} created, '
             f'{total_updated} updated'
