@@ -3,11 +3,13 @@
 ## What this repo is
 
 Personal Django 4.2 monolith ("collection of random Django apps") —
-several small apps sharing one project, one Postgres database, and one
-deployment. GitHub: `Ted-Rose/django-apps`. Primary production target is
-GCP Cloud Run (project `gmail-vercel`, region `europe-west3`); Vercel
-(`vercel.json`, `build_files.sh`) and PythonAnywhere
-(`tedisrozenfelds_pythonanywhere_com_wsgi.py`) configs are legacy.
+several small apps sharing one project and one (Aiven) Postgres
+database. GitHub: `Ted-Rose/django-apps`. Deployed to two live targets:
+GCP Cloud Run (project `gmail-vercel`, region `europe-west3`) and
+Vercel (`vercel.json`, `build_files.sh`), where the same Django app
+serves front-end traffic to reduce Cloud Run costs — both hit the
+same database. PythonAnywhere
+(`tedisrozenfelds_pythonanywhere_com_wsgi.py`) is legacy.
 
 ## Repository map
 
@@ -40,7 +42,10 @@ used for logout via `/admin/logout/`).
     `GOCARDLESS_SECRET_ID`, `GOCARDLESS_SECRET_KEY`,
     `GCS_AUDIO_BUCKET`). `GOOGLE_OAUTH_CLIENT_JSON` is written to
     `/tmp/app_secrets.json` at settings import (writable on both
-    Cloud Run and Vercel/Lambda).
+    Cloud Run and Vercel/Lambda). `CONN_MAX_AGE` is 600 on Cloud Run
+    (long-lived gunicorn workers) but 0 on Vercel — serverless
+    instances must not hold persistent connections or they exhaust
+    Aiven's `max_connections`.
   - Local: reads `private_settings.json` at repo root (gitignored;
     template: `private_settings_template.json`). If the file is
     missing, settings fall back to env vars, then insecure dev
@@ -128,6 +133,9 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
   Artifact Registry → one-off Cloud Run job runs `manage.py migrate` →
   `gcloud run deploy django-apps`.
+- Vercel deploys the same repo automatically via its GitHub
+  integration (no GitHub Actions involved) and serves front-end
+  traffic to keep Cloud Run costs down.
 - `terraform.yml` plans on PRs touching `terraform/`, applies on main.
 - Both workflows share `concurrency: gcp-main` — intentional, they
   mutate the same Cloud Run resources.
@@ -163,6 +171,11 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   incremental scopes).
 - `text_to_audio` requires `GCS_AUDIO_BUCKET` + GCP credentials — it
   cannot work in pure local dev.
+- Both Vercel and Cloud Run share one Aiven Postgres with a low
+  `max_connections` on small plans — exhausted slots surface as
+  "remaining connection slots are reserved for non-replication
+  superuser connections". Keep `CONN_MAX_AGE=0` on Vercel; if it
+  resurfaces, point `DATABASE_URL` at Aiven's PgBouncer pool.
 - google_tasks trash is advertised as "auto-purged after 30 days" in UI
   text and model help_text, but **no purge job exists** — items stay
   until `permanent_delete_task_view` runs.
