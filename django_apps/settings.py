@@ -61,8 +61,11 @@ if IS_CLOUD_ENVIRONMENT:
     # 'require' is only the default (Vercel needs e.g. verify-full
     # with the build-generated ca.pem).
     db_config['OPTIONS'].setdefault('sslmode', 'require')
-    # Enable connection pooling to reuse DB connections
-    db_config['CONN_MAX_AGE'] = 600  # 10 minutes
+    # Reuse DB connections where the process is long-lived. On Vercel
+    # (serverless) each instance is a separate process, so persistent
+    # connections hold Postgres slots open long after requests finish
+    # and can exhaust Aiven's max_connections.
+    db_config['CONN_MAX_AGE'] = 0 if IS_VERCEL_ENVIRONMENT else 600
     DATABASES = {'default': db_config}
 
     GOCARDLESS_SECRET_ID = get_env_str('GOCARDLESS_SECRET_ID')
