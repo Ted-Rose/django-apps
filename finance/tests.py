@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -6,7 +7,7 @@ from pywebpush import WebPushException
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from django.urls import reverse
@@ -16,6 +17,7 @@ from finance.models import (
     AccountShare,
     Category,
     CategoryRule,
+    LimitEvaluation,
     PushSubscription,
     Requisition,
     Transaction,
@@ -31,6 +33,11 @@ from finance.services.push import send_limit_alert
 from finance.services.categories import (
     annotate_effective_category,
     effective_category_for,
+)
+from finance.services.limits import (
+    limit_window_stats,
+    monthly_history,
+    monthly_period_start,
 )
 from finance.services.rules import (
     apply_rules,
@@ -60,14 +67,14 @@ def make_account(owner, requisition, account_id='acc-1'):
 
 def make_transaction(account, transaction_id, amount, days_ago=0,
                      **fields):
+    fields.setdefault(
+        'booking_date',
+        timezone.now().date() - timezone.timedelta(days=days_ago),
+    )
     return Transaction.objects.create(
         account=account,
         transaction_id=transaction_id,
         amount=Decimal(amount),
-        booking_date=(
-            timezone.now().date()
-            - timezone.timedelta(days=days_ago)
-        ),
         **fields,
     )
 
@@ -374,6 +381,372 @@ class EvaluateSpendingLimitsTests(TestCase):
 
         mock_logger = self.run_command()
         mock_logger.warning.assert_not_called()
+
+    def test_monthly_window_exceeded_logs_warning(self):
+        start = timezone.now().date().replace(day=1)
+        TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-150.00', booking_date=start
+        )
+
+        mock_logger = self.run_command()
+        mock_logger.warning.assert_called_once()
+
+    def test_monthly_window_excludes_previous_period(self):
+        start = timezone.now().date().replace(day=1)
+        TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-60.00', booking_date=start
+        )
+        make_transaction(
+            self.account, 't-2', '-150.00',
+            booking_date=start - timezone.timedelta(days=1),
+        )
+
+        mock_logger = self.run_command()
+        mock_logger.warning.assert_not_called()
+
+    def test_monthly_run_records_evaluation(self):
+        start = timezone.now().date().replace(day=1)
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-60.00', booking_date=start
+        )
+
+        self.run_command()
+
+        evaluation = LimitEvaluation.objects.get(
+            limit=limit, period_start=start
+        )
+        self.assertEqual(evaluation.spent, Decimal('60.00'))
+        self.assertEqual(evaluation.threshold, Decimal('100.00'))
+        self.assertFalse(evaluation.exceeded)
+
+    def test_monthly_run_updates_existing_evaluation(self):
+        start = timezone.now().date().replace(day=1)
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-60.00', booking_date=start
+        )
+        self.run_command()
+
+        make_transaction(
+            self.account, 't-2', '-70.00', booking_date=start
+        )
+        self.run_command()
+
+        self.assertEqual(
+            LimitEvaluation.objects.filter(
+                limit=limit, period_start=start
+            ).count(),
+            1,
+        )
+        evaluation = LimitEvaluation.objects.get(
+            limit=limit, period_start=start
+        )
+        self.assertEqual(evaluation.spent, Decimal('130.00'))
+
+    def test_monthly_run_backfills_previous_month(self):
+        start = timezone.now().date().replace(day=1)
+        previous = (
+            start - timezone.timedelta(days=1)
+        ).replace(day=1)
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-150.00', booking_date=previous
+        )
+
+        self.run_command()
+
+        evaluation = LimitEvaluation.objects.get(
+            limit=limit, period_start=previous
+        )
+        self.assertEqual(evaluation.spent, Decimal('150.00'))
+        self.assertTrue(evaluation.exceeded)
+
+    def test_monthly_backfill_keeps_recorded_threshold(self):
+        """A changed limit must not rewrite last month's threshold."""
+        start = timezone.now().date().replace(day=1)
+        previous = (
+            start - timezone.timedelta(days=1)
+        ).replace(day=1)
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        LimitEvaluation.objects.create(
+            limit=limit,
+            period_start=previous,
+            spent=Decimal('60.00'),
+            threshold=Decimal('50.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-80.00', booking_date=previous
+        )
+
+        self.run_command()
+
+        evaluation = LimitEvaluation.objects.get(
+            limit=limit, period_start=previous
+        )
+        self.assertEqual(evaluation.threshold, Decimal('50.00'))
+        self.assertEqual(evaluation.spent, Decimal('80.00'))
+
+    def test_no_evaluation_recorded_without_monthly_limit(self):
+        TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+
+        self.run_command()
+
+        self.assertFalse(LimitEvaluation.objects.exists())
+
+
+class MonthlyPeriodStartTests(SimpleTestCase):
+    def test_returns_first_of_month(self):
+        self.assertEqual(
+            monthly_period_start(date(2026, 9, 29)),
+            date(2026, 9, 1),
+        )
+
+    def test_first_day_of_month(self):
+        self.assertEqual(
+            monthly_period_start(date(2026, 1, 1)),
+            date(2026, 1, 1),
+        )
+
+
+class LimitWindowStatsTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+
+    def test_stats_report_spent_and_overage(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+
+        stats = limit_window_stats(limit)
+
+        self.assertEqual(len(stats), 1)
+        self.assertEqual(stats[0]['spent'], Decimal('150.00'))
+        self.assertEqual(stats[0]['over'], Decimal('50.00'))
+        self.assertEqual(stats[0]['remaining'], Decimal('-50.00'))
+        self.assertEqual(stats[0]['bar_class'], 'bg-danger')
+
+    def test_stats_under_limit(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-30.00', days_ago=1)
+
+        stats = limit_window_stats(limit)
+
+        self.assertEqual(stats[0]['remaining'], Decimal('70.00'))
+        self.assertIsNone(stats[0]['over'])
+        self.assertEqual(stats[0]['bar_class'], 'bg-success')
+
+    def test_stats_warn_when_mostly_used(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-90.00', days_ago=1)
+
+        stats = limit_window_stats(limit)
+
+        self.assertEqual(stats[0]['bar_class'], 'bg-warning')
+
+    def test_stats_omit_windows_without_threshold(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+
+        stats = limit_window_stats(limit)
+
+        self.assertEqual(len(stats), 1)
+        self.assertEqual(stats[0]['label'], 'This month')
+
+    def test_monthly_history_covers_past_months(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        this_month = timezone.now().date().replace(day=1)
+        last_month_end = this_month - timezone.timedelta(days=1)
+        prev_month_end = (
+            last_month_end.replace(day=1)
+            - timezone.timedelta(days=1)
+        )
+        make_transaction(
+            self.account, 't-1', '-60.00',
+            booking_date=last_month_end,
+        )
+        make_transaction(
+            self.account, 't-2', '-150.00',
+            booking_date=prev_month_end,
+        )
+        make_transaction(
+            self.account, 't-3', '-30.00', booking_date=this_month,
+        )
+
+        history = monthly_history(limit)
+
+        self.assertEqual(len(history), 2)
+        self.assertEqual(
+            history[0]['label'], last_month_end.strftime('%b %Y')
+        )
+        self.assertEqual(history[0]['spent'], Decimal('60.00'))
+        self.assertEqual(
+            history[1]['label'], prev_month_end.strftime('%b %Y')
+        )
+        self.assertEqual(history[1]['spent'], Decimal('150.00'))
+        self.assertEqual(history[1]['over'], Decimal('50.00'))
+
+    def test_monthly_history_prefers_recorded_values(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        start = timezone.now().date().replace(day=1)
+        previous = (
+            start - timezone.timedelta(days=1)
+        ).replace(day=1)
+        LimitEvaluation.objects.create(
+            limit=limit,
+            period_start=previous,
+            spent=Decimal('80.00'),
+            threshold=Decimal('50.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-999.00', booking_date=previous
+        )
+
+        history = monthly_history(limit)
+
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]['spent'], Decimal('80.00'))
+        self.assertEqual(history[0]['threshold'], Decimal('50.00'))
+        self.assertEqual(history[0]['over'], Decimal('30.00'))
+
+    def test_monthly_history_empty_without_past_data(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-10.00', days_ago=0)
+
+        self.assertEqual(monthly_history(limit), [])
+
+
+class LimitsViewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('500.00'),
+        )
+        self.client.force_login(self.user)
+
+    def test_page_shows_progress_bars(self):
+        response = self.client.get(reverse('finance:limits'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'progress-bar')
+        self.assertContains(response, 'This month')
+
+    def test_edit_prefills_form_with_limit(self):
+        response = self.client.get(
+            reverse('finance:limits'), {'edit': self.limit.pk}
+        )
+        self.assertEqual(
+            response.context['form'].instance.pk, self.limit.pk
+        )
+        self.assertEqual(response.context['editing'], self.limit)
+
+    def test_edit_ignores_other_users_limit(self):
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign = TransactionLimit.objects.create(
+            account=self.account,
+            user=other,
+            limit_7_days=Decimal('100.00'),
+        )
+        response = self.client.get(
+            reverse('finance:limits'), {'edit': foreign.pk}
+        )
+        self.assertIsNone(response.context['editing'])
+
+    def test_delete_limit(self):
+        response = self.client.post(
+            reverse('finance:delete_limit', args=[self.limit.pk])
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(
+            TransactionLimit.objects.filter(pk=self.limit.pk).exists()
+        )
+
+    def test_delete_other_users_limit_404(self):
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign = TransactionLimit.objects.create(
+            account=self.account,
+            user=other,
+            limit_7_days=Decimal('100.00'),
+        )
+        response = self.client.post(
+            reverse('finance:delete_limit', args=[foreign.pk])
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(
+            TransactionLimit.objects.filter(pk=foreign.pk).exists()
+        )
 
 
 class SyncBankTransactionsTests(TestCase):
@@ -1545,6 +1918,46 @@ class LimitPushAlertCommandTests(TestCase):
         mock_send.assert_not_called()
         limit.refresh_from_db()
         self.assertIsNone(limit.alerted_7d_at)
+
+    def test_monthly_breach_sends_push_and_sets_flag(self):
+        start = timezone.now().date().replace(day=1)
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-150.00', booking_date=start
+        )
+
+        mock_send = self.run_command()
+
+        mock_send.assert_called_once()
+        self.assertIn('month', mock_send.call_args[0][2])
+        limit.refresh_from_db()
+        self.assertIsNotNone(limit.alerted_monthly_at)
+
+    def test_monthly_flag_cleared_when_threshold_removed(self):
+        start = timezone.now().date().replace(day=1)
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(
+            self.account, 't-1', '-150.00', booking_date=start
+        )
+        self.run_command()
+        limit.refresh_from_db()
+        self.assertIsNotNone(limit.alerted_monthly_at)
+
+        limit.limit_monthly = None
+        limit.save()
+        mock_send = self.run_command()
+
+        mock_send.assert_not_called()
+        limit.refresh_from_db()
+        self.assertIsNone(limit.alerted_monthly_at)
 
 
 class PushSubscriptionEndpointTests(TestCase):

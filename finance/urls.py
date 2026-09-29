@@ -27,6 +27,11 @@ urlpatterns = [
     ),
     path('limits/', views.limits_view, name='limits'),
     path(
+        'limits/<int:limit_id>/delete/',
+        views.delete_limit,
+        name='delete_limit',
+    ),
+    path(
         'push/subscribe/',
         views.push_subscribe,
         name='push_subscribe',

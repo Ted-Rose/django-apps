@@ -49,12 +49,28 @@ transactions, and get spending-limit alerts.
   (`signals.py`, wired via `FinanceConfig.ready`) deletes the
   ex-viewer's rows when a share is revoked. No row = uncategorized
   for that user — sharers never see the owner's categories.
-- `TransactionLimit` — per `(account, user, category)` 7-/30-day
-  outgoing spending limits; `category` is optional — when set, only
-  the limit user's own category assignments count. `alerted_7d_at` /
-  `alerted_30d_at` are per-window episode flags for push alerts: set
-  when a breach notification is sent, cleared once spending falls
-  back under the threshold so the next breach alerts again.
+- `TransactionLimit` — per `(account, user, category)` outgoing
+  spending limits over three window kinds: rolling 7 days, rolling
+  30 days, or the current calendar month. `category` is optional —
+  when set, only the limit user's own category assignments count.
+  `alerted_7d_at` / `alerted_30d_at` / `alerted_monthly_at` are
+  per-window episode flags for push alerts: set when a breach
+  notification is sent, cleared once spending falls back under the
+  threshold so the next breach alerts again. Window math
+  (`limit_windows`, `monthly_period_start`), spend sums
+  (`spent_in_window`), display stats (`limit_window_stats`) and the
+  per-past-month breakdown (`monthly_history`) live in
+  `services/limits.py`, shared by the limits page and
+  `evaluate_spending_limits`. The limits page shows progress bars
+  per window plus expandable past-month history; rows are edited
+  via `?edit=<id>` and deleted via
+  `POST /finance/limits/<id>/delete/`.
+- `LimitEvaluation` — one row per `(limit, calendar month)` written
+  by `evaluate_spending_limits`: the current month's row refreshes
+  every run; the just-ended month is backfilled with the full-month
+  total while keeping its recorded threshold. `monthly_history`
+  prefers recorded rows and falls back to recomputed spend for
+  months that predate the first evaluation.
 - `PushSubscription` — one row per subscribed browser (`endpoint`
   unique); feeds Web Push spending alerts via `services/push.py`
   (`send_limit_alert`, uses `VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`
@@ -89,7 +105,8 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   owner's `UserTransactionCategory` row plus each sharer's via
   `categorize_transaction()`.
 - `evaluate_spending_limits`: sums negative amounts per active limit
-  window (filtered to the limit's category when set); logs
+  window — 7-day, 30-day, or monthly — via `services/limits.py`
+  (filtered to the limit's category when set); logs
   `SPENDING_LIMIT_EXCEEDED ...` warnings and sends one Web Push
   notification per limit per breach episode (both windows naming in
   a single notification when breached together) to the user's

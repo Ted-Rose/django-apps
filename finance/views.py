@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import IntegrityError
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
@@ -31,6 +32,7 @@ from finance.models import (
     PushSubscription,
     Requisition,
     Transaction,
+    TransactionLimit,
     UserAccountPreference,
 )
 from finance.services.categories import (
@@ -38,6 +40,7 @@ from finance.services.categories import (
     annotate_effective_category_name,
 )
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
+from finance.services.limits import limit_window_stats
 from finance.services.rules import apply_rules, preview_rule
 from finance.services.sync import sync_account_transactions
 
@@ -661,33 +664,71 @@ def refresh_balances(request):
 
 @login_required
 def limits_view(request):
+    editing = None
     if request.method == 'POST':
-        form = TransactionLimitForm(request.POST, user=request.user)
-        if form.is_valid():
-            TransactionLimit = form._meta.model
-            TransactionLimit.objects.update_or_create(
-                account=form.cleaned_data['account'],
+        if request.POST.get('limit_id'):
+            editing = get_object_or_404(
+                TransactionLimit,
+                pk=request.POST['limit_id'],
                 user=request.user,
-                category=form.cleaned_data['category'],
-                defaults={
-                    'limit_7_days': form.cleaned_data['limit_7_days'],
-                    'limit_30_days': (
-                        form.cleaned_data['limit_30_days']
-                    ),
-                    'is_active': form.cleaned_data['is_active'],
-                },
             )
-            messages.success(request, 'Spending limit saved.')
+        form = TransactionLimitForm(
+            request.POST, instance=editing, user=request.user
+        )
+        if form.is_valid():
+            if editing is not None:
+                try:
+                    limit = form.save(commit=False)
+                    limit.user = request.user
+                    limit.save()
+                except IntegrityError:
+                    messages.error(
+                        request,
+                        'A limit already exists for this account '
+                        'and category.',
+                    )
+                    return redirect('finance:limits')
+                messages.success(request, 'Spending limit updated.')
+            else:
+                TransactionLimit.objects.update_or_create(
+                    account=form.cleaned_data['account'],
+                    user=request.user,
+                    category=form.cleaned_data['category'],
+                    defaults={
+                        'limit_7_days': (
+                            form.cleaned_data['limit_7_days']
+                        ),
+                        'limit_30_days': (
+                            form.cleaned_data['limit_30_days']
+                        ),
+                        'limit_monthly': (
+                            form.cleaned_data['limit_monthly']
+                        ),
+                        'is_active': form.cleaned_data['is_active'],
+                    },
+                )
+                messages.success(request, 'Spending limit saved.')
             return redirect('finance:limits')
     else:
-        form = TransactionLimitForm(user=request.user)
+        if request.GET.get('edit'):
+            editing = TransactionLimit.objects.filter(
+                pk=request.GET['edit'], user=request.user
+            ).first()
+        form = TransactionLimitForm(
+            instance=editing, user=request.user
+        )
+
+    limits = request.user.transactionlimit_set.select_related(
+        'account', 'category'
+    )
+    for limit in limits:
+        limit.window_stats = limit_window_stats(limit)
 
     vapid_public_key = getattr(settings, 'VAPID_PUBLIC_KEY', '')
     return render(request, 'finance/limits.html', {
         'form': form,
-        'limits': request.user.transactionlimit_set.select_related(
-            'account', 'category'
-        ),
+        'editing': editing,
+        'limits': limits,
         'vapid_public_key': vapid_public_key,
         'push_subscription_count': (
             request.user.push_subscriptions.count()
@@ -699,6 +740,17 @@ def limits_view(request):
         },
         'burger_menu_items': _burger_menu_items(request),
     })
+
+
+@login_required
+@require_POST
+def delete_limit(request, limit_id):
+    limit = get_object_or_404(
+        TransactionLimit, pk=limit_id, user=request.user
+    )
+    limit.delete()
+    messages.success(request, 'Spending limit deleted.')
+    return redirect('finance:limits')
 
 
 @login_required

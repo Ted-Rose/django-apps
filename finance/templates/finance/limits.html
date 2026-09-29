@@ -17,18 +17,41 @@
         <h1 class="mb-4">Spending Limits</h1>
         <p class="text-muted">
             Outgoing spending limits per account, optionally scoped to
-            a single category. You are alerted when the total spent
-            within the last 7 or 30 days exceeds the limit.
+            a single category. A limit can cover the last 7 days, the
+            last 30 days, or the current calendar month. You are
+            alerted when spending within a window exceeds the limit.
         </p>
 
         <div class="row g-3">
             <div class="col-md-5">
                 <div class="card mb-4">
                     <div class="card-body">
-                        <h5 class="card-title">Set a limit</h5>
+                        <h5 class="card-title">
+                            {% if editing %}Edit limit{% else %}Set a limit{% endif %}
+                        </h5>
+                        {% if editing %}
+                        <div class="alert alert-secondary py-2">
+                            Editing an existing limit.
+                            <a href="{% url 'finance:limits' %}">
+                                Cancel
+                            </a>
+                        </div>
+                        {% endif %}
                         <form method="post">
                             {% csrf_token %}
+                            {% if editing %}
+                            <input type="hidden" name="limit_id"
+                                   value="{{ editing.pk }}">
+                            {% endif %}
+                            {{ form.non_field_errors }}
                             {% for field in form %}
+                            {% if field.name == 'limit_7_days' %}
+                            <p class="fw-semibold mb-1">Time windows</p>
+                            <p class="text-muted small mb-2">
+                                Set any combination — leave a field
+                                blank to disable that window.
+                            </p>
+                            {% endif %}
                             <div class="mb-3">
                                 <label class="form-label"
                                        for="{{ field.id_for_label }}">
@@ -43,7 +66,7 @@
                             </div>
                             {% endfor %}
                             <button type="submit" class="btn btn-primary">
-                                Save
+                                {% if editing %}Update{% else %}Save{% endif %}
                             </button>
                         </form>
                     </div>
@@ -81,9 +104,9 @@
                         <tr>
                             <th>Account</th>
                             <th>Category</th>
-                            <th class="text-end">7-day limit</th>
-                            <th class="text-end">30-day limit</th>
+                            <th style="min-width: 240px;">Spent / limit</th>
                             <th>Active</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -102,11 +125,75 @@
                                 <span class="text-muted">All</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end">
-                                {{ limit.limit_7_days|default:'-' }}
-                            </td>
-                            <td class="text-end">
-                                {{ limit.limit_30_days|default:'-' }}
+                            <td>
+                                {% for window in limit.window_stats %}
+                                <div class="mb-3">
+                                    <div class="d-flex
+                                                justify-content-between
+                                                small">
+                                        <span>{{ window.label }}</span>
+                                        <span>
+                                            {{ window.spent }} /
+                                            {{ window.threshold }}
+                                            {{ limit.account.currency }}
+                                        </span>
+                                    </div>
+                                    <div class="progress"
+                                         style="height: 6px;">
+                                        <div class="progress-bar
+                                                    {{ window.bar_class }}"
+                                             role="progressbar"
+                                             style="width: {{ window.bar_pct }}%">
+                                        </div>
+                                    </div>
+                                    <div class="small
+                                                {% if window.over %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                                        {% if window.over %}
+                                        {{ window.over }}
+                                        {{ limit.account.currency }}
+                                        over
+                                        {% else %}
+                                        {{ window.remaining }}
+                                        {{ limit.account.currency }}
+                                        left
+                                        {% endif %}
+                                    </div>
+                                    {% if window.history %}
+                                    <details class="mt-1">
+                                        <summary class="small text-muted">
+                                            Past months
+                                        </summary>
+                                        {% for month in window.history %}
+                                        <div class="mt-2">
+                                            <div class="d-flex
+                                                        justify-content-between
+                                                        small">
+                                                <span>
+                                                    {{ month.label }}
+                                                </span>
+                                                <span>
+                                                    {{ month.spent }} /
+                                                    {{ month.threshold }}
+                                                    {{ limit.account.currency }}
+                                                </span>
+                                            </div>
+                                            <div class="progress"
+                                                 style="height: 4px;">
+                                                <div class="progress-bar
+                                                            {{ month.bar_class }}"
+                                                     style="width: {{ month.bar_pct }}%">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </details>
+                                    {% endif %}
+                                </div>
+                                {% empty %}
+                                <span class="text-muted">
+                                    No windows set
+                                </span>
+                                {% endfor %}
                             </td>
                             <td>
                                 {% if limit.is_active %}
@@ -114,6 +201,22 @@
                                 {% else %}
                                 <i class="bi bi-x-circle text-muted"></i>
                                 {% endif %}
+                            </td>
+                            <td class="text-nowrap">
+                                <a href="?edit={{ limit.pk }}"
+                                   class="btn btn-sm btn-outline-primary"
+                                   title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form method="post" class="d-inline"
+                                      action="{% url 'finance:delete_limit' limit.pk %}">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger"
+                                            title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         {% endfor %}

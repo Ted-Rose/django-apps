@@ -5,6 +5,7 @@ from finance.models import (
     AccountShare,
     Category,
     CategoryRule,
+    LimitEvaluation,
     PushSubscription,
     Requisition,
     Transaction,
@@ -89,10 +90,20 @@ class CategoryRuleAdmin(admin.ModelAdmin):
 class TransactionLimitAdmin(admin.ModelAdmin):
     list_display = [
         'user', 'account', 'category', 'limit_7_days',
-        'limit_30_days', 'is_active', 'updated_at',
+        'limit_30_days', 'limit_monthly', 'is_active', 'updated_at',
     ]
     list_filter = ['is_active', 'user']
-    readonly_fields = ['alerted_7d_at', 'alerted_30d_at']
+    readonly_fields = [
+        'alerted_7d_at', 'alerted_30d_at', 'alerted_monthly_at',
+    ]
+
+
+@admin.register(LimitEvaluation)
+class LimitEvaluationAdmin(admin.ModelAdmin):
+    list_display = [
+        'limit', 'period_start', 'spent', 'threshold', 'evaluated_at',
+    ]
+    list_filter = ['period_start', 'limit__user']
 
 
 @admin.register(PushSubscription)

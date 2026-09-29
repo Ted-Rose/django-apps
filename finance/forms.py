@@ -58,8 +58,13 @@ class TransactionLimitForm(forms.ModelForm):
         model = TransactionLimit
         fields = [
             'account', 'category', 'limit_7_days', 'limit_30_days',
-            'is_active',
+            'limit_monthly', 'is_active',
         ]
+        labels = {
+            'limit_7_days': 'Limit per 7 days',
+            'limit_30_days': 'Limit per 30 days',
+            'limit_monthly': 'Limit per calendar month',
+        }
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)

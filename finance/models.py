@@ -322,10 +322,12 @@ class CategoryRule(models.Model):
 
 
 class TransactionLimit(models.Model):
-    """Per user+account outgoing-spending limits (7/30 days).
+    """Per user+account outgoing-spending limits.
 
-    When ``category`` is set, only transactions in that category count
-    towards the limit; when null, all outgoing spending counts.
+    Three window kinds: rolling 7 days, rolling 30 days, or the
+    current calendar month. When ``category`` is set, only
+    transactions in that category count towards the limit; when
+    null, all outgoing spending counts.
     """
     account = models.ForeignKey(
         Account,
@@ -356,6 +358,13 @@ class TransactionLimit(models.Model):
         null=True,
         blank=True
     )
+    limit_monthly = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Limit for the current calendar month'
+    )
     is_active = models.BooleanField(default=True)
     alerted_7d_at = models.DateTimeField(
         null=True,
@@ -366,6 +375,11 @@ class TransactionLimit(models.Model):
         null=True,
         blank=True,
         help_text='When a push alert was last sent for the 30-day window'
+    )
+    alerted_monthly_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When a push alert was last sent for the monthly window'
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -378,6 +392,39 @@ class TransactionLimit(models.Model):
         return (
             f'{scope} limits for {self.account} ({self.user.username})'
         )
+
+
+class LimitEvaluation(models.Model):
+    """Recorded monthly evaluation of a TransactionLimit.
+
+    One row per (limit, calendar month): ``evaluate_spending_limits``
+    refreshes it on every run, so the last run inside a month holds
+    that month's final recorded figures — including the threshold at
+    the time, which the limits page uses for past-month history.
+    """
+    limit = models.ForeignKey(
+        TransactionLimit,
+        on_delete=models.CASCADE,
+        related_name='evaluations'
+    )
+    period_start = models.DateField(
+        help_text='First day of the evaluated calendar month'
+    )
+    spent = models.DecimalField(max_digits=12, decimal_places=2)
+    threshold = models.DecimalField(max_digits=12, decimal_places=2)
+    evaluated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('limit', 'period_start')
+        ordering = ['-period_start']
+
+    @property
+    def exceeded(self):
+        return self.spent > self.threshold
+
+    def __str__(self):
+        return f'{self.limit} — {self.period_start:%b %Y}'
 
 
 class PushSubscription(models.Model):
