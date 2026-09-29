@@ -127,21 +127,29 @@
                                 </span>
                             </td>
                             <td>
-                                {% if rule.sender_receiver_pattern %}
-                                <code>sender/receiver
-                                    {{ rule.get_match_type_display|lower }}
-                                    "{{ rule.sender_receiver_pattern }}"
+                                {% if rule.counterparty_pattern %}
+                                <code>{{ rule.get_counterparty_scope_display|lower }}
+                                    {{ rule.get_counterparty_match_type_display|lower }}
+                                    "{{ rule.counterparty_pattern }}"
                                 </code>
                                 {% endif %}
-                                {% if rule.sender_receiver_pattern and rule.description_pattern %}
+                                {% if rule.counterparty_pattern and rule.description_pattern %}
                                 <span class="badge text-bg-light">
                                     {{ rule.operator }}
                                 </span>
                                 {% endif %}
                                 {% if rule.description_pattern %}
                                 <code>description
-                                    {{ rule.get_match_type_display|lower }}
+                                    {{ rule.get_description_match_type_display|lower }}
                                     "{{ rule.description_pattern }}"
+                                </code>
+                                {% endif %}
+                                {% if rule.description_exclusion %}
+                                <span class="badge text-bg-light">
+                                    except
+                                </span>
+                                <code>description contains
+                                    "{{ rule.description_exclusion }}"
                                 </code>
                                 {% endif %}
                             </td>
@@ -250,37 +258,79 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label"
-                           for="rule-sender-receiver">
-                        Sender / receiver pattern
+                           for="rule-counterparty-pattern">
+                        Counterparty name
                     </label>
-                    <input type="text" name="sender_receiver_pattern"
-                           id="rule-sender-receiver" maxlength="255"
-                           class="form-control"
-                           placeholder="e.g. Rimi, employer name">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <select name="counterparty_scope"
+                                    id="rule-counterparty-scope"
+                                    class="form-select"
+                                    title="Which name field to match">
+                                {% for code, label in counterparty_scopes %}
+                                <option value="{{ code }}">
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3">
+                            <select name="counterparty_match_type"
+                                    id="rule-counterparty-match-type"
+                                    class="form-select"
+                                    title="Match type">
+                                {% for code, label in match_types %}
+                                <option value="{{ code }}">
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-5">
+                            <input type="text" name="counterparty_pattern"
+                                   id="rule-counterparty-pattern"
+                                   maxlength="255"
+                                   class="form-control"
+                                   placeholder="e.g. Rimi, employer name">
+                        </div>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label" for="rule-description">
-                        Description pattern
+                        Description
                     </label>
-                    <input type="text" name="description_pattern"
-                           id="rule-description" maxlength="255"
-                           class="form-control"
-                           placeholder="e.g. grocery purchase">
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <select name="description_match_type"
+                                    id="rule-description-match-type"
+                                    class="form-select"
+                                    title="Match type">
+                                {% for code, label in match_types %}
+                                <option value="{{ code }}">
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-8">
+                            <input type="text" name="description_pattern"
+                                   id="rule-description" maxlength="255"
+                                   class="form-control"
+                                   placeholder="e.g. grocery purchase">
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"
+                           for="rule-description-exclusion">
+                        Exclude when description contains
+                    </label>
+                    <input type="text" name="description_exclusion"
+                           id="rule-description-exclusion"
+                           maxlength="255" class="form-control"
+                           placeholder="e.g. refund — rule never applies">
                 </div>
                 <div class="row g-2 mb-3">
-                    <div class="col-4">
-                        <label class="form-label" for="rule-match-type">
-                            Match
-                        </label>
-                        <select name="match_type" id="rule-match-type"
-                                class="form-select">
-                            {% for code, label in match_types %}
-                            <option value="{{ code }}">
-                                {{ label }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
                     <div class="col-4">
                         <label class="form-label" for="rule-operator">
                             Patterns combine

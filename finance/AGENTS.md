@@ -62,12 +62,16 @@ transactions, and get spending-limit alerts.
   subscribe via `POST /finance/push/subscribe/` (+ `unsubscribe/`)
   from the limits page; no-op when `VAPID_*` settings are empty.
 - `Category` — per-user, unique on `(user, name)`, optional hex color.
-- `CategoryRule` — per-user auto-categorization rule; patterns match
-  debtor/creditor name (`sender_receiver_pattern`) and remittance
-  info (`description_pattern`) via `match_type`
-  (contains/equals/starts_with/ends_with, case-insensitive),
-  combined with
-  `operator` (AND/OR). Evaluated in `(priority, pk)` order —
+- `CategoryRule` — per-user auto-categorization rule. Counterparty
+  condition: `counterparty_pattern` + `counterparty_match_type`
+  against the name field picked by `counterparty_scope`
+  (`debtor`/`creditor`/`any`); description condition:
+  `description_pattern` + `description_match_type` against
+  remittance info. Match types are
+  contains/equals/starts_with/ends_with, case-insensitive; the two
+  conditions combine via `operator` (AND/OR).
+  `description_exclusion` vetoes the match when its text appears in
+  remittance info. Evaluated in `(priority, pk)` order —
   **first match wins**.
 
 **Always** query accounts/transactions through

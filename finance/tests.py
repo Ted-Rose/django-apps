@@ -95,14 +95,18 @@ def make_subscription(user, endpoint='https://push.example.com/s/1'):
 
 
 def make_rule(user, category, priority=1, sender='', description='',
-              match_type='contains', operator='AND', is_active=True):
+              match_type='contains', operator='AND', is_active=True,
+              scope='any', exclusion=''):
     return CategoryRule.objects.create(
         user=user,
         category=category,
         priority=priority,
-        sender_receiver_pattern=sender,
+        counterparty_scope=scope,
+        counterparty_pattern=sender,
+        counterparty_match_type=match_type,
         description_pattern=description,
-        match_type=match_type,
+        description_match_type=match_type,
+        description_exclusion=exclusion,
         operator=operator,
         is_active=is_active,
     )
@@ -626,7 +630,7 @@ class RuleMatchingTests(TestCase):
             tx,
         ))
 
-    def test_sender_receiver_matches_debtor_or_creditor(self):
+    def test_counterparty_any_scope_matches_debtor_or_creditor(self):
         rule = make_rule(self.user, self.category, sender='employer')
         incoming = make_transaction(
             self.account, 't-1', '500.00', debtor_name='Employer Ltd',
@@ -636,6 +640,49 @@ class RuleMatchingTests(TestCase):
         )
         self.assertTrue(rule_matches(rule, incoming))
         self.assertTrue(rule_matches(rule, outgoing))
+
+    def test_counterparty_scope_targets_one_side(self):
+        outgoing = make_transaction(
+            self.account, 't-1', '-5.00', creditor_name='Shop',
+        )
+        incoming = make_transaction(
+            self.account, 't-2', '500.00', debtor_name='Shop',
+        )
+        creditor_rule = make_rule(
+            self.user, self.category, sender='shop', scope='creditor'
+        )
+        debtor_rule = make_rule(
+            self.user, self.category, sender='shop', scope='debtor',
+            priority=2,
+        )
+        self.assertTrue(rule_matches(creditor_rule, outgoing))
+        self.assertFalse(rule_matches(creditor_rule, incoming))
+        self.assertFalse(rule_matches(debtor_rule, outgoing))
+        self.assertTrue(rule_matches(debtor_rule, incoming))
+
+    def test_description_exclusion_vetoes_match(self):
+        rule = make_rule(
+            self.user, self.category,
+            sender='shop', exclusion='refund',
+        )
+        normal = make_transaction(
+            self.account, 't-1', '-5.00', creditor_name='Shop',
+            remittance_information='card payment',
+        )
+        refund = make_transaction(
+            self.account, 't-2', '-5.00', creditor_name='Shop',
+            remittance_information='Refund for card payment',
+        )
+        self.assertTrue(rule_matches(rule, normal))
+        self.assertFalse(rule_matches(rule, refund))
+
+    def test_exclusion_only_rule_never_matches(self):
+        rule = make_rule(self.user, self.category, exclusion='refund')
+        tx = make_transaction(
+            self.account, 't-1', '-5.00',
+            remittance_information='card payment',
+        )
+        self.assertFalse(rule_matches(rule, tx))
 
     def test_and_requires_both_or_accepts_either(self):
         tx = make_transaction(
@@ -854,9 +901,12 @@ class PreviewRuleTests(TestCase):
         data = {
             'category_id': str(self.groceries.pk),
             'priority': '1',
-            'sender_receiver_pattern': '',
+            'counterparty_scope': 'any',
+            'counterparty_pattern': '',
+            'counterparty_match_type': 'contains',
             'description_pattern': 'shop',
-            'match_type': 'contains',
+            'description_match_type': 'contains',
+            'description_exclusion': '',
             'operator': 'AND',
             'is_active': 'on',
         }
@@ -911,6 +961,24 @@ class PreviewRuleTests(TestCase):
         self.assertEqual(
             result['changes'][0]['new_category'], 'Groceries'
         )
+
+    def test_reports_gain_and_loss_counts(self):
+        gained = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        # Stale 'Other' row — candidate would assign Groceries.
+        make_assignment(self.user, gained, self.other_cat)
+        lost = make_transaction(
+            self.account, 't-2', '-5.00',
+            remittance_information='rent',
+        )
+        # Stale 'Groceries' row no rule produces — would be cleared.
+        make_assignment(self.user, lost, self.groceries)
+        result = preview_rule(self.user, self.preview_data())
+        self.assertEqual(result['gains'], 1)
+        self.assertEqual(result['losses'], 1)
+        self.assertEqual(result['changes_total'], 2)
 
     def test_error_without_category(self):
         result = preview_rule(
@@ -1172,6 +1240,19 @@ class RuleViewTests(TestCase):
         response = self.client.post(reverse('finance:preview_rule'))
         self.assertEqual(response.status_code, 302)
 
+    def test_rules_page_renders_rule_conditions(self):
+        make_rule(
+            self.user, self.category,
+            sender='Shop', scope='creditor', exclusion='refund',
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('finance:rules'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'rule-counterparty-scope')
+        self.assertContains(response, 'rule-description-exclusion')
+        self.assertContains(response, 'creditor (receiver)')
+        self.assertContains(response, 'refund')
+
     def test_preview_endpoint_returns_json(self):
         self.client.force_login(self.user)
         make_transaction(
@@ -1183,8 +1264,10 @@ class RuleViewTests(TestCase):
             {
                 'category_id': self.category.pk,
                 'priority': 1,
+                'counterparty_scope': 'any',
+                'counterparty_match_type': 'contains',
                 'description_pattern': 'shop',
-                'match_type': 'contains',
+                'description_match_type': 'contains',
                 'operator': 'AND',
                 'is_active': 'on',
             },
@@ -1213,8 +1296,10 @@ class RuleViewTests(TestCase):
                 'rule_id': rule.pk,
                 'category': self.category.pk,
                 'priority': 1,
+                'counterparty_scope': 'any',
+                'counterparty_match_type': 'contains',
                 'description_pattern': 'hijack',
-                'match_type': 'contains',
+                'description_match_type': 'contains',
                 'operator': 'AND',
             },
         )
@@ -1233,8 +1318,10 @@ class RuleViewTests(TestCase):
             {
                 'category': self.category.pk,
                 'priority': 1,
+                'counterparty_scope': 'any',
+                'counterparty_match_type': 'contains',
                 'description_pattern': 'shop',
-                'match_type': 'contains',
+                'description_match_type': 'contains',
                 'operator': 'AND',
                 'is_active': 'on',
             },

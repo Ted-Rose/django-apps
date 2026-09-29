@@ -254,6 +254,11 @@ class CategoryRule(models.Model):
         ('AND', 'AND'),
         ('OR', 'OR'),
     ]
+    COUNTERPARTY_SCOPES = [
+        ('any', 'Debtor or creditor'),
+        ('debtor', 'Debtor (sender)'),
+        ('creditor', 'Creditor (receiver)'),
+    ]
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -266,11 +271,22 @@ class CategoryRule(models.Model):
         related_name='rules'
     )
     priority = models.PositiveIntegerField(default=1)
-    sender_receiver_pattern = models.CharField(
+    counterparty_scope = models.CharField(
+        max_length=10,
+        choices=COUNTERPARTY_SCOPES,
+        default='any',
+        help_text='Which name field the counterparty pattern matches'
+    )
+    counterparty_pattern = models.CharField(
         max_length=255,
         blank=True,
         default='',
-        help_text='Matches debtor or creditor name'
+        help_text='Matches the scoped debtor/creditor name'
+    )
+    counterparty_match_type = models.CharField(
+        max_length=20,
+        choices=MATCH_TYPES,
+        default='contains'
     )
     description_pattern = models.CharField(
         max_length=255,
@@ -278,16 +294,22 @@ class CategoryRule(models.Model):
         default='',
         help_text='Matches remittance information'
     )
-    match_type = models.CharField(
+    description_match_type = models.CharField(
         max_length=20,
         choices=MATCH_TYPES,
         default='contains'
+    )
+    description_exclusion = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Rule never applies when remittance info contains this'
     )
     operator = models.CharField(
         max_length=3,
         choices=OPERATORS,
         default='AND',
-        help_text='How the two patterns combine'
+        help_text='How the counterparty and description patterns combine'
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

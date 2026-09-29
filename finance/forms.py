@@ -28,9 +28,10 @@ class CategoryRuleForm(forms.ModelForm):
     class Meta:
         model = CategoryRule
         fields = [
-            'category', 'priority', 'sender_receiver_pattern',
-            'description_pattern', 'match_type', 'operator',
-            'is_active',
+            'category', 'priority', 'counterparty_scope',
+            'counterparty_pattern', 'counterparty_match_type',
+            'description_pattern', 'description_match_type',
+            'description_exclusion', 'operator', 'is_active',
         ]
 
     def __init__(self, *args, user=None, **kwargs):
@@ -43,7 +44,7 @@ class CategoryRuleForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         if not (
-            cleaned.get('sender_receiver_pattern')
+            cleaned.get('counterparty_pattern')
             or cleaned.get('description_pattern')
         ):
             raise forms.ValidationError(

@@ -712,9 +712,12 @@ def rules_view(request):
             'id': rule.pk,
             'category_id': rule.category_id,
             'priority': rule.priority,
-            'sender_receiver_pattern': rule.sender_receiver_pattern,
+            'counterparty_scope': rule.counterparty_scope,
+            'counterparty_pattern': rule.counterparty_pattern,
+            'counterparty_match_type': rule.counterparty_match_type,
             'description_pattern': rule.description_pattern,
-            'match_type': rule.match_type,
+            'description_match_type': rule.description_match_type,
+            'description_exclusion': rule.description_exclusion,
             'operator': rule.operator,
             'is_active': rule.is_active,
         }
@@ -724,6 +727,7 @@ def rules_view(request):
         'rules': rules,
         'categories': Category.objects.filter(user=request.user),
         'match_types': CategoryRule.MATCH_TYPES,
+        'counterparty_scopes': CategoryRule.COUNTERPARTY_SCOPES,
         'operators': CategoryRule.OPERATORS,
         'sandbox_config': {
             'preview_url': reverse('finance:preview_rule'),

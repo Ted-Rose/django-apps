@@ -75,12 +75,12 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(CategoryRule)
 class CategoryRuleAdmin(admin.ModelAdmin):
     list_display = [
-        'priority', 'user', 'category', 'match_type', 'operator',
-        'is_active', 'created_at',
+        'priority', 'user', 'category', 'counterparty_scope',
+        'operator', 'is_active', 'created_at',
     ]
-    list_filter = ['is_active', 'match_type', 'operator']
+    list_filter = ['is_active', 'counterparty_scope', 'operator']
     search_fields = [
-        'sender_receiver_pattern', 'description_pattern',
+        'counterparty_pattern', 'description_pattern',
         'category__name', 'user__username',
     ]
 

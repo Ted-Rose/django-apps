@@ -24,6 +24,7 @@ logger = logging.getLogger('django')
 MAX_PREVIEW_CHANGES = 50
 _VALID_MATCH_TYPES = {code for code, _ in CategoryRule.MATCH_TYPES}
 _VALID_OPERATORS = {code for code, _ in CategoryRule.OPERATORS}
+_VALID_SCOPES = {code for code, _ in CategoryRule.COUNTERPARTY_SCOPES}
 
 
 def _matches_value(value, pattern, match_type):
@@ -39,39 +40,55 @@ def _matches_value(value, pattern, match_type):
     return pattern in value
 
 
+def _counterparty_matches(rule, transaction):
+    """Match the counterparty pattern against the scoped fields."""
+    names = []
+    if rule.counterparty_scope in ('any', 'debtor'):
+        names.append(transaction.debtor_name)
+    if rule.counterparty_scope in ('any', 'creditor'):
+        names.append(transaction.creditor_name)
+    return any(
+        _matches_value(
+            name, rule.counterparty_pattern,
+            rule.counterparty_match_type,
+        )
+        for name in names
+    )
+
+
 def rule_matches(rule, transaction):
     """True when the rule's patterns match the transaction.
 
     A blank pattern contributes no check; a rule with both patterns
-    blank never matches.
+    blank never matches. When ``description_exclusion`` is set, its
+    presence in the remittance info vetoes the match entirely.
     """
     checks = []
-    if rule.sender_receiver_pattern:
-        checks.append(
-            _matches_value(
-                transaction.debtor_name,
-                rule.sender_receiver_pattern,
-                rule.match_type,
-            )
-            or _matches_value(
-                transaction.creditor_name,
-                rule.sender_receiver_pattern,
-                rule.match_type,
-            )
-        )
+    if rule.counterparty_pattern:
+        checks.append(_counterparty_matches(rule, transaction))
     if rule.description_pattern:
         checks.append(
             _matches_value(
                 transaction.remittance_information,
                 rule.description_pattern,
-                rule.match_type,
+                rule.description_match_type,
             )
         )
     if not checks:
         return False
     if rule.operator == 'OR':
-        return any(checks)
-    return all(checks)
+        included = any(checks)
+    else:
+        included = all(checks)
+    if not included:
+        return False
+    if rule.description_exclusion:
+        return not _matches_value(
+            transaction.remittance_information,
+            rule.description_exclusion,
+            'contains',
+        )
+    return True
 
 
 def first_matching_rule(rules, transaction):
@@ -165,14 +182,19 @@ def _to_int(value, default):
         return default
 
 
+def _validated(value, valid, default):
+    return value if value in valid else default
+
+
 def preview_rule(user, data):
     """Simulate a candidate rule against the user's history.
 
     Read-only: compares the simulated first-match outcome against
     the user's own category assignments. ``data`` is a dict with the
-    form fields (``category_id``, ``priority``, the two patterns,
-    ``match_type``, ``operator``, ``is_active``) plus optional
-    ``rule_id`` when editing an existing rule.
+    form fields (``category_id``, ``priority``, the patterns and
+    their match types, ``counterparty_scope``, ``operator``,
+    ``is_active``) plus optional ``rule_id`` when editing an
+    existing rule.
 
     Returns ``{'error': msg}`` on invalid input.
     """
@@ -183,23 +205,33 @@ def preview_rule(user, data):
         return {'error': 'Pick a category to preview.'}
 
     rule_id = _to_int(data.get('rule_id'), 0) or None
-    match_type = data.get('match_type')
-    if match_type not in _VALID_MATCH_TYPES:
-        match_type = 'contains'
-    operator = data.get('operator')
-    if operator not in _VALID_OPERATORS:
-        operator = 'AND'
-
     candidate = SimpleNamespace(
         # Unsaved rules sort after equal priorities, like a fresh pk.
         pk=rule_id or 2 ** 62,
         priority=max(_to_int(data.get('priority'), 1), 1),
-        sender_receiver_pattern=(
-            data.get('sender_receiver_pattern') or ''
+        counterparty_scope=_validated(
+            data.get('counterparty_scope'), _VALID_SCOPES, 'any'
+        ),
+        counterparty_pattern=(
+            data.get('counterparty_pattern') or ''
+        ),
+        counterparty_match_type=_validated(
+            data.get('counterparty_match_type'),
+            _VALID_MATCH_TYPES,
+            'contains',
         ),
         description_pattern=data.get('description_pattern') or '',
-        match_type=match_type,
-        operator=operator,
+        description_match_type=_validated(
+            data.get('description_match_type'),
+            _VALID_MATCH_TYPES,
+            'contains',
+        ),
+        description_exclusion=(
+            data.get('description_exclusion') or ''
+        ),
+        operator=_validated(
+            data.get('operator'), _VALID_OPERATORS, 'AND'
+        ),
         is_active=data.get('is_active') in ('on', 'true', '1', True),
         category=category,
         category_id=category.pk,
@@ -225,6 +257,9 @@ def preview_rule(user, data):
     apply_count = 0
     changes = []
     changes_total = 0
+    gains = 0
+    losses = 0
+    other_changes = 0
     for tx in transactions.iterator():
         assignment = assignments.get(tx.pk)
         if assignment is not None and assignment.is_manual:
@@ -240,6 +275,12 @@ def preview_rule(user, data):
         if new_id == old_id:
             continue
         changes_total += 1
+        if new_id == category.pk:
+            gains += 1
+        elif old_id == category.pk:
+            losses += 1
+        else:
+            other_changes += 1
         if len(changes) < MAX_PREVIEW_CHANGES:
             changes.append({
                 'id': tx.pk,
@@ -264,6 +305,10 @@ def preview_rule(user, data):
         'match_count': match_count,
         'apply_count': apply_count,
         'is_active': candidate.is_active,
+        'category': category.name,
         'changes_total': changes_total,
+        'gains': gains,
+        'losses': losses,
+        'other_changes': other_changes,
         'changes': changes,
     }
