@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 // One entry per Django app. Output goes to repo-root frontend_dist/,
@@ -34,5 +34,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    // Playwright smoke specs live outside Vitest — they need a real
+    // Django server (see `npm run test:e2e` in package.json).
+    exclude: [...configDefaults.exclude, 'tests/e2e/**'],
   },
 });
