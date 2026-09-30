@@ -19,7 +19,9 @@ python3 django_apps/console_tasks/build.py create_ca_pem create_private_settings
 
 # Build the React frontend → frontend_dist/ (a STATICFILES_DIRS entry,
 # so collectstatic ships it to the CDN below).
-npm ci --prefix frontend
+# --include=dev: Vercel's build env may set NODE_ENV=production, which
+# would skip devDependencies (vite/tsc) and break the build below.
+npm ci --prefix frontend --include=dev
 npm run build --prefix frontend
 
 # Collect static files
