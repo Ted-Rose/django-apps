@@ -17,7 +17,7 @@ const PRECACHE_URLS = [
 ];
 
 // Paths we never want the service worker to serve from cache (auth, APIs, admin).
-const BYPASS_PATHS = ['/admin', '/login', '/logout', '/oauth', '/accounts'];
+const BYPASS_PATHS = ['/admin', '/login', '/logout', '/oauth', '/accounts', '/api'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

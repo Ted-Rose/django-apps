@@ -57,7 +57,7 @@ def spa_url_for(request):
     """Map an /api/<app>/<sub> request URL onto the SPA page the user
     should return to after auth. API paths are JSON endpoints, not
     pages, so `next`/`login_url` must never point back at them —
-    /api/tasks/trash/?label=X → /tasks/app/trash/?label=X."""
+    /api/tasks/trash/?label=X → /tasks/trash/?label=X."""
     path = request.path
     prefix = '/api/'
     if path.startswith(prefix):
@@ -65,7 +65,7 @@ def spa_url_for(request):
         if sub.startswith('dashboard'):
             # The SPA mounts its dashboard at the app root.
             sub = ''
-        path = f'/{app}/app/{sub}'
+        path = f'/{app}/{sub}'
     if request.GET:
         path = f'{path}?{request.GET.urlencode()}'
     return path

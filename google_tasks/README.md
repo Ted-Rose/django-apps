@@ -73,21 +73,25 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 
 ## URL Structure
 
-| URL Pattern | View | Method | Description |
-|------------|------|--------|-------------|
-| `/tasks/` | `dashboard` | GET | Main dashboard with all tasks |
-| `/tasks/starred/` | `starred_tasks` | GET | Starred tasks view |
-| `/tasks/starred/reorder/` | `reorder_starred` | POST | Save drag-drop order (starred) |
-| `/tasks/tasks/reorder/` | `reorder_tasks` | POST | Save drag-drop order (all tasks) |
-| `/tasks/sync/` | `sync_view` | GET | Manual sync endpoint |
-| `/tasks/task/<task_id>/toggle-star/` | `toggle_star` | POST | Toggle star status |
-| `/tasks/task/<task_id>/complete/` | `complete_task_view` | POST | Mark task complete |
-| `/tasks/task/<task_id>/uncomplete/` | `uncomplete_task_view` | POST | Mark task incomplete |
-| `/tasks/process-labels/` | `process_labels_view` | POST | Process labels for all active tasks |
-| `/tasks/task/<task_id>/process-label/` | `process_task_label_view` | POST | Process label for specific task |
-| `/tasks/divider/create/` | `create_divider` | POST | Create a new task divider |
-| `/tasks/divider/<task_id>/delete/` | `delete_divider` | POST | Delete a task divider |
-| `/tasks/divider/<task_id>/update/` | `update_divider` | POST | Update divider text |
+Since the React cutover (Stage 6 of
+`docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`), every GET under
+`/tasks/` serves the SPA shell and React Router resolves the page:
+
+| URL | React route | Description |
+|-----|-------------|-------------|
+| `/tasks/` | `/` | Main dashboard with all tasks |
+| `/tasks/starred/` | `/starred` | Starred tasks view |
+| `/tasks/overdue/` | `/overdue` | Overdue tasks view |
+| `/tasks/archived/` | `/archived` | Archived tasks view |
+| `/tasks/trash/` | `/trash` | Deleted tasks (trash) |
+| `/tasks/search/` | `/search` | Search |
+| `/tasks/task/<task_id>/` | `/task/:id` | Task detail/edit |
+| `/tasks/app/*` | — | 301 → `/tasks/*` (legacy mount) |
+
+All data goes through the django-ninja API under `/api/tasks/` (see
+`api.py` for the operation list; the POST operations delegate to the
+JSON handlers in `views.py`). Non-GET/HEAD requests under `/tasks/`
+404 — the retired template-UI mutation URLs no longer exist.
 
 ## Behavior Details
 
@@ -106,8 +110,8 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 4. Preserves local-only fields (is_starred, task_order)
 
 **Triggered by**:
-- Clicking "Sync Now" button (adds `?sync=true` to URL)
-- Manual call to `/tasks/sync/` endpoint
+- Clicking "Sync Now" in the SPA menu (POST `/api/tasks/sync/`)
+- The SPA's autosync loop (5-minute interval + visible-tab catch-up)
 
 **Data Flow**:
 - Google API → `sync_task_lists()` → GoogleTaskList model
@@ -123,7 +127,7 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 ### Task Ordering
 **Drag-and-Drop Reordering**:
 - Available in all views (dashboard, starred, list-filtered)
-- Uses SortableJS library for smooth drag-and-drop
+- Uses dnd-kit (React) for smooth drag-and-drop
 - Custom ordering saved in `task_order` field
 - Ordered by: task_order (nulls last), then updated (descending)
 - Visual drag handle with grip icon on all task cards
@@ -139,14 +143,14 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 
 ### Task Completion
 **Complete Task**:
-- AJAX POST to `/tasks/task/<task_id>/complete/`
+- AJAX POST to `/api/tasks/task/<task_id>/complete/`
 - Updates Google Tasks API via `tasks().patch()`
 - Sets status='completed' and completed=now()
 - Shows confirmation modal before completing
 - Moves task to "Completed Tasks" section
 
 **Uncomplete Task**:
-- AJAX POST to `/tasks/task/<task_id>/uncomplete/`
+- AJAX POST to `/api/tasks/task/<task_id>/uncomplete/`
 - Updates Google Tasks API via `tasks().patch()`
 - Sets status='needsAction' and clears completed timestamp
 - Moves task back to active tasks
@@ -306,7 +310,7 @@ Mirrors individual tasks from Google Tasks with local enhancements.
 
 **Starred View Specifics**:
 - Drag handle visible on each card
-- SortableJS library for drag-and-drop
+- dnd-kit drag-and-drop
 - Ghost effect during drag
 - Auto-save on drop
 - Save indicator (fixed bottom-right)
@@ -369,7 +373,7 @@ All required dependencies are already in the main `requirements.txt`:
 - `google-auth-oauthlib` - OAuth2 flow
 - Bootstrap 5 (CDN) - UI framework
 - Bootstrap Icons (CDN) - Icon library
-- SortableJS (CDN) - Drag-and-drop functionality
+- React SPA frontend (`frontend/src/tasks/`) - dnd-kit drag-and-drop
 
 ## Technical Notes
 

@@ -309,12 +309,6 @@ export function TaskListPage({ view }: { view: ListView }) {
 
   const burgerItems: BurgerMenuItem[] = [
     { label: 'Home', url: '/', icon: 'house', btn_class: 'btn-light' },
-    {
-      label: 'Template UI',
-      url: '/tasks/',
-      icon: 'card-list',
-      btn_class: 'btn-light',
-    },
   ];
   if (hasCredentials) {
     burgerItems.push(

@@ -29,11 +29,11 @@ async function login(page: Page) {
 }
 
 test.describe('unauthenticated', () => {
-  test('/tasks/app/ redirects to login (session auth)', async ({ request }) => {
+  test('/tasks/ redirects to login (session auth)', async ({ request }) => {
     // @login_required → 302 to LOGIN_URL (/login/?next=…); that view
     // then forwards into Google OAuth. Assert the first hop only —
     // the rest depends on accounts.google.com being reachable.
-    const response = await request.get('/tasks/app/', {
+    const response = await request.get('/tasks/', {
       maxRedirects: 0,
     });
     expect(response.status()).toBe(302);
@@ -57,7 +57,7 @@ test.describe('authenticated smoke', () => {
 
   test('login renders the React dashboard', async ({ page }) => {
     await login(page);
-    await page.goto('/tasks/app/');
+    await page.goto('/tasks/');
     // React mounted: navbar + either the task list or an
     // empty/auth-state alert (never the raw "Loading React app…").
     await expect(page.locator('nav.navbar').first()).toBeVisible();
@@ -67,7 +67,7 @@ test.describe('authenticated smoke', () => {
 
   test('star toggle round-trips through the API', async ({ page }) => {
     await login(page);
-    await page.goto('/tasks/app/');
+    await page.goto('/tasks/');
     const star = page.locator('.task-card .star-btn').first();
     await expect(
       star,

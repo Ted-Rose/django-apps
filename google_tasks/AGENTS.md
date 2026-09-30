@@ -51,22 +51,32 @@ sync and several local-only features. Full behavior docs:
   `_star_task_at_top` shifts all starred tasks +1 and puts the task at
   `starred_order=1`. `remove_starred_hashtags` strips them from notes
   so periodic reprocessing doesn't re-star.
-- Dashboard auto-runs `process_task_labels` after sync, swallowing all
-  errors silently.
+- The API's sync op auto-runs `process_task_labels` after sync,
+  swallowing all errors silently.
 
-## Views (views.py, ~1800 lines)
+## Views & API (post-cutover)
 
-- `dashboard`, `starred_tasks`, `overdue_tasks`, `archived_tasks`,
-  `trash_tasks` share the same template/context machinery; view flags
-  (`is_starred_view`, `is_archived_view`, `is_trash_view`,
-  `is_overdue_view`) flow to JS via `get_dashboard_js_config` →
-  `json_script` → `static/google_tasks/js/dashboard/*.js`.
-- `get_creds_dict(user)` bridges DB credentials → the legacy dict shape
-  services expect. Page views pair it with `reauth_redirect(request)`:
-  when creds are `None` but a `GoogleOAuthCredentials` row exists
-  (e.g. revoked refresh token), the user is bounced into the OAuth
-  flow automatically instead of seeing a dead dashboard.
-- Client-side undo/redo lives in `js/dashboard/action_history.js`
+- The UI is the React SPA (`frontend/src/tasks/`, Vite entry `tasks`)
+  served by `react_app` at `/tasks/` + a `<path:subpath>` catch-all.
+  `/tasks/app/*` 301-redirects to `/tasks/*` (legacy strangler mount);
+  non-GET/HEAD requests under `/tasks/` 404 — the old template views
+  and their POST URLs are gone.
+- All reads/mutations are the django-ninja router in `api.py`
+  (`/api/tasks/…`). Mutation **operations delegate to the JSON
+  handlers still defined in views.py** (`sync_view`,
+  `toggle_star`, `complete_task_view`, `reorder_*`, `*_divider`,
+  `archive/unarchive/delete/restore/permanent_delete`, `create`/
+  `update_task_view`, `process_labels*`) so semantics — service
+  calls, `{'success': …}` shapes, session-stored OAuth state — stay
+  identical; `api.py`'s `_adapt()` maps reauth/error payloads onto
+  the API contract. Keep those handlers' decorators and bodies in
+  sync with the API schemas when contracts change.
+- `get_creds_dict(user)` bridges DB credentials → the legacy dict
+  shape services expect. The API equivalent of the old
+  `reauth_redirect` is `_creds_or_reauth` → `GoogleReauthRequired`
+  → 401 `{error: google_reauth, authorization_url}` — the SPA
+  navigates to the OAuth flow itself.
+- `reverse('google_tasks:dashboard')` resolves to `/tasks/` — kept
+  for `home.html` and the `google_api` OAuth-callback default.
+- Client-side undo/redo lives in `frontend/src/tasks/actionHistory.ts`
   (localStorage, 50-action cap).
-- All mutations are AJAX `POST` + `JsonResponse`; templates are
-  Bootstrap 5 partials under `templates/google_tasks/components/`.

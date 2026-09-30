@@ -21,7 +21,13 @@ from google_tasks.views import REORDER_CAP
 
 
 class ReorderViewTests(TestCase):
-    """Shared payload validation for both reorder endpoints."""
+    """Shared payload validation for both reorder endpoints.
+
+    Post-cutover the only public reorder surface is the ninja API —
+    these exercise /api/tasks/… through _adapt(), so schema-rejected
+    payloads come back 422 and view-level failures keep their status
+    with the uniform {error, detail} shape.
+    """
 
     def setUp(self):
         User = get_user_model()
@@ -38,8 +44,8 @@ class ReorderViewTests(TestCase):
         self.other_list = GoogleTaskList.objects.create(
             user=self.user, list_id='list-2', title='List 2'
         )
-        self.url = reverse('google_tasks:reorder_tasks')
-        self.starred_url = reverse('google_tasks:reorder_starred')
+        self.url = '/api/tasks/tasks/reorder/'
+        self.starred_url = '/api/tasks/starred/reorder/'
 
     def make_task(self, task_id, order, starred=False,
                   starred_order=None, task_list=None):
@@ -63,39 +69,43 @@ class ReorderViewTests(TestCase):
     # --- validation ---
 
     def test_invalid_json_returns_400(self):
+        # Ninja passes the unparseable body through; the view's own
+        # json.loads fails → its 400 survives _adapt.
         resp = self.post(None, raw='{not json')
         self.assertEqual(resp.status_code, 400)
 
-    def test_missing_updates_returns_400(self):
+    def test_missing_updates_returns_422(self):
         resp = self.post({})
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 422)
 
     def test_empty_updates_returns_400(self):
+        # Passes the schema; the view rejects empty lists.
         resp = self.post({'updates': []})
         self.assertEqual(resp.status_code, 400)
 
-    def test_updates_not_a_list_returns_400(self):
+    def test_updates_not_a_list_returns_422(self):
         resp = self.post({'updates': {'task_id': 'a'}})
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 422)
 
-    def test_too_many_updates_returns_400(self):
+    def test_too_many_updates_returns_422(self):
+        # ReorderIn.updates has max_length=REORDER_CAP → schema 422.
         updates = [
             {'task_id': f't{i}', 'position': float(i)}
             for i in range(REORDER_CAP + 1)
         ]
         resp = self.post({'updates': updates})
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 422)
 
-    def test_update_missing_task_id_returns_400(self):
+    def test_update_missing_task_id_returns_422(self):
         resp = self.post({'updates': [{'position': 1.0}]})
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 422)
 
-    def test_update_non_numeric_position_returns_400(self):
+    def test_update_non_numeric_position_returns_422(self):
         self.make_task('a', 1.0)
         resp = self.post({'updates': [
             {'task_id': 'a', 'position': 'high'},
         ]})
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 422)
 
     def test_update_non_finite_position_returns_400(self):
         self.make_task('a', 1.0)
@@ -161,7 +171,8 @@ class ReorderViewTests(TestCase):
         resp = self.post({'updates': [
             {'task_id': 'a', 'position': 1.0},
         ]})
-        self.assertEqual(resp.status_code, 302)
+        # API contract: JSON 401, never a login redirect.
+        self.assertEqual(resp.status_code, 401)
 
     # --- happy paths ---
 
@@ -219,7 +230,11 @@ class ReorderViewTests(TestCase):
                 {'task_id': 'a', 'position': 2.0},
             ]})
         self.assertEqual(resp.status_code, 409)
-        self.assertEqual(resp.json()['error'], 'position_conflict')
+        # _adapt maps the view's {'error': 'position_conflict'} onto
+        # the uniform API shape.
+        body = resp.json()
+        self.assertEqual(body['error'], 'conflict')
+        self.assertEqual(body['detail'], 'position_conflict')
 
     def test_unrelated_integrity_error_propagates(self):
         self.make_task('a', 1.0)
@@ -228,6 +243,8 @@ class ReorderViewTests(TestCase):
             'bulk_update',
             side_effect=IntegrityError('some other failure'),
         ):
+            # Not a position-conflict name — ninja re-raises
+            # unhandled exceptions rather than masking them as 4xx.
             with self.assertRaises(IntegrityError):
                 self.post({'updates': [
                     {'task_id': 'a', 'position': 2.0},
@@ -278,9 +295,7 @@ class ToggleStarOrderTests(TestCase):
             username='alice', password='pw'
         )
         self.client.force_login(self.user)
-        self.url = lambda tid: reverse(
-            'google_tasks:toggle_star', args=[tid]
-        )
+        self.url = lambda tid: f'/api/tasks/task/{tid}/toggle-star/'
 
     def make_task(self, task_id, starred=False, starred_order=None):
         return GoogleTask.objects.create(
@@ -588,7 +603,8 @@ class TasksApiTests(TestCase):
 
 
 class ReactAppShellTests(TestCase):
-    """Strangler-mounted SPA shell at /tasks/app/."""
+    """Post-cutover SPA mount: /tasks/ + catch-all serve the shell;
+    /tasks/app/* 301-redirects; retired mutation URLs 404 on POST."""
 
     ENTRY_KEY = 'src/tasks/main.tsx'
 
@@ -615,16 +631,16 @@ class ReactAppShellTests(TestCase):
         })
 
     def test_requires_login(self):
-        resp = self.client.get(reverse('google_tasks:react_app'))
+        resp = self.client.get(reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 302)
 
     def test_subpath_requires_login(self):
-        resp = self.client.get('/tasks/app/starred/')
+        resp = self.client.get('/tasks/starred/')
         self.assertEqual(resp.status_code, 302)
 
     def test_renders_shell_with_bootstrap(self):
         self.client.force_login(self.user)
-        resp = self.client.get(reverse('google_tasks:react_app'))
+        resp = self.client.get(reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="root"')
         self.assertContains(resp, 'id="spa-bootstrap"')
@@ -633,25 +649,91 @@ class ReactAppShellTests(TestCase):
     def test_sets_csrf_cookie(self):
         # The React client's POSTs depend on the csrftoken cookie.
         self.client.force_login(self.user)
-        resp = self.client.get(reverse('google_tasks:react_app'))
+        resp = self.client.get(reverse('google_tasks:dashboard'))
         self.assertIn('csrftoken', resp.cookies)
 
     def test_subpath_renders_shell(self):
         self.client.force_login(self.user)
-        resp = self.client.get('/tasks/app/starred/')
+        resp = self.client.get('/tasks/starred/')
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="root"')
 
     def test_subpath_without_trailing_slash_renders(self):
         self.client.force_login(self.user)
-        resp = self.client.get('/tasks/app/starred')
+        resp = self.client.get('/tasks/starred')
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="root"')
+
+    def test_task_detail_subpath_renders_shell(self):
+        self.client.force_login(self.user)
+        resp = self.client.get('/tasks/task/abc123/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="root"')
+
+    # --- /tasks/app/* legacy mount → permanent redirects ---
+
+    def test_app_root_redirects_to_tasks_root(self):
+        resp = self.client.get('/tasks/app/')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(resp['Location'], '/tasks/')
+
+    def test_app_bare_redirects_without_append_slash_hop(self):
+        # /tasks/app must not fall through to the SPA catch-all.
+        resp = self.client.get('/tasks/app')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(resp['Location'], '/tasks/')
+
+    def test_app_subpath_redirects(self):
+        resp = self.client.get('/tasks/app/starred/')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(resp['Location'], '/tasks/starred/')
+
+    def test_app_subpath_without_trailing_slash_redirects(self):
+        resp = self.client.get('/tasks/app/starred')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(resp['Location'], '/tasks/starred')
+
+    def test_app_redirect_preserves_query_string(self):
+        resp = self.client.get('/tasks/app/?list=list-1&order=due_asc')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(
+            resp['Location'], '/tasks/?list=list-1&order=due_asc'
+        )
+
+    def test_app_redirect_is_anonymous_friendly(self):
+        # No login bounce on the redirect itself — the destination
+        # view enforces auth after the hop.
+        self.client.logout()
+        resp = self.client.get('/tasks/app/starred/')
+        self.assertEqual(resp.status_code, 301)
+
+    # --- retired mutation routes ---
+
+    def test_old_mutation_urls_404_on_post(self):
+        self.client.force_login(self.user)
+        for url in (
+            '/tasks/sync/',
+            '/tasks/tasks/reorder/',
+            '/tasks/starred/reorder/',
+            '/tasks/task/a/toggle-star/',
+            '/tasks/task/a/complete/',
+            '/tasks/task/a/archive/',
+            '/tasks/task/a/delete/',
+            '/tasks/divider/create/',
+            '/tasks/process-labels/',
+            '/tasks/task/create/',
+        ):
+            resp = self.client.post(
+                url, data='{}', content_type='application/json'
+            )
+            self.assertEqual(resp.status_code, 404, url)
+
+    # --- shell internals (unchanged by the move) ---
 
     def test_warns_when_manifest_missing(self):
         self.client.force_login(self.user)
         with self._vite_override('/nonexistent/manifest.json'):
-            resp = self.client.get(reverse('google_tasks:react_app'))
+            resp = self.client.get(reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'React entry not loaded')
 
@@ -665,7 +747,7 @@ class ReactAppShellTests(TestCase):
             })
             with self._vite_override(manifest_path):
                 resp = self.client.get(
-                    reverse('google_tasks:react_app'))
+                    reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'React entry not loaded')
 
@@ -686,7 +768,7 @@ class ReactAppShellTests(TestCase):
                 client.manifest._entries, {self.ENTRY_KEY: entry}
             ):
                 resp = self.client.get(
-                    reverse('google_tasks:react_app'))
+                    reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'tasks/tasks.abc12345.js')
         self.assertNotContains(resp, 'React entry not loaded')
@@ -700,7 +782,7 @@ class ReactAppShellTests(TestCase):
             '/nonexistent/manifest.json', dev_mode=True
         ), patch.object(client, 'dev_mode', True):
             resp = self.client.get(
-                reverse('google_tasks:react_app'))
+                reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'localhost:5173')
         self.assertNotContains(resp, 'React entry not loaded')

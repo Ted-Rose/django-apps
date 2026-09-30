@@ -76,17 +76,31 @@ export function truncateWords(text: string, count: number): string {
 }
 
 /** BrowserRouter basename from main.tsx. */
-const SPA_BASENAME = '/tasks/app';
+const SPA_BASENAME = '/tasks';
+/** Pre-cutover mount (Stages 1–5) — stored paths from old sessions
+ *  still resolve. */
+const LEGACY_BASENAME = '/tasks/app';
 
 /**
  * Convert a stored absolute path (localStorage `lastTasksView` /
  * `taskListReferrer`, written as `location.pathname + search`) into
- * a router `to` value the SPA can navigate to internally. Returns
- * null for non-SPA paths (e.g. template-UI `/tasks/...` URLs) —
- * callers fall back to the dashboard.
+ * a router `to` value the SPA can navigate to internally. Old
+ * template-UI URLs like `/tasks/starred/` and legacy `/tasks/app/…`
+ * paths resolve to the same client routes — the cutover deliberately
+ * kept the SPA routes under the same names. Returns null for
+ * non-SPA paths; callers fall back to the dashboard.
  */
 export function spaPathFromStoredUrl(stored: string | null): string | null {
   if (!stored) return null;
+  // Normalize legacy /tasks/app<rest> → /tasks<rest> first.
+  if (stored === LEGACY_BASENAME) return '/';
+  if (
+    stored.startsWith(`${LEGACY_BASENAME}/`) ||
+    stored.startsWith(`${LEGACY_BASENAME}?`) ||
+    stored.startsWith(`${LEGACY_BASENAME}#`)
+  ) {
+    stored = `${SPA_BASENAME}${stored.slice(LEGACY_BASENAME.length)}`;
+  }
   if (stored === SPA_BASENAME) return '/';
   if (stored.startsWith(`${SPA_BASENAME}/`)) {
     return stored.slice(SPA_BASENAME.length);

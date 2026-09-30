@@ -1,6 +1,13 @@
 # React Frontend Platform — google_tasks as First App
 
-> **Status**: ✅ Vercel manifest spike **PASSED** (2026-09-30). A
+> **Status**: ✅ **Complete — Stage 6 cutover done.** `/tasks/` now
+> serves the React SPA (`BrowserRouter basename='/tasks'`); the old
+> template views, templates, and `static/google_tasks/` are deleted.
+> `/tasks/app/*` 301-redirects to `/tasks/*`. Mutation handlers stay
+> in `google_tasks/views.py` (unrouted) and the ninja API delegates
+> to them — same service calls and `{'success': …}` shapes.
+>
+> ✅ Vercel manifest spike **PASSED** (2026-09-30). A
 > minimal Stage 1 subset (frontend workspace, django-vite,
 > `/tasks/app/` shell, npm build in `build_files.sh`, Docker node
 > stage) is merged to main. On the Vercel prod deployment,

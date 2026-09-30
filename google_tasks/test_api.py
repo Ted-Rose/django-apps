@@ -201,7 +201,7 @@ class TasksApiReviewTests(TestCase):
         self.assertEqual(resp.status_code, 401)
         login_url = resp.json()['login_url']
         next_param = parse_qs(urlparse(login_url).query)['next'][0]
-        self.assertEqual(next_param, '/tasks/app/trash/?label=Home')
+        self.assertEqual(next_param, '/tasks/trash/?label=Home')
 
     def test_google_reauth_next_points_at_spa(self):
         from google_api.models import GoogleOAuthCredentials
@@ -218,7 +218,7 @@ class TasksApiReviewTests(TestCase):
         self.assertEqual(resp.status_code, 401)
         auth_url = resp.json()['authorization_url']
         next_param = parse_qs(urlparse(auth_url).query)['next'][0]
-        self.assertEqual(next_param, '/tasks/app/')
+        self.assertEqual(next_param, '/tasks/')
 
     # --- 2xx success:false floor ---
 

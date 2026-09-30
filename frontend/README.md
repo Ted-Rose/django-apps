@@ -85,7 +85,7 @@ E2E_BASE_URL=http://localhost:8000 E2E_USERNAME=... E2E_PASSWORD=... \
 
 What it covers (`tests/e2e/tasks.smoke.spec.ts`):
 
-- `/tasks/app/` answers 302 → `/login/?next=…` without a session
+- `/tasks/` answers 302 → `/login/?next=…` without a session
   (`@login_required`; that view then forwards into Google OAuth).
 - `GET /api/tasks/dashboard/` answers 401 without a session.
 - Admin login → dashboard renders (navbar + task list/empty state).
