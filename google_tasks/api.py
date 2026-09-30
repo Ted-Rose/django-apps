@@ -9,15 +9,21 @@ contract (401 google_reauth, uniform {error, detail}).
 import json
 from datetime import datetime
 from typing import List, Optional
+from urllib.parse import urlencode
 
 from django.db.models import F, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
-from ninja import Router, Schema
+from ninja import Query, Router, Schema
+from pydantic import Field
 
-from django_apps.api import GoogleReauthRequired, error_slug
+from django_apps.api import (
+    GoogleReauthRequired,
+    error_slug,
+    spa_url_for,
+)
 from google_tasks import views
 from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
 
@@ -25,6 +31,12 @@ router = Router()
 
 
 # --- Schemas ---
+#
+# The *In schemas are validate-only: ninja parses the request body for
+# 422 checking and to generate the OpenAPI spec / TS types, but the
+# delegated views re-parse request.body themselves. They deliberately
+# mirror the views' JSON contracts rather than drive behavior, so keep
+# them in sync with the views when contracts change.
 
 class LabelRef(Schema):
     id: int
@@ -64,6 +76,7 @@ class TaskOut(Schema):
     labels: List[LabelRef] = []
     is_archived: bool
     is_deleted: bool
+    deleted_at: Optional[datetime] = None
     needs_push: bool
 
     @staticmethod
@@ -117,7 +130,9 @@ class ReorderItem(Schema):
 
 
 class ReorderIn(Schema):
-    updates: List[ReorderItem]
+    # max_length mirrors the view's REORDER_CAP so oversized payloads
+    # fail with a 422 here instead of the view's 400.
+    updates: List[ReorderItem] = Field(max_length=views.REORDER_CAP)
     task_list_id: Optional[str] = None
 
 
@@ -135,16 +150,25 @@ class TaskCreateIn(Schema):
     notes: Optional[str] = None
     is_starred: bool = False
     task_list_id: Optional[str] = None
-    label_ids: List[int] = []
+    label_ids: List[int] = Field(default_factory=list, max_length=50)
 
 
 class TaskUpdateIn(Schema):
     title: str
     notes: Optional[str] = None
-    label_ids: Optional[List[int]] = None
+    label_ids: Optional[List[int]] = Field(default=None, max_length=50)
 
 
 # --- Shared helpers ---
+
+def _reauth_url(request):
+    """Google OAuth login URL whose `next` sends the user back to the
+    SPA page for this request (never to a raw /api/ JSON URL)."""
+    return (
+        f"{reverse('google_api:login')}"
+        f"?{urlencode({'next': spa_url_for(request)})}"
+    )
+
 
 def _creds_or_reauth(request):
     """Return the Google creds dict for request.user, or raise
@@ -156,15 +180,17 @@ def _creds_or_reauth(request):
         if GoogleOAuthCredentials.objects.filter(
             user=request.user
         ).exists():
-            raise GoogleReauthRequired(
-                f"{reverse('google_api:login')}"
-                f"?next={request.get_full_path()}"
-            )
+            raise GoogleReauthRequired(_reauth_url(request))
     return creds
 
 
-def _order_active(qs, order_by, field='task_order'):
-    """Ordering branches shared by the dashboard-style views."""
+def _order_active(qs, order_by, field='task_order',
+                  completed_orders=True):
+    """Ordering branches shared by the dashboard-style views.
+
+    `completed_orders=False` mirrors views.archived_tasks, which only
+    honours the order/created orderings for its active bucket — there
+    completed_* values leave the model Meta ordering in place."""
     if order_by == 'order_desc':
         return qs.order_by(F(field).desc(nulls_last=True), '-updated')
     if order_by == 'order_asc':
@@ -183,11 +209,11 @@ def _order_active(qs, order_by, field='task_order'):
         return qs.order_by(
             F('due_date').asc(nulls_last=True), 'updated'
         )
-    if order_by == 'completed_last':
+    if order_by == 'completed_last' and completed_orders:
         return qs.order_by(
             F('completed').asc(nulls_first=True), '-updated'
         )
-    if order_by == 'completed_first':
+    if order_by == 'completed_first' and completed_orders:
         return qs.order_by(
             F('completed').desc(nulls_last=True), '-updated'
         )
@@ -243,9 +269,10 @@ def _task_queryset(user):
 # --- Read endpoints ---
 
 @router.get('/dashboard/', response=DashboardOut)
-def dashboard(request, list: Optional[str] = None,
-                  label: Optional[str] = None,
-                  order: str = 'order_asc'):
+def dashboard(request,
+              list: Optional[str] = Query(None, max_length=255),
+              label: Optional[str] = Query(None, max_length=255),
+              order: str = 'order_asc'):
     creds = _creds_or_reauth(request)
     tasks = _task_queryset(request.user).filter(
         is_archived=False, is_deleted=False
@@ -273,8 +300,9 @@ def dashboard(request, list: Optional[str] = None,
 
 
 @router.get('/starred/', response=DashboardOut)
-def starred(request, label: Optional[str] = None,
-                order: str = 'order_asc'):
+def starred(request,
+            label: Optional[str] = Query(None, max_length=255),
+            order: str = 'order_asc'):
     creds = _creds_or_reauth(request)
     tasks = _task_queryset(request.user).filter(
         is_starred=True, is_archived=False, is_deleted=False
@@ -293,8 +321,9 @@ def starred(request, label: Optional[str] = None,
 
 
 @router.get('/overdue/', response=DashboardOut)
-def overdue(request, label: Optional[str] = None,
-                order: str = 'order_asc'):
+def overdue(request,
+            label: Optional[str] = Query(None, max_length=255),
+            order: str = 'order_asc'):
     creds = _creds_or_reauth(request)
     tasks = _task_queryset(request.user).filter(
         is_archived=False, is_deleted=False,
@@ -314,8 +343,9 @@ def overdue(request, label: Optional[str] = None,
 
 
 @router.get('/archived/', response=DashboardOut)
-def archived(request, label: Optional[str] = None,
-                 order: str = 'order_asc'):
+def archived(request,
+             label: Optional[str] = Query(None, max_length=255),
+             order: str = 'order_asc'):
     creds = _creds_or_reauth(request)
     tasks = _task_queryset(request.user).filter(
         is_archived=True, is_deleted=False
@@ -327,15 +357,18 @@ def archived(request, label: Optional[str] = None,
     _label_task_counts(labels, base)
     return _list_response(
         request, creds,
-        _order_active(base, order),
+        # Parity with views.archived_tasks: completed_* orderings only
+        # affect the completed bucket there, not the active list.
+        _order_active(base, order, completed_orders=False),
         _order_completed(tasks.filter(status='completed'), order),
         labels, order, selected_label=label, is_archived_view=True,
     )
 
 
 @router.get('/trash/', response=DashboardOut)
-def trash(request, label: Optional[str] = None,
-              order: str = 'deleted_desc'):
+def trash(request,
+          label: Optional[str] = Query(None, max_length=255),
+          order: str = 'deleted_desc'):
     creds = _creds_or_reauth(request)
     tasks = _task_queryset(request.user).filter(is_deleted=True)
     if label:
@@ -345,12 +378,14 @@ def trash(request, label: Optional[str] = None,
     else:
         tasks = tasks.order_by('-deleted_at')
     labels = TaskLabel.objects.filter(user=request.user)
-    _label_task_counts(
-        labels,
-        GoogleTask.objects.filter(
-            user=request.user, is_deleted=True, status='needsAction'
-        )
+    # Parity with views.trash_tasks: per-label counts are computed over
+    # the label-filtered base, like every other list endpoint.
+    base = GoogleTask.objects.filter(
+        user=request.user, is_deleted=True, status='needsAction'
     )
+    if label:
+        base = base.filter(labels__name=label)
+    _label_task_counts(labels, base)
     return _list_response(
         request, creds, tasks, GoogleTask.objects.none(),
         labels, order, selected_label=label, is_trash_view=True,
@@ -372,7 +407,10 @@ def task_detail(request, task_id: str):
 
 
 @router.get('/search/', response=SearchOut)
-def search(request, q: str = ''):
+def search(request, q: str = Query('', max_length=200)):
+    # Deliberate redesign vs views.search_tasks: a single `q` param
+    # OR-matched across title+notes returning a flat list, instead of
+    # separate title/notes params AND-ed and grouped per task list.
     _creds_or_reauth(request)
     q = q.strip()
     if not q:
@@ -403,18 +441,21 @@ def _adapt(request, response):
         # The view already stored OAuth state in the session when a
         # flow URL exists; otherwise bounce through /login/ (the same
         # target views.reauth_redirect uses for dead creds).
-        authorization_url = payload.get('authorization_url') or (
-            f"{reverse('google_api:login')}"
-            f"?next={request.get_full_path()}"
+        authorization_url = (
+            payload.get('authorization_url') or _reauth_url(request)
         )
         return JsonResponse({
             'error': 'google_reauth',
             'authorization_url': authorization_url,
         }, status=401)
-    if payload.get('success') is False:
+    if 'success' in payload and not payload['success']:
+        # Non-2xx keeps the view's status verbatim. A 2xx with
+        # success:false is a server-side failure (e.g. sync_view emits
+        # {'success': False} with status 200), so floor at 500 — a 400
+        # would misreport it as a client error.
         status = response.status_code
         if status < 400:
-            status = 400
+            status = 500
         extra = {
             k: v for k, v in payload.items()
             if k not in ('success', 'error')

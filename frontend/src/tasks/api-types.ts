@@ -555,6 +555,8 @@ export interface components {
             is_archived: boolean;
             /** Is Deleted */
             is_deleted: boolean;
+            /** Deleted At */
+            deleted_at?: string | null;
             /** Needs Push */
             needs_push: boolean;
         };
@@ -600,11 +602,8 @@ export interface components {
             is_starred: boolean;
             /** Task List Id */
             task_list_id?: string | null;
-            /**
-             * Label Ids
-             * @default []
-             */
-            label_ids: number[];
+            /** Label Ids */
+            label_ids?: number[];
         };
         /** DividerCreateIn */
         DividerCreateIn: {
