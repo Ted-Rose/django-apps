@@ -119,6 +119,39 @@ describe('Dashboard', () => {
     );
   });
 
+  it('keeps original order badges and dividers under secondary_label', async () => {
+    // The template renders forloop.counter and selectSecondaryLabel
+    // only hides rows without renumbering; divider cards are not
+    // .task-container and stay visible.
+    mockedApiGet.mockResolvedValue(
+      makeDashboard({
+        tasks: [
+          makeTask({
+            task_id: 'a',
+            title: 'First',
+            labels: [{ id: 1, name: 'home' }],
+          }),
+          makeTask({ task_id: 'd', title: 'Section', is_divider: true }),
+          makeTask({ task_id: 'b', title: 'Hidden' }),
+          makeTask({
+            task_id: 'c',
+            title: 'Third',
+            labels: [{ id: 1, name: 'home' }],
+          }),
+        ],
+        labels: [{ id: 1, name: 'home', color: '#f00' }],
+      }),
+    );
+    renderDashboard('/?secondary_label=home');
+    expect(await screen.findByText('First')).toBeInTheDocument();
+    expect(screen.queryByText('Hidden')).not.toBeInTheDocument();
+    expect(document.querySelector('.divider-card')).not.toBeNull();
+    const badges = [...document.querySelectorAll('.order-btn')].map(
+      (btn) => btn.textContent,
+    );
+    expect(badges).toEqual(['1', '4']);
+  });
+
   it('shows the connect-Google prompt without credentials', async () => {
     mockedApiGet.mockResolvedValue(
       makeDashboard({

@@ -78,13 +78,29 @@ export default function Dashboard() {
 
   // Client-side secondary_label filter (filters.js selectSecondaryLabel):
   // a row stays visible when it carries a label badge with that name.
+  // Divider cards are not .task-container in the template, so the
+  // original filter never hides them — keep them visible here too.
   const visibleTasks = useMemo(() => {
     const tasks = data?.tasks ?? [];
     if (!secondaryLabel) return tasks;
-    return tasks.filter((task) =>
-      task.labels.some((l) => l.name === secondaryLabel),
+    return tasks.filter(
+      (task) =>
+        task.is_divider || task.labels.some((l) => l.name === secondaryLabel),
     );
   }, [data, secondaryLabel]);
+
+  // Order badge positions in the UNFILTERED list. The template renders
+  // forloop.counter and selectSecondaryLabel only hides rows (no
+  // renumbering), so filtered lists keep their original numbers —
+  // gaps included. forloop.counter counts dividers too, hence the map
+  // is built over data.tasks.
+  const taskPositions = useMemo(
+    () =>
+      new Map(
+        (data?.tasks ?? []).map((task, index) => [task.task_id, index + 1]),
+      ),
+    [data],
+  );
 
   const visibleCompleted = useMemo(() => {
     const completed = data?.completed ?? [];
@@ -177,14 +193,14 @@ export default function Dashboard() {
           <>
             {data.tasks.length > 0 ? (
               <div id="task-list">
-                {visibleTasks.map((task, index) =>
+                {visibleTasks.map((task) =>
                   task.is_divider ? (
                     <DividerCard key={task.task_id} task={task} />
                   ) : (
                     <TaskCard
                       key={task.task_id}
                       task={task}
-                      position={index + 1}
+                      position={taskPositions.get(task.task_id) ?? 0}
                       labelColors={labelColors}
                       labels={data.labels}
                       starredView={data.flags.is_starred_view}
