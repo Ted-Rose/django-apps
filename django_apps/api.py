@@ -7,15 +7,22 @@ enforced on unsafe methods) with JSON 401s instead of redirects,
 plus the google_reauth contract the SPA uses to bounce users into
 the OAuth flow (fetch must never follow Google redirects).
 """
+from urllib.parse import urlencode
+
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import Http404
 from ninja import NinjaAPI
-from ninja.errors import AuthenticationError, HttpError
+from ninja.errors import AuthenticationError, HttpError, ValidationError
 from ninja.security import django_auth
 
 api = NinjaAPI(
     title='django-apps API',
     version='0.1.0',
     auth=django_auth,
+    # Schema is committed in-repo (frontend/openapi.json) and type
+    # generation uses `manage.py export_openapi_schema`, so restricting
+    # the served docs/spec to staff does not affect that workflow.
+    docs_decorator=staff_member_required,
 )
 
 
@@ -35,6 +42,7 @@ _ERROR_SLUGS = {
     404: 'not_found',
     405: 'method_not_allowed',
     409: 'conflict',
+    422: 'validation_error',
     429: 'throttled',
     500: 'server_error',
 }
@@ -45,12 +53,33 @@ def error_slug(status_code):
     return _ERROR_SLUGS.get(status_code, 'error')
 
 
+def spa_url_for(request):
+    """Map an /api/<app>/<sub> request URL onto the SPA page the user
+    should return to after auth. API paths are JSON endpoints, not
+    pages, so `next`/`login_url` must never point back at them —
+    /api/tasks/trash/?label=X → /tasks/app/trash/?label=X."""
+    path = request.path
+    prefix = '/api/'
+    if path.startswith(prefix):
+        app, _, sub = path[len(prefix):].partition('/')
+        if sub.startswith('dashboard'):
+            # The SPA mounts its dashboard at the app root.
+            sub = ''
+        path = f'/{app}/app/{sub}'
+    if request.GET:
+        path = f'{path}?{request.GET.urlencode()}'
+    return path
+
+
 @api.exception_handler(AuthenticationError)
 def _on_unauthenticated(request, exc):
     """Session auth failed → JSON 401, never a login redirect."""
     return api.create_response(request, {
         'error': 'unauthenticated',
-        'login_url': f'/admin/login/?next={request.get_full_path()}',
+        'login_url': (
+            f'/admin/login/'
+            f'?{urlencode({"next": spa_url_for(request)})}'
+        ),
     }, status=401)
 
 
@@ -68,6 +97,16 @@ def _on_not_found(request, exc):
         'error': 'not_found',
         'detail': str(exc) or 'Not Found',
     }, status=404)
+
+
+@api.exception_handler(ValidationError)
+def _on_validation_error(request, exc):
+    """Schema validation failures keep the uniform {error, detail}
+    contract instead of ninja's bare {detail: [...]} shape."""
+    return api.create_response(request, {
+        'error': 'validation_error',
+        'detail': exc.errors,
+    }, status=422)
 
 
 @api.exception_handler(HttpError)
