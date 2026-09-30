@@ -173,6 +173,16 @@ def _order_active(qs, order_by, field='task_order'):
         return qs.order_by(F('created').desc(nulls_last=True), '-updated')
     if order_by == 'created_asc':
         return qs.order_by(F('created').asc(nulls_last=True), 'updated')
+    # due_date is a nullable DateTimeField; tasks without a due date
+    # always sort last so they never top the list.
+    if order_by == 'due_desc':
+        return qs.order_by(
+            F('due_date').desc(nulls_last=True), '-updated'
+        )
+    if order_by == 'due_asc':
+        return qs.order_by(
+            F('due_date').asc(nulls_last=True), 'updated'
+        )
     if order_by == 'completed_last':
         return qs.order_by(
             F('completed').asc(nulls_first=True), '-updated'
