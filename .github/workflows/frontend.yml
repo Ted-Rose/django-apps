@@ -5,13 +5,17 @@ on:
     paths:
       - 'frontend/**'
       - '*/api.py'
-      - 'django_apps/api.py'
+      - 'django_apps/views.py'
+      - 'django_apps/templates/spa_shell.html'
+      - '.github/workflows/frontend.yml'
   push:
     branches: [main]
     paths:
       - 'frontend/**'
       - '*/api.py'
-      - 'django_apps/api.py'
+      - 'django_apps/views.py'
+      - 'django_apps/templates/spa_shell.html'
+      - '.github/workflows/frontend.yml'
 
 jobs:
   frontend:
@@ -28,18 +32,49 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python dependencies
+        working-directory: .
+        run: pip install -r requirements.txt
+
       - run: npm ci
       - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
 
       - name: OpenAPI drift check
+        working-directory: .
         run: |
-          # openapi.json is produced by Stage 0 (django-ninja). Until it
-          # lands there is nothing to check — keep this step green.
-          if [ ! -f openapi.json ]; then
-            echo "frontend/openapi.json not present yet — skipping"
-            exit 0
+          # Regenerate frontend/openapi.json from the django-ninja API
+          # itself, so a PR that edits */api.py without re-dumping the
+          # spec fails here — diffing only api-types.ts would never
+          # catch that drift. Settings import needs a
+          # private_settings.json; reuse the Dockerfile's build-time
+          # dummy (no secrets, in-memory sqlite).
+          python -c "import json; json.dump({'SECRET_KEY': 'build-time-dummy', 'DEBUG': False, 'BASE_URL': '', 'DATABASES': {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}, 'ESV_KEY': ''}, open('private_settings.json', 'w'))"
+          python manage.py export_openapi_schema --output frontend/openapi.json
+          rm private_settings.json
+          # The committed file keeps a trailing newline; the export
+          # doesn't write one.
+          printf '\n' >> frontend/openapi.json
+          # --porcelain catches deleted/untracked files too, which
+          # `git diff --exit-code` would silently miss.
+          if [ -n "$(git status --porcelain -- frontend/openapi.json)" ]; then
+            echo "frontend/openapi.json is stale — run:"
+            echo "  python manage.py export_openapi_schema --output frontend/openapi.json"
+            git diff -- frontend/openapi.json
+            exit 1
           fi
+
+          cd frontend
           npm run gen:types
-          git diff --exit-code -- src/tasks/api-types.ts
+          if [ -n "$(git status --porcelain -- src/tasks/api-types.ts)" ]; then
+            echo "src/tasks/api-types.ts is stale — run: npm run gen:types"
+            git status -- src/tasks/api-types.ts
+            exit 1
+          fi

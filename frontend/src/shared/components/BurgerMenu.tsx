@@ -34,9 +34,11 @@ function ItemIcon({ icon }: { icon?: string }) {
 export function BurgerMenu({ items }: BurgerMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   // Close the menu when clicking outside of it (like the template's
-  // document-level click listener).
+  // document-level click listener) or pressing Escape — focus returns
+  // to the toggle button.
   useEffect(() => {
     if (!open) return;
     const onDocumentClick = (event: MouseEvent) => {
@@ -44,8 +46,18 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
         setOpen(false);
       }
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        toggleRef.current?.focus();
+      }
+    };
     document.addEventListener('click', onDocumentClick);
-    return () => document.removeEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('click', onDocumentClick);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [open]);
 
   const visibleItems = items.filter((item) => item.url || item.onClick);
@@ -57,6 +69,7 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
         className="burger-icon"
         aria-label="Toggle menu"
         aria-expanded={open}
+        ref={toggleRef}
         onClick={(event) => {
           event.stopPropagation();
           setOpen((prev) => !prev);
@@ -66,10 +79,12 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
       </button>
 
       <div className={`burger-menu-items${open ? ' show' : ''}`}>
-        {visibleItems.map((item) =>
+        {visibleItems.map((item, index) =>
           item.url ? (
             <a
-              key={item.label}
+              // Labels can repeat (server-built dicts) — keep the key
+              // unique with the item's index.
+              key={`${item.label}-${index}`}
               href={item.url}
               className={itemClass(item)}
               onClick={() => setOpen(false)}
@@ -79,7 +94,7 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
             </a>
           ) : (
             <button
-              key={item.label}
+              key={`${item.label}-${index}`}
               type="button"
               className={itemClass(item)}
               onClick={() => {

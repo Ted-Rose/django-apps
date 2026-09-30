@@ -48,6 +48,19 @@ function authRedirectUrl(body: unknown): string | undefined {
   return b.authorization_url ?? b.login_url;
 }
 
+/**
+ * Only plain objects and arrays get JSON-encoded. Every valid
+ * `BodyInit` (FormData, Blob, ArrayBuffer + views like Uint8Array,
+ * URLSearchParams, ReadableStream, strings) passes through untouched
+ * so `fetch` can set the right Content-Type itself.
+ */
+function shouldJsonEncode(body: unknown): boolean {
+  if (Array.isArray(body)) return true;
+  if (typeof body !== 'object' || body === null) return false;
+  const proto: unknown = Object.getPrototypeOf(body);
+  return proto === Object.prototype || proto === null;
+}
+
 /** Full-page navigation — extracted so tests can observe it. */
 function navigate(url: string): void {
   window.location.assign(url);
@@ -70,13 +83,7 @@ export async function apiFetch<T = unknown>(
 
   let payload: BodyInit | undefined;
   if (body != null) {
-    if (
-      typeof body === 'object' &&
-      !(body instanceof FormData) &&
-      !(body instanceof Blob) &&
-      !(body instanceof ArrayBuffer) &&
-      !(body instanceof URLSearchParams)
-    ) {
+    if (shouldJsonEncode(body)) {
       payload = JSON.stringify(body);
       if (!headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
@@ -94,6 +101,18 @@ export async function apiFetch<T = unknown>(
     credentials: 'same-origin',
     redirect: 'manual',
   });
+
+  // With `redirect: 'manual'` a 30x response comes back as an
+  // opaque-redirect stub (status 0, empty body) — session expiry on
+  // non-ninja endpoints (@login_required → 302 to /admin/login/),
+  // APPEND_SLASH redirects, middleware redirects. Treat it like the
+  // auth path: bounce the browser to login instead of throwing a
+  // meaningless status-0 ApiError.
+  if (response.type === 'opaqueredirect' || response.status === 0) {
+    const next = window.location.pathname + window.location.search;
+    navigate(`/admin/login/?next=${encodeURIComponent(next)}`);
+    return new Promise<T>(() => {});
+  }
 
   const parsed = await parseBody(response);
 
