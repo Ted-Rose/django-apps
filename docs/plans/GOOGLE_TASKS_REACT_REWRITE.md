@@ -1,15 +1,18 @@
 # React Frontend Platform — google_tasks as First App
 
-> **Status**: Vercel manifest spike in progress — a minimal Stage 1
-> subset (frontend workspace, django-vite, `/tasks/app/` shell) ships
-> first. Running `npm ci`/`npm run build` inside `build_files.sh`
-> failed on Vercel preview deploys (no log access to diagnose), so
-> **`frontend_dist/` is committed to the repo** and `build_files.sh`
-> runs no npm — regenerate it locally with
-> `npm run build --prefix frontend` and commit the result. If the
-> deploy goes green, record under "Vercel manifest spike" below that a
-> committed manifest lands in the lambda (guaranteed — it's source,
-> not build output) and revisit build-time generation separately.
+> **Status**: ✅ Vercel manifest spike **PASSED** (2026-09-30). A
+> minimal Stage 1 subset (frontend workspace, django-vite,
+> `/tasks/app/` shell, npm build in `build_files.sh`, Docker node
+> stage) is merged to main. On the Vercel prod deployment,
+> `{% vite_asset %}` resolves via `frontend_dist/manifest.json`
+> **inside the Python lambda** and `/tasks/app/` serves
+> `/static/tasks/tasks.<hash>.js` from the CDN — option 1 confirmed,
+> build output IS shared with the `@vercel/python` build. Two
+> unrelated gotchas found: Vercel *preview* deploys fail on every
+> branch (env vars appear Production-scoped only — scope them to
+> Preview if previews are wanted), and the Cloud Run migrate job has
+> been failing on `sslrootcert` (`/root/.postgresql/root.crt`) since
+> before this work — Cloud Run did not pick up this change yet.
 
 ## Decision
 

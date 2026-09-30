@@ -23,6 +23,7 @@ same database. PythonAnywhere
 | `tv_archive/` | Latvian TV schedule scraper (tet.lv) enriched with IMDb ratings. `fetch_tv_program_details()` is **not** wired to a URL — run it manually via shell |
 | `single_pages/` | One-off pages that don't merit their own app (twister, spoki.lv proxy) |
 | `terraform/` | All GCP infra: Cloud Run service + jobs, paused Cloud Scheduler triggers, secrets refs, Artifact Registry, GCS audio bucket, WIF |
+| `frontend/` | React rewrite workspace: Vite 5 + React 19 + TS, one entry per app (`src/tasks/`); builds to gitignored `frontend_dist/` (Vite manifest + hashed assets) |
 | `docs/` | `QUICKSTART.md` (GCP deploy runbook), `changelog.md`, `coding_diary.md` (dev log), `plans/` (design docs) |
 
 URL routing (`django_apps/urls.py`): `google_api` and `single_pages`,
@@ -127,15 +128,30 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 - **Tests**: Django `TestCase` in each app's `tests.py`; factory helper
   functions (`make_*`) instead of fixtures; mock external APIs with
   `unittest.mock.patch`.
+- **React SPA mounts**: `django_apps.views.spa_shell(request, entry,
+  title)` renders `spa_shell.html` (login + CSRF + `json_script`
+  bootstrap) for a `frontend/src/<entry>/main.tsx` Vite entry. Apps
+  mount it under `/<app>/app/` with a `<path:subpath>` catch-all —
+  google_tasks does this at `/tasks/app/` while the template UI keeps
+  `/tasks/` (strangler pattern; see
+  `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`).
 
 ## Deployment & CI
 
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
   Artifact Registry → one-off Cloud Run job runs `manage.py migrate` →
-  `gcloud run deploy django-apps`.
+  `gcloud run deploy django-apps`. Dockerfile has a `node:22-slim`
+  stage that builds `frontend_dist/` (Vite) before collectstatic.
 - Vercel deploys the same repo automatically via its GitHub
   integration (no GitHub Actions involved) and serves front-end
-  traffic to keep Cloud Run costs down.
+  traffic to keep Cloud Run costs down. `build_files.sh` runs
+  `npm ci --include=dev` + `npm run build --prefix frontend` before
+  collectstatic, then deletes `frontend/node_modules` so the Python
+  lambda stays under `maxLambdaSize` — verified: `frontend_dist/`
+  generated at build time IS bundled into the lambda, so
+  `{% vite_asset %}` resolves `manifest.json` there. Vercel
+  **preview** deploys fail on every branch (env vars look
+  Production-scoped); only production deploys are a usable signal.
 - `terraform.yml` plans on PRs touching `terraform/`, applies on main.
 - Both workflows share `concurrency: gcp-main` — intentional, they
   mutate the same Cloud Run resources.
