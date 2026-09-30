@@ -17,3 +17,7 @@ terraform/tfplan
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+
+# React frontend (built output is generated at deploy time)
+node_modules/
+frontend_dist/
