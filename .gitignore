@@ -17,3 +17,7 @@ terraform/tfplan
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+
+# React frontend — frontend_dist/ IS committed (Vercel can't reliably
+# build it yet; regenerate with `npm run build --prefix frontend`)
+node_modules/

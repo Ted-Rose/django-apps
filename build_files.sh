@@ -17,6 +17,11 @@ fi
 
 python3 django_apps/console_tasks/build.py create_ca_pem create_private_settings_json
 
+# The React frontend ships pre-built: frontend_dist/ is committed
+# (Vercel preview builds failed running npm here — see
+# docs/plans/GOOGLE_TASKS_REACT_REWRITE.md). Regenerate locally with
+# `npm run build --prefix frontend` and commit the result.
+
 # Collect static files
 python3 manage.py collectstatic --noinput
 

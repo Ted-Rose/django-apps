@@ -37,3 +37,8 @@ staticfiles/
 media/recordings/*
 media/bible_research/*
 !media/recordings/.gitkeep
+
+# React frontend — frontend_dist is committed and copied via COPY . .;
+# only node_modules stays out of the build context
+node_modules
+frontend/node_modules
