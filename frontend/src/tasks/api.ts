@@ -8,6 +8,8 @@ export type TaskListOut = components['schemas']['TaskListOut'];
 export type LabelOut = components['schemas']['LabelOut'];
 export type LabelRef = components['schemas']['LabelRef'];
 export type FlagsOut = components['schemas']['FlagsOut'];
+export type TaskDetailOut = components['schemas']['TaskDetailOut'];
+export type SearchOut = components['schemas']['SearchOut'];
 
 /** Mutation request bodies (POST /api/tasks/…). */
 export type TaskCreateIn = components['schemas']['TaskCreateIn'];
@@ -52,4 +54,61 @@ export function fetchDashboard(
   return apiGet<DashboardOut>(
     `/api/tasks/dashboard/${suffix ? `?${suffix}` : ''}`,
   );
+}
+
+export interface ViewParams {
+  label?: string | null;
+  order?: string;
+}
+
+/**
+ * GET /api/tasks/starred/|overdue/|archived/|trash/ — the special
+ * views share the dashboard-shaped DashboardOut (flags.is_*_view
+ * tells them apart). None accept a `list` filter; trash orders by
+ * deleted_at (deleted_desc default, deleted_asc the only override).
+ */
+function fetchView(
+  path: 'starred' | 'overdue' | 'archived' | 'trash',
+  params: ViewParams = {},
+): Promise<DashboardOut> {
+  const qs = new URLSearchParams();
+  if (params.label) qs.set('label', params.label);
+  if (params.order) qs.set('order', params.order);
+  const suffix = qs.toString();
+  return apiGet<DashboardOut>(
+    `/api/tasks/${path}/${suffix ? `?${suffix}` : ''}`,
+  );
+}
+
+export function fetchStarred(params: ViewParams = {}): Promise<DashboardOut> {
+  return fetchView('starred', params);
+}
+
+export function fetchOverdue(params: ViewParams = {}): Promise<DashboardOut> {
+  return fetchView('overdue', params);
+}
+
+export function fetchArchived(params: ViewParams = {}): Promise<DashboardOut> {
+  return fetchView('archived', params);
+}
+
+export function fetchTrash(params: ViewParams = {}): Promise<DashboardOut> {
+  return fetchView('trash', params);
+}
+
+/** GET /api/tasks/task/{task_id}/ → TaskDetailOut. */
+export function fetchTaskDetail(taskId: string): Promise<TaskDetailOut> {
+  return apiGet<TaskDetailOut>(
+    `/api/tasks/task/${encodeURIComponent(taskId)}/`,
+  );
+}
+
+/**
+ * GET /api/tasks/search/?q= — flat list across title+notes (the
+ * documented redesign: the template search AND-ed separate
+ * title/notes inputs and grouped per task list; the API is one
+ * `q` OR-matched flat list).
+ */
+export function fetchSearchTasks(q: string): Promise<SearchOut> {
+  return apiGet<SearchOut>(`/api/tasks/search/?q=${encodeURIComponent(q)}`);
 }

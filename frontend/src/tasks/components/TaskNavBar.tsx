@@ -1,11 +1,12 @@
 import { Fragment } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BurgerMenu,
   type BurgerMenuItem,
 } from '../../shared/components/BurgerMenu';
 import Dropdown from '../../shared/components/Dropdown';
 import type { DashboardOut } from '../api';
+import SecondaryLabelDropdown from './SecondaryLabelDropdown';
 
 /**
  * React port of components/dashboard/navbar.html — the fixed primary
@@ -54,6 +55,7 @@ export function TaskNavBar({
   burgerItems,
 }: TaskNavBarProps) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const flags = data?.flags;
   const hasCredentials = flags?.has_credentials ?? false;
@@ -75,8 +77,15 @@ export function TaskNavBar({
   );
 
   /** filters.js selectList: drop list/label/secondary_label/sync,
-   *  keep order, then set the new list. */
+   *  keep order, then set the new list. From a special view
+   *  (starred/overdue/archived/trash — endpoints that take no list
+   *  filter) the original navigates back to the dashboard with the
+   *  filter applied instead. */
   const selectList = (listId: string) => {
+    if (isSpecialView) {
+      navigate(`/${listId ? `?list=${encodeURIComponent(listId)}` : ''}`);
+      return;
+    }
     const params = new URLSearchParams(searchParams);
     params.delete('list');
     params.delete('label');
@@ -86,8 +95,15 @@ export function TaskNavBar({
     setSearchParams(params);
   };
 
-  /** filters.js selectLabel — same reset pattern as selectList. */
+  /** filters.js selectLabel — same reset pattern as selectList,
+   *  with the same special-view bounce to the dashboard. */
   const selectLabel = (labelName: string) => {
+    if (isSpecialView) {
+      navigate(
+        `/${labelName ? `?label=${encodeURIComponent(labelName)}` : ''}`,
+      );
+      return;
+    }
     const params = new URLSearchParams(searchParams);
     params.delete('list');
     params.delete('label');
@@ -95,19 +111,6 @@ export function TaskNavBar({
     params.delete('sync');
     if (labelName) params.set('label', labelName);
     setSearchParams(params);
-  };
-
-  /** filters.js selectSecondaryLabel — client-side filter only. */
-  const selectSecondaryLabel = (labelName: string) => {
-    const params = new URLSearchParams(searchParams);
-    if (labelName) {
-      params.set('secondary_label', labelName);
-    } else {
-      params.delete('secondary_label');
-    }
-    // The original only filtered the DOM and never navigated — keep
-    // history clean here too.
-    setSearchParams(params, { replace: true });
   };
 
   /** filters.js changeOrder: keep other params, replace order. */
@@ -262,67 +265,11 @@ export function TaskNavBar({
 
             {/* Secondary label filter — client-side only */}
             {(selectedLabel || isSpecialView) && (
-              <Dropdown
-                label={
-                  secondaryLabel ? (
-                    <>
-                      <i className="bi bi-funnel" /> {secondaryLabel}
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-funnel" /> All
-                    </>
-                  )
-                }
+              <SecondaryLabelDropdown
+                labels={data.labels}
+                secondaryLabel={secondaryLabel}
                 buttonStyle={TOGGLE_STYLE}
-              >
-                <li>
-                  <a
-                    className={activeClass(!secondaryLabel)}
-                    href="#"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      selectSecondaryLabel('');
-                    }}
-                  >
-                    <i className="bi bi-funnel" /> All Labels
-                  </a>
-                </li>
-                {data.labels.length > 0 && (
-                  <>
-                    <li>
-                      <hr className="dropdown-divider" />
-                    </li>
-                    <li>
-                      <h6 className="dropdown-header">Filter by Label</h6>
-                    </li>
-                    {data.labels.map((label) => (
-                      <li key={label.id}>
-                        <a
-                          className={activeClass(secondaryLabel === label.name)}
-                          href="#"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            selectSecondaryLabel(label.name);
-                          }}
-                        >
-                          <span
-                            className="badge"
-                            style={{ backgroundColor: label.color }}
-                          >
-                            {label.name}
-                          </span>
-                          {label.task_count != null && label.task_count > 0 && (
-                            <span className="badge bg-secondary ms-1">
-                              {label.task_count}
-                            </span>
-                          )}
-                        </a>
-                      </li>
-                    ))}
-                  </>
-                )}
-              </Dropdown>
+              />
             )}
 
             {/* Ordering dropdown */}

@@ -21,3 +21,5 @@ terraform/terraform.tfstate.backup
 # React frontend (built output is generated at deploy time)
 node_modules/
 frontend_dist/
+frontend/test-results/
+frontend/playwright-report/

@@ -261,3 +261,66 @@ body {
   padding-top: 60px;
   padding-bottom: 100px;
 }
+
+/*
+ * Styles ported from the inline <style> blocks of the secondary-page
+ * templates (search.html, task_detail.html) — dashboard.css itself
+ * only covered the dashboard-shaped pages.
+ */
+.search-form {
+  background-color: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+.task-detail-container {
+  max-width: 800px;
+  margin: 2rem auto;
+}
+.task-meta {
+  background-color: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+.task-meta .badge {
+  font-size: 0.9rem;
+}
+.header-section .btn-sm {
+  font-size: 0.75rem;
+}
+.header-section h5 {
+  font-size: 1rem;
+}
+/* task_detail.html #task-title — borderless title textarea. */
+#task-title {
+  border: none;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  resize: none;
+  min-height: 2.5rem;
+}
+#task-title:focus {
+  border: none;
+  box-shadow: none;
+}
+/* task_detail.html #label-selector — badge-shaped toggles, dimmed
+   when unchecked. */
+#label-selector .form-check {
+  margin-bottom: 0;
+}
+#label-selector .form-check-input {
+  display: none;
+}
+#label-selector .form-check-label {
+  padding: 0.375rem 0.75rem;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+#label-selector .form-check-input:checked + .form-check-label {
+  opacity: 1;
+}
+#label-selector .form-check-label:hover {
+  opacity: 0.8;
+}
