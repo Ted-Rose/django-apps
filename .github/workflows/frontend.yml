@@ -1,0 +1,45 @@
+name: Frontend
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '*/api.py'
+      - 'django_apps/api.py'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '*/api.py'
+      - 'django_apps/api.py'
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: OpenAPI drift check
+        run: |
+          # openapi.json is produced by Stage 0 (django-ninja). Until it
+          # lands there is nothing to check — keep this step green.
+          if [ ! -f openapi.json ]; then
+            echo "frontend/openapi.json not present yet — skipping"
+            exit 0
+          fi
+          npm run gen:types
+          git diff --exit-code -- src/tasks/api-types.ts

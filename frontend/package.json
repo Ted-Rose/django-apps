@@ -10,6 +10,11 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "gen:types": "openapi-typescript ../frontend/openapi.json -o src/tasks/api-types.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -17,10 +22,23 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "4.7.0",
+    "eslint": "9.39.5",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "jsdom": "26.1.0",
+    "openapi-typescript": "7.13.0",
+    "prettier": "3.9.8",
     "typescript": "~5.9.3",
-    "vite": "5.4.21"
+    "typescript-eslint": "8.70.1",
+    "vite": "5.4.21",
+    "vitest": "3.2.7"
   }
 }

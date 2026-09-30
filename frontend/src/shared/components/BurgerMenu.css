@@ -1,0 +1,53 @@
+/* Mirrors django_apps/templates/components/burger_menu.html styles. */
+
+.burger-menu {
+  position: relative;
+}
+
+.burger-icon {
+  display: none;
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: white;
+  background: none;
+  border: none;
+  padding: 0.5rem;
+}
+
+.burger-menu-items {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .burger-icon {
+    display: block;
+  }
+
+  .burger-menu-items {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border-radius: 0.25rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 0.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 200px;
+    z-index: 1000;
+    margin-top: 0.5rem;
+  }
+
+  .burger-menu-items.show {
+    display: flex;
+  }
+
+  .burger-menu-items .btn {
+    width: 100%;
+    text-align: left;
+    justify-content: flex-start;
+  }
+}
