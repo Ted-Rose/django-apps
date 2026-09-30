@@ -99,6 +99,35 @@
             </div>
             <div class="col-md-7">
                 {% if limits %}
+                <form method="get"
+                      class="d-flex align-items-center gap-2 mb-3">
+                    <label class="form-label mb-0 small text-muted"
+                           for="overview-month">
+                        Overview
+                    </label>
+                    <select id="overview-month" name="month"
+                            class="form-select form-select-sm w-auto"
+                            onchange="this.form.submit()">
+                        {% for option in overview_months %}
+                        <option value="{{ option.value }}"
+                                {% if option.active %}selected{% endif %}>
+                            {{ option.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if selected_month %}
+                    <a href="{% url 'finance:limits' %}" class="small">
+                        Back to this month
+                    </a>
+                    {% endif %}
+                </form>
+                {% if selected_month %}
+                <p class="text-muted small">
+                    Windows evaluated as of
+                    {{ as_of|date:'F j, Y' }} — the last day of the
+                    selected month — using current limit values.
+                </p>
+                {% endif %}
                 <table class="table table-striped">
                     <thead>
                         <tr>

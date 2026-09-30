@@ -666,6 +666,77 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(history[0]['threshold'], Decimal('50.00'))
         self.assertEqual(history[0]['over'], Decimal('30.00'))
 
+    def test_monthly_history_before_bounds_results(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        this_month = timezone.now().date().replace(day=1)
+        last_month_end = this_month - timezone.timedelta(days=1)
+        prev_month = (
+            last_month_end.replace(day=1)
+            - timezone.timedelta(days=1)
+        ).replace(day=1)
+        make_transaction(
+            self.account, 't-1', '-10.00', booking_date=prev_month
+        )
+        make_transaction(
+            self.account, 't-2', '-20.00',
+            booking_date=last_month_end,
+        )
+
+        history = monthly_history(
+            limit, before=last_month_end.replace(day=1)
+        )
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]['spent'], Decimal('10.00'))
+
+    def test_selected_month_stat(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        this_month = timezone.now().date().replace(day=1)
+        last_month_end = this_month - timezone.timedelta(days=1)
+        last_month = last_month_end.replace(day=1)
+        make_transaction(
+            self.account, 't-1', '-120.00', booking_date=last_month
+        )
+
+        stats = limit_window_stats(limit, as_of=last_month_end)
+
+        self.assertEqual(len(stats), 1)
+        self.assertEqual(
+            stats[0]['label'], last_month.strftime('%B %Y')
+        )
+        self.assertEqual(stats[0]['spent'], Decimal('120.00'))
+        self.assertEqual(stats[0]['over'], Decimal('20.00'))
+
+    def test_rolling_windows_evaluated_as_of_past_date(self):
+        limit = TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        this_month = timezone.now().date().replace(day=1)
+        as_of = this_month - timezone.timedelta(days=1)
+        make_transaction(
+            self.account, 't-1', '-40.00',
+            booking_date=as_of - timezone.timedelta(days=3),
+        )
+        make_transaction(
+            self.account, 't-2', '-200.00',
+            booking_date=as_of - timezone.timedelta(days=20),
+        )
+        make_transaction(self.account, 't-3', '-60.00', days_ago=0)
+
+        stats = limit_window_stats(limit, as_of=as_of)
+
+        self.assertEqual(stats[0]['spent'], Decimal('40.00'))
+        self.assertEqual(stats[0]['remaining'], Decimal('60.00'))
+
     def test_monthly_history_empty_without_past_data(self):
         limit = TransactionLimit.objects.create(
             account=self.account,
@@ -721,6 +792,42 @@ class LimitsViewTests(TestCase):
             reverse('finance:limits'), {'edit': foreign.pk}
         )
         self.assertIsNone(response.context['editing'])
+
+    def test_month_param_shows_selected_month(self):
+        this_month = timezone.now().date().replace(day=1)
+        last_month = (
+            this_month - timezone.timedelta(days=1)
+        ).replace(day=1)
+        make_transaction(
+            self.account, 't-1', '-120.00', booking_date=last_month
+        )
+
+        response = self.client.get(
+            reverse('finance:limits'),
+            {'month': last_month.strftime('%Y-%m')},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context['selected_month'], last_month
+        )
+        self.assertContains(
+            response, last_month.strftime('%B %Y')
+        )
+
+    def test_invalid_month_param_ignored(self):
+        response = self.client.get(
+            reverse('finance:limits'), {'month': 'not-a-month'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['selected_month'])
+
+    def test_future_month_param_ignored(self):
+        response = self.client.get(
+            reverse('finance:limits'), {'month': '2999-01'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['selected_month'])
 
     def test_delete_limit(self):
         response = self.client.post(

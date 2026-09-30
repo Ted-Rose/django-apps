@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -11,7 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import Count, Q, Sum
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -718,17 +718,65 @@ def limits_view(request):
             instance=editing, user=request.user
         )
 
+    today = timezone.now().date()
+    this_month = today.replace(day=1)
+    selected_month = None
+    if request.GET.get('month'):
+        try:
+            year, mon = (int(p) for p in request.GET['month'].split('-'))
+            candidate = date(year, mon, 1)
+            if candidate < this_month:
+                selected_month = candidate
+        except (ValueError, TypeError):
+            pass
+
+    # A selected month evaluates every window as of its last day.
+    as_of = None
+    if selected_month:
+        as_of = (
+            selected_month + timedelta(days=32)
+        ).replace(day=1) - timedelta(days=1)
+
     limits = request.user.transactionlimit_set.select_related(
         'account', 'category'
     )
     for limit in limits:
-        limit.window_stats = limit_window_stats(limit)
+        limit.window_stats = limit_window_stats(limit, as_of=as_of)
+
+    month_rows = (
+        Transaction.objects.for_user(request.user)
+        .annotate(period=TruncMonth('booking_date'))
+        .values_list('period', flat=True)
+        .distinct()
+        .order_by('-period')
+    )
+    overview_months = [
+        {
+            'value': '',
+            'label': 'This month',
+            'active': selected_month is None,
+        }
+    ]
+    for period in month_rows:
+        if isinstance(period, datetime):
+            period = period.date()
+        period = period.replace(day=1)
+        if period >= this_month:
+            continue
+        overview_months.append({
+            'value': period.strftime('%Y-%m'),
+            'label': period.strftime('%B %Y'),
+            'active': period == selected_month,
+        })
 
     vapid_public_key = getattr(settings, 'VAPID_PUBLIC_KEY', '')
     return render(request, 'finance/limits.html', {
         'form': form,
         'editing': editing,
         'limits': limits,
+        'selected_month': selected_month,
+        'overview_months': overview_months,
+        'as_of': as_of,
         'vapid_public_key': vapid_public_key,
         'push_subscription_count': (
             request.user.push_subscriptions.count()

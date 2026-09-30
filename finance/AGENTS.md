@@ -62,8 +62,10 @@ transactions, and get spending-limit alerts.
   per-past-month breakdown (`monthly_history`) live in
   `services/limits.py`, shared by the limits page and
   `evaluate_spending_limits`. The limits page shows progress bars
-  per window plus expandable past-month history; rows are edited
-  via `?edit=<id>` and deleted via
+  per window plus expandable past-month history, and an "Overview"
+  month dropdown (`?month=YYYY-MM`) re-evaluates every window as of
+  the selected month's last day (`as_of` in `limit_window_stats`);
+  rows are edited via `?edit=<id>` and deleted via
   `POST /finance/limits/<id>/delete/`.
 - `LimitEvaluation` — one row per `(limit, calendar month)` written
   by `evaluate_spending_limits`: the current month's row refreshes

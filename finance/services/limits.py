@@ -38,6 +38,7 @@ class LimitWindow:
     alert_field: str
     threshold: Decimal
     start: date           # window covers [start, today]
+    days: int | None = None   # rolling length; None for monthly
 
 
 def monthly_period_start(today):
@@ -60,6 +61,7 @@ def limit_windows(limit, today=None):
             alert_field=alert_field,
             threshold=threshold,
             start=today - timedelta(days=days),
+            days=days,
         ))
     if limit.limit_monthly is not None:
         windows.append(LimitWindow(
@@ -129,20 +131,49 @@ def _next_month(first_of_month):
     return date(first_of_month.year, first_of_month.month + 1, 1)
 
 
-def monthly_history(limit, today=None):
-    """Spend vs threshold for every past month, newest first.
+def monthly_stat(limit, period_start, today=None):
+    """Spend vs threshold for one calendar month.
 
-    Months with a persisted ``LimitEvaluation`` (written by the
-    ``evaluate_spending_limits`` command) show the recorded figures —
-    including the threshold at the time. Months predating the first
-    evaluation fall back to spend computed from transactions against
-    the *current* threshold.
+    Past months prefer the recorded ``LimitEvaluation`` (threshold at
+    the time); the current month and months without a record are
+    computed live against the current threshold.
     """
     today = today or timezone.now().date()
     current_start = monthly_period_start(today)
+    record = None
+    if period_start < current_start:
+        record = limit.evaluations.filter(
+            period_start=period_start
+        ).first()
+    if record is not None:
+        spent, threshold = record.spent, record.threshold
+    else:
+        spent = spent_in_window(
+            limit, period_start, end=_next_month(period_start)
+        )
+        threshold = limit.limit_monthly
+    label = (
+        'This month'
+        if period_start == current_start
+        else period_start.strftime('%B %Y')
+    )
+    return {'label': label, **_stat(spent, threshold)}
+
+
+def monthly_history(limit, before=None, today=None):
+    """Spend vs threshold for every month before ``before``.
+
+    ``before`` is a first-of-month date bounding the history —
+    defaults to the current month. Returns a newest-first list of
+    stat dicts (same shape as ``_stat`` plus a ``label``). Months
+    with a persisted ``LimitEvaluation`` show recorded figures;
+    older months fall back to computed spend vs current threshold.
+    """
+    today = today or timezone.now().date()
+    boundary = before or monthly_period_start(today)
     rows = (
         _spend_queryset(limit)
-        .filter(booking_date__lt=current_start)
+        .filter(booking_date__lt=boundary)
         .annotate(month=TruncMonth('booking_date'))
         .values('month')
         .annotate(total=Sum('amount'))
@@ -158,7 +189,7 @@ def monthly_history(limit, today=None):
     records = {
         e.period_start: e
         for e in limit.evaluations.filter(
-            period_start__lt=current_start
+            period_start__lt=boundary
         )
     }
     months = set(totals) | set(records)
@@ -167,7 +198,7 @@ def monthly_history(limit, today=None):
 
     history = []
     month = min(months)
-    while month < current_start:
+    while month < boundary:
         record = records.get(month)
         if record is not None:
             spent, threshold = record.spent, record.threshold
@@ -183,17 +214,32 @@ def monthly_history(limit, today=None):
     return history
 
 
-def limit_window_stats(limit, today=None):
-    """Per-window spend vs threshold dicts for display."""
+def limit_window_stats(limit, today=None, as_of=None):
+    """Per-window spend vs threshold dicts for display.
+
+    ``as_of`` evaluates every window as of that date: rolling windows
+    cover the N days ending on it, the monthly window covers its
+    calendar month. Defaults to today (live view).
+    """
     today = today or timezone.now().date()
+    as_of = as_of or today
     stats = []
     for window in limit_windows(limit, today):
-        stat = {
-            'label': window.label,
-            **_stat(spent_in_window(limit, window.start),
-                    window.threshold),
-        }
         if window.threshold_field == 'limit_monthly':
-            stat['history'] = monthly_history(limit, today)
+            period = as_of.replace(day=1)
+            stat = monthly_stat(limit, period, today)
+            stat['history'] = monthly_history(
+                limit, before=period, today=today
+            )
+        else:
+            spent = spent_in_window(
+                limit,
+                as_of - timedelta(days=window.days),
+                end=as_of + timedelta(days=1),
+            )
+            stat = {
+                'label': window.label,
+                **_stat(spent, window.threshold),
+            }
         stats.append(stat)
     return stats
