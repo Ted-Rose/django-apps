@@ -6,8 +6,11 @@ app_name = 'google_tasks'
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('app/', views.react_app, name='react_app'),
+    # No trailing slash on <path:subpath> — it matches both
+    # 'app/x' and 'app/x/', so client-side routes don't depend on
+    # an APPEND_SLASH redirect hop.
     path(
-        'app/<path:subpath>/',
+        'app/<path:subpath>',
         views.react_app,
         name='react_app_subpath'
     ),

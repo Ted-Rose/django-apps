@@ -1841,6 +1841,7 @@ def search_tasks(request):
     return render(request, 'google_tasks/search.html', context)
 
 
+@login_required
 def react_app(request, subpath=''):
     """React SPA shell — strangler mount at /tasks/app/.
 

@@ -21,8 +21,14 @@ export default defineConfig({
     },
   },
   server: {
+    // Proxy everything to Django EXCEPT Vite-internal paths — both at
+    // root (/@react-refresh, /@id/*, /@fs/*, /src/*, /node_modules/*)
+    // and under the /static/ base (dev asset URLs are
+    // /static/src/*, /static/node_modules/*, /static/@*). Real Django
+    // static files under /static/ DO proxy to :8000.
     proxy: {
-      '^/(?!static/|@vite|src/|node_modules/)': 'http://localhost:8000',
+      '^/(?!@|src/|node_modules/|static/(?:@|src/|node_modules/))':
+        'http://localhost:8000',
     },
   },
   test: {

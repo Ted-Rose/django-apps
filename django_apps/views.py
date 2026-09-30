@@ -1,7 +1,10 @@
+import json
 import os
+import re
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import render
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -49,6 +52,28 @@ def offline(request):
     return render(request, 'pwa/offline.html')
 
 
+# SPA entry names map to folders under frontend/src/ and keys in
+# manifest.json — restrict them to plain lowercase identifiers so a
+# future mount deriving `entry` from a URL segment can't traverse or
+# 500 on {% vite_asset %}.
+SPA_ENTRY_RE = re.compile(r'[a-z0-9_]+')
+
+
+def _manifest_has_entry(manifest_path, entry_key):
+    """True only if manifest.json exists AND still lists `entry_key`.
+
+    A stale/partial build can leave a manifest that lacks the entry —
+    {% vite_asset %} would raise DjangoViteAssetNotFoundError (500)
+    on it, so the caller degrades to the diagnostic warning instead.
+    A corrupt manifest degrades the same way.
+    """
+    try:
+        with open(manifest_path, 'r') as manifest_file:
+            return entry_key in json.load(manifest_file)
+    except (OSError, ValueError):
+        return False
+
+
 @login_required
 @ensure_csrf_cookie
 def spa_shell(request, entry, title=''):
@@ -56,18 +81,27 @@ def spa_shell(request, entry, title=''):
 
     `entry` is the app folder under frontend/src/ (e.g. 'tasks' →
     src/tasks/main.tsx). `manifest_ready` tells the template whether
-    frontend_dist/ is present in this runtime — on hosts where the
-    build output isn't bundled (the Vercel spike question) the page
-    shows a diagnostic instead of crashing in {% vite_asset %}.
+    {% vite_asset %} is safe to call: always in dev mode (VITE_DEV=1,
+    where django-vite hits the dev server and never reads the
+    manifest), or in prod only when manifest.json exists and contains
+    the entry key. Otherwise the page shows a diagnostic instead of
+    crashing.
     """
-    manifest_path = settings.DJANGO_VITE.get('default', {}).get(
+    if not SPA_ENTRY_RE.fullmatch(entry):
+        raise Http404(f'Unknown SPA entry: {entry}')
+    vite_entry = f'src/{entry}/main.tsx'
+    vite_config = settings.DJANGO_VITE.get('default', {})
+    manifest_path = vite_config.get(
         'manifest_path',
         os.path.join(settings.BASE_DIR, 'frontend_dist',
                      'manifest.json'),
     )
     return render(request, 'spa_shell.html', {
         'title': title,
-        'vite_entry': f'src/{entry}/main.tsx',
-        'manifest_ready': os.path.exists(manifest_path),
+        'vite_entry': vite_entry,
+        'manifest_ready': (
+            vite_config.get('dev_mode')
+            or _manifest_has_entry(manifest_path, vite_entry)
+        ),
         'bootstrap': {'user': request.user.get_username()},
     })

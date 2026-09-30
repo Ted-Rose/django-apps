@@ -254,9 +254,14 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 STATIC_URL = '/static/'
+# frontend_dist/ is generated at build time (gitignored), so filter
+# the list to directories that exist — otherwise `manage.py check`
+# warns (staticfiles.W004) on every fresh checkout.
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-    os.path.join(BASE_DIR, 'frontend_dist'),
+    p for p in (
+        os.path.join(BASE_DIR, 'static'),
+        os.path.join(BASE_DIR, 'frontend_dist'),
+    ) if os.path.isdir(p)
 ]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles', 'static')
 # collectstatic silently fails in Docker build (no private_settings.json
@@ -265,6 +270,11 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles', 'static')
 # which IS committed to git and present in the container.
 # Only use finders in DEBUG mode for better production performance
 WHITENOISE_USE_FINDERS = DEBUG
+# Vite emits content-hashed names (e.g. tasks/tasks.<hash>.js) whose
+# hashes are base64url — they include - and _, so [0-9a-f] is not
+# enough. Without this, hashed assets fall back to whitenoise's short
+# default max-age and get revalidated on every page load.
+WHITENOISE_IMMUTABLE_FILE_TEST = r'\.[0-9A-Za-z_-]{8}\.'
 
 # React frontend (frontend/, built by Vite into frontend_dist/).
 # VITE_DEV=1 + `npm run dev --prefix frontend` enables the dev
