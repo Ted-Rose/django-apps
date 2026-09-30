@@ -1,10 +1,11 @@
 """django-ninja router for google_tasks (mounted at /api/tasks/).
 
 GET endpoints serialize tasks directly. POST operations delegate to
-the existing JSON views so mutation semantics — same service calls,
-same OAuth session state, same per-user scoping — stay identical;
-_adapt() maps their reauth_required / error payloads onto the API
-contract (401 google_reauth, uniform {error, detail}).
+the JSON mutation handlers in views.py (kept there post-cutover —
+they're no longer URL-routed) so mutation semantics — same service
+calls, same OAuth session state, same per-user scoping — stay
+identical; _adapt() maps their reauth_required / error payloads onto
+the API contract (401 google_reauth, uniform {error, detail}).
 """
 import json
 from datetime import datetime
@@ -173,7 +174,9 @@ def _reauth_url(request):
 def _creds_or_reauth(request):
     """Return the Google creds dict for request.user, or raise
     GoogleReauthRequired when stored creds exist but are unusable —
-    the API equivalent of views.reauth_redirect()."""
+    the API equivalent of the removed views.reauth_redirect() (a
+    GoogleOAuthCredentials row with dead creds bounced page views
+    into OAuth instead of rendering a dead dashboard)."""
     creds = views.get_creds_dict(request.user)
     if creds is None:
         from google_api.models import GoogleOAuthCredentials
@@ -188,9 +191,10 @@ def _order_active(qs, order_by, field='task_order',
                   completed_orders=True):
     """Ordering branches shared by the dashboard-style views.
 
-    `completed_orders=False` mirrors views.archived_tasks, which only
-    honours the order/created orderings for its active bucket — there
-    completed_* values leave the model Meta ordering in place."""
+    `completed_orders=False` mirrors the removed views.archived_tasks,
+    which only honoured the order/created orderings for its active
+    bucket — there completed_* values leave the model Meta ordering in
+    place."""
     if order_by == 'order_desc':
         return qs.order_by(F(field).desc(nulls_last=True), '-updated')
     if order_by == 'order_asc':
@@ -357,8 +361,9 @@ def archived(request,
     _label_task_counts(labels, base)
     return _list_response(
         request, creds,
-        # Parity with views.archived_tasks: completed_* orderings only
-        # affect the completed bucket there, not the active list.
+        # Parity with the removed views.archived_tasks: completed_*
+        # orderings only affect the completed bucket there, not the
+        # active list.
         _order_active(base, order, completed_orders=False),
         _order_completed(tasks.filter(status='completed'), order),
         labels, order, selected_label=label, is_archived_view=True,
@@ -378,8 +383,9 @@ def trash(request,
     else:
         tasks = tasks.order_by('-deleted_at')
     labels = TaskLabel.objects.filter(user=request.user)
-    # Parity with views.trash_tasks: per-label counts are computed over
-    # the label-filtered base, like every other list endpoint.
+    # Parity with the removed views.trash_tasks: per-label counts are
+    # computed over the label-filtered base, like every other list
+    # endpoint.
     base = GoogleTask.objects.filter(
         user=request.user, is_deleted=True, status='needsAction'
     )
@@ -408,7 +414,7 @@ def task_detail(request, task_id: str):
 
 @router.get('/search/', response=SearchOut)
 def search(request, q: str = Query('', max_length=200)):
-    # Deliberate redesign vs views.search_tasks: a single `q` param
+    # Deliberate redesign vs the removed views.search_tasks: a single `q` param
     # OR-matched across title+notes returning a flat list, instead of
     # separate title/notes params AND-ed and grouped per task list.
     _creds_or_reauth(request)
@@ -440,7 +446,8 @@ def _adapt(request, response):
             payload.get('error') == 'No credentials found'):
         # The view already stored OAuth state in the session when a
         # flow URL exists; otherwise bounce through /login/ (the same
-        # target views.reauth_redirect uses for dead creds).
+        # target the removed views.reauth_redirect used for dead
+        # creds).
         authorization_url = (
             payload.get('authorization_url') or _reauth_url(request)
         )

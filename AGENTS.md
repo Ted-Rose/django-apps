@@ -103,11 +103,14 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 - **Views**: function-based only. `@login_required` on everything
   user-facing; POST endpoints also get `@require_POST`. JSON endpoints
   return `JsonResponse({'success': ...})` or `{'error': ...}` with an
-  HTTP status.
+  HTTP status. **API endpoints use django-ninja** (`<app>/api.py`
+  routers on the shared `NinjaAPI` in `django_apps/api.py`, mounted
+  under `/api/<app>/`); page views stay function-based.
 - **Auth pattern for Google APIs**: services return either a result or a
-  dict `{'authorization_url', 'state', 'scopes'}` — callers must detect
-  the dict and redirect into the OAuth flow (see
-  `google_tasks/views.py` dashboard for the canonical pattern).
+  dict `{'authorization_url', 'state', 'scopes'}` — page views redirect
+  into the OAuth flow; API endpoints surface it as a `401
+  google_reauth` JSON body (see `google_tasks/api.py` `_adapt`) and the
+  SPA navigates to `authorization_url` itself.
 - **Per-user isolation**: every query filters by `user=request.user`;
   finance uses `for_user()` queryset helpers that include shared
   accounts. Always scope `get_object_or_404` by user.
@@ -116,10 +119,9 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   `django_apps/templates/components/burger_menu.html`. Copy this pattern
   for new pages.
 - **Templates/static**: Bootstrap 5 + Bootstrap Icons via CDN; app
-  templates under `<app>/templates/` (google_tasks/finance namespace
-  into subdirs; google_api/tv_archive/single_pages are flat). Dashboard
-  JS config is passed via `json_script` (`get_dashboard_js_config`);
-  dashboard JS lives in `google_tasks/static/google_tasks/js/dashboard/`.
+  templates under `<app>/templates/` (finance namespaces into a
+  subdir; google_api/tv_archive/single_pages are flat). google_tasks
+  has no templates — its UI is the React SPA (below).
 - **Sync pattern**: external objects are mirrored locally via
   `update_or_create` keyed on the remote ID (`task_id`, `list_id`,
   `transaction_id`, `account_id`, `requisition_id` are unique-ish keys).
@@ -130,11 +132,14 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   `unittest.mock.patch`.
 - **React SPA mounts**: `django_apps.views.spa_shell(request, entry,
   title)` renders `spa_shell.html` (login + CSRF + `json_script`
-  bootstrap) for a `frontend/src/<entry>/main.tsx` Vite entry. Apps
-  mount it under `/<app>/app/` with a `<path:subpath>` catch-all —
-  google_tasks does this at `/tasks/app/` while the template UI keeps
-  `/tasks/` (strangler pattern; see
-  `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`).
+  bootstrap) for a `frontend/src/<entry>/main.tsx` Vite entry. The
+  google_tasks cutover is complete: `/tasks/` IS the SPA
+  (`BrowserRouter basename='/tasks'`), a `<path:subpath>` catch-all
+  serves deep links, non-GET/HEAD requests to the old `/tasks/…`
+  mutation URLs 404, and `/tasks/app/*` 301-redirects to `/tasks/*`.
+  New apps should mount the shell at `/<app>/` the same way —
+  mutations live in the ninja API (`<app>/api.py` →
+  `/api/<app>/…`); see `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`.
 
 ## Deployment & CI
 

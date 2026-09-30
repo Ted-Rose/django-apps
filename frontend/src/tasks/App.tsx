@@ -8,13 +8,13 @@ import TaskDetail from './routes/TaskDetail';
 import Trash from './routes/Trash';
 
 /**
- * Router host for the tasks SPA (mounted at /tasks/app/, see
- * `BrowserRouter basename` in main.tsx). All template routes now
- * have React counterparts: `/` is the dashboard; starred/overdue
- * reuse the dashboard-shaped TaskListPage; archived, trash, search
- * and task detail are standalone pages like their templates. The
- * Django catch-all routes every /tasks/app/<subpath>/ here, so deep
- * links land on the right page.
+ * Router host for the tasks SPA (mounted at /tasks/ since the Stage 6
+ * cutover, see `BrowserRouter basename` in main.tsx). `/` is the
+ * dashboard; starred/overdue reuse the dashboard-shaped TaskListPage;
+ * archived, trash, search and task detail are standalone pages. The
+ * Django catch-all routes every /tasks/<subpath>/ here, so deep links
+ * land on the right page — including the old template URLs like
+ * /tasks/starred/, which map onto the same route names.
  */
 export default function App() {
   return (

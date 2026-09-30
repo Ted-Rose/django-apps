@@ -4,9 +4,9 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
-// Copied from google_tasks/static/google_tasks/css/dashboard.css for
-// visual parity; Stage 6 removes the original. Also provides the fixed
-// navbar offset (`body { padding-top: 60px }`).
+// Ported from google_tasks/static/google_tasks/css/dashboard.css for
+// visual parity (the original was deleted in Stage 6). Also provides
+// the fixed navbar offset (`body { padding-top: 60px }`).
 import './dashboard.css';
 
 const queryClient = new QueryClient({
@@ -25,7 +25,7 @@ if (root) {
   createRoot(root).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter basename="/tasks/app">
+        <BrowserRouter basename="/tasks">
           <App />
         </BrowserRouter>
       </QueryClientProvider>

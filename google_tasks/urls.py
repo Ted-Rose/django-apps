@@ -3,103 +3,29 @@ from google_tasks import views
 
 app_name = 'google_tasks'
 
+# Stage 6 cutover: the React SPA is the only UI under /tasks/. Every
+# GET/HEAD path renders the shell and React Router resolves the page;
+# non-GET requests to the retired mutation URLs (sync/,
+# task/<id>/complete/, ...) 404 in react_app — mutations live under
+# /api/tasks/ now.
 urlpatterns = [
-    path('', views.dashboard, name='dashboard'),
-    path('app/', views.react_app, name='react_app'),
-    # No trailing slash on <path:subpath> — it matches both
-    # 'app/x' and 'app/x/', so client-side routes don't depend on
-    # an APPEND_SLASH redirect hop.
+    # 'dashboard' keeps reverse('google_tasks:dashboard') working —
+    # home.html links to it and google_api's OAuth callback uses it as
+    # the default oauth_redirect_url.
+    path('', views.react_app, name='dashboard'),
+    # Legacy strangler mount (Stages 1–5): 301 to the real routes so
+    # bookmarks/links like /tasks/app/starred/ keep working. The
+    # bare 'app' pattern (no trailing slash) keeps /tasks/app from
+    # falling through to the catch-all below.
+    path('app', views.app_redirect, name='react_app_noslash'),
+    path('app/', views.app_redirect, name='react_app'),
     path(
         'app/<path:subpath>',
-        views.react_app,
+        views.app_redirect,
         name='react_app_subpath'
     ),
-    path('search/', views.search_tasks, name='search'),
-    path('starred/', views.starred_tasks, name='starred'),
-    path('overdue/', views.overdue_tasks, name='overdue'),
-    path('starred/reorder/', views.reorder_starred, name='reorder_starred'),
-    path('tasks/reorder/', views.reorder_tasks, name='reorder_tasks'),
-    path('sync/', views.sync_view, name='sync'),
-    path(
-        'task/<str:task_id>/toggle-star/',
-        views.toggle_star,
-        name='toggle_star'
-    ),
-    path(
-        'task/<str:task_id>/complete/',
-        views.complete_task_view,
-        name='complete_task'
-    ),
-    path(
-        'task/<str:task_id>/uncomplete/',
-        views.uncomplete_task_view,
-        name='uncomplete_task'
-    ),
-    path(
-        'process-labels/',
-        views.process_labels_view,
-        name='process_labels'
-    ),
-    path(
-        'task/<str:task_id>/process-label/',
-        views.process_task_label_view,
-        name='process_task_label'
-    ),
-    path(
-        'divider/create/',
-        views.create_divider,
-        name='create_divider'
-    ),
-    path(
-        'divider/<str:task_id>/delete/',
-        views.delete_divider,
-        name='delete_divider'
-    ),
-    path(
-        'divider/<str:task_id>/update/',
-        views.update_divider,
-        name='update_divider'
-    ),
-    path('archived/', views.archived_tasks, name='archived'),
-    path('trash/', views.trash_tasks, name='trash'),
-    path(
-        'task/<str:task_id>/archive/',
-        views.archive_task_view,
-        name='archive_task'
-    ),
-    path(
-        'task/<str:task_id>/unarchive/',
-        views.unarchive_task_view,
-        name='unarchive_task'
-    ),
-    path(
-        'task/<str:task_id>/delete/',
-        views.delete_task_view,
-        name='delete_task'
-    ),
-    path(
-        'task/<str:task_id>/restore/',
-        views.restore_task_view,
-        name='restore_task'
-    ),
-    path(
-        'task/<str:task_id>/permanent-delete/',
-        views.permanent_delete_task_view,
-        name='permanent_delete_task'
-    ),
-    path(
-        'task/create/',
-        views.create_task_view,
-        name='create_task'
-    ),
-    path(
-        'task/<str:task_id>/',
-        views.task_detail,
-        name='task_detail'
-    ),
-    path(
-        'task/<str:task_id>/update/',
-        views.update_task_view,
-        name='update_task'
-    ),
+    # No trailing slash on <path:subpath> — it matches both
+    # 'x' and 'x/', so client-side routes don't depend on
+    # an APPEND_SLASH redirect hop.
+    path('<path:subpath>', views.react_app, name='spa_subpath'),
 ]

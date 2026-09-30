@@ -68,7 +68,7 @@ describe('apiFetch', () => {
   });
 
   it.each([
-    { login_url: '/admin/login/?next=/tasks/app/' },
+    { login_url: '/admin/login/?next=/tasks/' },
     { authorization_url: 'https://accounts.google.com/o/oauth2/auth' },
   ])('navigates on 401 with %o', async (body) => {
     const { assign, restore } = stubLocationAssign();
