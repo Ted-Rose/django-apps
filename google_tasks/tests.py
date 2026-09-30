@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from google_tasks.models import GoogleTask, GoogleTaskList
 from google_tasks.services import process_task_labels
@@ -340,6 +341,242 @@ class ProcessTaskLabelsStarTests(TestCase):
         self.assertEqual(new.starred_order, 1.0)
         self.assertEqual(old.starred_order, 2.0)
         self.assertEqual(mid.starred_order, 3.0)
+
+
+class TasksApiTests(TestCase):
+    """django-ninja layer at /api/tasks/ — auth contract, per-user
+    isolation and mutation delegation to the existing views."""
+
+    API = '/api/tasks'
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other_user = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.client.force_login(self.user)
+        self.task_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-1', title='List 1'
+        )
+
+    def make_task(self, task_id, order=1.0, user=None, **kwargs):
+        return GoogleTask.objects.create(
+            user=user or self.user,
+            task_id=task_id,
+            task_list=self.task_list,
+            title=task_id,
+            task_order=order,
+            **kwargs,
+        )
+
+    # --- session auth contract ---
+
+    def test_unauthenticated_get_is_401_not_redirect(self):
+        self.client.logout()
+        resp = self.client.get(f'{self.API}/dashboard/')
+        self.assertEqual(resp.status_code, 401)
+        body = resp.json()
+        self.assertEqual(body['error'], 'unauthenticated')
+        self.assertTrue(
+            body['login_url'].startswith('/admin/login/?next=')
+        )
+
+    def test_unauthenticated_post_is_401_not_redirect(self):
+        self.client.logout()
+        resp = self.client.post(
+            f'{self.API}/tasks/reorder/',
+            data=json.dumps({'updates': []}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.json()['error'], 'unauthenticated')
+
+    def test_post_without_csrf_token_rejected(self):
+        csrf_client = self.client.__class__(enforce_csrf_checks=True)
+        csrf_client.force_login(self.user)
+        resp = csrf_client.post(
+            f'{self.API}/task/a/toggle-star/',
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()['error'], 'forbidden')
+
+    def test_post_with_csrf_token_allowed(self):
+        task = self.make_task('a')
+        csrf_client = self.client.__class__(enforce_csrf_checks=True)
+        csrf_client.force_login(self.user)
+        csrf_client.cookies['csrftoken'] = 'x' * 32
+        resp = csrf_client.post(
+            f'{self.API}/task/a/toggle-star/',
+            HTTP_X_CSRFTOKEN='x' * 32,
+        )
+        self.assertEqual(resp.status_code, 200)
+        task.refresh_from_db()
+        self.assertTrue(task.is_starred)
+
+    # --- google_reauth contract ---
+
+    def test_auth_dict_result_returns_401_google_reauth(self):
+        auth = {
+            'authorization_url': (
+                'https://accounts.google.com/o/oauth2/auth?x=1'
+            ),
+            'state': 'state-123',
+            'scopes': ['https://www.googleapis.com/auth/tasks'],
+        }
+        with patch('google_tasks.views.get_creds_dict',
+                   return_value={'token': 't'}), \
+                patch('google_tasks.views.sync_all',
+                      return_value=auth):
+            resp = self.client.post(f'{self.API}/sync/')
+        self.assertEqual(resp.status_code, 401)
+        body = resp.json()
+        self.assertEqual(body['error'], 'google_reauth')
+        self.assertEqual(
+            body['authorization_url'], auth['authorization_url']
+        )
+        # OAuth state stored in session exactly like the views do
+        session = self.client.session
+        self.assertEqual(session['state'], 'state-123')
+        self.assertEqual(
+            session['oauth_scopes'], auth['scopes']
+        )
+
+    def test_dead_credentials_return_401_google_reauth(self):
+        from google_api.models import GoogleOAuthCredentials
+        GoogleOAuthCredentials.objects.create(
+            user=self.user,
+            access_token='dead',
+            refresh_token='dead',
+            token_expiry=timezone.now(),
+            scopes=[],
+        )
+        with patch('google_tasks.views.get_creds_dict',
+                   return_value=None):
+            resp = self.client.get(f'{self.API}/dashboard/')
+        self.assertEqual(resp.status_code, 401)
+        body = resp.json()
+        self.assertEqual(body['error'], 'google_reauth')
+        self.assertIn('/login/', body['authorization_url'])
+
+    def test_missing_credentials_mutation_returns_google_reauth(self):
+        resp = self.client.post(f'{self.API}/sync/')
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.json()['error'], 'google_reauth')
+
+    # --- reads ---
+
+    def test_dashboard_shape_and_user_scoping(self):
+        self.make_task('a', 1.0)
+        self.make_task('done', 2.0, status='completed')
+        self.make_task('bob-task', 1.0, user=self.other_user)
+        resp = self.client.get(f'{self.API}/dashboard/')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        ids = [t['task_id'] for t in body['tasks']]
+        self.assertEqual(ids, ['a'])
+        self.assertEqual(
+            [t['task_id'] for t in body['completed']], ['done']
+        )
+        self.assertIn('needs_push', body['tasks'][0])
+        self.assertIn('is_starred', body['tasks'][0])
+        self.assertFalse(body['flags']['has_credentials'])
+
+    def test_dashboard_list_and_label_filters(self):
+        from google_tasks.models import TaskLabel
+        label = TaskLabel.objects.create(user=self.user, name='Home')
+        tagged = self.make_task('tagged', 1.0)
+        tagged.labels.add(label)
+        self.make_task('plain', 2.0)
+        resp = self.client.get(f'{self.API}/dashboard/?label=Home')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(
+            [t['task_id'] for t in body['tasks']], ['tagged']
+        )
+        self.assertEqual(body['selected_label'], 'Home')
+
+    def test_task_detail_scoped_to_user(self):
+        foreign = self.make_task(
+            'foreign', user=self.other_user
+        )
+        resp = self.client.get(f'{self.API}/task/{foreign.task_id}/')
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.json()['error'], 'not_found')
+
+    def test_task_detail_returns_task_schema(self):
+        self.make_task('a', notes='n')
+        resp = self.client.get(f'{self.API}/task/a/')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body['task']['task_id'], 'a')
+        self.assertEqual(body['task']['notes'], 'n')
+        self.assertEqual(body['task']['needs_push'], False)
+
+    def test_search_matches_title(self):
+        self.make_task('find me please', 1.0)
+        self.make_task('other', 2.0)
+        resp = self.client.get(f'{self.API}/search/?q=find+me')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body['total_results'], 1)
+        self.assertEqual(body['tasks'][0]['task_id'], 'find me please')
+
+    # --- mutations ---
+
+    def test_reorder_happy_path(self):
+        a = self.make_task('a', 1.0)
+        b = self.make_task('b', 2.0)
+        resp = self.client.post(
+            f'{self.API}/tasks/reorder/',
+            data=json.dumps({'updates': [
+                {'task_id': 'a', 'position': 2.0},
+                {'task_id': 'b', 'position': 1.0},
+            ]}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(a.task_order, 2.0)
+        self.assertEqual(b.task_order, 1.0)
+
+    def test_reorder_other_users_task_is_400(self):
+        self.make_task('foreign', 1.0, user=self.other_user)
+        resp = self.client.post(
+            f'{self.API}/tasks/reorder/',
+            data=json.dumps({'updates': [
+                {'task_id': 'foreign', 'position': 1.0},
+            ]}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['error'], 'bad_request')
+
+    def test_reorder_invalid_payload_is_422(self):
+        resp = self.client.post(
+            f'{self.API}/tasks/reorder/',
+            data=json.dumps({'updates': 'not-a-list'}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 422)
+        self.assertIn('detail', resp.json())
+
+    def test_archive_and_permanent_delete(self):
+        task = self.make_task('a')
+        resp = self.client.post(f'{self.API}/task/a/archive/')
+        self.assertEqual(resp.status_code, 200)
+        task.refresh_from_db()
+        self.assertTrue(task.is_archived)
+        resp = self.client.post(f'{self.API}/task/a/permanent-delete/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(
+            GoogleTask.objects.filter(task_id='a').exists()
+        )
 
 
 class ReactAppShellTests(TestCase):

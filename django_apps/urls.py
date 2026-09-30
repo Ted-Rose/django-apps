@@ -3,11 +3,17 @@ from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
 from . import views
+from django_apps.api import api
+from google_tasks.api import router as tasks_router
 
 app_name = 'main'
 
+api.add_router('/tasks/', tasks_router)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # django-ninja JSON API (session auth + CSRF; React SPA contract)
+    path('api/', api.urls),
     # PWA endpoints (served at the site root so the SW scope is the whole site)
     path('sw.js', views.service_worker, name='service_worker'),
     path('manifest.webmanifest', views.manifest, name='manifest'),
