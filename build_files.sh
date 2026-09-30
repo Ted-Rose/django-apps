@@ -23,6 +23,9 @@ python3 django_apps/console_tasks/build.py create_ca_pem create_private_settings
 # would skip devDependencies (vite/tsc) and break the build below.
 npm ci --prefix frontend --include=dev
 npm run build --prefix frontend
+# @vercel/python bundles every file reachable at build time into the
+# function; node_modules (~67MB) would blow the 15mb maxLambdaSize.
+rm -rf frontend/node_modules
 
 # Collect static files
 python3 manage.py collectstatic --noinput
