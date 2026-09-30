@@ -4,3 +4,16 @@
 **/node_modules
 venv
 terraform
+# Never upload local secrets/state (gitignored on disk, but a manual
+# `vercel` deploy would otherwise bundle them into the lambda).
+private_settings.json
+google_api/app_secrets.json
+ca.pem
+settings.json
+.env*
+db.sqlite3
+*.sqlite3
+data/
+# Build artifacts / docs only bloat the upload.
+staticfiles/
+docs/

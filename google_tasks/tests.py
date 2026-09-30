@@ -1,12 +1,20 @@
 import json
+import os
+import tempfile
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
-from django.test import TestCase
+from django.http import Http404
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from django_apps.views import spa_shell
+from django_vite.core.asset_loader import (
+    DjangoViteAssetLoader,
+    ManifestEntry,
+)
 from google_tasks.models import GoogleTask, GoogleTaskList
 from google_tasks.services import process_task_labels
 from google_tasks.views import REORDER_CAP
@@ -582,14 +590,36 @@ class TasksApiTests(TestCase):
 class ReactAppShellTests(TestCase):
     """Strangler-mounted SPA shell at /tasks/app/."""
 
+    ENTRY_KEY = 'src/tasks/main.tsx'
+
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(
             username='alice', password='pw'
         )
 
+    def _write_manifest(self, tmpdir, contents):
+        path = os.path.join(tmpdir, 'manifest.json')
+        with open(path, 'w') as f:
+            json.dump(contents, f)
+        return path
+
+    def _vite_override(self, manifest_path, dev_mode=False):
+        return override_settings(DJANGO_VITE={
+            'default': {
+                'dev_mode': dev_mode,
+                'dev_server_port': 5173,
+                'static_url_prefix': '',
+                'manifest_path': manifest_path,
+            }
+        })
+
     def test_requires_login(self):
         resp = self.client.get(reverse('google_tasks:react_app'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_subpath_requires_login(self):
+        resp = self.client.get('/tasks/app/starred/')
         self.assertEqual(resp.status_code, 302)
 
     def test_renders_shell_with_bootstrap(self):
@@ -598,10 +628,85 @@ class ReactAppShellTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="root"')
         self.assertContains(resp, 'id="spa-bootstrap"')
-        self.assertContains(resp, 'alice')
+        self.assertContains(resp, '"user": "alice"')
+
+    def test_sets_csrf_cookie(self):
+        # The React client's POSTs depend on the csrftoken cookie.
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('google_tasks:react_app'))
+        self.assertIn('csrftoken', resp.cookies)
 
     def test_subpath_renders_shell(self):
         self.client.force_login(self.user)
         resp = self.client.get('/tasks/app/starred/')
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="root"')
+
+    def test_subpath_without_trailing_slash_renders(self):
+        self.client.force_login(self.user)
+        resp = self.client.get('/tasks/app/starred')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="root"')
+
+    def test_warns_when_manifest_missing(self):
+        self.client.force_login(self.user)
+        with self._vite_override('/nonexistent/manifest.json'):
+            resp = self.client.get(reverse('google_tasks:react_app'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'React entry not loaded')
+
+    def test_stale_manifest_renders_warning_not_500(self):
+        # Manifest exists but the entry key is gone (renamed input,
+        # partial build) — degrade to the warning, not a 500.
+        self.client.force_login(self.user)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = self._write_manifest(tmpdir, {
+                'src/renamed/main.tsx': {'file': 'x/x.deadbeef.js'},
+            })
+            with self._vite_override(manifest_path):
+                resp = self.client.get(
+                    reverse('google_tasks:react_app'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'React entry not loaded')
+
+    def test_renders_entry_script_when_manifest_ready(self):
+        # django-vite parses the manifest once into a singleton, so
+        # patch the parsed entries rather than relying on re-reads.
+        self.client.force_login(self.user)
+        client = DjangoViteAssetLoader.instance()._apps['default']
+        entry = ManifestEntry(
+            file='tasks/tasks.abc12345.js',
+            src=self.ENTRY_KEY,
+            isEntry=True,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = self._write_manifest(
+                tmpdir, {self.ENTRY_KEY: {'file': entry.file}})
+            with self._vite_override(manifest_path), patch.dict(
+                client.manifest._entries, {self.ENTRY_KEY: entry}
+            ):
+                resp = self.client.get(
+                    reverse('google_tasks:react_app'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'tasks/tasks.abc12345.js')
+        self.assertNotContains(resp, 'React entry not loaded')
+
+    def test_dev_mode_renders_entry_without_manifest(self):
+        # VITE_DEV flow: no manifest on disk, but dev_mode makes the
+        # shell ready and vite_asset points at the dev server.
+        self.client.force_login(self.user)
+        client = DjangoViteAssetLoader.instance()._apps['default']
+        with self._vite_override(
+            '/nonexistent/manifest.json', dev_mode=True
+        ), patch.object(client, 'dev_mode', True):
+            resp = self.client.get(
+                reverse('google_tasks:react_app'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'localhost:5173')
+        self.assertNotContains(resp, 'React entry not loaded')
+
+    def test_invalid_entry_raises_404(self):
+        request = RequestFactory().get('/tasks/app/')
+        request.user = self.user
+        with self.assertRaises(Http404):
+            spa_shell(request, entry='../escape')

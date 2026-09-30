@@ -337,10 +337,12 @@ Record the outcome in this doc and in root `AGENTS.md`.
 
 - `.gitignore`: `node_modules/`, `frontend_dist/`,
   `frontend/test-results/`, `frontend/playwright-report/`.
-- `.vercelignore` (new): `node_modules`, `frontend_dist`, `venv`,
-  `terraform`. Note this only filters **uploaded source**, not build
-  output — check lambda size against `maxLambdaSize: 15mb` after the
-  first preview deploy.
+- `.vercelignore` (new): `**/node_modules`, `venv`, `terraform`.
+  `frontend_dist` is deliberately NOT listed — the `@vercel/python`
+  lambda must bundle it so `{% vite_asset %}` resolves
+  `manifest.json`. Note this only filters **uploaded source**, not
+  build output — check lambda size against `maxLambdaSize: 15mb`
+  after the first preview deploy.
 
 ### CI (`.github/workflows/frontend.yml`, new)
 
@@ -360,10 +362,11 @@ Cloud Run deploys on failing tests.
 ### Dev loop
 
 ```bash
-# terminal 1
-python manage.py runserver            # :8000 (runsslserver for OAuth)
+# terminal 1 — dev_mode is read by the Django process, so VITE_DEV
+# goes on runserver, NOT on the Vite process
+VITE_DEV=1 python manage.py runserver  # :8000 (runsslserver for OAuth)
 # terminal 2
-VITE_DEV=1 npm run dev --prefix frontend   # :5173
+npm run dev --prefix frontend          # :5173
 ```
 
 Open `http://localhost:5173/tasks/app/`. Vite proxies everything that

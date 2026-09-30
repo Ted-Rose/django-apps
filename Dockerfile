@@ -3,7 +3,10 @@
 FROM node:22-slim AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+# --include=dev: parity with build_files.sh — if NODE_ENV=production
+# ever propagates here, plain `npm ci` would skip devDependencies
+# (vite/tsc) and break `npm run build` below.
+RUN npm ci --include=dev
 COPY frontend/ ./
 RUN npm run build
 
