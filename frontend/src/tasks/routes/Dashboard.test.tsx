@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Dashboard from './Dashboard';
 import { apiGet, apiPost } from '../../shared/api/client';
+import { resetActionHistory } from '../actionHistory';
 import { clearToasts } from '../toasts';
 import type { DashboardOut, TaskOut } from '../api';
 
@@ -66,6 +67,10 @@ beforeEach(() => {
   mockedApiGet.mockReset();
   mockedApiPost.mockReset();
   clearToasts();
+  resetActionHistory();
+  // Keep autosync quiet: a fresh lastPageLoad makes the mount-time
+  // stale check skip the initial sync (autosync.js port).
+  localStorage.setItem('lastPageLoad', String(Date.now()));
 });
 
 describe('Dashboard', () => {

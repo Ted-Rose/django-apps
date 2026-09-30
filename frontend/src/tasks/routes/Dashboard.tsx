@@ -1,9 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { ApiError } from '../../shared/api/errors';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import useBootstrap from '../../shared/hooks/useBootstrap';
+import { actionHistory } from '../actionHistory';
 import { fetchDashboard, type DashboardOut } from '../api';
 import CompletedSection from '../components/CompletedSection';
 import DividerCard from '../components/DividerCard';
@@ -11,8 +27,22 @@ import TaskCard from '../components/TaskCard';
 import TaskFormModal from '../components/TaskFormModal';
 import TaskNavBar from '../components/TaskNavBar';
 import Toasts from '../components/Toasts';
-import { useCreateDivider, useProcessLabels, useSync } from '../mutations';
+import {
+  useCreateDivider,
+  useProcessLabels,
+  useReorderTasks,
+  useSync,
+} from '../mutations';
+import {
+  computeDropReorder,
+  computeRankReorder,
+  isManualOrder,
+  noteDragFinished,
+  positionField,
+} from '../reorder';
 import { pushToast } from '../toasts';
+import useAutosync from '../useAutosync';
+import useUndoRedo from '../useUndoRedo';
 
 /**
  * React port of dashboard.html — the `?list=&label=&order=` params
@@ -22,8 +52,19 @@ import { pushToast } from '../toasts';
  *
  * Stage 3: task mutations are wired (star/complete/archive/delete/
  * edit on the cards, Add Divider / Process Labels / Sync Now in the
- * burger menu, and the floating "+" create-task button). Reorder,
- * undo/redo and autosync arrive in Stage 4.
+ * burger menu, and the floating "+" create-task button).
+ *
+ * Stage 4: dnd-kit drag reorder (task rows AND divider cards, like
+ * SortableJS's `draggable: '.task-container, .divider-card'`), the
+ * localStorage-backed undo/redo store with floating buttons + Ctrl+Z /
+ * Ctrl+Y / Ctrl+Shift+Z, and the 5-minute autosync loop.
+ *
+ * Gating note: SortableJS was created unconditionally — but under
+ * non-manual `?order=` sorts a position write is invisible (the sort
+ * doesn't read task_order), so the dragged row would snap back on the
+ * next refetch. Drag is therefore enabled only for order_asc/
+ * order_desc; the order-badge preset dropdown works everywhere, as in
+ * the old UI.
  */
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
@@ -48,7 +89,51 @@ export default function Dashboard() {
 
   const createDivider = useCreateDivider();
   const processLabels = useProcessLabels();
+  const reorder = useReorderTasks();
   const [creatingTask, setCreatingTask] = useState(false);
+
+  const starredView = data?.flags.is_starred_view ?? false;
+  const field = positionField(starredView);
+
+  const { undo, redo, canUndo, canRedo } = useUndoRedo({
+    tasks: data?.tasks ?? [],
+    starredView,
+    taskListId: starredView ? null : list,
+  });
+
+  // autosync.js — 5-minute loop + stale-load/visible-tab catch-up,
+  // gated on has_credentials. The API's sync op runs server-side
+  // label processing already, so no second call is needed.
+  const hasCredentials = data?.flags.has_credentials ?? false;
+  useAutosync(hasCredentials, syncMutation.mutate);
+
+  // Drag sensors — SortableJS used a plain mouse/pointer drag plus a
+  // 200ms long-press on touch (delayOnTouchOnly).
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  // The floating_controls.html "Order saved" badge, shown ~2s after a
+  // successful reorder POST.
+  const [orderSaved, setOrderSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashOrderSaved = useCallback(() => {
+    setOrderSaved(true);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setOrderSaved(false), 2000);
+  }, []);
+  useEffect(
+    () => () => {
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+    },
+    [],
+  );
 
   // filters.js saveCurrentView(): remember the last tasks view so a
   // future "back from search" flow can restore it.
@@ -62,6 +147,34 @@ export default function Dashboard() {
       // Storage unavailable — non-fatal.
     }
   }, [list, label, order, secondaryLabel]);
+
+  // main.js keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Y or
+  // Ctrl/Cmd+Shift+Z redo. (Small fix over the original: skip while
+  // typing in an input/textarea so text fields keep native undo.)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const mod = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      if (mod && !event.shiftKey && key === 'z') {
+        event.preventDefault();
+        undo();
+      } else if (mod && (key === 'y' || (event.shiftKey && key === 'z'))) {
+        event.preventDefault();
+        redo();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [undo, redo]);
 
   const labelColors = useMemo(
     () => new Map((data?.labels ?? []).map((l) => [l.name, l.color])),
@@ -102,7 +215,71 @@ export default function Dashboard() {
     );
   }, [data, secondaryLabel]);
 
-  const hasCredentials = data?.flags.has_credentials ?? false;
+  const visibleIds = useMemo(
+    () => visibleTasks.map((task) => task.task_id),
+    [visibleTasks],
+  );
+
+  // Drag is only meaningful when the displayed order is the manual
+  // position field — see the component docstring. The old UI also
+  // kept it on under secondary_label filtering, so we do too.
+  const dragEnabled = isManualOrder(order);
+
+  const postReorder = useCallback(
+    (result: {
+      order: string[];
+      updates: { task_id: string; position: number }[];
+      positions: Record<string, number>;
+    }) => {
+      reorder.mutate(
+        {
+          updates: result.updates,
+          order: result.order,
+          positions: result.positions,
+          starredView,
+          taskListId: starredView ? null : list,
+        },
+        { onSuccess: flashOrderSaved },
+      );
+    },
+    [reorder, starredView, list, flashOrderSaved],
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      noteDragFinished();
+      const { active, over } = event;
+      if (!over || active.id === over.id || !data) return;
+      const result = computeDropReorder(
+        data.tasks,
+        visibleIds,
+        String(active.id),
+        String(over.id),
+        field,
+      );
+      if (!result) return;
+      // reorder.js onEnd records before posting; the snapshot is the
+      // pre-drag order (the cache is untouched until onMutate).
+      actionHistory.recordAction({
+        type: 'REORDER_TASKS',
+        previousOrder: data.tasks.map((task) => task.task_id),
+        newOrder: result.order,
+      });
+      postReorder(result);
+    },
+    [data, visibleIds, field, postReorder],
+  );
+
+  /** task_actions.js setTaskOrder — order-badge preset ranks. */
+  const handleSetRank = useCallback(
+    (taskId: string, rank: number) => {
+      if (!data) return;
+      const result = computeRankReorder(data.tasks, taskId, rank, field);
+      if (result) postReorder(result);
+    },
+    [data, field, postReorder],
+  );
+
   const loginUrl = `/login/?next=${encodeURIComponent(
     window.location.pathname + window.location.search,
   )}`;
@@ -178,22 +355,43 @@ export default function Dashboard() {
         {data && (
           <>
             {data.tasks.length > 0 ? (
-              <div id="task-list">
-                {visibleTasks.map((task) =>
-                  task.is_divider ? (
-                    <DividerCard key={task.task_id} task={task} />
-                  ) : (
-                    <TaskCard
-                      key={task.task_id}
-                      task={task}
-                      position={taskPositions.get(task.task_id) ?? 0}
-                      labelColors={labelColors}
-                      labels={data.labels}
-                      starredView={data.flags.is_starred_view}
-                    />
-                  ),
-                )}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+                onDragCancel={noteDragFinished}
+              >
+                <SortableContext
+                  items={visibleIds}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div id="task-list">
+                    {visibleTasks.map((task) =>
+                      task.is_divider ? (
+                        <DividerCard
+                          key={task.task_id}
+                          task={task}
+                          draggable={dragEnabled}
+                          starredView={starredView}
+                        />
+                      ) : (
+                        <TaskCard
+                          key={task.task_id}
+                          task={task}
+                          position={taskPositions.get(task.task_id) ?? 0}
+                          labelColors={labelColors}
+                          labels={data.labels}
+                          starredView={starredView}
+                          draggable={dragEnabled}
+                          onSetRank={(rank) =>
+                            handleSetRank(task.task_id, rank)
+                          }
+                        />
+                      ),
+                    )}
+                  </div>
+                </SortableContext>
+              </DndContext>
             ) : (
               data.completed.length === 0 && <EmptyState data={data} />
             )}
@@ -227,8 +425,43 @@ export default function Dashboard() {
             taskListId={list}
             onClose={() => setCreatingTask(false)}
           />
+          {/* floating_controls.html undo/redo (hidden without creds) */}
+          <div className="undo-redo-controls">
+            <button
+              id="undo-btn"
+              className="btn btn-primary"
+              type="button"
+              title="Undo (Ctrl+Z)"
+              disabled={!canUndo}
+              onClick={undo}
+            >
+              <i className="bi bi-arrow-counterclockwise" />
+            </button>
+            <button
+              id="redo-btn"
+              className="btn btn-secondary"
+              type="button"
+              title="Redo (Ctrl+Y)"
+              disabled={!canRedo}
+              onClick={redo}
+            >
+              <i className="bi bi-arrow-clockwise" />
+            </button>
+          </div>
         </>
       )}
+
+      {/* floating_controls.html save indicator — CSS keeps it hidden
+          by default, so visibility is toggled inline. */}
+      <div
+        id="save-indicator"
+        style={{ display: orderSaved ? 'block' : 'none' }}
+      >
+        <span className="badge bg-success fs-6 px-3 py-2">
+          <i className="bi bi-check-circle" /> Order saved
+        </span>
+      </div>
+
       <Toasts />
     </>
   );

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CompletedSection } from './CompletedSection';
 import { apiPost } from '../../shared/api/client';
+import { resetActionHistory } from '../actionHistory';
 import { clearToasts } from '../toasts';
 import type { TaskOut } from '../api';
 
@@ -59,6 +60,7 @@ function renderSection(autoOpen = false) {
 beforeEach(() => {
   mockedApiPost.mockReset();
   clearToasts();
+  resetActionHistory();
 });
 
 describe('CompletedSection', () => {
