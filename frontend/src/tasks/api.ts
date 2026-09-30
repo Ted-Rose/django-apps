@@ -9,6 +9,25 @@ export type LabelOut = components['schemas']['LabelOut'];
 export type LabelRef = components['schemas']['LabelRef'];
 export type FlagsOut = components['schemas']['FlagsOut'];
 
+/** Mutation request bodies (POST /api/tasks/…). */
+export type TaskCreateIn = components['schemas']['TaskCreateIn'];
+export type TaskUpdateIn = components['schemas']['TaskUpdateIn'];
+export type DividerCreateIn = components['schemas']['DividerCreateIn'];
+export type DividerUpdateIn = components['schemas']['DividerUpdateIn'];
+
+/** Shape returned by the mutation views the API delegates to. */
+export interface MutationResult {
+  success: boolean;
+  task_id?: string;
+  is_starred?: boolean;
+  stats?: {
+    processed: number;
+    moved: number;
+    starred: number;
+    errors?: number;
+  };
+}
+
 export interface DashboardParams {
   list?: string | null;
   label?: string | null;

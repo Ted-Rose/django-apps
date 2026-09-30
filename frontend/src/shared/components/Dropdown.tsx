@@ -20,10 +20,17 @@ import {
 interface DropdownProps {
   /** Toggle button content (icon + label). */
   label: ReactNode;
-  /** Extra classes for the toggle button. */
+  /**
+   * Full class override for the toggle button — replaces the default
+   * navbar-style `btn btn-outline-light btn-sm dropdown-toggle`
+   * (note that default also carries the caret). Use e.g.
+   * `btn btn-sm btn-link text-muted` for the card three-dots menus.
+   */
   buttonClassName?: string;
   /** Inline style for the toggle button (templates use small padding). */
   buttonStyle?: CSSProperties;
+  /** Accessible name — needed when `label` is only an icon. */
+  ariaLabel?: string;
   /** Extra classes for the `<ul>` menu (e.g. `dropdown-menu-end`). */
   menuClassName?: string;
   children: ReactNode;
@@ -33,6 +40,7 @@ export function Dropdown({
   label,
   buttonClassName = '',
   buttonStyle,
+  ariaLabel,
   menuClassName = '',
   children,
 }: DropdownProps) {
@@ -53,10 +61,13 @@ export function Dropdown({
   return (
     <div className="dropdown" ref={rootRef}>
       <button
-        className={`btn btn-outline-light btn-sm dropdown-toggle ${buttonClassName}`.trim()}
+        className={
+          buttonClassName || 'btn btn-outline-light btn-sm dropdown-toggle'
+        }
         type="button"
         style={buttonStyle}
         aria-expanded={open}
+        aria-label={ariaLabel}
         onClick={(event) => {
           event.stopPropagation();
           setOpen((prev) => !prev);

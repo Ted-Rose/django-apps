@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CompletedSection } from './CompletedSection';
+import { apiPost } from '../../shared/api/client';
+import { clearToasts } from '../toasts';
 import type { TaskOut } from '../api';
+
+vi.mock('../../shared/api/client', () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+  getCsrfToken: () => undefined,
+}));
+
+const mockedApiPost = vi.mocked(apiPost);
 
 function makeCompleted(
   id: string,
@@ -29,24 +40,30 @@ const tasks = [
 ];
 
 function renderSection(autoOpen = false) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <MemoryRouter>
-      <CompletedSection
-        tasks={tasks}
-        labelColors={new Map()}
-        autoOpen={autoOpen}
-      />
+      <QueryClientProvider client={queryClient}>
+        <CompletedSection
+          tasks={tasks}
+          labelColors={new Map()}
+          autoOpen={autoOpen}
+        />
+      </QueryClientProvider>
     </MemoryRouter>,
   );
 }
 
+beforeEach(() => {
+  mockedApiPost.mockReset();
+  clearToasts();
+});
+
 describe('CompletedSection', () => {
   it('renders collapsed with the completed count and toggles open', () => {
-    render(
-      <MemoryRouter>
-        <CompletedSection tasks={tasks} labelColors={new Map()} />
-      </MemoryRouter>,
-    );
+    renderSection();
     const collapse = document.getElementById('completedTasksCollapse')!;
     expect(
       screen.getByRole('button', { name: /Completed tasks \(2\)/ }),
@@ -78,11 +95,44 @@ describe('CompletedSection', () => {
   });
 
   it('renders nothing when there are no completed tasks', () => {
+    const queryClient = new QueryClient();
     const { container } = render(
       <MemoryRouter>
-        <CompletedSection tasks={[]} labelColors={new Map()} />
+        <QueryClientProvider client={queryClient}>
+          <CompletedSection tasks={[]} labelColors={new Map()} />
+        </QueryClientProvider>
       </MemoryRouter>,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('posts uncomplete after the confirm modal', async () => {
+    mockedApiPost.mockResolvedValue({ success: true, task_id: 'c1' });
+    const { container } = renderSection(true);
+    fireEvent.click(container.querySelector('.uncomplete-btn')!);
+    expect(
+      await screen.findByText('Mark as Not Completed', {
+        selector: '.modal-title',
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Mark as Not Completed' }),
+    );
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/tasks/task/c1/uncomplete/',
+      ),
+    );
+  });
+
+  it('posts toggle-star for a completed task', async () => {
+    mockedApiPost.mockResolvedValue({ success: true, is_starred: true });
+    const { container } = renderSection(true);
+    fireEvent.click(container.querySelector('.star-btn')!);
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/tasks/task/c1/toggle-star/',
+      ),
+    );
   });
 });
