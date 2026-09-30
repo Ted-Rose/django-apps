@@ -340,3 +340,31 @@ class ProcessTaskLabelsStarTests(TestCase):
         self.assertEqual(new.starred_order, 1.0)
         self.assertEqual(old.starred_order, 2.0)
         self.assertEqual(mid.starred_order, 3.0)
+
+
+class ReactAppShellTests(TestCase):
+    """Strangler-mounted SPA shell at /tasks/app/."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+
+    def test_requires_login(self):
+        resp = self.client.get(reverse('google_tasks:react_app'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_renders_shell_with_bootstrap(self):
+        self.client.force_login(self.user)
+        resp = self.client.get(reverse('google_tasks:react_app'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="root"')
+        self.assertContains(resp, 'id="spa-bootstrap"')
+        self.assertContains(resp, 'alice')
+
+    def test_subpath_renders_shell(self):
+        self.client.force_login(self.user)
+        resp = self.client.get('/tasks/app/starred/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="root"')

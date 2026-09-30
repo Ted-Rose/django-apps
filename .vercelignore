@@ -1,0 +1,6 @@
+# Filters uploaded source only — not build output. frontend_dist/ is
+# deliberately NOT listed: we want the @vercel/python lambda to bundle
+# it after build_files.sh generates it.
+**/node_modules
+venv
+terraform
