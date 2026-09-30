@@ -1,6 +1,10 @@
+import os
+
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.views.decorators.cache import cache_control
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 
 def home(request):
@@ -43,3 +47,27 @@ def service_worker(request):
 def offline(request):
     """Fallback page shown by the service worker when the user is offline."""
     return render(request, 'pwa/offline.html')
+
+
+@login_required
+@ensure_csrf_cookie
+def spa_shell(request, entry, title=''):
+    """Render the shared React SPA shell for a Vite entry name.
+
+    `entry` is the app folder under frontend/src/ (e.g. 'tasks' →
+    src/tasks/main.tsx). `manifest_ready` tells the template whether
+    frontend_dist/ is present in this runtime — on hosts where the
+    build output isn't bundled (the Vercel spike question) the page
+    shows a diagnostic instead of crashing in {% vite_asset %}.
+    """
+    manifest_path = settings.DJANGO_VITE.get('default', {}).get(
+        'manifest_path',
+        os.path.join(settings.BASE_DIR, 'frontend_dist',
+                     'manifest.json'),
+    )
+    return render(request, 'spa_shell.html', {
+        'title': title,
+        'vite_entry': f'src/{entry}/main.tsx',
+        'manifest_ready': os.path.exists(manifest_path),
+        'bootstrap': {'user': request.user.get_username()},
+    })

@@ -11,7 +11,11 @@
     {
     "src": "django_apps/wsgi.py",
     "use": "@vercel/python",
-    "config": { "maxLambdaSize": "15mb", "runtime": "python3.12" }
+    "config": {
+      "maxLambdaSize": "15mb",
+      "runtime": "python3.12",
+      "excludeFiles": "{**/node_modules/**,venv/**,terraform/**}"
+    }
   }],
   "routes": [
     {

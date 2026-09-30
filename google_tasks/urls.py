@@ -5,6 +5,12 @@ app_name = 'google_tasks'
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
+    path('app/', views.react_app, name='react_app'),
+    path(
+        'app/<path:subpath>/',
+        views.react_app,
+        name='react_app_subpath'
+    ),
     path('search/', views.search_tasks, name='search'),
     path('starred/', views.starred_tasks, name='starred'),
     path('overdue/', views.overdue_tasks, name='overdue'),
