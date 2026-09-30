@@ -1,40 +1,60 @@
-import NavBar from '../shared/components/NavBar';
-import type { BurgerMenuItem } from '../shared/components/BurgerMenu';
-import useBootstrap from '../shared/hooks/useBootstrap';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import Dashboard from './routes/Dashboard';
+import StubPage, { TaskDetailStub } from './routes/StubPage';
 
+/**
+ * Router host for the tasks SPA (mounted at /tasks/app/, see
+ * `BrowserRouter basename` in main.tsx).
+ *
+ * `/` is the real dashboard (Stage 2). The other routes are graceful
+ * stubs until the Stage 5 secondary pages land — the Django catch-all
+ * already routes every /tasks/app/<subpath>/ here, so deep links get
+ * a friendly placeholder instead of a blank page.
+ */
 export default function App() {
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
-  const menuItems: BurgerMenuItem[] = [
-    { label: 'Home', url: '/', icon: 'house', btn_class: 'btn-light' },
-    {
-      label: 'Template UI',
-      url: '/tasks/',
-      icon: 'card-list',
-      btn_class: 'btn-light',
-    },
-    {
-      label: `Logout (${user})`,
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
-  ];
-
   return (
-    <>
-      <NavBar title="Tasks" user={user} items={menuItems} />
-      <div className="container py-4">
-        <h1 className="mb-3">Tasks — React shell</h1>
-        <p>
-          Signed in as <strong>{user}</strong>.
-        </p>
-        <p className="text-muted">
-          This page is rendered by React via Vite + django-vite (strangler mount
-          at <code>/tasks/app/</code>). The template UI still lives at{' '}
-          <a href="/tasks/">/tasks/</a>.
-        </p>
-      </div>
-    </>
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route
+        path="/starred"
+        element={
+          <StubPage title="Starred" templatePath="starred/" icon="bi-star" />
+        }
+      />
+      <Route
+        path="/overdue"
+        element={
+          <StubPage
+            title="Overdue"
+            templatePath="overdue/"
+            icon="bi-exclamation-triangle"
+          />
+        }
+      />
+      <Route
+        path="/archived"
+        element={
+          <StubPage
+            title="Archive"
+            templatePath="archived/"
+            icon="bi-archive"
+          />
+        }
+      />
+      <Route
+        path="/trash"
+        element={
+          <StubPage title="Trash" templatePath="trash/" icon="bi-trash" />
+        }
+      />
+      <Route
+        path="/search"
+        element={
+          <StubPage title="Search" templatePath="search/" icon="bi-search" />
+        }
+      />
+      <Route path="/task/:taskId" element={<TaskDetailStub />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
