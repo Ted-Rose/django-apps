@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   keepPreviousData,
@@ -14,7 +14,11 @@ import { fetchDashboard, type DashboardOut } from '../api';
 import CompletedSection from '../components/CompletedSection';
 import DividerCard from '../components/DividerCard';
 import TaskCard from '../components/TaskCard';
+import TaskFormModal from '../components/TaskFormModal';
 import TaskNavBar from '../components/TaskNavBar';
+import Toasts from '../components/Toasts';
+import { useCreateDivider, useProcessLabels } from '../mutations';
+import { pushToast } from '../toasts';
 
 /**
  * React port of dashboard.html — the `?list=&label=&order=` params
@@ -22,9 +26,10 @@ import TaskNavBar from '../components/TaskNavBar';
  * as the template view), while `secondary_label` stays a client-side
  * filter exactly like filters.js.
  *
- * Read-only stage: no task mutations are wired yet (Stage 3+); only
- * "Sync Now" is functional since it is a plain refresh action against
- * the existing endpoint.
+ * Stage 3: task mutations are wired (star/complete/archive/delete/
+ * edit on the cards, Add Divider / Process Labels / Sync Now in the
+ * burger menu, and the floating "+" create-task button). Reorder,
+ * undo/redo and autosync arrive in Stage 4.
  */
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
@@ -48,6 +53,10 @@ export default function Dashboard() {
     mutationFn: () => apiPost('/api/tasks/sync/'),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
   });
+
+  const createDivider = useCreateDivider();
+  const processLabels = useProcessLabels();
+  const [creatingTask, setCreatingTask] = useState(false);
 
   // filters.js saveCurrentView(): remember the last tasks view so a
   // future "back from search" flow can restore it.
@@ -102,6 +111,31 @@ export default function Dashboard() {
   if (hasCredentials) {
     burgerItems.push(
       {
+        label: 'Add Divider',
+        icon: 'dash-lg',
+        btn_class: 'btn-primary',
+        onClick: () => {
+          // dividers.js: ?list= first, else the first task list;
+          // without either the template alerted the user to pick one.
+          const listId = list ?? data?.task_lists[0]?.list_id;
+          if (!listId) {
+            pushToast(
+              'Please select a specific task list first — ' +
+                'dividers must belong to a task list.',
+              'warning',
+            );
+            return;
+          }
+          createDivider.mutate({ task_list_id: listId, is_starred: false });
+        },
+      },
+      {
+        label: processLabels.isPending ? 'Processing…' : 'Process Labels',
+        icon: 'tags',
+        btn_class: 'btn-success',
+        onClick: () => processLabels.mutate(),
+      },
+      {
         label: syncMutation.isPending ? 'Syncing…' : 'Sync Now',
         icon: 'arrow-repeat',
         btn_class: 'btn-light',
@@ -152,6 +186,7 @@ export default function Dashboard() {
                       task={task}
                       position={index + 1}
                       labelColors={labelColors}
+                      labels={data.labels}
                       starredView={data.flags.is_starred_view}
                     />
                   ),
@@ -171,6 +206,28 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {data && hasCredentials && (
+        <>
+          {/* floating_controls.html: "+" opens the create modal */}
+          <button
+            className="floating-add-btn"
+            type="button"
+            title="Create new task"
+            onClick={() => setCreatingTask(true)}
+          >
+            <i className="bi bi-plus" />
+          </button>
+          <TaskFormModal
+            show={creatingTask}
+            mode="create"
+            labels={data.labels}
+            taskListId={list}
+            onClose={() => setCreatingTask(false)}
+          />
+        </>
+      )}
+      <Toasts />
     </>
   );
 }

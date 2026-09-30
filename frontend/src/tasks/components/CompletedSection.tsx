@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { TaskOut } from '../api';
+import { useToggleStar, useUncompleteTask } from '../mutations';
 import { formatShortDate } from '../utils';
+import ConfirmModal from './ConfirmModal';
 
 /**
  * React port of components/dashboard/completed_tasks.html.
@@ -9,7 +11,8 @@ import { formatShortDate } from '../utils';
  * The template uses a Bootstrap collapse + a chevron swap driven by
  * main.js; here it's plain React state (`collapse`/`show` classes are
  * kept so the copied dashboard.css and any CSS hooks still apply).
- * Star/uncomplete icons render inertly this stage (mutations = Stage 3).
+ * Stage 3: the star toggles optimistically and the uncomplete icon
+ * opens the "Mark as Not Completed" confirm modal, like the template.
  *
  * `autoOpen` mirrors filters.js: selecting a secondary_label that
  * matches completed tasks expands the section automatically.
@@ -81,6 +84,10 @@ function CompletedTaskCard({
   labelColors: Map<string, string>;
 }) {
   const completed = formatShortDate(task.completed);
+  const [confirming, setConfirming] = useState(false);
+  const toggleStar = useToggleStar();
+  const uncompleteTask = useUncompleteTask();
+
   return (
     <div
       className="card task-card mb-1 border-0 bg-light"
@@ -113,7 +120,12 @@ function CompletedTaskCard({
           <div className="d-flex align-items-center gap-2">
             <span
               className={`star-btn${task.is_starred ? ' starred' : ''}`}
+              role="button"
               title={task.is_starred ? 'Unstar' : 'Star'}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleStar.mutate(task.task_id);
+              }}
             >
               <i
                 className={`bi ${task.is_starred ? 'bi-star-fill' : 'bi-star'}`}
@@ -121,13 +133,36 @@ function CompletedTaskCard({
             </span>
             <span
               className="uncomplete-btn"
-              title="Mark as not completed (available in a later stage)"
+              role="button"
+              title="Mark as not completed"
+              onClick={(event) => {
+                event.stopPropagation();
+                setConfirming(true);
+              }}
             >
               <i className="bi bi-arrow-counterclockwise" />
             </span>
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        show={confirming}
+        title="Mark as Not Completed"
+        confirmLabel="Mark as Not Completed"
+        confirmIcon="arrow-counterclockwise"
+        confirmClassName="btn-primary"
+        busy={uncompleteTask.isPending}
+        onClose={() => setConfirming(false)}
+        onConfirm={() =>
+          uncompleteTask.mutate(task.task_id, {
+            onSuccess: () => setConfirming(false),
+          })
+        }
+      >
+        <p>Are you sure you want to mark this task as not completed?</p>
+        <p className="fw-bold">{task.title}</p>
+      </ConfirmModal>
     </div>
   );
 }

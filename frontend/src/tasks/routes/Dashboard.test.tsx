@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Dashboard from './Dashboard';
-import { apiGet } from '../../shared/api/client';
+import { apiGet, apiPost } from '../../shared/api/client';
+import { clearToasts } from '../toasts';
 import type { DashboardOut, TaskOut } from '../api';
 
 vi.mock('../../shared/api/client', () => ({
@@ -13,6 +14,7 @@ vi.mock('../../shared/api/client', () => ({
 }));
 
 const mockedApiGet = vi.mocked(apiGet);
+const mockedApiPost = vi.mocked(apiPost);
 
 function makeTask(overrides: Partial<TaskOut> = {}): TaskOut {
   return {
@@ -62,6 +64,8 @@ function renderDashboard(initialEntry = '/') {
 
 beforeEach(() => {
   mockedApiGet.mockReset();
+  mockedApiPost.mockReset();
+  clearToasts();
 });
 
 describe('Dashboard', () => {
@@ -132,5 +136,103 @@ describe('Dashboard', () => {
     expect(
       loginLinks.some((l) => l.getAttribute('href')?.includes('/login/?next=')),
     ).toBe(true);
+  });
+
+  it('flips the star optimistically and posts toggle-star', async () => {
+    // Keep the mutation in flight so the optimistic state stays.
+    mockedApiPost.mockReturnValue(new Promise(() => {}));
+    mockedApiGet.mockResolvedValue(
+      makeDashboard({ tasks: [makeTask({ task_id: 'a', title: 'Star me' })] }),
+    );
+    const { container } = renderDashboard();
+    const starBtn = (await screen.findByText('Star me'))
+      .closest('.task-container')!
+      .querySelector('.star-btn')!;
+    expect(starBtn).not.toHaveClass('starred');
+    fireEvent.click(starBtn);
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/tasks/task/a/toggle-star/',
+      ),
+    );
+    // Optimistic cache patch flips the icon before the server replies.
+    expect(container.querySelector('.star-btn')).toHaveClass('starred');
+    expect(container.querySelector('.bi-star-fill')).not.toBeNull();
+  });
+
+  it('creates a task from the floating + button modal', async () => {
+    mockedApiPost.mockResolvedValue({ success: true, task_id: 'new-1' });
+    mockedApiGet.mockResolvedValue(makeDashboard());
+    renderDashboard('/?list=list-1');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create new task' }),
+    );
+    expect(await screen.findByText('Create New Task')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Title/), {
+      target: { value: 'New chore' },
+    });
+    fireEvent.change(screen.getByLabelText(/Notes/), {
+      target: { value: 'soon' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Task' }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith('/api/tasks/task/create/', {
+        title: 'New chore',
+        notes: 'soon',
+        is_starred: false,
+        task_list_id: 'list-1',
+        label_ids: [],
+      }),
+    );
+  });
+
+  it('warns instead of submitting a blank task title', async () => {
+    mockedApiGet.mockResolvedValue(makeDashboard());
+    renderDashboard();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create new task' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Create Task' }));
+    expect(
+      await screen.findByText('Please enter a task title'),
+    ).toBeInTheDocument();
+    expect(mockedApiPost).not.toHaveBeenCalled();
+  });
+
+  it('posts divider/create for the Add Divider burger item', async () => {
+    mockedApiPost.mockResolvedValue({ success: true, task_id: 'div-1' });
+    mockedApiGet.mockResolvedValue(
+      makeDashboard({
+        task_lists: [{ list_id: 'list-1', title: 'Groceries' }],
+      }),
+    );
+    renderDashboard();
+    await screen.findByText('No tasks found');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }));
+    fireEvent.click(screen.getByRole('button', { name: /Add Divider/ }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith('/api/tasks/divider/create/', {
+        task_list_id: 'list-1',
+        is_starred: false,
+      }),
+    );
+  });
+
+  it('posts process-labels and shows the stats toast', async () => {
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      stats: { processed: 3, moved: 1, starred: 1, errors: 0 },
+    });
+    mockedApiGet.mockResolvedValue(makeDashboard());
+    renderDashboard();
+    await screen.findByText('No tasks found');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }));
+    fireEvent.click(screen.getByRole('button', { name: /Process Labels/ }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith('/api/tasks/process-labels/'),
+    );
+    expect(
+      await screen.findByText(/processed: 3, moved: 1/),
+    ).toBeInTheDocument();
   });
 });
