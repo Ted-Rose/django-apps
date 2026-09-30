@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 // One entry per Django app. Output goes to repo-root frontend_dist/,
@@ -24,5 +24,9 @@ export default defineConfig({
     proxy: {
       '^/(?!static/|@vite|src/|node_modules/)': 'http://localhost:8000',
     },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
   },
 });
