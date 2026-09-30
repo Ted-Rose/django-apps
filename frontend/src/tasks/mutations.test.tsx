@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   useCreateDivider,
   usePermanentDeleteTask,
+  useReorderTasks,
   useRestoreTask,
   useSync,
   useUnarchiveTask,
@@ -307,6 +308,137 @@ describe('useUncompleteTask optimistic insert', () => {
     });
     await waitFor(() =>
       expect(taskIds(queryClient)).toEqual(['a', 'b', 'done']),
+    );
+  });
+});
+
+describe('useReorderTasks', () => {
+  const dashParams = { list: 'list-1', label: null, order: 'order_asc' };
+
+  function mountReorder(dashboard: DashboardOut) {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    queryClient.setQueryData(['dashboard', dashParams], dashboard);
+    const hook = renderHook(() => useReorderTasks(), {
+      wrapper: makeWrapper(queryClient),
+    });
+    return { queryClient, result: hook.result };
+  }
+
+  it('posts the single midpoint update to the dashboard endpoint', async () => {
+    mockedApiPost.mockResolvedValue({ success: true });
+    const { result } = mountReorder(makeDashboard());
+    await act(() =>
+      result.current.mutateAsync({
+        updates: [{ task_id: 'a', position: 2.5 }],
+        starredView: false,
+        taskListId: 'list-1',
+      }),
+    );
+    expect(mockedApiPost).toHaveBeenCalledWith('/api/tasks/tasks/reorder/', {
+      updates: [{ task_id: 'a', position: 2.5 }],
+      task_list_id: 'list-1',
+    });
+  });
+
+  it('uses the starred endpoint and drops task_list_id in the starred view', async () => {
+    mockedApiPost.mockResolvedValue({ success: true });
+    const { result } = mountReorder(makeDashboard());
+    await act(() =>
+      result.current.mutateAsync({
+        updates: [{ task_id: 'a', position: 1 }],
+        starredView: true,
+        taskListId: 'list-1',
+      }),
+    );
+    expect(mockedApiPost).toHaveBeenCalledWith('/api/tasks/starred/reorder/', {
+      updates: [{ task_id: 'a', position: 1 }],
+    });
+  });
+
+  it('optimistically reorders the cached task list', async () => {
+    // Keep the POST in flight so the optimistic order stays visible.
+    mockedApiPost.mockReturnValue(new Promise(() => {}));
+    const { queryClient, result } = mountReorder(
+      makeDashboard({
+        tasks: [
+          makeTask({ task_id: 'a', task_order: 1 }),
+          makeTask({ task_id: 'b', task_order: 2 }),
+          makeTask({ task_id: 'c', task_order: 3 }),
+        ],
+      }),
+    );
+    await act(async () => {
+      result.current.mutate({
+        updates: [{ task_id: 'c', position: 0.5 }],
+        order: ['c', 'a', 'b'],
+        positions: { c: 0.5 },
+        starredView: false,
+      });
+    });
+    const cached = queryClient.getQueryData<DashboardOut>([
+      'dashboard',
+      dashParams,
+    ])!;
+    expect(cached.tasks.map((t) => t.task_id)).toEqual(['c', 'a', 'b']);
+    expect(cached.tasks[0].task_order).toBe(0.5);
+  });
+
+  it('rolls back and toasts on failure', async () => {
+    mockedApiPost.mockRejectedValue(
+      new ApiError('Server error', 500, '', { detail: 'nope' }),
+    );
+    const { queryClient, result } = mountReorder(
+      makeDashboard({
+        tasks: [makeTask({ task_id: 'a' }), makeTask({ task_id: 'b' })],
+      }),
+    );
+    const toasts = renderHook(() => useToasts());
+    await act(() =>
+      result.current
+        .mutateAsync({
+          updates: [{ task_id: 'b', position: 0 }],
+          order: ['b', 'a'],
+          starredView: false,
+        })
+        .catch(() => undefined),
+    );
+    const cached = queryClient.getQueryData<DashboardOut>([
+      'dashboard',
+      dashParams,
+    ])!;
+    expect(cached.tasks.map((t) => t.task_id)).toEqual(['a', 'b']);
+    await waitFor(() =>
+      expect(
+        toasts.result.current.some(
+          (t) => t.kind === 'warning' && t.text.includes('task order'),
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('treats a 409 position_conflict as a refresh, not a failure toast', async () => {
+    mockedApiPost.mockRejectedValue(
+      new ApiError('Conflict', 409, '', { error: 'position_conflict' }),
+    );
+    const { result } = mountReorder(makeDashboard());
+    const toasts = renderHook(() => useToasts());
+    await act(() =>
+      result.current
+        .mutateAsync({
+          updates: [{ task_id: 'b', position: 0 }],
+          starredView: false,
+        })
+        .catch(() => undefined),
+    );
+    await waitFor(() =>
+      expect(
+        toasts.result.current.some((t) => t.text.includes('conflicted')),
+      ).toBe(true),
     );
   });
 });

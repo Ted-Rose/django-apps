@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Dropdown from '../../shared/components/Dropdown';
+import { actionHistory } from '../actionHistory';
 import type { LabelOut, LabelRef, TaskOut } from '../api';
 import {
   useArchiveTask,
@@ -8,9 +11,13 @@ import {
   useDeleteTask,
   useToggleStar,
 } from '../mutations';
+import { noteCardPressStart, shouldSuppressTaskClick } from '../reorder';
 import { formatFullDate, truncateWords } from '../utils';
 import ConfirmModal from './ConfirmModal';
 import TaskFormModal from './TaskFormModal';
+
+/** task_card.html's preset ranks for the order-badge dropdown. */
+const ORDER_PRESETS = [1, 5, 10, 15, 20, 50];
 
 /**
  * React port of components/dashboard/task_card.html.
@@ -19,7 +26,10 @@ import TaskFormModal from './TaskFormModal';
  * the star toggles optimistically, and the three-dots menu exposes
  * Edit (title/notes/labels modal — the fields task_detail.html edits),
  * Archive and Delete (confirm modal, like the template's confirm()).
- * The order-presets dropdown stays inert until Stage 4 (reorder).
+ * Stage 4: the card is a dnd-kit sortable row (`.task-content` is the
+ * drag handle, like SortableJS's `handle` option), the order badge
+ * offers the same preset ranks `setTaskOrder` used, and the mutation
+ * clicks record undoable actions in the localStorage history store.
  */
 interface TaskCardProps {
   task: TaskOut;
@@ -31,6 +41,10 @@ interface TaskCardProps {
   labels?: LabelOut[];
   /** Position field depends on the view (dashboard vs starred). */
   starredView?: boolean;
+  /** Drag-to-reorder is active (manual order modes only). */
+  draggable?: boolean;
+  /** Order-badge preset click (task_actions.js setTaskOrder). */
+  onSetRank?: (rank: number) => void;
 }
 
 function LabelBadge({
@@ -56,6 +70,8 @@ export function TaskCard({
   labelColors,
   labels = [],
   starredView = false,
+  draggable = false,
+  onSetRank,
 }: TaskCardProps) {
   const orderValue = starredView ? task.starred_order : task.task_order;
   const due = formatFullDate(task.due);
@@ -65,6 +81,15 @@ export function TaskCard({
   const archiveTask = useArchiveTask();
   const deleteTask = useDeleteTask();
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.task_id, disabled: !draggable });
+
   const [confirming, setConfirming] = useState<'complete' | 'delete' | null>(
     null,
   );
@@ -72,11 +97,23 @@ export function TaskCard({
 
   return (
     <div
-      className="task-container d-flex mb-2"
+      ref={setNodeRef}
+      className={`task-container d-flex mb-2${isDragging ? ' sortable-chosen' : ''}`}
       data-task-id={task.task_id}
       data-position={orderValue ?? ''}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        position: 'relative',
+        zIndex: isDragging ? 5 : undefined,
+      }}
     >
-      <div className="card task-card flex-grow-1 task-content">
+      <div
+        className="card task-card flex-grow-1 task-content"
+        onPointerDownCapture={noteCardPressStart}
+        {...(draggable ? attributes : {})}
+        {...(draggable ? listeners : {})}
+      >
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-start">
             <div className="flex-grow-1">
@@ -98,6 +135,12 @@ export function TaskCard({
                   title={task.is_starred ? 'Unstar' : 'Star'}
                   onClick={(event) => {
                     event.stopPropagation();
+                    // task_actions.js toggleStar records before POSTing.
+                    actionHistory.recordAction({
+                      type: 'TOGGLE_STAR',
+                      taskId: task.task_id,
+                      previousState: task.is_starred,
+                    });
                     toggleStar.mutate(task.task_id);
                   }}
                 >
@@ -107,7 +150,26 @@ export function TaskCard({
                     }`}
                   />
                 </span>
-                <Link to={`/task/${task.task_id}`} className="task-title-link">
+                <Link
+                  to={`/task/${task.task_id}`}
+                  className="task-title-link"
+                  onClick={(event) => {
+                    // reorder.js swallowed link clicks during/right
+                    // after a drag; otherwise it saved the referrer.
+                    if (shouldSuppressTaskClick()) {
+                      event.preventDefault();
+                      return;
+                    }
+                    try {
+                      localStorage.setItem(
+                        'taskListReferrer',
+                        window.location.pathname + window.location.search,
+                      );
+                    } catch {
+                      // Storage unavailable — non-fatal.
+                    }
+                  }}
+                >
                   {task.title}
                 </Link>
                 {task.needs_push && (
@@ -176,6 +238,11 @@ export function TaskCard({
                     href="#"
                     onClick={(event) => {
                       event.preventDefault();
+                      actionHistory.recordAction({
+                        type: 'ARCHIVE_TASK',
+                        taskId: task.task_id,
+                        taskTitle: task.title,
+                      });
                       archiveTask.mutate(task.task_id);
                     }}
                   >
@@ -200,13 +267,38 @@ export function TaskCard({
         </div>
       </div>
       <div className="task-order-badge ms-2">
-        <button
-          className="btn btn-sm btn-outline-secondary order-btn"
-          type="button"
-          title="Change order (available in a later stage)"
-        >
-          {position}
-        </button>
+        {onSetRank ? (
+          <Dropdown
+            label={<>{position}</>}
+            buttonClassName="btn btn-sm btn-outline-secondary order-btn"
+            ariaLabel="Change order"
+            menuClassName="dropdown-menu-end"
+          >
+            {ORDER_PRESETS.map((rank) => (
+              <li key={rank}>
+                <a
+                  className="dropdown-item"
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onSetRank(rank);
+                  }}
+                >
+                  {rank}
+                </a>
+              </li>
+            ))}
+          </Dropdown>
+        ) : (
+          <button
+            className="btn btn-sm btn-outline-secondary order-btn"
+            type="button"
+            title="Change order"
+          >
+            {position}
+          </button>
+        )}
       </div>
 
       <ConfirmModal
@@ -217,11 +309,16 @@ export function TaskCard({
         confirmClassName="btn-success"
         busy={completeTask.isPending}
         onClose={() => setConfirming(null)}
-        onConfirm={() =>
+        onConfirm={() => {
+          actionHistory.recordAction({
+            type: 'COMPLETE_TASK',
+            taskId: task.task_id,
+            taskTitle: task.title,
+          });
           completeTask.mutate(task.task_id, {
             onSuccess: () => setConfirming(null),
-          })
-        }
+          });
+        }}
       >
         <p>Are you sure you want to mark this task as completed?</p>
         <p className="fw-bold">{task.title}</p>
@@ -235,11 +332,16 @@ export function TaskCard({
         confirmClassName="btn-danger"
         busy={deleteTask.isPending}
         onClose={() => setConfirming(null)}
-        onConfirm={() =>
+        onConfirm={() => {
+          actionHistory.recordAction({
+            type: 'DELETE_TASK',
+            taskId: task.task_id,
+            taskTitle: task.title,
+          });
           deleteTask.mutate(task.task_id, {
             onSuccess: () => setConfirming(null),
-          })
-        }
+          });
+        }}
       >
         <p>Move this task to trash?</p>
         <p className="fw-bold">{task.title}</p>

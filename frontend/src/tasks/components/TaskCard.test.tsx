@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TaskCard } from './TaskCard';
 import DividerCard from './DividerCard';
 import { apiPost } from '../../shared/api/client';
+import { resetActionHistory } from '../actionHistory';
 import { clearToasts } from '../toasts';
 import type { TaskOut } from '../api';
 
@@ -70,6 +71,7 @@ function renderCard(task: TaskOut) {
 beforeEach(() => {
   mockedApiPost.mockReset();
   clearToasts();
+  resetActionHistory();
 });
 
 describe('TaskCard', () => {

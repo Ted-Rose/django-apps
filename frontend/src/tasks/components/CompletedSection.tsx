@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { actionHistory } from '../actionHistory';
 import type { TaskOut } from '../api';
 import { useToggleStar, useUncompleteTask } from '../mutations';
 import { formatShortDate } from '../utils';
@@ -124,6 +125,11 @@ function CompletedTaskCard({
               title={task.is_starred ? 'Unstar' : 'Star'}
               onClick={(event) => {
                 event.stopPropagation();
+                actionHistory.recordAction({
+                  type: 'TOGGLE_STAR',
+                  taskId: task.task_id,
+                  previousState: task.is_starred,
+                });
                 toggleStar.mutate(task.task_id);
               }}
             >
@@ -154,11 +160,16 @@ function CompletedTaskCard({
         confirmClassName="btn-primary"
         busy={uncompleteTask.isPending}
         onClose={() => setConfirming(false)}
-        onConfirm={() =>
+        onConfirm={() => {
+          actionHistory.recordAction({
+            type: 'UNCOMPLETE_TASK',
+            taskId: task.task_id,
+            taskTitle: task.title,
+          });
           uncompleteTask.mutate(task.task_id, {
             onSuccess: () => setConfirming(false),
-          })
-        }
+          });
+        }}
       >
         <p>Are you sure you want to mark this task as not completed?</p>
         <p className="fw-bold">{task.title}</p>

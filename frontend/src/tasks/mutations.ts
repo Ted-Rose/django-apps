@@ -31,6 +31,12 @@ import type {
   TaskOut,
   TaskUpdateIn,
 } from './api';
+import {
+  orderTasksByIds,
+  positionField,
+  reorderUrl,
+  type ReorderUpdate,
+} from './reorder';
 import { pushToast } from './toasts';
 
 const DASHBOARD_KEY = ['dashboard'] as const;
@@ -415,6 +421,87 @@ export function useDeleteDivider() {
     onError: (error) =>
       pushToast(`Failed to delete divider: ${errorDetail(error)}`, 'warning'),
     onSettled: () => invalidateDashboards(queryClient),
+  });
+}
+
+export interface ReorderVariables {
+  /** Payload posted verbatim — one midpoint entry for a drop, or the
+   *  sequential 1..n set for an undo/redo full-order restore. */
+  updates: ReorderUpdate[];
+  /** Full task_id order to optimistically apply to the cached
+   *  `tasks` arrays (orderTasksByIds — ids missing from the list are
+   *  skipped, unlisted cached rows keep their slots at the top). */
+  order?: string[];
+  /** Cache position writes keyed by task_id — the moved task's new
+   *  midpoint, or the sequential positions of a restore. */
+  positions?: Record<string, number>;
+  /** Starred view posts /starred/reorder/ and writes starred_order. */
+  starredView: boolean;
+  /** Sent as task_list_id only on the dashboard endpoint (the old
+   *  postReorderUpdates forwarded the ?list= filter). */
+  taskListId?: string | null;
+}
+
+/**
+ * reorder_tasks / reorder_starred (utils.js postReorderUpdates +
+ * reorder.js onEnd + reorderTasksToOrder). Optimistic: patches every
+ * cached dashboard's `tasks` order. Unlike the other mutations this
+ * does NOT invalidate on success — the optimistic order already IS
+ * the server's resulting order, and a mid-flight refetch could
+ * clobber a second in-progress drag. On error the snapshots roll
+ * back and a refetch restores the authoritative order (the old code
+ * reloaded the page on position_conflict).
+ */
+export function useReorderTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: ReorderVariables) => {
+      const body: Record<string, unknown> = { updates: vars.updates };
+      if (!vars.starredView && vars.taskListId) {
+        body.task_list_id = vars.taskListId;
+      }
+      return apiPost<MutationResult>(reorderUrl(vars.starredView), body);
+    },
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: DASHBOARD_KEY });
+      const snapshots = patchDashboards(queryClient, (data) => {
+        const tasks = vars.order
+          ? orderTasksByIds(data.tasks, vars.order)
+          : data.tasks;
+        if (!vars.positions) return { ...data, tasks };
+        const field = positionField(vars.starredView);
+        return {
+          ...data,
+          tasks: tasks.map((task) =>
+            vars.positions && task.task_id in vars.positions
+              ? { ...task, [field]: vars.positions[task.task_id] }
+              : task,
+          ),
+        };
+      });
+      return { snapshots };
+    },
+    onError: (error, _vars, context) => {
+      restoreDashboards(queryClient, context?.snapshots);
+      const conflict =
+        error instanceof ApiError &&
+        (error.status === 409 ||
+          (typeof error.body === 'object' &&
+            error.body !== null &&
+            (error.body as { error?: unknown }).error === 'position_conflict'));
+      if (conflict) {
+        pushToast(
+          'Order conflicted with another change — refreshing',
+          'warning',
+        );
+      } else {
+        pushToast(
+          `Failed to save task order: ${errorDetail(error)}`,
+          'warning',
+        );
+      }
+      invalidateDashboards(queryClient);
+    },
   });
 }
 
