@@ -23,7 +23,6 @@ from google_tasks.services import (
     get_tasks_service
 )
 from google_api.utils import get_user_credentials
-from django_apps.views import spa_shell
 
 # Maximum number of position updates accepted by a single reorder
 # request (task lists exceed bible's 100-note scale).
@@ -1839,13 +1838,3 @@ def search_tasks(request):
     }
 
     return render(request, 'google_tasks/search.html', context)
-
-
-def react_app(request, subpath=''):
-    """React SPA shell — strangler mount at /tasks/app/.
-
-    The template UI keeps serving /tasks/ until the cutover stage.
-    `subpath` is swallowed so client-side routes under /tasks/app/
-    all render the shell.
-    """
-    return spa_shell(request, entry='tasks', title='Tasks')

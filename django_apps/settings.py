@@ -166,7 +166,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'corsheaders',
     'django.contrib.staticfiles',
-    'django_vite',
     'sslserver',
     'google_api',
     'google_tasks',
@@ -253,10 +252,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-    os.path.join(BASE_DIR, 'frontend_dist'),
-]
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles', 'static')
 # collectstatic silently fails in Docker build (no private_settings.json
 # available at build time), so STATIC_ROOT stays empty. WHITENOISE_USE_FINDERS
@@ -264,20 +260,6 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles', 'static')
 # which IS committed to git and present in the container.
 # Only use finders in DEBUG mode for better production performance
 WHITENOISE_USE_FINDERS = DEBUG
-
-# React frontend (frontend/, built by Vite into frontend_dist/).
-# VITE_DEV=1 + `npm run dev --prefix frontend` enables the dev
-# server + HMR; otherwise entries resolve via manifest.json.
-DJANGO_VITE = {
-    'default': {
-        'dev_mode': DEBUG and os.environ.get('VITE_DEV') == '1',
-        'dev_server_port': 5173,
-        'static_url_prefix': '',
-        'manifest_path': os.path.join(
-            BASE_DIR, 'frontend_dist', 'manifest.json'
-        ),
-    }
-}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

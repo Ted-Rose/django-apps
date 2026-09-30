@@ -17,16 +17,6 @@ fi
 
 python3 django_apps/console_tasks/build.py create_ca_pem create_private_settings_json
 
-# Build the React frontend → frontend_dist/ (a STATICFILES_DIRS entry,
-# so collectstatic ships it to the CDN below).
-# --include=dev: Vercel's build env may set NODE_ENV=production, which
-# would skip devDependencies (vite/tsc) and break the build below.
-npm ci --prefix frontend --include=dev
-npm run build --prefix frontend
-# @vercel/python bundles every file reachable at build time into the
-# function; node_modules (~67MB) would blow the 15mb maxLambdaSize.
-rm -rf frontend/node_modules
-
 # Collect static files
 python3 manage.py collectstatic --noinput
 

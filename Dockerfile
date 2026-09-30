@@ -1,12 +1,3 @@
-# React frontend — built in a node stage so the final image has no
-# node_modules; only frontend_dist/ is copied over.
-FROM node:22-slim AS frontend
-WORKDIR /frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -24,7 +15,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 COPY . .
-COPY --from=frontend /frontend_dist /app/frontend_dist
 
 # collectstatic needs settings to import, which requires
 # private_settings.json (dockerignored). Create a build-time dummy,
