@@ -167,6 +167,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django.contrib.staticfiles',
     'django_vite',
+    'ninja',
     'sslserver',
     'google_api',
     'google_tasks',
