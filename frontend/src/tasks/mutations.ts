@@ -10,6 +10,10 @@
  * archive, delete and the divider/label-processing ops invalidate the
  * dashboard queries on settle instead — the refetched DashboardOut
  * carries the authoritative state (incl. needs_push).
+ *
+ * The unarchive/restore/permanent-delete hooks are scaffolded ahead
+ * of their UI: Stage 5's archived/trash pages call them, no component
+ * imports them yet.
  */
 import {
   useMutation,
@@ -91,6 +95,67 @@ function taskUrl(taskId: string, action: string): string {
   return `/api/tasks/task/${encodeURIComponent(taskId)}/${action}/`;
 }
 
+/** Postgres-style ordering on a nullable key (nulls last/first). */
+function compareNullable(
+  a: number | string | null | undefined,
+  b: number | string | null | undefined,
+  dir: 1 | -1,
+  nullsLast: boolean,
+): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return nullsLast ? 1 : -1;
+  if (b == null) return nullsLast ? -1 : 1;
+  if (a === b) return 0;
+  return (a < b ? -1 : 1) * dir;
+}
+
+/**
+ * Comparator reproducing the dashboard's server-side ordering of the
+ * active list (views.py applies the same keys). `created` is not part
+ * of TaskOut, so created_* sorts return null — callers fall back to
+ * appending and the refetch on settle places the row correctly.
+ */
+function activeTaskComparator(
+  orderBy: string,
+): ((a: TaskOut, b: TaskOut) => number) | null {
+  switch (orderBy) {
+    case 'order_asc':
+      // task_order ASC NULLS LAST, updated ASC NULLS LAST.
+      return (a, b) =>
+        compareNullable(a.task_order, b.task_order, 1, true) ||
+        compareNullable(a.updated, b.updated, 1, true);
+    case 'order_desc':
+      // task_order DESC NULLS LAST, updated DESC NULLS FIRST.
+      return (a, b) =>
+        compareNullable(a.task_order, b.task_order, -1, true) ||
+        compareNullable(a.updated, b.updated, -1, false);
+    case 'completed_first':
+    case 'completed_last':
+      // Active tasks all have completed=null, so the effective key
+      // is the `-updated` tie-break — newest first.
+      return (a, b) => compareNullable(a.updated, b.updated, -1, false);
+    default:
+      return null;
+  }
+}
+
+/**
+ * Insert `task` into the active `tasks` array where `orderBy` (the
+ * DashboardOut.order_by echo of ?order=) puts it. Unknown or
+ * unreproducible orderings append — settle-time refetch corrects.
+ */
+function insertActiveTask(
+  tasks: TaskOut[],
+  task: TaskOut,
+  orderBy: string,
+): TaskOut[] {
+  const cmp = activeTaskComparator(orderBy);
+  if (!cmp) return [...tasks, task];
+  const index = tasks.findIndex((t) => cmp(task, t) < 0);
+  if (index === -1) return [...tasks, task];
+  return [...tasks.slice(0, index), task, ...tasks.slice(index)];
+}
+
 /** toggleStar — flips is_starred optimistically (task_actions.js). */
 export function useToggleStar() {
   const queryClient = useQueryClient();
@@ -152,7 +217,12 @@ export function useCompleteTask() {
   });
 }
 
-/** uncompleteTask — optimistic move back into the active list. */
+/**
+ * uncompleteTask — optimistic move back into the active list. The
+ * server keeps the task's task_order, so the row re-enters where the
+ * current ordering places it (created_* sorts append — `created` is
+ * not cached — and settle-time refetch corrects).
+ */
 export function useUncompleteTask() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -163,12 +233,17 @@ export function useUncompleteTask() {
       const snapshots = patchDashboards(queryClient, (data) => {
         const task = data.completed.find((t) => t.task_id === taskId);
         if (!task) return data;
+        const restored: TaskOut = {
+          ...task,
+          status: 'needsAction',
+          completed: null,
+          // Mirrors services.py stamping `updated` from Google's
+          // response — keeps -updated tie-breaks placing it first.
+          updated: new Date().toISOString(),
+        };
         return {
           ...data,
-          tasks: [
-            { ...task, status: 'needsAction', completed: null },
-            ...data.tasks,
-          ],
+          tasks: insertActiveTask(data.tasks, restored, data.order_by),
           completed: data.completed.filter((t) => t.task_id !== taskId),
         };
       });
@@ -206,6 +281,55 @@ export function useDeleteTask() {
   });
 }
 
+/**
+ * unarchiveTask — returns an archived task to the main view.
+ * Wired by Stage 5's archived page; refetch moves the row.
+ */
+export function useUnarchiveTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) =>
+      apiPost<MutationResult>(taskUrl(taskId, 'unarchive')),
+    onError: (error) =>
+      pushToast(`Failed to unarchive task: ${errorDetail(error)}`, 'warning'),
+    onSettled: () => invalidateDashboards(queryClient),
+  });
+}
+
+/**
+ * restoreTask — restores a trashed task (clears is_deleted, flags
+ * needs_push so sync recreates it on Google). Wired by Stage 5's
+ * trash page; refetch removes the row from the trash list.
+ */
+export function useRestoreTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) =>
+      apiPost<MutationResult>(taskUrl(taskId, 'restore')),
+    onError: (error) =>
+      pushToast(`Failed to restore task: ${errorDetail(error)}`, 'warning'),
+    onSettled: () => invalidateDashboards(queryClient),
+  });
+}
+
+/**
+ * permanentDeleteTask — irreversible DB delete (trash page only).
+ * Wired by Stage 5; refetch removes the row.
+ */
+export function usePermanentDeleteTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) =>
+      apiPost<MutationResult>(taskUrl(taskId, 'permanent-delete')),
+    onError: (error) =>
+      pushToast(
+        `Failed to permanently delete task: ${errorDetail(error)}`,
+        'warning',
+      ),
+    onSettled: () => invalidateDashboards(queryClient),
+  });
+}
+
 /** createTask (create_task.js) — title/notes/labels/starred. */
 export function useCreateTask() {
   const queryClient = useQueryClient();
@@ -237,7 +361,14 @@ export function useUpdateTask() {
   });
 }
 
-/** createDivider (dividers.js) — needs a task_list_id (or starred). */
+/**
+ * createDivider (dividers.js) — two payload branches: list pages pass
+ * `{task_list_id, is_starred: false}`; the starred view passes
+ * `{is_starred: true}` with NO task_list_id (the view leaves
+ * task_list null and assigns starred_order = max+1). The starred
+ * caller lands with Stage 5's starred page — the payload shape is
+ * already valid DividerCreateIn.
+ */
 export function useCreateDivider() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -283,6 +414,21 @@ export function useDeleteDivider() {
       ),
     onError: (error) =>
       pushToast(`Failed to delete divider: ${errorDetail(error)}`, 'warning'),
+    onSettled: () => invalidateDashboards(queryClient),
+  });
+}
+
+/**
+ * sync (autosync.js "Sync Now") — failure reports via the shared
+ * toast store like every other mutation; the caller keeps rendering
+ * `isPending` for the in-progress state.
+ */
+export function useSync() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<MutationResult>('/api/tasks/sync/'),
+    onError: (error) =>
+      pushToast(`Sync failed: ${errorDetail(error)}`, 'warning'),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }

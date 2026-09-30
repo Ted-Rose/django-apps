@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
-import { apiPost } from '../../shared/api/client';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ApiError } from '../../shared/api/errors';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import useBootstrap from '../../shared/hooks/useBootstrap';
@@ -17,7 +11,7 @@ import TaskCard from '../components/TaskCard';
 import TaskFormModal from '../components/TaskFormModal';
 import TaskNavBar from '../components/TaskNavBar';
 import Toasts from '../components/Toasts';
-import { useCreateDivider, useProcessLabels } from '../mutations';
+import { useCreateDivider, useProcessLabels, useSync } from '../mutations';
 import { pushToast } from '../toasts';
 
 /**
@@ -40,7 +34,6 @@ export default function Dashboard() {
 
   const bootstrap = useBootstrap();
   const user = bootstrap.user ?? 'unknown';
-  const queryClient = useQueryClient();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', { list, label, order }],
@@ -49,10 +42,9 @@ export default function Dashboard() {
     placeholderData: keepPreviousData,
   });
 
-  const syncMutation = useMutation({
-    mutationFn: () => apiPost('/api/tasks/sync/'),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-  });
+  // Failure surfaces as a shared toast inside useSync; isPending
+  // drives the "Syncing…" menu label.
+  const syncMutation = useSync();
 
   const createDivider = useCreateDivider();
   const processLabels = useProcessLabels();
@@ -167,12 +159,6 @@ export default function Dashboard() {
       <div className="container-fluid px-2 py-4">
         {isPending && <LoadingSkeleton />}
         {isError && <ErrorState error={error} onRetry={() => refetch()} />}
-        {syncMutation.isError && (
-          <div className="alert alert-warning py-2" role="alert">
-            <i className="bi bi-exclamation-triangle" /> Sync failed — the task
-            list may be stale.
-          </div>
-        )}
         {data && (
           <>
             {data.tasks.length > 0 ? (
