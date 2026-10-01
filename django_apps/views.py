@@ -17,7 +17,7 @@ def home(request):
 # --- Progressive Web App (PWA) endpoints ---
 
 # Bump this to force clients to refresh the service worker cache.
-PWA_CACHE_VERSION = '7'
+PWA_CACHE_VERSION = '8'
 
 
 def manifest(request):
@@ -74,9 +74,7 @@ def _manifest_has_entry(manifest_path, entry_key):
         return False
 
 
-@login_required
-@ensure_csrf_cookie
-def spa_shell(request, entry, title=''):
+def _spa_shell(request, entry, title=''):
     """Render the shared React SPA shell for a Vite entry name.
 
     `entry` is the app folder under frontend/src/ (e.g. 'tasks' →
@@ -86,6 +84,10 @@ def spa_shell(request, entry, title=''):
     manifest), or in prod only when manifest.json exists and contains
     the entry key. Otherwise the page shows a diagnostic instead of
     crashing.
+
+    Undecorated on purpose: `spa_shell`/`react_app` wrap it with
+    login_required + ensure_csrf_cookie, while `react_app_public`
+    serves it to anonymous users (`bootstrap.user` is '' then).
     """
     if not SPA_ENTRY_RE.fullmatch(entry):
         raise Http404(f'Unknown SPA entry: {entry}')
@@ -108,7 +110,18 @@ def spa_shell(request, entry, title=''):
 
 
 @login_required
-def react_app(request, entry, title='', subpath=''):
+@ensure_csrf_cookie
+def spa_shell(request, entry, title=''):
+    """Login-required wrapper over `_spa_shell` (see its docstring).
+
+    Keeps the historical contract for the tasks/finance mounts:
+    anonymous users bounce to login and a CSRF cookie is set for the
+    session-authenticated API the SPA calls.
+    """
+    return _spa_shell(request, entry=entry, title=title)
+
+
+def _react_app(request, entry, title='', subpath=''):
     """React SPA shell shared by every app-level mount.
 
     Mount with functools.partial (or a thin wrapper) binding `entry`
@@ -128,7 +141,32 @@ def react_app(request, entry, title='', subpath=''):
     """
     if request.method not in ('GET', 'HEAD'):
         raise Http404
-    return spa_shell(request, entry=entry, title=title)
+    return _spa_shell(request, entry=entry, title=title)
+
+
+@login_required
+@ensure_csrf_cookie
+def react_app(request, entry, title='', subpath=''):
+    """Login-required wrapper over `_react_app` (see its docstring).
+
+    Same auth/CSRF contract as `spa_shell` — this is what the tasks
+    and finance mounts use.
+    """
+    return _react_app(request, entry=entry, title=title,
+                      subpath=subpath)
+
+
+def react_app_public(request, entry, title='', subpath=''):
+    """Public variant of `react_app` — no login bounce, no CSRF
+    cookie.
+
+    First used by tv_archive, whose page is public today; the API it
+    calls is GET-only (`auth=None`), so the CSRF cookie `react_app`
+    sets is irrelevant. `bootstrap.user` renders as '' for anonymous
+    visitors — any bootstrap consumer must tolerate that.
+    """
+    return _react_app(request, entry=entry, title=title,
+                      subpath=subpath)
 
 
 def app_redirect(request, base, subpath=''):

@@ -15,6 +15,7 @@ export default defineConfig({
       input: {
         tasks: 'src/tasks/main.tsx',
         finance: 'src/finance/main.tsx',
+        tv_archive: 'src/tv_archive/main.tsx',
       },
       output: {
         entryFileNames: '[name]/[name].[hash].js',

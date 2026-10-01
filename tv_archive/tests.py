@@ -1,7 +1,11 @@
 """API tests for /api/tv-arhivs/ (Stage 0 of the React rewrite):
 the anonymous-GET contract (``auth=None`` on the shared NinjaAPI),
 typed-param 422s, pagination shape, ordering determinism, each
-filter's semantics and the dropdown option lists."""
+filter's semantics and the dropdown option lists.
+
+Stage 1 adds SpaMountTests covering the public shell mount at
+/tv-arhivs/app/ (react_app_public) against the still-login-required
+/tasks/ mount."""
 import itertools
 from datetime import date
 
@@ -154,3 +158,46 @@ class ContentsApiTests(TestCase):
         self.assertEqual(body['channels'], ['ltv1_hd', 'ltv7_hd'])
         self.assertEqual(body['content_ratings'], ['TV-MA'])
         self.assertEqual(body['types'], ['movie', 'series'])
+
+
+class SpaMountTests(TestCase):
+    """Stage 1 strangler mount: /tv-arhivs/app* serves the React
+    shell publicly (react_app_public — no login bounce, no CSRF
+    cookie) while /tv-arhivs keeps rendering the template and
+    /tasks/ proves react_app stayed login-required."""
+
+    def test_anonymous_app_paths_render_the_shell(self):
+        for url in ('/tv-arhivs/app', '/tv-arhivs/app/',
+                    '/tv-arhivs/app/foo'):
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 200, url)
+            self.assertTemplateUsed(resp, 'spa_shell.html')
+            # Context check — the {% vite_asset %} tag itself only
+            # renders when a frontend_dist build exists locally.
+            self.assertEqual(
+                resp.context['vite_entry'], 'src/tv_archive/main.tsx'
+            )
+
+    def test_anonymous_shell_has_empty_bootstrap_user(self):
+        resp = self.client.get('/tv-arhivs/app/')
+        self.assertEqual(resp.context['bootstrap'], {'user': ''})
+        # Public variant: no CSRF cookie is set (the API is
+        # GET-only — react_app's ensure_csrf_cookie is irrelevant).
+        self.assertNotIn('csrftoken', resp.cookies)
+
+    def test_template_page_still_serves_tv_arhivs(self):
+        resp = self.client.get('/tv-arhivs')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, 'content_list.html')
+
+    def test_post_to_app_is_404(self):
+        """react_app's non-GET/HEAD → 404 rule holds publicly."""
+        resp = self.client.post('/tv-arhivs/app/')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_tasks_mount_still_requires_login(self):
+        """The shared react_app kept @login_required — anonymous
+        /tasks/ bounces to login rather than rendering a shell."""
+        resp = self.client.get('/tasks/')
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(resp['Location'].startswith('/login/'))
