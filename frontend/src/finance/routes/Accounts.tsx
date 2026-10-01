@@ -10,7 +10,8 @@ import { useShareAccount, useToggleBalanceCheck } from '../mutations';
 /**
  * React port of accounts.html — the account list with a per-row
  * balance-check toggle (each user's own UserAccountPreference, so
- * sharers get the button too) and an owner-only share form. The
+ * sharers get the button too) and an owner-only share icon that
+ * expands into an inline share form. The
  * "Connect Bank" button routes in-SPA to /connect.
  */
 export default function Accounts() {
@@ -68,12 +69,14 @@ export default function Accounts() {
 /**
  * One list-group row: display name + iban/institution/currency,
  * a "Shared by …" badge for non-owned accounts, the balance-check
- * toggle button, and (owners only) the inline share form.
+ * toggle button, and (owners only) a share icon that expands into
+ * the inline share form.
  */
 function AccountRow({ account }: { account: AccountOut }) {
   const toggle = useToggleBalanceCheck();
   const share = useShareAccount();
   const [username, setUsername] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
 
   const toggling = toggle.isPending && toggle.variables === account.id;
   const sharing = share.isPending && share.variables?.accountId === account.id;
@@ -116,45 +119,74 @@ function AccountRow({ account }: { account: AccountOut }) {
             )}{' '}
             Balance check
           </button>
-          {account.is_owner && (
-            <form
-              className="d-flex gap-1"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const trimmed = username.trim();
-                if (!trimmed) return;
-                share.mutate(
-                  { accountId: account.id, username: trimmed },
-                  { onSuccess: () => setUsername('') },
-                );
-              }}
-            >
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="Username"
-                aria-label="Username to share with"
-                required
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-              />
-              <button
-                type="submit"
-                className="btn btn-sm btn-outline-primary"
-                disabled={sharing}
+          {account.is_owner &&
+            (shareOpen ? (
+              <form
+                className="d-flex gap-1"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const trimmed = username.trim();
+                  if (!trimmed) return;
+                  share.mutate(
+                    { accountId: account.id, username: trimmed },
+                    {
+                      onSuccess: () => {
+                        setUsername('');
+                        setShareOpen(false);
+                      },
+                    },
+                  );
+                }}
               >
-                {sharing ? (
-                  <span
-                    className="spinner-border spinner-border-sm"
-                    role="status"
-                  />
-                ) : (
-                  <i className="bi bi-share" />
-                )}{' '}
-                Share
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  placeholder="Username"
+                  aria-label="Username to share with"
+                  required
+                  autoFocus
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-sm btn-outline-primary"
+                  disabled={sharing}
+                >
+                  {sharing ? (
+                    <span
+                      className="spinner-border spinner-border-sm"
+                      role="status"
+                    />
+                  ) : (
+                    <i className="bi bi-share" />
+                  )}{' '}
+                  Share
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  title="Cancel"
+                  aria-label="Cancel sharing"
+                  onClick={() => {
+                    setShareOpen(false);
+                    setUsername('');
+                  }}
+                >
+                  <i className="bi bi-x-lg" />
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary"
+                title="Share account"
+                aria-label="Share account"
+                onClick={() => setShareOpen(true)}
+              >
+                <i className="bi bi-share" />
               </button>
-            </form>
-          )}
+            ))}
         </div>
       </div>
     </div>

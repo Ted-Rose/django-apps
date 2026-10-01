@@ -121,9 +121,12 @@ describe('Accounts', () => {
       message: 'Account shared with bob.',
     });
     renderAccounts();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Share account' }),
+    );
     const input = await screen.findByLabelText('Username to share with');
     fireEvent.change(input, { target: { value: 'bob' } });
-    fireEvent.click(screen.getByRole('button', { name: /Share/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/accounts/5/share/',
@@ -133,8 +136,13 @@ describe('Accounts', () => {
     expect(
       await screen.findByText('Account shared with bob.'),
     ).toBeInTheDocument();
-    // The field resets after a successful share.
-    expect(input).toHaveValue('');
+    // The form collapses after a successful share.
+    expect(
+      screen.queryByLabelText('Username to share with'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Share account' }),
+    ).toBeInTheDocument();
   });
 
   it('hides the share form on shared (non-owned) accounts', async () => {
