@@ -28,3 +28,10 @@ urlpatterns = [
     path('', include('bible_research.urls', namespace='bible_research')),
     path('', views.home),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+if settings.DEBUG:
+    # Chrome DevTools probes this on every page load while open.
+    urlpatterns.append(path(
+        '.well-known/appspecific/com.chrome.devtools.json',
+        views.chrome_devtools_probe,
+    ))

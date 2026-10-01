@@ -4,7 +4,7 @@ import re
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -50,6 +50,13 @@ def service_worker(request):
 def offline(request):
     """Fallback page shown by the service worker when the user is offline."""
     return render(request, 'pwa/offline.html')
+
+
+def chrome_devtools_probe(request):
+    """Chrome DevTools GETs this while open to detect workspace
+    integration — an empty object keeps the 404 WARNING noise out of
+    the runserver log. Routed only when DEBUG."""
+    return JsonResponse({})
 
 
 # SPA entry names map to folders under frontend/src/ and keys in
