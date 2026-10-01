@@ -18,12 +18,13 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { apiPost } from '../shared/api/client';
-import { errorDetail } from '../shared/api/errors';
+import { ApiError, errorDetail } from '../shared/api/errors';
 import { pushToast } from '../shared/toasts';
 import type {
   CategorySaveIn,
   ConnectIn,
   ConnectOut,
+  LimitSaveIn,
   MessageOut,
   MoveRuleIn,
   RefreshOut,
@@ -297,6 +298,55 @@ export function useDeleteCategory() {
     },
     onError: (error) =>
       pushToast(`Failed to delete category: ${errorDetail(error)}`, 'warning'),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/limits/save/ — create (`update_or_create` on
+ * account+user+category) or edit (`limit_id`) a TransactionLimit,
+ * validated server-side by the same TransactionLimitForm the
+ * template view uses. A second limit on the same
+ * account+category during an edit comes back as a 409 — toast its
+ * `detail` verbatim, like the template's `messages.error`.
+ */
+export function useSaveLimit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: LimitSaveIn) =>
+      apiPost<MessageOut>('/api/finance/limits/save/', payload),
+    onSuccess: (data) => {
+      if (data?.message) {
+        pushToast(data.message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        error instanceof ApiError && error.status === 409
+          ? errorDetail(error)
+          : `Failed to save limit: ${errorDetail(error)}`,
+        'warning',
+      ),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/limits/{id}/delete/ — owner/user-scoped delete;
+ * the template version was a per-row form POST + redirect.
+ */
+export function useDeleteLimit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (limitId: number) =>
+      apiPost<MessageOut>(`/api/finance/limits/${limitId}/delete/`),
+    onSuccess: (data) => {
+      if (data?.message) {
+        pushToast(data.message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(`Failed to delete limit: ${errorDetail(error)}`, 'warning'),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
