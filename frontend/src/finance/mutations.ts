@@ -46,8 +46,9 @@ function invalidateFinance(queryClient: QueryClient) {
 
 /**
  * POST /api/finance/transactions/sync/ — loops `status='LN'`
- * accounts server-side (one request, same as the template button);
- * `{account}` limits the sync to a single account.
+ * accounts server-side (one request, same as the template button).
+ * The body is optional; `{account}` echoes the current filter back
+ * like the template form did — the sync itself is not scoped by it.
  */
 export function useSyncTransactions() {
   const queryClient = useQueryClient();

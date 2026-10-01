@@ -908,7 +908,7 @@ def share_account(request, account_id: int, payload: ShareIn):
 
 
 @router.post('/transactions/sync/', response=SyncOut)
-def sync_transactions(request, payload: SyncIn):
+def sync_transactions(request, payload: Optional[SyncIn] = None):
     """Fetch latest transactions for the user's linked accounts."""
     accounts = Account.objects.for_user(request.user).filter(
         requisition__status='LN'

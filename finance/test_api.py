@@ -776,6 +776,17 @@ class SyncAndBalancesApiTests(ApiTestCase):
             body['message'], 'No linked bank accounts to sync.'
         )
 
+    def test_sync_accepts_missing_body(self):
+        """The SPA posts no body when no account filter is set —
+        fetch sends neither Content-Type nor a body."""
+        self.req.status = 'CR'
+        self.req.save()
+        resp = self.client.generic(
+            'POST', f'{self.API}/transactions/sync/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json()['success'])
+
     def test_sync_reports_counts(self):
         client = MagicMock()
         client.fetch_transactions.return_value = {
