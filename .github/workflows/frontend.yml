@@ -73,8 +73,10 @@ jobs:
 
           cd frontend
           npm run gen:types
-          if [ -n "$(git status --porcelain -- src/tasks/api-types.ts)" ]; then
-            echo "src/tasks/api-types.ts is stale — run: npm run gen:types"
-            git status -- src/tasks/api-types.ts
+          # Per-entry generated types (src/<entry>/api-types.ts) —
+          # the git pathspec glob catches a stale file in any entry.
+          if [ -n "$(git status --porcelain -- 'src/*/api-types.ts')" ]; then
+            echo "src/*/api-types.ts is stale — run: npm run gen:types"
+            git status -- 'src/*/api-types.ts'
             exit 1
           fi

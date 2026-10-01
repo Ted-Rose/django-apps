@@ -10,8 +10,6 @@ from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from django.urls import reverse
-
 from finance.models import (
     Account,
     AccountShare,
@@ -749,6 +747,12 @@ class LimitWindowStatsTests(TestCase):
 
 
 class LimitsViewTests(TestCase):
+    """Limits API — the limits page is the SPA post-cutover, so
+    assertions hit /api/finance/limits/ JSON instead of template
+    context. Edit-prefill (?edit=) is client-side state now."""
+
+    API = '/api/finance'
+
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -764,36 +768,49 @@ class LimitsViewTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def test_page_shows_progress_bars(self):
-        response = self.client.get(reverse('finance:limits'))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'progress-bar')
-        self.assertContains(response, 'This month')
-
-    def test_edit_prefills_form_with_limit(self):
+    def get_limits(self, params=None):
         response = self.client.get(
-            reverse('finance:limits'), {'edit': self.limit.pk}
+            f'{self.API}/limits/', params or {}
         )
-        self.assertEqual(
-            response.context['form'].instance.pk, self.limit.pk
-        )
-        self.assertEqual(response.context['editing'], self.limit)
+        self.assertEqual(response.status_code, 200)
+        return response.json()
 
-    def test_edit_ignores_other_users_limit(self):
+    def post_json(self, path, payload=None):
+        return self.client.post(
+            f'{self.API}{path}',
+            data=json.dumps(payload or {}),
+            content_type='application/json',
+        )
+
+    def test_limits_include_window_stats(self):
+        limits = self.get_limits()['limits']
+        self.assertEqual(len(limits), 1)
+        self.assertEqual(
+            [s['label'] for s in limits[0]['window_stats']],
+            ['7 days', 'This month'],
+        )
+
+    def test_limit_row_returned_for_edit(self):
+        limits = self.get_limits()['limits']
+        self.assertEqual(limits[0]['id'], self.limit.pk)
+        self.assertEqual(limits[0]['limit_7_days'], '100.00')
+        self.assertEqual(limits[0]['limit_monthly'], '500.00')
+
+    def test_other_users_limits_not_listed(self):
         other = get_user_model().objects.create_user(
             username='bob', password='pw'
         )
-        foreign = TransactionLimit.objects.create(
+        TransactionLimit.objects.create(
             account=self.account,
             user=other,
             limit_7_days=Decimal('100.00'),
         )
-        response = self.client.get(
-            reverse('finance:limits'), {'edit': foreign.pk}
+        limits = self.get_limits()['limits']
+        self.assertEqual(
+            [limit['id'] for limit in limits], [self.limit.pk]
         )
-        self.assertIsNone(response.context['editing'])
 
-    def test_month_param_shows_selected_month(self):
+    def test_month_param_selects_month(self):
         this_month = timezone.now().date().replace(day=1)
         last_month = (
             this_month - timezone.timedelta(days=1)
@@ -802,38 +819,31 @@ class LimitsViewTests(TestCase):
             self.account, 't-1', '-120.00', booking_date=last_month
         )
 
-        response = self.client.get(
-            reverse('finance:limits'),
-            {'month': last_month.strftime('%Y-%m')},
-        )
+        data = self.get_limits({'month': last_month.strftime('%Y-%m')})
 
-        self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.context['selected_month'], last_month
+            data['selected_month'], last_month.strftime('%Y-%m')
         )
-        self.assertContains(
-            response, last_month.strftime('%B %Y')
+        # as_of is the selected month's last day.
+        self.assertEqual(
+            data['as_of'],
+            (this_month - timezone.timedelta(days=1)).isoformat(),
         )
 
     def test_invalid_month_param_ignored(self):
-        response = self.client.get(
-            reverse('finance:limits'), {'month': 'not-a-month'}
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.context['selected_month'])
+        data = self.get_limits({'month': 'not-a-month'})
+        self.assertIsNone(data['selected_month'])
 
     def test_future_month_param_ignored(self):
-        response = self.client.get(
-            reverse('finance:limits'), {'month': '2999-01'}
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.context['selected_month'])
+        data = self.get_limits({'month': '2999-01'})
+        self.assertIsNone(data['selected_month'])
 
     def test_delete_limit(self):
-        response = self.client.post(
-            reverse('finance:delete_limit', args=[self.limit.pk])
+        response = self.post_json(
+            f'/limits/{self.limit.pk}/delete/'
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
         self.assertFalse(
             TransactionLimit.objects.filter(pk=self.limit.pk).exists()
         )
@@ -847,8 +857,8 @@ class LimitsViewTests(TestCase):
             user=other,
             limit_7_days=Decimal('100.00'),
         )
-        response = self.client.post(
-            reverse('finance:delete_limit', args=[foreign.pk])
+        response = self.post_json(
+            f'/limits/{foreign.pk}/delete/'
         )
         self.assertEqual(response.status_code, 404)
         self.assertTrue(
@@ -1502,6 +1512,12 @@ class PreviewRuleTests(TestCase):
 
 
 class TransactionListViewTests(TestCase):
+    """Transactions API — the page is the SPA post-cutover, so
+    assertions hit /api/finance/transactions/ JSON instead of
+    template context."""
+
+    API = '/api/finance'
+
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -1513,14 +1529,26 @@ class TransactionListViewTests(TestCase):
         self.req = make_requisition(self.user)
         self.account = make_account(self.user, self.req)
 
+    def get_transactions(self, params=None):
+        response = self.client.get(
+            f'{self.API}/transactions/', params or {}
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def tx_ids(self, body):
+        return [t['id'] for t in body['transactions']]
+
     def test_shows_users_own_category(self):
         cat = make_category(self.user, 'Groceries')
         tx = make_transaction(self.account, 't-1', '-10.00')
         make_assignment(self.user, tx, cat)
         self.client.force_login(self.user)
-        response = self.client.get(reverse('finance:transactions'))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Groceries')
+        body = self.get_transactions()
+        self.assertEqual(
+            body['transactions'][0]['effective_category']['name'],
+            'Groceries',
+        )
 
     def test_category_filter_matches_effective_category(self):
         cat = make_category(self.user, 'Groceries')
@@ -1528,17 +1556,10 @@ class TransactionListViewTests(TestCase):
         make_assignment(self.user, tx, cat)
         other_tx = make_transaction(self.account, 't-2', '-5.00')
         self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('finance:transactions'),
-            {'category': str(cat.pk)},
-        )
-        txs = response.context['page_obj']
-        self.assertEqual([t.pk for t in txs], [tx.pk])
-        response = self.client.get(
-            reverse('finance:transactions'), {'category': 'none'}
-        )
-        txs = response.context['page_obj']
-        self.assertEqual([t.pk for t in txs], [other_tx.pk])
+        body = self.get_transactions({'category': str(cat.pk)})
+        self.assertEqual(self.tx_ids(body), [tx.pk])
+        body = self.get_transactions({'category': 'none'})
+        self.assertEqual(self.tx_ids(body), [other_tx.pk])
 
     def test_sharer_sees_only_own_categories(self):
         AccountShare.objects.create(
@@ -1548,20 +1569,23 @@ class TransactionListViewTests(TestCase):
         tx = make_transaction(self.account, 't-1', '-10.00')
         make_assignment(self.user, tx, owner_cat)
         self.client.force_login(self.other)
-        response = self.client.get(reverse('finance:transactions'))
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'OwnerCat')
+        body = self.get_transactions()
+        self.assertIsNone(
+            body['transactions'][0]['effective_category']
+        )
+        self.assertNotIn(
+            'OwnerCat',
+            [c['name'] for c in body['categories']],
+        )
 
     def test_sort_by_amount(self):
         small = make_transaction(self.account, 't-1', '-5.00')
         large = make_transaction(self.account, 't-2', '-50.00')
         self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('finance:transactions'),
-            {'sort': 'amount', 'direction': 'asc'},
+        body = self.get_transactions(
+            {'sort': 'amount', 'direction': 'asc'}
         )
-        txs = list(response.context['page_obj'])
-        self.assertEqual([t.pk for t in txs], [large.pk, small.pk])
+        self.assertEqual(self.tx_ids(body), [large.pk, small.pk])
 
     def test_sort_by_category_name(self):
         cat_b = make_category(self.user, 'Beta')
@@ -1571,12 +1595,10 @@ class TransactionListViewTests(TestCase):
         make_assignment(self.user, tx_b, cat_b)
         make_assignment(self.user, tx_a, cat_a)
         self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('finance:transactions'),
-            {'sort': 'category', 'direction': 'asc'},
+        body = self.get_transactions(
+            {'sort': 'category', 'direction': 'asc'}
         )
-        txs = list(response.context['page_obj'])
-        self.assertEqual([t.pk for t in txs], [tx_a.pk, tx_b.pk])
+        self.assertEqual(self.tx_ids(body), [tx_a.pk, tx_b.pk])
 
     def test_creditor_filter_and_options(self):
         tx = make_transaction(
@@ -1586,31 +1608,20 @@ class TransactionListViewTests(TestCase):
             self.account, 't-2', '-5.00', creditor_name='Maxima'
         )
         self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('finance:transactions'), {'creditor': 'Rimi'}
-        )
+        body = self.get_transactions({'creditor': 'Rimi'})
+        self.assertEqual(self.tx_ids(body), [tx.pk])
+        body = self.get_transactions()
         self.assertEqual(
-            [t.pk for t in response.context['page_obj']],
-            [tx.pk],
+            set(body['counterparties']), {'Rimi', 'Maxima'}
         )
-        response = self.client.get(reverse('finance:transactions'))
-        names = {
-            o['name'] for o in response.context['creditor_options']
-        }
-        self.assertEqual(names, {'Rimi', 'Maxima'})
 
     def test_creditor_falls_back_to_debtor_name(self):
         tx = make_transaction(
             self.account, 't-1', '10.00', debtor_name='Employer'
         )
         self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('finance:transactions'), {'creditor': 'Employer'}
-        )
-        self.assertEqual(
-            [t.pk for t in response.context['page_obj']],
-            [tx.pk],
-        )
+        body = self.get_transactions({'creditor': 'Employer'})
+        self.assertEqual(self.tx_ids(body), [tx.pk])
 
     def test_description_search(self):
         tx = make_transaction(
@@ -1622,58 +1633,44 @@ class TransactionListViewTests(TestCase):
             remittance_information='groceries',
         )
         self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('finance:transactions'), {'q': 'rent'}
-        )
-        self.assertEqual(
-            [t.pk for t in response.context['page_obj']],
-            [tx.pk],
-        )
-        self.assertEqual(response.context['search_query'], 'rent')
+        body = self.get_transactions({'q': 'rent'})
+        self.assertEqual(self.tx_ids(body), [tx.pk])
+        self.assertEqual(body['search_query'], 'rent')
 
-    def test_account_options_mark_selected(self):
+    def test_account_options_and_selected_account(self):
         other = make_account(self.user, self.req, 'acc-2')
         self.client.force_login(self.user)
-        response = self.client.get(reverse('finance:transactions'))
-        self.assertEqual(len(response.context['account_options']), 2)
-        response = self.client.get(
-            reverse('finance:transactions'), {'account': str(other.pk)}
-        )
-        selected = [
-            o['label'] for o in response.context['account_options']
-            if o['selected']
-        ]
-        self.assertEqual(selected, ['acc-2'])
+        body = self.get_transactions()
+        self.assertEqual(len(body['accounts']), 2)
+        body = self.get_transactions({'account': str(other.pk)})
+        self.assertEqual(body['selected_account'], other.pk)
 
     def test_invalid_params_ignored(self):
         make_transaction(self.account, 't-1', '-10.00')
         self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('finance:transactions'),
-            {'account': 'x', 'category': 'x', 'sort': 'x'},
+        body = self.get_transactions(
+            {'account': 'x', 'category': 'x', 'sort': 'x'}
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context['page_obj']), 1)
+        self.assertEqual(len(body['transactions']), 1)
 
     def test_pagination(self):
         for i in range(101):
             make_transaction(self.account, f't-{i}', '-1.00')
         self.client.force_login(self.user)
-        url = reverse('finance:transactions')
 
-        response = self.client.get(url)
-        self.assertEqual(len(response.context['page_obj']), 100)
-        self.assertEqual(response.context['page_obj'].number, 1)
+        body = self.get_transactions()
+        self.assertEqual(len(body['transactions']), 100)
+        self.assertEqual(body['page'], 1)
 
-        response = self.client.get(url, {'page': '2'})
-        self.assertEqual(len(response.context['page_obj']), 1)
-        self.assertEqual(response.context['page_obj'].number, 2)
+        body = self.get_transactions({'page': '2'})
+        self.assertEqual(len(body['transactions']), 1)
+        self.assertEqual(body['page'], 2)
 
         # Out-of-range and invalid pages fall back gracefully.
-        response = self.client.get(url, {'page': '999'})
-        self.assertEqual(response.context['page_obj'].number, 2)
-        response = self.client.get(url, {'page': 'abc'})
-        self.assertEqual(response.context['page_obj'].number, 1)
+        body = self.get_transactions({'page': '999'})
+        self.assertEqual(body['page'], 2)
+        body = self.get_transactions({'page': 'abc'})
+        self.assertEqual(body['page'], 1)
 
 
 class CategoryOverviewViewTests(TestCase):
@@ -1691,19 +1688,25 @@ class CategoryOverviewViewTests(TestCase):
         make_assignment(self.user, tx, cat)
         make_transaction(self.account, 't-2', '-5.00')
         self.client.force_login(self.user)
-        response = self.client.get(reverse('finance:categories'))
+        response = self.client.get('/api/finance/categories/overview/')
         self.assertEqual(response.status_code, 200)
-        rows = response.context['rows']
+        rows = response.json()['rows']
         names = {row['category_name'] for row in rows}
         self.assertEqual(names, {'Groceries', 'Uncategorized'})
         groceries = next(
             row for row in rows if row['category_name'] == 'Groceries'
         )
-        self.assertEqual(groceries['spent'], Decimal('10.00'))
+        # Money serializes as a JSON string (DjangoJSONEncoder).
+        self.assertEqual(groceries['spent'], '10.00')
         self.assertEqual(groceries['category_color'], '#00ff00')
 
 
 class RuleViewTests(TestCase):
+    """Rules API — the page is the SPA post-cutover, so assertions
+    hit /api/finance/rules/* JSON endpoints."""
+
+    API = '/api/finance'
+
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -1716,22 +1719,30 @@ class RuleViewTests(TestCase):
         self.account = make_account(self.user, self.req)
         self.category = make_category(self.user)
 
-    def test_preview_endpoint_requires_login(self):
-        response = self.client.post(reverse('finance:preview_rule'))
-        self.assertEqual(response.status_code, 302)
+    def post_json(self, path, payload=None):
+        return self.client.post(
+            f'{self.API}{path}',
+            data=json.dumps(payload or {}),
+            content_type='application/json',
+        )
 
-    def test_rules_page_renders_rule_conditions(self):
+    def test_preview_endpoint_requires_login(self):
+        response = self.post_json('/rules/preview/')
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()['error'], 'unauthenticated')
+
+    def test_rules_list_returns_rule_conditions(self):
         make_rule(
             self.user, self.category,
             sender='Shop', scope='creditor', exclusion='refund',
         )
         self.client.force_login(self.user)
-        response = self.client.get(reverse('finance:rules'))
+        response = self.client.get(f'{self.API}/rules/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'rule-counterparty-scope')
-        self.assertContains(response, 'rule-description-exclusion')
-        self.assertContains(response, 'creditor (receiver)')
-        self.assertContains(response, 'refund')
+        rule = response.json()['rules'][0]
+        self.assertEqual(rule['counterparty_scope'], 'creditor')
+        self.assertEqual(rule['counterparty_pattern'], 'Shop')
+        self.assertEqual(rule['description_exclusion'], 'refund')
 
     def test_preview_endpoint_returns_json(self):
         self.client.force_login(self.user)
@@ -1739,8 +1750,8 @@ class RuleViewTests(TestCase):
             self.account, 't-1', '-10.00',
             remittance_information='shop',
         )
-        response = self.client.post(
-            reverse('finance:preview_rule'),
+        response = self.post_json(
+            '/rules/preview/',
             {
                 'category_id': self.category.pk,
                 'priority': 1,
@@ -1749,7 +1760,7 @@ class RuleViewTests(TestCase):
                 'description_pattern': 'shop',
                 'description_match_type': 'contains',
                 'operator': 'AND',
-                'is_active': 'on',
+                'is_active': True,
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -1759,19 +1770,18 @@ class RuleViewTests(TestCase):
 
     def test_preview_endpoint_rejects_missing_category(self):
         self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('finance:preview_rule'),
-            {'description_pattern': 'shop'},
+        response = self.post_json(
+            '/rules/preview/', {'description_pattern': 'shop'},
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn('error', response.json())
+        self.assertEqual(response.json()['error'], 'bad_request')
 
     def test_save_rule_scoped_to_owner(self):
         rule = make_rule(self.user, self.category,
                          description='shop')
         self.client.force_login(self.other)
-        response = self.client.post(
-            reverse('finance:save_rule'),
+        response = self.post_json(
+            '/rules/save/',
             {
                 'rule_id': rule.pk,
                 'category': self.category.pk,
@@ -1793,8 +1803,8 @@ class RuleViewTests(TestCase):
             self.account, 't-1', '-10.00',
             remittance_information='shop',
         )
-        response = self.client.post(
-            reverse('finance:save_rule'),
+        response = self.post_json(
+            '/rules/save/',
             {
                 'category': self.category.pk,
                 'priority': 1,
@@ -1803,10 +1813,11 @@ class RuleViewTests(TestCase):
                 'description_pattern': 'shop',
                 'description_match_type': 'contains',
                 'operator': 'AND',
-                'is_active': 'on',
+                'is_active': True,
             },
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
         tx = Transaction.objects.get(transaction_id='t-1')
         self.assertEqual(
             effective_category_for(tx, self.user), self.category
@@ -1819,10 +1830,10 @@ class RuleViewTests(TestCase):
         second = make_rule(self.user, other_cat, priority=2,
                            description='b')
         self.client.force_login(self.user)
-        self.client.post(
-            reverse('finance:move_rule', args=[second.pk]),
-            {'direction': 'up'},
+        response = self.post_json(
+            f'/rules/{second.pk}/move/', {'direction': 'up'},
         )
+        self.assertEqual(response.status_code, 200)
         first.refresh_from_db()
         second.refresh_from_db()
         self.assertEqual((second.priority, first.priority), (1, 2))
@@ -2068,6 +2079,8 @@ class LimitPushAlertCommandTests(TestCase):
 
 
 class PushSubscriptionEndpointTests(TestCase):
+    """Push subscribe/unsubscribe API — /api/finance/push/*."""
+
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -2076,8 +2089,8 @@ class PushSubscriptionEndpointTests(TestCase):
         self.other = User.objects.create_user(
             username='bob', password='pw'
         )
-        self.subscribe_url = reverse('finance:push_subscribe')
-        self.unsubscribe_url = reverse('finance:push_unsubscribe')
+        self.subscribe_url = '/api/finance/push/subscribe/'
+        self.unsubscribe_url = '/api/finance/push/unsubscribe/'
         self.payload = {
             'endpoint': 'https://push.example.com/sub/1',
             'keys': {'p256dh': 'key', 'auth': 'secret'},
@@ -2092,7 +2105,8 @@ class PushSubscriptionEndpointTests(TestCase):
 
     def test_subscribe_requires_login(self):
         response = self.post_json(self.subscribe_url, self.payload)
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()['error'], 'unauthenticated')
 
     @override_settings(VAPID_PUBLIC_KEY='pub')
     def test_subscribe_saves_and_updates_row(self):
@@ -2119,6 +2133,9 @@ class PushSubscriptionEndpointTests(TestCase):
 
     @override_settings(VAPID_PUBLIC_KEY='pub')
     def test_subscribe_400_on_non_dict_body(self):
+        """A non-object JSON body is rejected by schema validation —
+        the API has no 'Invalid JSON body' fallback like the old
+        view did."""
         self.client.force_login(self.user)
         response = self.client.post(
             self.subscribe_url,
@@ -2214,6 +2231,9 @@ class FetchBalancesParallelTests(TestCase):
 
 
 class LiveBalancesViewTests(TestCase):
+    """Balances API — the page is the SPA post-cutover; assertions
+    hit /api/finance/balances/ JSON."""
+
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -2224,10 +2244,10 @@ class LiveBalancesViewTests(TestCase):
         self.pref = UserAccountPreference.objects.create(
             user=self.user, account=self.account
         )
-        self.url = reverse('finance:balances')
+        self.url = '/api/finance/balances/'
         self.client.force_login(self.user)
 
-    def test_page_shows_stored_balance(self):
+    def test_lists_stored_balance(self):
         self.account.last_balance = {
             'balanceAmount': {'amount': '99.00', 'currency': 'EUR'},
             'balanceType': 'interimAvailable',
@@ -2235,30 +2255,39 @@ class LiveBalancesViewTests(TestCase):
         self.account.balance_updated_at = timezone.now()
         self.account.save()
         response = self.client.get(self.url)
-        self.assertContains(response, '99.00')
-        self.assertContains(response, 'interimAvailable')
-        self.assertContains(response, 'local-datetime')
+        self.assertEqual(response.status_code, 200)
+        account = response.json()['accounts'][0]
+        self.assertEqual(
+            account['last_balance']['balanceAmount']['amount'],
+            '99.00',
+        )
+        self.assertEqual(
+            account['last_balance']['balanceType'],
+            'interimAvailable',
+        )
+        self.assertIsNotNone(account['balance_updated_at'])
 
-    def test_page_does_not_call_api(self):
-        with patch('finance.views.GoCardlessClient') as client_cls:
+    def test_does_not_call_gocardless(self):
+        with patch('finance.api.GoCardlessClient') as client_cls:
             response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         client_cls.assert_not_called()
 
-    def test_no_stored_balance_shows_hint(self):
+    def test_no_stored_balance_is_null(self):
         response = self.client.get(self.url)
-        self.assertContains(response, 'No balance retrieved yet')
+        account = response.json()['accounts'][0]
+        self.assertIsNone(account['last_balance'])
 
     def test_excluded_accounts_not_listed(self):
         self.pref.included_in_balance_check = False
         self.pref.save()
         response = self.client.get(self.url)
-        self.assertContains(
-            response, 'No accounts are included'
-        )
+        self.assertEqual(response.json()['accounts'], [])
 
 
 class RefreshBalancesViewTests(TestCase):
+    """Refresh API — /api/finance/balances/refresh/."""
+
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -2269,16 +2298,20 @@ class RefreshBalancesViewTests(TestCase):
         self.pref = UserAccountPreference.objects.create(
             user=self.user, account=self.account
         )
-        self.url = reverse('finance:refresh_balances')
+        self.url = '/api/finance/balances/refresh/'
         self.client.force_login(self.user)
 
-    def post_refresh(self, results, follow=True):
+    def post_refresh(self, results):
         client = MagicMock()
         client.fetch_balances_parallel.return_value = results
         with patch(
-            'finance.views.GoCardlessClient', return_value=client
+            'finance.api.GoCardlessClient', return_value=client
         ):
-            return self.client.post(self.url, follow=follow)
+            return self.client.post(
+                self.url,
+                data='{}',
+                content_type='application/json',
+            )
 
     def ok_results(self, amount='123.45'):
         return {
@@ -2310,9 +2343,10 @@ class RefreshBalancesViewTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
 
-    def test_success_stores_balance_and_redirects(self):
-        response = self.post_refresh(self.ok_results(), follow=False)
-        self.assertRedirects(response, reverse('finance:balances'))
+    def test_success_stores_balance(self):
+        response = self.post_refresh(self.ok_results())
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
         self.account.refresh_from_db()
         self.assertEqual(
             self.account.last_balance['balanceAmount']['amount'],
@@ -2322,8 +2356,9 @@ class RefreshBalancesViewTests(TestCase):
 
     def test_success_message(self):
         response = self.post_refresh(self.ok_results())
-        self.assertContains(response, 'Updated 1 balance(s)')
-        self.assertContains(response, '123.45')
+        body = response.json()
+        self.assertIn('Updated 1 balance(s)', body['message'])
+        self.assertEqual(body['updated'], 1)
 
     def test_rate_limited_falls_back_to_stored_balance(self):
         self.account.last_balance = {
@@ -2334,9 +2369,10 @@ class RefreshBalancesViewTests(TestCase):
         self.account.balance_updated_at = updated_at
         self.account.save()
         response = self.post_refresh(self.rate_limited_results())
-        self.assertContains(response, 'daily API limit')
-        self.assertContains(response, 'last stored balance')
-        self.assertContains(response, '99.00')
+        body = response.json()
+        self.assertIn('daily API limit', body['message'])
+        self.assertIn('last stored balance', body['message'])
+        self.assertEqual(body['rate_limited'], 1)
         self.account.refresh_from_db()
         self.assertEqual(
             self.account.last_balance['balanceAmount']['amount'],
@@ -2348,8 +2384,15 @@ class RefreshBalancesViewTests(TestCase):
         self.pref.included_in_balance_check = False
         self.pref.save()
         with patch(
-            'finance.views.GoCardlessClient'
+            'finance.api.GoCardlessClient'
         ) as client_cls:
-            response = self.client.post(self.url, follow=True)
+            response = self.client.post(
+                self.url,
+                data='{}',
+                content_type='application/json',
+            )
         client_cls.assert_not_called()
-        self.assertContains(response, 'No accounts are included')
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body['success'])
+        self.assertIn('No accounts are included', body['message'])

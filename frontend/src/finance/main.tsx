@@ -24,10 +24,9 @@ if (root) {
   createRoot(root).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        {/* Strangler mount: during Stages 1–5 the SPA lives under
-            /finance/app/ while the template UI keeps serving
-            /finance/*. Stage 6 moves the basename to /finance. */}
-        <BrowserRouter basename="/finance/app">
+        {/* Stage 6 cutover: the SPA owns /finance/ — the template
+            UI is deleted and /finance/app/* 301-redirects here. */}
+        <BrowserRouter basename="/finance">
           <App />
         </BrowserRouter>
       </QueryClientProvider>

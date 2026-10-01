@@ -34,7 +34,7 @@ interface DropdownProps {
   /** Extra classes for the `<ul>` menu (e.g. `dropdown-menu-end`). */
   menuClassName?: string;
   /**
-   * Inline style for the `<ul>` menu — the finance templates use
+   * Inline style for the `<ul>` menu — the finance SPA uses
    * `max-height`/`overflow-y` to scroll long option lists.
    */
   menuStyle?: CSSProperties;
