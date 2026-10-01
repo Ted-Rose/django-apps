@@ -131,9 +131,9 @@ describe('Transactions', () => {
     // Amount keeps the raw string + currency, signed colored cell.
     const amountCell = screen.getByRole('cell', { name: '-500.00 EUR' });
     expect(amountCell).toHaveClass('text-danger');
-    expect(
-      screen.getByRole('cell', { name: '2500.00 EUR' }),
-    ).toHaveClass('text-success');
+    expect(screen.getByRole('cell', { name: '2500.00 EUR' })).toHaveClass(
+      'text-success',
+    );
     expect(mockedApiGet).toHaveBeenCalledWith('/api/finance/transactions/');
   });
 

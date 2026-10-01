@@ -222,9 +222,7 @@ export function TransactionTable({ data, onUpdate }: TransactionTableProps) {
                   key={category.id}
                   label={category.name}
                   active={data.selected_category === String(category.id)}
-                  onClick={() =>
-                    onUpdate({ category: String(category.id) })
-                  }
+                  onClick={() => onUpdate({ category: String(category.id) })}
                 />
               ))}
             </ColumnHeader>
@@ -416,9 +414,7 @@ function TransactionRow({ tx }: { tx: TransactionOut }) {
           <span className="text-muted">-</span>
         )}
       </td>
-      <td
-        className={`text-end ${negative ? 'text-danger' : 'text-success'}`}
-      >
+      <td className={`text-end ${negative ? 'text-danger' : 'text-success'}`}>
         {tx.amount} {tx.currency}
       </td>
     </tr>
