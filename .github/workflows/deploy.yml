@@ -49,49 +49,26 @@ jobs:
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
 
-      - name: Run database migrations via Cloud Run Jobs
+      - name: Set up Python for migrations
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Runs directly on the runner: Aiven Postgres is publicly
+      # reachable and sslmode=require needs no CA cert. Secrets are
+      # pulled from GCP Secret Manager at run time (WIF SA already has
+      # secretAccessor) so they live only in GCP.
+      - name: Run database migrations
         run: |
-          # Create a one-off Cloud Run job to run migrations
-          gcloud run jobs create django-migrate-${{ github.sha }} \
-            --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-            --region=${{ env.GCP_REGION }} \
-            --service-account=cloudrun-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
-            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},USE_GCP_SECRETS=true \
-            --set-secrets=DATABASE_URL=DATABASE_URL:latest,DJANGO_SECRET_KEY=DJANGO_SECRET_KEY:latest,APP_BASE_URL=APP_BASE_URL:latest,ESV_KEY=ESV_KEY:latest,GOOGLE_OAUTH_CLIENT_JSON=GOOGLE_OAUTH_CLIENT_JSON:latest \
-            --command=python \
-            --args=manage.py,migrate,--noinput \
-            --project=${{ env.GCP_PROJECT_ID }} || true
-          
-          # Execute the migration job
-          set +e
-          gcloud run jobs execute django-migrate-${{ github.sha }} \
-            --region=${{ env.GCP_REGION }} \
-            --wait \
-            --project=${{ env.GCP_PROJECT_ID }}
-          EXIT_CODE=$?
-          set -e
-          
-          # If execution failed, get logs for debugging
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "Migration job failed with exit code $EXIT_CODE. Fetching logs..."
-            gcloud logging read "resource.type=cloud_run_job AND resource.labels.job_name=django-migrate-${{ github.sha }}" \
-              --limit=100 \
-              --format="table(timestamp,textPayload)" \
-              --project=${{ env.GCP_PROJECT_ID }} || true
-            
-            # Clean up and exit with error
-            gcloud run jobs delete django-migrate-${{ github.sha }} \
-              --region=${{ env.GCP_REGION }} \
-              --quiet \
-              --project=${{ env.GCP_PROJECT_ID }} || true
-            exit 1
-          fi
-          
-          # Clean up the job after successful execution
-          gcloud run jobs delete django-migrate-${{ github.sha }} \
-            --region=${{ env.GCP_REGION }} \
-            --quiet \
-            --project=${{ env.GCP_PROJECT_ID }} || true
+          export DATABASE_URL="$(gcloud secrets versions access latest \
+            --secret=DATABASE_URL --project=${{ env.GCP_PROJECT_ID }})"
+          export DJANGO_SECRET_KEY="$(gcloud secrets versions access latest \
+            --secret=DJANGO_SECRET_KEY --project=${{ env.GCP_PROJECT_ID }})"
+          USE_GCP_SECRETS=true python manage.py migrate --noinput
 
       - name: Deploy to Cloud Run
         # Deploy :latest, not the SHA tag: the Artifact Registry

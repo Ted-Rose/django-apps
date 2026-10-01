@@ -79,8 +79,8 @@ Always generate migration files for model changes
 (`python manage.py makemigrations`) — the user commits them. Never
 run `python manage.py migrate` (or any equivalent command that
 applies migrations to a real database) — that is managed outside of
-agent sessions. (Note: CI deploy runs `migrate` via a Cloud
-Run job — that's fine, it happens in the workflow, not here.)
+agent sessions. (Note: CI deploy runs `migrate` on the GitHub
+Actions runner — that's fine, it happens in the workflow, not here.)
 
 ### Documentation and planning
 When the user requests writing a plan to a markdown file, always save it
@@ -164,7 +164,8 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 ## Deployment & CI
 
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
-  Artifact Registry → one-off Cloud Run job runs `manage.py migrate` →
+  Artifact Registry → `manage.py migrate` runs on the GitHub Actions
+  runner (secrets fetched from GCP Secret Manager via WIF) →
   `gcloud run deploy django-apps`. Dockerfile has a `node:22-slim`
   stage that builds `frontend_dist/` (Vite) before collectstatic.
 - Vercel deploys the same repo automatically via its GitHub
