@@ -29,9 +29,7 @@ async function login(page: Page) {
 }
 
 test.describe('unauthenticated', () => {
-  test('/finance/ redirects to login (session auth)', async ({
-    request,
-  }) => {
+  test('/finance/ redirects to login (session auth)', async ({ request }) => {
     // @login_required → 302 to LOGIN_URL (/login/?next=…); that view
     // then forwards into Google OAuth. Assert the first hop only —
     // the rest depends on accounts.google.com being reachable.
