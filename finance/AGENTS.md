@@ -122,8 +122,9 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   a single notification when breached together) to the user's
   `PushSubscription`s.
 - Terraform (`terraform/cloud_run_jobs.tf`) maps these to Cloud Run
-  jobs with Cloud Scheduler triggers — schedulers are **paused**, so
-  nothing runs on a schedule until unpaused.
+  jobs with Cloud Scheduler triggers running daily (`paused = false`:
+  sync at 02:00 UTC, evaluate at 02:30 UTC) — set `paused = true` to
+  stop the schedules and save costs.
 
 ## Rules engine (`services/rules.py`)
 

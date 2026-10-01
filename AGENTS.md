@@ -22,7 +22,7 @@ same database. PythonAnywhere
 | `bible_research/` | ESV API wrapper (`api.esv.org`): verse lookup as JSON and passage audio. No models |
 | `tv_archive/` | Latvian TV schedule scraper (tet.lv) enriched with IMDb ratings. `fetch_tv_program_details()` is **not** wired to a URL — run it manually via shell |
 | `single_pages/` | One-off pages that don't merit their own app (twister, spoki.lv proxy) |
-| `terraform/` | All GCP infra: Cloud Run service + jobs, paused Cloud Scheduler triggers, secrets refs, Artifact Registry, GCS audio bucket, WIF |
+| `terraform/` | All GCP infra: Cloud Run service + jobs, Cloud Scheduler triggers, secrets refs, Artifact Registry, GCS audio bucket, WIF |
 | `frontend/` | React rewrite workspace: Vite 5 + React 19 + TS, one entry per app (`src/tasks/`); builds to gitignored `frontend_dist/` (Vite manifest + hashed assets) |
 | `docs/` | `QUICKSTART.md` (GCP deploy runbook), `changelog.md`, `coding_diary.md` (dev log), `plans/` (design docs) |
 
@@ -201,11 +201,14 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 - Cloud Run service: `django-apps`, scales 0→1, unauthenticated access
   allowed (app does its own auth), image tag `latest` is what Cloud Run
   actually runs.
-- Scheduled jobs (`sync-bank-transactions`, `evaluate-spending-limits`)
-  are disabled: all of `terraform/cloud_run_jobs.tf` (Cloud Run jobs +
-  Cloud Scheduler triggers) is commented out to save costs — run them
-  manually via `manage.py sync_bank_transactions` /
-  `evaluate_spending_limits`, or uncomment to re-enable.
+- Scheduled jobs (`sync-bank-transactions` at 02:00 UTC,
+  `evaluate-spending-limits` at 02:30 UTC) run daily: Cloud Scheduler
+  → Cloud Run jobs (`terraform/cloud_run_jobs.tf`, `paused = false`).
+  To save costs set `paused = true`; they can also be run manually
+  via `manage.py sync_bank_transactions` / `evaluate_spending_limits`.
+- Cost goal: keep production within the GCP free tier — Cloud Run
+  scales 0→1 and Vercel absorbs front-end traffic for that reason.
+  Prefer free-tier-friendly choices when changing infra.
 - `bootstrap_gcp.sh` = one-time GCP setup; `migrate_to_django_apps.sh` =
   move infra to a new GCP project.
 - Dockerfile builds `collectstatic` against a dummy
