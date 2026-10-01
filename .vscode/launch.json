@@ -5,17 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Django",
-            "type": "debugpy",
-            "request": "launch",
-            "args": [
-                "runserver"
-            ],
-            "django": true,
-            "autoStartBrowser": false,
-            "program": "${workspaceFolder}/manage.py"
-        },
-        {
             // Same as above but with django-vite dev_mode on:
             // {% vite_asset %} emits :5173 URLs, so run this together
             // with "Vite dev server" (or just use the compound).
@@ -40,11 +29,17 @@
             "type": "node",
             "request": "launch",
             "cwd": "${workspaceFolder}/frontend",
-            "runtimeExecutable": "npm",
+            // Absolute nvm path + PATH env: VS Code launched from the
+            // Dock doesn't inherit the shell's nvm PATH, so bare
+            // "npm" fails to spawn here.
+            "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v22.2.0/bin/npm",
             "runtimeArgs": [
                 "run",
                 "dev"
             ],
+            "env": {
+                "PATH": "${env:HOME}/.nvm/versions/node/v22.2.0/bin:${env:PATH}"
+            },
             "console": "integratedTerminal"
         }
     ],
