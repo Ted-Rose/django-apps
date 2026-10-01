@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CategoryOverview from './CategoryOverview';
@@ -97,36 +103,40 @@ describe('CategoryOverview', () => {
       '/api/finance/categories/overview/',
     );
 
-    expect(
-      await screen.findByRole('cell', { name: 'Groceries' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: 'Salary' })).toBeInTheDocument();
-    // Money strings render as-is with their currency.
-    expect(
-      screen.getAllByRole('cell', { name: '120.50 EUR' }),
-    ).not.toHaveLength(0);
-    expect(screen.getAllByRole('cell', { name: '39.00 USD' })).not.toHaveLength(
-      0,
-    );
-    // Negative net is danger-styled, positive net success-styled.
+    expect(await screen.findByText('Groceries')).toBeInTheDocument();
+    expect(screen.getByText('Salary')).toBeInTheDocument();
+    // A single signed net column — negative danger, positive with
+    // an explicit '+' and success-styled.
     expect(screen.getByRole('cell', { name: '-120.50 EUR' })).toHaveClass(
       'text-danger',
     );
-    // '2000.00 EUR' appears in the Salary row and the EUR total.
-    for (const cell of screen.getAllByRole('cell', {
-      name: '2000.00 EUR',
-    })) {
-      expect(cell).toHaveClass('text-success');
-    }
+    expect(screen.getByRole('cell', { name: '+2000.00 EUR' })).toHaveClass(
+      'text-success',
+    );
     expect(screen.getByRole('cell', { name: '-39.00 USD' })).toHaveClass(
       'text-danger',
     );
-    // Share column and tx counts.
+    // Share column and the secondary tx-count subtext.
     expect(screen.getByText('75.5%')).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: '12' })).toBeInTheDocument();
-    // Totals footer keyed by currency.
-    expect(screen.getByText('Total (EUR)')).toBeInTheDocument();
-    expect(screen.getByText('Total (USD)')).toBeInTheDocument();
+    expect(screen.getByText('12 transactions')).toBeInTheDocument();
+    expect(screen.getByText('1 transaction')).toBeInTheDocument();
+    // Totals footer keeps spent and received separate per currency.
+    const eurTotal = screen.getByText('Total (EUR)').closest('tr');
+    expect(eurTotal).not.toBeNull();
+    expect(within(eurTotal!).getByText('-120.50 EUR')).toHaveClass(
+      'text-danger',
+    );
+    expect(within(eurTotal!).getByText('+2000.00 EUR')).toHaveClass(
+      'text-success',
+    );
+    const usdTotal = screen.getByText('Total (USD)').closest('tr');
+    expect(usdTotal).not.toBeNull();
+    expect(within(usdTotal!).getByText('-39.00 USD')).toHaveClass(
+      'text-danger',
+    );
+    expect(within(usdTotal!).getByText('+0.00 USD')).toHaveClass(
+      'text-success',
+    );
     // The active preset is rendered as the primary button.
     const active = screen.getByRole('button', { name: 'Last 7 days' });
     expect(active).toHaveClass('btn-primary');
@@ -224,8 +234,6 @@ describe('CategoryOverview', () => {
       await screen.findByText(/Couldn't load category spending/),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
-    expect(
-      await screen.findByRole('cell', { name: 'Groceries' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Groceries')).toBeInTheDocument();
   });
 });

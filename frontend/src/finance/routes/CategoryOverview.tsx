@@ -17,7 +17,10 @@ import { fetchCategoryOverview } from '../api';
  * `totals` dict.
  *
  * Money arrives as Decimal-serialized strings and renders as-is;
- * `net`'s sign is only used for the text-danger/success class.
+ * `net`'s sign picks the text-danger/success class and the '+'
+ * prefix. The table stays three slim columns (no
+ * table-responsive scroll) so it fits narrow screens — the tx
+ * count is secondary text under the category badge.
  */
 export default function CategoryOverview() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -69,7 +72,7 @@ export default function CategoryOverview() {
         <h1 className="mb-4">Category spending</h1>
 
         <form className="row g-2 align-items-end mb-3" onSubmit={applyFilters}>
-          <div className="col-auto">
+          <div className="col-6 col-sm-auto">
             <label htmlFor="date-from" className="form-label">
               From
             </label>
@@ -82,7 +85,7 @@ export default function CategoryOverview() {
               defaultValue={params.from}
             />
           </div>
-          <div className="col-auto">
+          <div className="col-6 col-sm-auto">
             <label htmlFor="date-to" className="form-label">
               To
             </label>
@@ -95,7 +98,7 @@ export default function CategoryOverview() {
               defaultValue={params.to}
             />
           </div>
-          <div className="col-auto">
+          <div className="col-12 col-sm-auto">
             <label htmlFor="account-filter" className="form-label">
               Account
             </label>
@@ -116,8 +119,8 @@ export default function CategoryOverview() {
               ))}
             </select>
           </div>
-          <div className="col-auto">
-            <button type="submit" className="btn btn-primary">
+          <div className="col-12 col-sm-auto">
+            <button type="submit" className="btn btn-primary w-100">
               Apply
             </button>
           </div>
@@ -158,20 +161,18 @@ export default function CategoryOverview() {
         )}
         {data &&
           (data.rows.length > 0 ? (
-            <div className="table-responsive">
-              <table className="table table-striped table-hover">
-                <thead>
-                  <tr>
-                    <th>Category</th>
-                    <th className="text-end">Transactions</th>
-                    <th className="text-end">Spent</th>
-                    <th className="text-end">Received</th>
-                    <th className="text-end">Net</th>
-                    <th>Share of spending</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((row, index) => (
+            <table className="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th className="w-25">Share</th>
+                  <th className="text-end">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row, index) => {
+                  const net = Number(row.net);
+                  return (
                     <tr key={`${row.category_name}-${row.currency}-${index}`}>
                       <td>
                         <CategoryBadge
@@ -181,55 +182,60 @@ export default function CategoryOverview() {
                             color: row.category_color,
                           }}
                         />
+                        <div className="small text-muted">
+                          {row.tx_count}{' '}
+                          {row.tx_count === 1 ? 'transaction' : 'transactions'}
+                        </div>
                       </td>
-                      <td className="text-end">{row.tx_count}</td>
-                      <td className="text-end text-danger">
-                        {row.spent} {row.currency}
-                      </td>
-                      <td className="text-end text-success">
-                        {row.received} {row.currency}
-                      </td>
-                      <td
-                        className={`text-end ${
-                          Number(row.net) < 0 ? 'text-danger' : 'text-success'
-                        }`}
-                      >
-                        {row.net} {row.currency}
-                      </td>
-                      <td>
-                        <div className="d-flex align-items-center">
+                      <td className="align-middle">
+                        <div className="d-flex align-items-center gap-2">
                           <div
-                            className="progress flex-grow-1 me-2"
+                            className="progress flex-grow-1"
                             role="progressbar"
-                            style={{ height: '0.5rem' }}
+                            style={{ height: '0.5rem', minWidth: '1.5rem' }}
                           >
                             <div
                               className="progress-bar"
                               style={{ width: `${row.share.toFixed(0)}%` }}
                             />
                           </div>
-                          <small>{row.share.toFixed(1)}%</small>
+                          <small className="text-nowrap">
+                            {row.share.toFixed(1)}%
+                          </small>
                         </div>
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  {Object.entries(data.totals).map(([currency, total]) => (
-                    <tr className="fw-bold" key={currency}>
-                      <td colSpan={2}>Total ({currency})</td>
-                      <td className="text-end text-danger">
-                        {total.spent} {currency}
+                      <td
+                        className={`text-end text-nowrap ${
+                          net < 0
+                            ? 'text-danger'
+                            : net > 0
+                              ? 'text-success'
+                              : 'text-muted'
+                        }`}
+                      >
+                        {net > 0 ? `+${row.net}` : row.net} {row.currency}
                       </td>
-                      <td className="text-end text-success">
-                        {total.received} {currency}
-                      </td>
-                      <td className="text-end" colSpan={2} />
                     </tr>
-                  ))}
-                </tfoot>
-              </table>
-            </div>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                {Object.entries(data.totals).map(([currency, total]) => (
+                  <tr className="fw-bold" key={currency}>
+                    <td>Total ({currency})</td>
+                    <td />
+                    <td className="text-end text-nowrap">
+                      <div className="text-danger">
+                        -{total.spent} {currency}
+                      </div>
+                      <div className="text-success">
+                        +{total.received} {currency}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tfoot>
+            </table>
           ) : (
             <div className="alert alert-info">
               No transactions in this period.
