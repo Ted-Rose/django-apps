@@ -24,10 +24,9 @@ if (root) {
   createRoot(root).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        {/* Stage 1 strangler mount: the SPA lives at /tv-arhivs/app
-            while the template keeps serving /tv-arhivs; Stage 3
-            flips the basename to "/tv-arhivs" at cutover. */}
-        <BrowserRouter basename="/tv-arhivs/app">
+        {/* Stage 3 cutover: the SPA owns /tv-arhivs — the template
+            UI is deleted and /tv-arhivs/app/* 301-redirects here. */}
+        <BrowserRouter basename="/tv-arhivs">
           <App />
         </BrowserRouter>
       </QueryClientProvider>

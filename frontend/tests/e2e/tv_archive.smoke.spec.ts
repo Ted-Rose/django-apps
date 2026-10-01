@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * tv_archive SPA smoke tests (Stage 2 of the React rewrite plan:
- * load /tv-arhivs/app/, apply a filter, change page).
+ * tv_archive SPA smoke tests (post-cutover: the SPA owns
+ * /tv-arhivs; load it, apply a filter, change page — plus a check
+ * that the legacy /tv-arhivs/app/ mount 301-redirects).
  *
  * Unlike finance/tasks this page is PUBLIC — no login helper, no
  * seeded user. Prerequisites: `python manage.py runserver` serving
@@ -20,7 +21,7 @@ async function waitForFeed(page: Page) {
 
 test.describe('tv_archive public feed', () => {
   test('the SPA mounts anonymously and renders the feed', async ({ page }) => {
-    await page.goto('/tv-arhivs/app/');
+    await page.goto('/tv-arhivs/');
     // React mounted — never the shell's raw placeholder text.
     await expect(page.locator('#root')).not.toContainText('Loading React app');
     await expect(
@@ -42,7 +43,7 @@ test.describe('tv_archive public feed', () => {
   test('submitting the filter form writes params to the URL', async ({
     page,
   }) => {
-    await page.goto('/tv-arhivs/app/');
+    await page.goto('/tv-arhivs/');
     await waitForFeed(page);
     // not_channel is a free-text input — works even with an empty DB.
     await page.getByLabel('Not Channel:').fill('e2e-nonexistent');
@@ -53,7 +54,7 @@ test.describe('tv_archive public feed', () => {
   test('the channel select applies ?channel= when options exist', async ({
     page,
   }) => {
-    await page.goto('/tv-arhivs/app/');
+    await page.goto('/tv-arhivs/');
     await waitForFeed(page);
     const select = page.getByLabel('Channel:', { exact: true });
     const optionCount = await select.locator('option').count();
@@ -66,7 +67,7 @@ test.describe('tv_archive public feed', () => {
   test('pagination writes ?page= when more than one page exists', async ({
     page,
   }) => {
-    await page.goto('/tv-arhivs/app/');
+    await page.goto('/tv-arhivs/');
     await waitForFeed(page);
     const next = page.getByRole('button', { name: 'Next' });
     test.skip(
@@ -75,5 +76,15 @@ test.describe('tv_archive public feed', () => {
     );
     await next.click();
     await expect(page).toHaveURL(/[?&]page=2/);
+  });
+
+  test('the legacy /tv-arhivs/app/ mount 301-redirects to /tv-arhivs/', async ({
+    request,
+  }) => {
+    const response = await request.get('/tv-arhivs/app/?channel=x', {
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(301);
+    expect(response.headers()['location']).toBe('/tv-arhivs/?channel=x');
   });
 });

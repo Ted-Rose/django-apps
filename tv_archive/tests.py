@@ -3,13 +3,14 @@ the anonymous-GET contract (``auth=None`` on the shared NinjaAPI),
 typed-param 422s, pagination shape, ordering determinism, each
 filter's semantics and the dropdown option lists.
 
-Stage 1 adds SpaMountTests covering the public shell mount at
-/tv-arhivs/app/ (react_app_public) against the still-login-required
-/tasks/ mount."""
+Stage 1 added SpaMountTests; Stage 3 (cutover) updated them: the
+SPA now owns /tv-arhivs, /tv-arhivs/app* 301-redirects onto it and
+/tasks/ still proves react_app stayed login-required."""
 import itertools
 from datetime import date
 
 from django.test import TestCase
+from django.urls import reverse
 
 from tv_archive.models import Content
 
@@ -170,14 +171,14 @@ class ContentsApiTests(TestCase):
 
 
 class SpaMountTests(TestCase):
-    """Stage 1 strangler mount: /tv-arhivs/app* serves the React
-    shell publicly (react_app_public — no login bounce, no CSRF
-    cookie) while /tv-arhivs keeps rendering the template and
-    /tasks/ proves react_app stayed login-required."""
+    """Stage 3 cutover: /tv-arhivs + the catch-all serve the public
+    React shell (react_app_public — no login bounce, no CSRF
+    cookie), /tv-arhivs/app* 301-redirects onto it, and /tasks/
+    proves react_app stayed login-required."""
 
-    def test_anonymous_app_paths_render_the_shell(self):
-        for url in ('/tv-arhivs/app', '/tv-arhivs/app/',
-                    '/tv-arhivs/app/foo'):
+    def test_anonymous_paths_render_the_shell(self):
+        for url in ('/tv-arhivs', '/tv-arhivs/',
+                    '/tv-arhivs/anything/deep'):
             resp = self.client.get(url)
             self.assertEqual(resp.status_code, 200, url)
             self.assertTemplateUsed(resp, 'spa_shell.html')
@@ -188,20 +189,41 @@ class SpaMountTests(TestCase):
             )
 
     def test_anonymous_shell_has_empty_bootstrap_user(self):
-        resp = self.client.get('/tv-arhivs/app/')
+        resp = self.client.get('/tv-arhivs/')
         self.assertEqual(resp.context['bootstrap'], {'user': ''})
         # Public variant: no CSRF cookie is set (the API is
         # GET-only — react_app's ensure_csrf_cookie is irrelevant).
         self.assertNotIn('csrftoken', resp.cookies)
 
-    def test_template_page_still_serves_tv_arhivs(self):
-        resp = self.client.get('/tv-arhivs')
-        self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, 'content_list.html')
+    def test_url_name_still_resolves_for_home_html(self):
+        """home.html does {% url 'tv_archive:tv-arhivs' %} — the
+        name must survive the cutover."""
+        self.assertEqual(
+            reverse('tv_archive:tv-arhivs'), '/tv-arhivs'
+        )
 
-    def test_post_to_app_is_404(self):
-        """react_app's non-GET/HEAD → 404 rule holds publicly."""
-        resp = self.client.post('/tv-arhivs/app/')
+    # --- /tv-arhivs/app* legacy mount → permanent redirects ---
+
+    def test_app_paths_301_to_spa(self):
+        for url, target in (
+            ('/tv-arhivs/app', '/tv-arhivs/'),
+            ('/tv-arhivs/app/', '/tv-arhivs/'),
+            ('/tv-arhivs/app/foo', '/tv-arhivs/foo'),
+        ):
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 301, url)
+            self.assertEqual(resp['Location'], target)
+
+    def test_app_redirect_preserves_query_string(self):
+        resp = self.client.get('/tv-arhivs/app/?channel=ltv1_hd')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(
+            resp['Location'], '/tv-arhivs/?channel=ltv1_hd'
+        )
+
+    def test_post_to_spa_is_404(self):
+        """_react_app's non-GET/HEAD → 404 rule holds publicly."""
+        resp = self.client.post('/tv-arhivs/')
         self.assertEqual(resp.status_code, 404)
 
     def test_tasks_mount_still_requires_login(self):

@@ -20,7 +20,7 @@ same database. PythonAnywhere
 | `google_tasks/` | Largest app. Google Tasks bidirectional sync with local-only features (stars, labels, dividers, archive/trash, manual ordering). See `google_tasks/AGENTS.md` and `google_tasks/README.md` |
 | `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits, rule-based auto-categorization (`services/rules.py`). React SPA at `/finance/` (`frontend/src/finance/`), API at `/api/finance/`; `views.py` keeps only `requisition_callback`. See `finance/AGENTS.md` |
 | `bible_research/` | ESV API wrapper (`api.esv.org`): verse lookup as JSON and passage audio. No models |
-| `tv_archive/` | Latvian TV schedule scraper (tet.lv) enriched with IMDb ratings. `fetch_tv_program_details()` is **not** wired to a URL — run it manually via shell |
+| `tv_archive/` | Latvian TV schedule archive (tet.lv scraper + IMDb ratings). Public read-only React SPA at `/tv-arhivs` (`frontend/src/tv_archive/`), API `/api/tv-arhivs/` (public, `auth=None`); scraper runs via `python manage.py fetch_tv_programs`. See `tv_archive/AGENTS.md` |
 | `single_pages/` | One-off pages that don't merit their own app (twister, spoki.lv proxy) |
 | `terraform/` | All GCP infra: Cloud Run service + jobs, paused Cloud Scheduler triggers, secrets refs, Artifact Registry, GCS audio bucket, WIF |
 | `frontend/` | React rewrite workspace: Vite 5 + React 19 + TS, one entry per app (`src/tasks/`); builds to gitignored `frontend_dist/` (Vite manifest + hashed assets) |
@@ -120,8 +120,8 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   for new pages.
 - **Templates/static**: Bootstrap 5 + Bootstrap Icons via CDN; app
   templates under `<app>/templates/` (finance namespaces into a
-  subdir; google_api/tv_archive/single_pages are flat). google_tasks
-  has no templates — its UI is the React SPA (below).
+  subdir; google_api/single_pages are flat). google_tasks and
+  tv_archive have no templates — their UI is the React SPA (below).
 - **Sync pattern**: external objects are mirrored locally via
   `update_or_create` keyed on the remote ID (`task_id`, `list_id`,
   `transaction_id`, `account_id`, `requisition_id` are unique-ish keys).
@@ -133,11 +133,14 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 - **React SPA mounts**: `django_apps.views.spa_shell(request, entry,
   title)` renders `spa_shell.html` (login + CSRF + `json_script`
   bootstrap) for a `frontend/src/<entry>/main.tsx` Vite entry. The
-  google_tasks and finance cutovers are complete: `/tasks/` and
-  `/finance/` ARE the SPAs (`BrowserRouter basename='/<app>'`),
-  `<path:subpath>` catch-alls serve deep links, non-GET/HEAD
-  requests to the old mutation URLs 404, and `/<app>/app/*`
-  301-redirects to `/<app>/*`.
+  google_tasks, finance and tv_archive cutovers are complete:
+  `/tasks/`, `/finance/` and `/tv-arhivs` ARE the SPAs
+  (`BrowserRouter basename='/<app>'` — tv_archive's literal mount
+  has no trailing slash), `<path:subpath>` catch-alls serve deep
+  links, non-GET/HEAD requests to the old mutation URLs 404, and
+  `/<app>/app/*` 301-redirects to `/<app>/*`. tv_archive mounts the
+  public variant (`react_app_public`, anonymous bootstrap, no CSRF
+  cookie) — the page stays public like the template was.
   New apps should mount the shell at `/<app>/` the same way —
   mutations live in the ninja API (`<app>/api.py` →
   `/api/<app>/…`); see `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`.

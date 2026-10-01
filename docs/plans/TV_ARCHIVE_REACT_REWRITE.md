@@ -1,11 +1,14 @@
 # TV Archive React Rewrite — third app on the shared platform
 
-> **Status**: 📋 Plan. The platform (`frontend/` workspace,
+> **Status**: ✅ Implemented — all four stages landed; the SPA
+> serves `/tv-arhivs` (template deleted) and `/tv-arhivs/app/*`
+> 301s. The platform (`frontend/` workspace,
 > `django_apps/api.py` NinjaAPI, `spa_shell`/`react_app`/
-> `app_redirect`, django-vite, generated types, TanStack Query,
+> `app_redirect`/`react_app_public`, django-vite, generated types,
+> TanStack Query,
 > `shared/` client/NavBar/Modal/Dropdown/Toasts) is live —
-> `google_tasks` is fully cut over and `finance` is
-> strangler-mounted (see `GOOGLE_TASKS_REACT_REWRITE.md`,
+> `google_tasks` and `finance` are fully cut over (see
+> `GOOGLE_TASKS_REACT_REWRITE.md`,
 > `FINANCE_REACT_REWRITE.md`). This rewrite adds a third Vite
 > entry; **no Docker, Vercel, CI, or settings changes are needed**.
 
