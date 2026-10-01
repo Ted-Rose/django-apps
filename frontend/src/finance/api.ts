@@ -10,6 +10,8 @@ export type TransactionsOut = components['schemas']['TransactionsOut'];
 export type TransactionOut = components['schemas']['TransactionOut'];
 export type CategoryOverviewOut = components['schemas']['CategoryOverviewOut'];
 export type CategoryRowOut = components['schemas']['CategoryRowOut'];
+export type CurrencyTotalOut = components['schemas']['CurrencyTotalOut'];
+export type PeriodOut = components['schemas']['PeriodOut'];
 export type LimitsOut = components['schemas']['LimitsOut'];
 export type LimitOut = components['schemas']['LimitOut'];
 export type WindowStatOut = components['schemas']['WindowStatOut'];
@@ -32,6 +34,8 @@ export type RuleSaveIn = components['schemas']['RuleSaveIn'];
 export type MoveRuleIn = components['schemas']['MoveRuleIn'];
 export type RulePreviewIn = components['schemas']['RulePreviewIn'];
 export type RulePreviewOut = components['schemas']['RulePreviewOut'];
+export type RulePreviewChangeOut =
+  components['schemas']['RulePreviewChangeOut'];
 export type RulesChangedOut = components['schemas']['RulesChangedOut'];
 export type CategorySaveIn = components['schemas']['CategorySaveIn'];
 export type PushSubscribeIn = components['schemas']['PushSubscribeIn'];
@@ -90,9 +94,9 @@ export function fetchTransactions(
 
 export interface CategoryOverviewParams {
   /** ISO dates; `from` maps to the ?from= query alias. */
-  from?: string;
-  to?: string;
-  account?: number | null;
+  from?: string | null;
+  to?: string | null;
+  account?: number | string | null;
 }
 
 /** GET /api/finance/categories/overview/?from=&to=&account= */
