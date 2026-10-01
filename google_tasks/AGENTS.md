@@ -42,17 +42,18 @@ sync and several local-only features. Full behavior docs:
 
 - `#xxx` (3+ letters) in title/notes → `match_label`: exact →
   4-char prefix → fuzzy `SequenceMatcher >= 0.80` → 3-char prefix.
-  `LABEL_AUTO_CREATE=False` by default; unmatched hashtags raise
-  `UnmatchedHashtagsError` **before any mutation** (pre-pass pattern —
-  preserve it).
+  `LABEL_AUTO_CREATE=False` by default. A pre-pass still matches all
+  hashtags before any mutation, but unmatched hashtags are **not**
+  fatal: they get no label, are warning-logged, and land in
+  `stats['unmatched']` while every other task keeps processing.
 - First non-star hashtag → `match_task_list` (exact → 4-prefix →
   3-prefix) → `move_task_to_list`.
 - `#star`, `#starred`, `#start`, `#starr*` = special "star me" keywords:
   `_star_task_at_top` shifts all starred tasks +1 and puts the task at
   `starred_order=1`. `remove_starred_hashtags` strips them from notes
   so periodic reprocessing doesn't re-star.
-- The API's sync op auto-runs `process_task_labels` after sync,
-  swallowing all errors silently.
+- The API's sync op auto-runs `process_task_labels` after sync;
+  unexpected errors are logged, never surfaced to the sync response.
 
 ## Views & API (post-cutover)
 

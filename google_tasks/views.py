@@ -29,7 +29,6 @@ from google_tasks.services import (
     process_task_labels,
     delete_task_google,
     match_task_list,
-    UnmatchedHashtagsError,
     remove_starred_hashtags,
     get_tasks_service
 )
@@ -254,6 +253,9 @@ def toggle_star(request, task_id):
 @require_POST
 def sync_view(request):
     """Manual sync endpoint."""
+    import logging
+    logger = logging.getLogger('django')
+
     creds = get_creds_dict(request.user)
 
     if not creds:
@@ -274,16 +276,16 @@ def sync_view(request):
             'authorization_url': result['authorization_url']
         })
 
-    # Automatically process labels after successful sync
+    # Automatically process labels after successful sync. Unmatched
+    # hashtags only land in stats['unmatched']; unexpected errors are
+    # logged but must not fail the sync response.
     if result:
         try:
             process_task_labels(request.user, creds)
-        except UnmatchedHashtagsError:
-            # Silently ignore unmatched hashtags during auto-processing
-            pass
         except Exception:
-            # Silently ignore other errors during auto-processing
-            pass
+            logger.exception(
+                'Unexpected error during post-sync label processing'
+            )
 
     return JsonResponse({'success': result})
 
@@ -426,15 +428,7 @@ def process_labels_view(request):
             'error': 'No credentials found'
         }, status=401)
 
-    try:
-        result = process_task_labels(request.user, creds)
-    except UnmatchedHashtagsError as e:
-        logger.warning(f'Unmatched hashtags: {e}')
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'unmatched': e.unmatched
-        }, status=400)
+    result = process_task_labels(request.user, creds)
 
     if isinstance(result, dict) and 'authorization_url' in result:
         logger.warning('Reauth required, returning authorization URL')
@@ -487,17 +481,9 @@ def process_task_label_view(request, task_id):
         user=request.user
     )
 
-    try:
-        result = process_task_labels(
-            request.user, creds, task_id=task_id
-        )
-    except UnmatchedHashtagsError as e:
-        logger.warning(f'Unmatched hashtags: {e}')
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'unmatched': e.unmatched
-        }, status=400)
+    result = process_task_labels(
+        request.user, creds, task_id=task_id
+    )
 
     if isinstance(result, dict) and 'authorization_url' in result:
         logger.warning('Reauth required, returning authorization URL')

@@ -365,6 +365,40 @@ class ProcessTaskLabelsStarTests(TestCase):
         self.assertEqual(old.starred_order, 2.0)
         self.assertEqual(mid.starred_order, 3.0)
 
+    def test_unmatched_hashtag_does_not_block_other_tasks(self):
+        """One bad hashtag must not abort processing — a different
+        task's #star still applies and the failure lands in
+        stats['unmatched']."""
+        self.make_task(
+            'bad', 'consultation with physiotherapist #growth'
+        )
+        good = self.make_task('good', 'call bob #star')
+        stats = process_task_labels(self.user, creds=None)
+        good.refresh_from_db()
+        self.assertTrue(good.is_starred)
+        self.assertEqual(good.starred_order, 1.0)
+        self.assertEqual(stats['starred'], 1)
+        self.assertEqual(stats['unmatched'], [{
+            'task_title': 'consultation with physiotherapist #growth',
+            'hashtag': 'growth',
+        }])
+
+    def test_unmatched_hashtag_skips_only_its_own_label(self):
+        """Matched labels on the same task are still assigned; only
+        the unmatched hashtag is skipped."""
+        from google_tasks.models import TaskLabel
+        label = TaskLabel.objects.create(user=self.user, name='Home')
+        task = self.make_task('mix', 'chores #home #growth')
+        stats = process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertEqual(
+            [label.name for label in task.labels.all()], ['Home']
+        )
+        self.assertEqual(stats['labels_assigned'], 1)
+        self.assertEqual(
+            [u['hashtag'] for u in stats['unmatched']], ['growth']
+        )
+
 
 class TasksApiTests(TestCase):
     """django-ninja layer at /api/tasks/ — auth contract, per-user
@@ -600,6 +634,34 @@ class TasksApiTests(TestCase):
         self.assertFalse(
             GoogleTask.objects.filter(task_id='a').exists()
         )
+
+    def test_process_labels_reports_unmatched_without_failing(self):
+        """Unmatched hashtags used to 400 and abort the whole run;
+        now the response stays 200 with stats.unmatched populated
+        and every other task still gets processed."""
+        GoogleTask.objects.create(
+            user=self.user, task_id='bad',
+            task_list=self.task_list,
+            title='consultation #growth',
+        )
+        good = GoogleTask.objects.create(
+            user=self.user, task_id='good',
+            task_list=self.task_list,
+            title='call bob #star',
+        )
+        with patch('google_tasks.views.get_creds_dict',
+                   return_value={'token': 't'}):
+            resp = self.client.post(f'{self.API}/process-labels/')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body['success'])
+        self.assertEqual(
+            body['stats']['unmatched'],
+            [{'task_title': 'consultation #growth',
+              'hashtag': 'growth'}],
+        )
+        good.refresh_from_db()
+        self.assertTrue(good.is_starred)
 
 
 class ReactAppShellTests(TestCase):

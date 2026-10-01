@@ -537,6 +537,15 @@ export function useProcessLabels() {
             `errors: ${stats.errors ?? 0}`,
           'success',
         );
+        const unmatched = stats.unmatched ?? [];
+        if (unmatched.length) {
+          pushToast(
+            `Unmatched hashtags: ${unmatched
+              .map((u) => `#${u.hashtag} (task: "${u.task_title}")`)
+              .join(', ')}`,
+            'warning',
+          );
+        }
       }
     },
     onError: (error) =>

@@ -25,18 +25,6 @@ LABEL_MIN_PREFIX_LENGTH = 4        # Min chars for prefix match
 LABEL_CAPITALIZE_NEW = True        # Capitalize new label names
 
 
-class UnmatchedHashtagsError(Exception):
-    """Raised when hashtags cannot be matched to existing labels."""
-
-    def __init__(self, unmatched):
-        self.unmatched = unmatched
-        details = '; '.join(
-            f'#{u["hashtag"]} (task: "{u["task_title"]}")'
-            for u in unmatched
-        )
-        super().__init__(f'Unmatched hashtags: {details}')
-
-
 def get_tasks_service(creds):
     """
     Build Google Tasks API service with proper authentication.
@@ -1227,14 +1215,14 @@ def process_task_labels(user, creds, task_id=None):
     4. Move task to GoogleTaskList if needed (Google API)
     5. Star the task
 
+    Hashtags that match no existing label are skipped (no label
+    assigned) and reported in stats['unmatched'] — they never abort
+    processing of the remaining tasks.
+
     Args:
         user: User object
         creds: Google credentials
         task_id: Optional specific task ID to process
-
-    Raises:
-        UnmatchedHashtagsError: If any hashtag cannot be matched
-            to an existing label. No tasks are modified in this case.
 
     Returns: Dict with stats
         {
@@ -1243,6 +1231,7 @@ def process_task_labels(user, creds, task_id=None):
             'starred': int,
             'labels_assigned': int,
             'errors': int,
+            'unmatched': [{'task_title': str, 'hashtag': str}, ...],
             'details': [...]
         }
     """
@@ -1257,6 +1246,7 @@ def process_task_labels(user, creds, task_id=None):
         'starred': 0,
         'labels_assigned': 0,
         'errors': 0,
+        'unmatched': [],
         'details': []
     }
 
@@ -1279,7 +1269,8 @@ def process_task_labels(user, creds, task_id=None):
 
     # Pre-pass: match all hashtags to existing labels before
     # modifying anything. Collect unmatched hashtags so they can
-    # be reported all at once.
+    # be reported all at once — they only forfeit their own label
+    # assignment, never the rest of the run.
     task_labels_map = {}
     unmatched = []
 
@@ -1314,8 +1305,15 @@ def process_task_labels(user, creds, task_id=None):
 
         task_labels_map[task.task_id] = labels
 
+    stats['unmatched'] = unmatched
     if unmatched:
-        raise UnmatchedHashtagsError(unmatched)
+        logger.warning(
+            'Unmatched hashtags during label processing: %s',
+            '; '.join(
+                f'#{u["hashtag"]} (task: "{u["task_title"]}")'
+                for u in unmatched
+            )
+        )
 
     for task in tasks:
         stats['processed'] += 1
@@ -1465,7 +1463,8 @@ def process_task_labels(user, creds, task_id=None):
         f'Label processing complete: {stats["processed"]} processed, '
         f'{stats["moved"]} moved, {stats["starred"]} starred, '
         f'{stats["labels_assigned"]} labels assigned, '
-        f'{stats["errors"]} errors'
+        f'{stats["errors"]} errors, '
+        f'{len(stats["unmatched"])} unmatched hashtags'
     )
 
     return stats

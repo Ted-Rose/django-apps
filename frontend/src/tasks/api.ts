@@ -27,6 +27,7 @@ export interface MutationResult {
     moved: number;
     starred: number;
     errors?: number;
+    unmatched?: { hashtag: string; task_title: string }[];
   };
 }
 
