@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import FinanceNavBar from '../components/FinanceNavBar';
 import ErrorState from '../components/ErrorState';
@@ -20,11 +20,18 @@ import {
 } from '../mutations';
 
 /**
- * React port of rules.html — a categories card (name + color form,
- * per-category edit/delete; delete re-applies rules server-side)
- * and the prioritized rules table with edit/move/delete actions,
- * a "Re-apply rules" button, and the RuleDrawer sandbox (offcanvas
- * form + debounced preview, ported from rule_sandbox.js).
+ * React port of rules.html — a collapsible categories card (name +
+ * color form, per-category edit/delete; delete re-applies rules
+ * server-side) and a collapsible rules card holding the prioritized
+ * rules table with edit/move/delete actions, a "Re-apply rules"
+ * button, and the RuleDrawer sandbox (offcanvas form + debounced
+ * preview, ported from rule_sandbox.js).
+ *
+ * Both sections are CollapsibleCards (the `collapse`/`show` + chevron
+ * pattern from tasks' CompletedSection); categories start collapsed
+ * on narrow screens so the rules are first. Below md the rules table
+ * collapses into cards via the `.rules-table` rules in finance.css
+ * (same approach as `.tx-table` on the transactions page).
  *
  * Condition summaries mirror the template: lowercased choice labels
  * for the counterparty scope/match type, the `operator` badge when
@@ -70,70 +77,17 @@ export default function Rules() {
         )}
         {data && (
           <div className="row g-3">
-            <div className="col-md-4">
+            <div className="col-12 col-md-4">
               <CategoriesCard categories={data.categories} />
             </div>
-            <div className="col-md-8">
-              <div className="d-flex gap-2 mb-3">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={data.categories.length === 0}
-                  onClick={() => setDrawer({ rule: null })}
-                >
-                  <i className="bi bi-plus-lg" /> New rule
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-primary"
-                  disabled={applyRules.isPending}
-                  onClick={() => applyRules.mutate()}
-                >
-                  {applyRules.isPending ? (
-                    <span
-                      className="spinner-border spinner-border-sm"
-                      role="status"
-                    />
-                  ) : (
-                    <i className="bi bi-arrow-repeat" />
-                  )}{' '}
-                  Re-apply rules
-                </button>
-              </div>
-
-              {data.rules.length > 0 ? (
-                <div className="table-responsive">
-                  <table className="table table-striped table-hover">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Category</th>
-                        <th>Matches</th>
-                        <th>Active</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.rules.map((rule, index) => (
-                        <RuleRow
-                          key={rule.id}
-                          rule={rule}
-                          data={data}
-                          isFirst={index === 0}
-                          isLast={index === data.rules.length - 1}
-                          onEdit={() => setDrawer({ rule })}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="alert alert-info">
-                  No rules yet. Rules automatically categorize transactions
-                  during sync based on the sender / receiver name or the payment
-                  description.
-                </div>
-              )}
+            <div className="col-12 col-md-8">
+              <RulesCard
+                data={data}
+                applying={applyRules.isPending}
+                onApply={() => applyRules.mutate()}
+                onNew={() => setDrawer({ rule: null })}
+                onEdit={(rule) => setDrawer({ rule })}
+              />
             </div>
           </div>
         )}
@@ -150,6 +104,63 @@ export default function Rules() {
     </>
   );
 }
+
+/**
+ * Card with a clickable header (title + count badge + chevron) that
+ * expands/collapses the body — the `collapse`/`show` class toggle
+ * from tasks' CompletedSection. `actions` render right-aligned in
+ * the header so they stay reachable while the body is collapsed.
+ */
+function CollapsibleCard({
+  id,
+  title,
+  count,
+  actions,
+  defaultOpen = true,
+  children,
+}: {
+  id: string;
+  title: string;
+  count?: number;
+  actions?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="card">
+      <div className="card-header d-flex flex-wrap align-items-center gap-2 py-2">
+        <button
+          type="button"
+          className="btn btn-link link-body-emphasis text-decoration-none p-0 d-flex align-items-center gap-2"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          <i
+            className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-right'}`}
+          />
+          <span className="fw-semibold">{title}</span>
+          {count !== undefined && (
+            <span className="badge text-bg-secondary">{count}</span>
+          )}
+        </button>
+        {actions && (
+          <div className="ms-auto d-flex flex-wrap gap-2">{actions}</div>
+        )}
+      </div>
+      <div id={id} className={`collapse${open ? ' show' : ''}`}>
+        <div className="card-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Narrow screens start with categories collapsed — rules are the
+ *  primary content. jsdom has no matchMedia, so fall back to open. */
+const isNarrowScreen = () =>
+  typeof window.matchMedia === 'function' &&
+  !window.matchMedia('(min-width: 768px)').matches;
 
 /**
  * The categories card: name + color create/edit form (the API
@@ -170,111 +181,199 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
   };
 
   return (
-    <div className="card mb-3">
-      <div className="card-body">
-        <h5 className="card-title">Categories</h5>
-        <form
-          className="row g-2 align-items-end mb-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const trimmed = name.trim();
-            if (!trimmed) return;
-            saveCategory.mutate(
-              { name: trimmed, color },
-              { onSuccess: (result) => result?.success && reset() },
-            );
-          }}
-        >
-          <div className="col-6">
-            <label className="form-label" htmlFor="cat-name">
-              Name
-            </label>
-            <input
-              type="text"
-              id="cat-name"
-              maxLength={100}
-              className="form-control"
-              required
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </div>
-          <div className="col-3">
-            <label className="form-label" htmlFor="cat-color">
-              Color
-            </label>
-            <input
-              type="color"
-              id="cat-color"
-              className="form-control form-control-color"
-              value={color}
-              onChange={(event) => setColor(event.target.value)}
-            />
-          </div>
-          <div className="col-3 d-flex gap-1">
+    <CollapsibleCard
+      id="categoriesCollapse"
+      title="Categories"
+      count={categories.length}
+      defaultOpen={!isNarrowScreen()}
+    >
+      <form
+        className="row g-2 align-items-end mb-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          saveCategory.mutate(
+            { name: trimmed, color },
+            { onSuccess: (result) => result?.success && reset() },
+          );
+        }}
+      >
+        <div className="col-6">
+          <label className="form-label" htmlFor="cat-name">
+            Name
+          </label>
+          <input
+            type="text"
+            id="cat-name"
+            maxLength={100}
+            className="form-control"
+            required
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </div>
+        <div className="col-3">
+          <label className="form-label" htmlFor="cat-color">
+            Color
+          </label>
+          <input
+            type="color"
+            id="cat-color"
+            className="form-control form-control-color"
+            value={color}
+            onChange={(event) => setColor(event.target.value)}
+          />
+        </div>
+        <div className="col-3 d-flex gap-1">
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={saveCategory.isPending}
+          >
+            {editingId !== null ? 'Save' : 'Add'}
+          </button>
+          {editingId !== null && (
             <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={saveCategory.isPending}
+              type="button"
+              className="btn btn-link btn-sm"
+              onClick={reset}
             >
-              {editingId !== null ? 'Save' : 'Add'}
+              Cancel
             </button>
-            {editingId !== null && (
-              <button
-                type="button"
-                className="btn btn-link btn-sm"
-                onClick={reset}
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
-        {categories.length > 0 ? (
-          <ul className="list-group">
-            {categories.map((category) => (
-              <li
-                key={category.id}
-                className="list-group-item d-flex justify-content-between align-items-center py-1"
-              >
-                <span>
-                  <CategoryBadge category={category} />
-                </span>
-                <span className="d-flex gap-1">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-secondary"
-                    title="Edit category"
-                    aria-label={`Edit ${category.name}`}
-                    onClick={() => {
-                      setName(category.name);
-                      setColor(category.color || '#6c757d');
-                      setEditingId(category.id);
-                    }}
-                  >
-                    <i className="bi bi-pencil" />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline-danger"
-                    title="Delete category"
-                    aria-label={`Delete ${category.name}`}
-                    disabled={deleteCategory.isPending}
-                    onClick={() => deleteCategory.mutate(category.id)}
-                  >
-                    <i className="bi bi-trash" />
-                  </button>
-                </span>
-              </li>
+          )}
+        </div>
+      </form>
+      {categories.length > 0 ? (
+        <ul className="list-group">
+          {categories.map((category) => (
+            <li
+              key={category.id}
+              className="list-group-item d-flex justify-content-between align-items-center py-1"
+            >
+              <span>
+                <CategoryBadge category={category} />
+              </span>
+              <span className="d-flex gap-1">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  title="Edit category"
+                  aria-label={`Edit ${category.name}`}
+                  onClick={() => {
+                    setName(category.name);
+                    setColor(category.color || '#6c757d');
+                    setEditingId(category.id);
+                  }}
+                >
+                  <i className="bi bi-pencil" />
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-danger"
+                  title="Delete category"
+                  aria-label={`Delete ${category.name}`}
+                  disabled={deleteCategory.isPending}
+                  onClick={() => deleteCategory.mutate(category.id)}
+                >
+                  <i className="bi bi-trash" />
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="alert alert-info mb-0">
+          No categories yet — create one, then add rules that assign it.
+        </div>
+      )}
+    </CollapsibleCard>
+  );
+}
+
+/**
+ * The rules card: "New rule" + "Re-apply rules" live in the header
+ * (always reachable, even collapsed); the body holds the prioritized
+ * table which collapses into per-rule cards below md.
+ */
+function RulesCard({
+  data,
+  applying,
+  onApply,
+  onNew,
+  onEdit,
+}: {
+  data: RulesOut;
+  applying: boolean;
+  onApply: () => void;
+  onNew: () => void;
+  onEdit: (rule: RuleOut) => void;
+}) {
+  return (
+    <CollapsibleCard
+      id="rulesCollapse"
+      title="Rules"
+      count={data.rules.length}
+      actions={
+        <>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            disabled={data.categories.length === 0}
+            onClick={onNew}
+          >
+            <i className="bi bi-plus-lg" /> New rule
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-primary"
+            disabled={applying}
+            onClick={onApply}
+          >
+            {applying ? (
+              <span
+                className="spinner-border spinner-border-sm"
+                role="status"
+              />
+            ) : (
+              <i className="bi bi-arrow-repeat" />
+            )}{' '}
+            Re-apply rules
+          </button>
+        </>
+      }
+    >
+      {data.rules.length > 0 ? (
+        <table className="rules-table table table-striped table-hover mb-0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Category</th>
+              <th>Matches</th>
+              <th>Active</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {data.rules.map((rule, index) => (
+              <RuleRow
+                key={rule.id}
+                rule={rule}
+                data={data}
+                isFirst={index === 0}
+                isLast={index === data.rules.length - 1}
+                onEdit={() => onEdit(rule)}
+              />
             ))}
-          </ul>
-        ) : (
-          <div className="alert alert-info mb-0">
-            No categories yet — create one, then add rules that assign it.
-          </div>
-        )}
-      </div>
-    </div>
+          </tbody>
+        </table>
+      ) : (
+        <div className="alert alert-info mb-0">
+          No rules yet. Rules automatically categorize transactions during sync
+          based on the sender / receiver name or the payment description.
+        </div>
+      )}
+    </CollapsibleCard>
   );
 }
 
@@ -300,25 +399,25 @@ function RuleRow({
 
   return (
     <tr>
-      <td>{rule.priority}</td>
-      <td>
+      <td className="rule-cell-priority">{rule.priority}</td>
+      <td className="rule-cell-category">
         {category ? (
           <CategoryBadge category={category} />
         ) : (
           <span className="badge text-bg-secondary">#{rule.category_id}</span>
         )}
       </td>
-      <td>
+      <td className="rule-cell-matches">
         <ConditionSummary rule={rule} data={data} />
       </td>
-      <td>
+      <td className="rule-cell-active">
         {rule.is_active ? (
-          <i className="bi bi-check-circle text-success" />
+          <i className="bi bi-check-circle text-success" title="Active" />
         ) : (
-          <i className="bi bi-x-circle text-muted" />
+          <i className="bi bi-x-circle text-muted" title="Inactive" />
         )}
       </td>
-      <td className="text-nowrap text-end">
+      <td className="rule-cell-actions text-nowrap text-end">
         <button
           type="button"
           className="btn btn-sm btn-outline-secondary"

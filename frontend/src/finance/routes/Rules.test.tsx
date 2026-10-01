@@ -173,6 +173,39 @@ describe('Rules', () => {
     ).toBeDisabled();
   });
 
+  it('collapses and expands the categories and rules cards', async () => {
+    mockedApiGet.mockResolvedValue(makeRules());
+    renderRules();
+    await screen.findByText(/debtor or creditor contains "rimi"/);
+
+    // Both sections render expanded (jsdom has no matchMedia, so the
+    // narrow-screen default-collapsed branch doesn't kick in).
+    for (const id of ['categoriesCollapse', 'rulesCollapse']) {
+      const section = document.getElementById(id)!;
+      expect(section).toHaveClass('collapse', 'show');
+    }
+
+    const categoriesToggle = screen.getByRole('button', {
+      name: /Categories/,
+    });
+    fireEvent.click(categoriesToggle);
+    expect(document.getElementById('categoriesCollapse')!).toHaveClass(
+      'collapse',
+    );
+    expect(
+      document.getElementById('categoriesCollapse')!,
+    ).not.toHaveClass('show');
+    expect(categoriesToggle).toHaveAttribute('aria-expanded', 'false');
+
+    // Collapsing categories keeps the rules section (and its header
+    // actions) usable.
+    fireEvent.click(screen.getByRole('button', { name: /Rules/ }));
+    expect(document.getElementById('rulesCollapse')!).not.toHaveClass('show');
+
+    fireEvent.click(categoriesToggle);
+    expect(document.getElementById('categoriesCollapse')!).toHaveClass('show');
+  });
+
   it('shows the empty state when there are no rules', async () => {
     mockedApiGet.mockResolvedValue(makeRules({ rules: [] }));
     renderRules();

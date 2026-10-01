@@ -18,3 +18,72 @@ body {
   justify-content: flex-end;
   row-gap: 0.25rem;
 }
+
+/* --- Rules table --------------------------------------------------------
+   Below md the five columns can't fit: the header row disappears and
+   each rule becomes a card — `#priority · category badge · active` on
+   top, the wrapped condition summary below, actions at the bottom
+   right. Same collapse-into-cards approach as `.tx-table` above. */
+@media (max-width: 767.98px) {
+  .rules-table,
+  .rules-table > thead,
+  .rules-table > tbody {
+    display: block;
+  }
+
+  .rules-table > thead {
+    display: none;
+  }
+
+  .rules-table > tbody > tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    padding: 0.75rem 0.875rem;
+    margin-bottom: 0.75rem;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: 0.5rem;
+  }
+  /* Cell padding, bottom borders and the striped/hover inset shadows
+     would look patchy inside a card — the card border separates rows. */
+  .rules-table > tbody > tr > td {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    white-space: normal;
+  }
+  /* Card line 1: `#1` · category badge · active icon. */
+  .rules-table .rule-cell-priority {
+    order: 1;
+    color: var(--bs-secondary-color);
+    font-size: 0.8125rem;
+  }
+  .rules-table .rule-cell-priority::before {
+    content: '#';
+  }
+  .rules-table .rule-cell-category {
+    order: 2;
+  }
+  .rules-table .rule-cell-active {
+    order: 3;
+    margin-left: auto;
+  }
+  /* Card line 2: full-width wrapped condition summary. */
+  .rules-table .rule-cell-matches {
+    order: 4;
+    flex: 1 1 100%;
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+  }
+  /* Card line 3: actions, right aligned. */
+  .rules-table .rule-cell-actions {
+    order: 5;
+    flex: 1 1 100%;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.25rem;
+  }
+}
