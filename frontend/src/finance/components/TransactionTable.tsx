@@ -24,6 +24,11 @@ interface TransactionTableProps {
  * toLocaleDateString (the local-datetime port) and the raw amount
  * string + currency (money stays a string; only the sign is read
  * for coloring).
+ *
+ * Below the lg breakpoint finance.css turns the table into a card
+ * list (the header row becomes a wrap-around filter bar, each row a
+ * card) and rearranges cells via their `tx-cell-*` classes — the
+ * markup here stays a plain table so desktop is unchanged.
  */
 export function TransactionTable({ data, onUpdate }: TransactionTableProps) {
   const { sort, direction } = data;
@@ -45,7 +50,7 @@ export function TransactionTable({ data, onUpdate }: TransactionTableProps) {
 
   return (
     <div className="table-responsive">
-      <table className="table table-striped table-hover">
+      <table className="table table-striped table-hover tx-table">
         <thead>
           <tr>
             <ColumnHeader
@@ -403,18 +408,24 @@ function TransactionRow({ tx }: { tx: TransactionOut }) {
   const negative = tx.amount.startsWith('-');
   return (
     <tr>
-      <td>{bookingDate.toLocaleDateString()}</td>
-      <td>{tx.account.name || tx.account.iban || ''}</td>
-      <td>{tx.remittance_information || '-'}</td>
-      <td>{tx.counterparty || '-'}</td>
-      <td>
+      <td className="tx-cell-date">{bookingDate.toLocaleDateString()}</td>
+      <td className="tx-cell-account">
+        {tx.account.name || tx.account.iban || ''}
+      </td>
+      <td className="tx-cell-desc">{tx.remittance_information || '-'}</td>
+      <td className="tx-cell-counterparty">{tx.counterparty || '-'}</td>
+      <td className="tx-cell-category">
         {tx.effective_category ? (
           <CategoryBadge category={tx.effective_category} />
         ) : (
           <span className="text-muted">-</span>
         )}
       </td>
-      <td className={`text-end ${negative ? 'text-danger' : 'text-success'}`}>
+      <td
+        className={`tx-cell-amount text-end ${
+          negative ? 'text-danger' : 'text-success'
+        }`}
+      >
         {tx.amount} {tx.currency}
       </td>
     </tr>

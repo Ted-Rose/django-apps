@@ -19,6 +19,129 @@ body {
   row-gap: 0.25rem;
 }
 
+/* --- Transactions table -------------------------------------------------
+   Long values wrap at every viewport so a huge remittance text or IBAN
+   can't stretch the table into horizontal scroll on its own. */
+.tx-table .tx-cell-account,
+.tx-table .tx-cell-desc,
+.tx-table .tx-cell-counterparty {
+  overflow-wrap: anywhere;
+}
+.tx-table .tx-cell-account {
+  max-width: 14rem;
+}
+.tx-table .tx-cell-desc {
+  min-width: 10rem;
+  max-width: 30rem;
+}
+.tx-table .tx-cell-counterparty {
+  max-width: 18rem;
+}
+.tx-table .tx-cell-date,
+.tx-table .tx-cell-amount {
+  white-space: nowrap;
+}
+
+/* Below lg the six columns can't fit: like banking apps, the header row
+   becomes a wrap-around bar of sort/filter chips and each transaction a
+   card — counterparty + amount on top, the wrapped description below,
+   and a muted `date · account … category` footer line. */
+@media (max-width: 991.98px) {
+  .tx-table,
+  .tx-table > thead,
+  .tx-table > tbody {
+    display: block;
+  }
+
+  .tx-table > thead > tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    margin-bottom: 0.75rem;
+    border: 0;
+  }
+  .tx-table > thead > tr > th {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  /* Chip look for the header dropdown toggles; keep menus on screen. */
+  .tx-table > thead .dropdown > .btn-link {
+    padding: 0.2rem 0.7rem !important;
+    border: var(--bs-border-width) solid var(--bs-border-color) !important;
+    border-radius: 2rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .tx-table > thead .dropdown-menu {
+    max-width: min(20rem, 92vw);
+  }
+
+  .tx-table > tbody > tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.125rem 0.75rem;
+    padding: 0.75rem 0.875rem;
+    margin-bottom: 0.75rem;
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: 0.5rem;
+  }
+  /* Cell padding, bottom borders and the striped/hover inset shadows
+     would look patchy inside a card — the card border separates rows. */
+  .tx-table > tbody > tr > td {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    min-width: 0;
+    max-width: none;
+    white-space: normal;
+  }
+  /* Card line 1: counterparty (the "merchant") + colored amount. */
+  .tx-table .tx-cell-counterparty {
+    order: 1;
+    flex: 1 1 auto;
+    font-weight: 600;
+  }
+  .tx-table .tx-cell-amount {
+    order: 2;
+    flex: 0 0 auto;
+    font-weight: 600;
+  }
+  /* Card line 2: full-width wrapped description. */
+  .tx-table .tx-cell-desc {
+    order: 3;
+    flex: 1 1 100%;
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+  }
+  /* Card line 3: `date · account` left, category chip right. */
+  .tx-table .tx-cell-date {
+    order: 4;
+    color: var(--bs-secondary-color);
+    font-size: 0.8125rem;
+  }
+  .tx-table .tx-cell-account {
+    order: 5;
+    color: var(--bs-secondary-color);
+    font-size: 0.8125rem;
+  }
+  .tx-table .tx-cell-account:not(:empty)::before {
+    content: '· ';
+  }
+  .tx-table .tx-cell-category {
+    order: 6;
+    margin-left: auto;
+  }
+  /* The empty-state cell spans the card's full width. */
+  .tx-table > tbody > tr > td[colspan] {
+    flex: 1 1 100%;
+  }
+}
+
 /* --- Rules table --------------------------------------------------------
    Below md the five columns can't fit: the header row disappears and
    each rule becomes a card — `#priority · category badge · active` on

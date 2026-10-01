@@ -70,7 +70,7 @@ export default function Transactions() {
       <div className="container-fluid px-2 py-4">
         <h1 className="mb-4">Transactions</h1>
 
-        <div className="mb-4 d-flex align-items-center gap-3">
+        <div className="mb-4 d-flex align-items-center flex-wrap gap-3">
           <button
             type="button"
             className="btn btn-outline-primary"

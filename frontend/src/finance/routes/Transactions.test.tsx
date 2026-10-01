@@ -137,6 +137,27 @@ describe('Transactions', () => {
     expect(mockedApiGet).toHaveBeenCalledWith('/api/finance/transactions/');
   });
 
+  it('tags each cell with the tx-cell-* hook the responsive CSS uses', async () => {
+    // Below lg, finance.css turns rows into cards and reorders cells
+    // via these classes — a refactor dropping them breaks mobile.
+    mockedApiGet.mockResolvedValue(
+      makeTransactions({ count: 1, transactions: [makeTransaction()] }),
+    );
+    renderTransactions();
+    const cell = await screen.findByRole('cell', { name: 'Rent January' });
+    const row = cell.closest('tr') as HTMLElement;
+    for (const cls of [
+      'tx-cell-date',
+      'tx-cell-account',
+      'tx-cell-desc',
+      'tx-cell-counterparty',
+      'tx-cell-category',
+      'tx-cell-amount',
+    ]) {
+      expect(row.querySelector(`.${cls}`)).not.toBeNull();
+    }
+  });
+
   it('shows the filtered/unfiltered empty states', async () => {
     mockedApiGet.mockResolvedValue(makeTransactions());
     const { unmount } = renderTransactions();
