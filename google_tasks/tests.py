@@ -623,6 +623,65 @@ class TasksApiTests(TestCase):
         self.assertEqual(resp.status_code, 422)
         self.assertIn('detail', resp.json())
 
+    def post_update(self, task_id, payload):
+        return self.client.post(
+            f'{self.API}/task/{task_id}/update/',
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+
+    def test_update_task_order_fields(self):
+        task = self.make_task('a', 1.0, starred_order=3.0)
+        resp = self.post_update('a', {
+            'title': 'a',
+            'task_order': 42.5,
+            'starred_order': 7.0,
+        })
+        self.assertEqual(resp.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.task_order, 42.5)
+        self.assertEqual(task.starred_order, 7.0)
+        # Order fields are local-only — no push to Google.
+        self.assertFalse(task.needs_push)
+
+    def test_update_task_clear_starred_order(self):
+        task = self.make_task(
+            'a', 5.0, is_starred=True, starred_order=2.0
+        )
+        resp = self.post_update('a', {
+            'title': 'a',
+            'starred_order': None,
+        })
+        self.assertEqual(resp.status_code, 200)
+        task.refresh_from_db()
+        self.assertIsNone(task.starred_order)
+        self.assertEqual(task.task_order, 5.0)
+
+    def test_update_task_omitted_order_fields_unchanged(self):
+        task = self.make_task('a', 9.0, starred_order=4.0)
+        resp = self.post_update('a', {'title': 'a'})
+        self.assertEqual(resp.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.task_order, 9.0)
+        self.assertEqual(task.starred_order, 4.0)
+
+    def test_update_task_null_task_order_is_400(self):
+        self.make_task('a', 1.0)
+        resp = self.post_update('a', {
+            'title': 'a',
+            'task_order': None,
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['error'], 'bad_request')
+
+    def test_update_task_string_order_is_422(self):
+        self.make_task('a', 1.0)
+        resp = self.post_update('a', {
+            'title': 'a',
+            'task_order': 'high',
+        })
+        self.assertEqual(resp.status_code, 422)
+
     def test_archive_and_permanent_delete(self):
         task = self.make_task('a')
         resp = self.client.post(f'{self.API}/task/a/archive/')

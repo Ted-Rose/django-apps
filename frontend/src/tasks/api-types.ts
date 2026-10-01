@@ -1070,6 +1070,10 @@ export interface components {
             notes?: string | null;
             /** Label Ids */
             label_ids?: number[] | null;
+            /** Task Order */
+            task_order?: number | null;
+            /** Starred Order */
+            starred_order?: number | null;
         };
         /** AccountOut */
         AccountOut: {

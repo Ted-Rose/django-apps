@@ -158,6 +158,10 @@ class TaskUpdateIn(Schema):
     title: str
     notes: Optional[str] = None
     label_ids: Optional[List[int]] = Field(default=None, max_length=50)
+    # Local-only float positions. Absent key = unchanged; the view
+    # additionally accepts explicit null for starred_order (clears it).
+    task_order: Optional[float] = None
+    starred_order: Optional[float] = None
 
 
 # --- Shared helpers ---

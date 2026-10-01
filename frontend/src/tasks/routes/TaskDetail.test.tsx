@@ -116,7 +116,46 @@ describe('TaskDetail', () => {
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/tasks/task/task-1/update/',
-        { title: 'New title', notes: 'new notes', label_ids: [3] },
+        {
+          title: 'New title',
+          notes: 'new notes',
+          label_ids: [3],
+          starred_order: null,
+        },
+      ),
+    );
+  });
+
+  it('posts edited order fields to /update/', async () => {
+    mockedApiPost.mockResolvedValue({ success: true });
+    mockedApiGet.mockResolvedValue(
+      makeDetail({
+        task: makeTask({
+          title: 'Old title',
+          task_order: 10,
+          starred_order: 4,
+        }),
+      }),
+    );
+    renderDetail();
+    await screen.findByDisplayValue('Old title');
+    fireEvent.change(screen.getByLabelText(/List order/), {
+      target: { value: '12.5' },
+    });
+    fireEvent.change(screen.getByLabelText(/Starred order/), {
+      target: { value: '1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save Changes/ }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/tasks/task/task-1/update/',
+        {
+          title: 'Old title',
+          notes: '',
+          label_ids: [],
+          task_order: 12.5,
+          starred_order: 1,
+        },
       ),
     );
   });

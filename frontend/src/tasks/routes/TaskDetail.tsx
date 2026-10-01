@@ -40,6 +40,8 @@ export default function TaskDetail() {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [labelIds, setLabelIds] = useState<number[]>([]);
+  const [taskOrder, setTaskOrder] = useState('');
+  const [starredOrder, setStarredOrder] = useState('');
   const [alert, setAlert] = useState<{
     kind: 'success' | 'danger';
     text: string;
@@ -61,6 +63,10 @@ export default function TaskDetail() {
       setTitle(task.title);
       setNotes(task.notes ?? '');
       setLabelIds(task.labels.map((l) => l.id));
+      setTaskOrder(task.task_order != null ? String(task.task_order) : '');
+      setStarredOrder(
+        task.starred_order != null ? String(task.starred_order) : '',
+      );
     }
   }, [task]);
 
@@ -90,6 +96,19 @@ export default function TaskDetail() {
       setAlert({ kind: 'danger', text: 'Title cannot be empty' });
       return;
     }
+    const orderRaw = taskOrder.trim();
+    const starredRaw = starredOrder.trim();
+    // Empty task_order keeps the current value (the key is omitted);
+    // empty starred_order posts null and clears the position.
+    const parsedOrder = orderRaw === '' ? undefined : Number(orderRaw);
+    const parsedStarred = starredRaw === '' ? null : Number(starredRaw);
+    if (
+      (parsedOrder !== undefined && !Number.isFinite(parsedOrder)) ||
+      (parsedStarred !== null && !Number.isFinite(parsedStarred))
+    ) {
+      setAlert({ kind: 'danger', text: 'Order values must be numbers' });
+      return;
+    }
     setAlert(null);
     updateTask.mutate(
       {
@@ -99,6 +118,10 @@ export default function TaskDetail() {
           // The view calls notes.strip() — string, never null.
           notes: notes.trim(),
           label_ids: labelIds,
+          starred_order: parsedStarred,
+          ...(parsedOrder !== undefined
+            ? { task_order: parsedOrder }
+            : {}),
         },
       },
       {
@@ -307,6 +330,53 @@ export default function TaskDetail() {
                 </div>
                 <div className="form-text">
                   Select labels to organize this task
+                </div>
+              </div>
+
+              <div className="row mb-4">
+                <div className="col-md-6">
+                  <label
+                    htmlFor="task-order"
+                    className="form-label fw-bold"
+                  >
+                    <i className="bi bi-sort-numeric-down" /> List order
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="form-control"
+                    id="task-order"
+                    name="task_order"
+                    value={taskOrder}
+                    onChange={(event) =>
+                      setTaskOrder(event.target.value)
+                    }
+                  />
+                  <div className="form-text">
+                    Manual position in the task list
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <label
+                    htmlFor="starred-order"
+                    className="form-label fw-bold"
+                  >
+                    <i className="bi bi-star" /> Starred order
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="form-control"
+                    id="starred-order"
+                    name="starred_order"
+                    value={starredOrder}
+                    onChange={(event) =>
+                      setStarredOrder(event.target.value)
+                    }
+                  />
+                  <div className="form-text">
+                    Position in the starred view (empty clears it)
+                  </div>
                 </div>
               </div>
 

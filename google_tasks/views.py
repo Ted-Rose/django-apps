@@ -906,10 +906,35 @@ def create_task_view(request):
         }, status=400)
 
 
+_ABSENT = object()
+
+
+def _parse_order_update(data, field):
+    """Validate an optional order field from an update payload.
+
+    Returns (value, error_response): value is a float, None (only for
+    the nullable starred_order), or _ABSENT when the key wasn't sent;
+    error_response is a 400 JsonResponse on invalid input.
+    """
+    if field not in data:
+        return _ABSENT, None
+    value = data[field]
+    if value is None and field == 'starred_order':
+        return None, None
+    if (isinstance(value, bool) or
+            not isinstance(value, (int, float)) or
+            not math.isfinite(value)):
+        return None, JsonResponse({
+            'success': False,
+            'error': f'{field} must be a finite number'
+        }, status=400)
+    return float(value), None
+
+
 @login_required
 @require_POST
 def update_task_view(request, task_id):
-    """Update task title, notes, and labels."""
+    """Update task title, notes, labels, and local order fields."""
     import logging
     logger = logging.getLogger('django')
 
@@ -918,6 +943,16 @@ def update_task_view(request, task_id):
         title = data.get('title', '').strip()
         notes = data.get('notes', '').strip()
         label_ids = data.get('label_ids', None)
+
+        # task_order/starred_order are local-only float positions —
+        # updating them must never set needs_push.
+        order_updates = {}
+        for field in ('task_order', 'starred_order'):
+            value, error = _parse_order_update(data, field)
+            if error is not None:
+                return error
+            if value is not _ABSENT:
+                order_updates[field] = value
 
         logger.info(
             f'Updating task {task_id} for user {request.user.username}'
@@ -940,6 +975,8 @@ def update_task_view(request, task_id):
             task.needs_push = True
         task.title = title
         task.notes = new_notes
+        for field, value in order_updates.items():
+            setattr(task, field, value)
 
         # Update labels if provided
         if label_ids is not None:
