@@ -2,94 +2,53 @@ from functools import partial
 
 from django.urls import path
 
-from django_apps.views import react_app
+from django_apps.views import app_redirect, react_app
 from finance import views
 
 app_name = 'finance'
 
-# Stage 1 strangler mount: the React SPA skeleton lives under
-# /finance/app/ while the template UI keeps serving /finance/*.
-# react_app is the shared shell helper (django_apps.views); non-
-# GET/HEAD requests under app/ 404 there. At Stage 6 cutover the SPA
-# takes over the page names below and these app/ routes 301 instead.
+# Stage 6 cutover: the React SPA is the only UI under /finance/.
+# Every GET/HEAD path renders the shell and React Router resolves
+# the page; non-GET requests to the retired form-POST URLs
+# (rules/save/, transactions/sync/, push/subscribe/, ...) 404 in
+# react_app — mutations live under /api/finance/ now. Both helpers
+# are shared (django_apps.views); `entry` picks the Vite bundle.
 react_app_finance = partial(
     react_app, entry='finance', title='Finance'
 )
+app_redirect_finance = partial(app_redirect, base='/finance/')
 
 urlpatterns = [
-    path('app/', react_app_finance, name='spa_app'),
+    # External redirect target baked into GoCardless requisitions
+    # ({BASE_URL}/finance/callback/) — stays a Django view forever
+    # and must precede the catch-all below.
+    path('callback/', views.requisition_callback, name='callback'),
+    # Every page name keeps resolving for reverse() callers
+    # (home.html's finance:accounts, evaluate_spending_limits'
+    # finance:limits, the callback's finance:connect/accounts
+    # redirects); each serves the SPA shell and React Router
+    # resolves the page client-side.
+    path('', react_app_finance, name='index'),
+    path('connect/', react_app_finance, name='connect'),
+    path('accounts/', react_app_finance, name='accounts'),
+    path('transactions/', react_app_finance, name='transactions'),
+    path('balances/', react_app_finance, name='balances'),
+    path('limits/', react_app_finance, name='limits'),
+    path('rules/', react_app_finance, name='rules'),
+    path('categories/', react_app_finance, name='categories'),
+    # Legacy strangler mount (Stages 1–5): 301 to the real routes so
+    # bookmarks/links like /finance/app/rules keep working. The
+    # bare 'app' pattern (no trailing slash) keeps /finance/app from
+    # falling through to the catch-all below.
+    path('app', app_redirect_finance, name='react_app_noslash'),
+    path('app/', app_redirect_finance, name='react_app'),
     path(
         'app/<path:subpath>',
-        react_app_finance,
-        name='spa_app_subpath',
+        app_redirect_finance,
+        name='react_app_subpath',
     ),
-    path('connect/', views.connect_bank, name='connect'),
-    path('callback/', views.requisition_callback, name='callback'),
-    path('accounts/', views.account_list, name='accounts'),
-    path(
-        'accounts/<int:account_id>/share/',
-        views.share_account,
-        name='share_account',
-    ),
-    path('transactions/', views.transaction_list, name='transactions'),
-    path(
-        'transactions/sync/',
-        views.sync_transactions,
-        name='sync_transactions',
-    ),
-    path('balances/', views.live_balances, name='balances'),
-    path(
-        'balances/refresh/',
-        views.refresh_balances,
-        name='refresh_balances',
-    ),
-    path('limits/', views.limits_view, name='limits'),
-    path(
-        'limits/<int:limit_id>/delete/',
-        views.delete_limit,
-        name='delete_limit',
-    ),
-    path(
-        'push/subscribe/',
-        views.push_subscribe,
-        name='push_subscribe',
-    ),
-    path(
-        'push/unsubscribe/',
-        views.push_unsubscribe,
-        name='push_unsubscribe',
-    ),
-    path('rules/', views.rules_view, name='rules'),
-    path('rules/save/', views.save_rule, name='save_rule'),
-    path(
-        'rules/<int:rule_id>/delete/',
-        views.delete_rule,
-        name='delete_rule',
-    ),
-    path(
-        'rules/<int:rule_id>/move/',
-        views.move_rule,
-        name='move_rule',
-    ),
-    path('rules/apply/', views.apply_rules_view, name='apply_rules'),
-    path(
-        'rules/preview/',
-        views.preview_rule_view,
-        name='preview_rule',
-    ),
-    path(
-        'categories/',
-        views.category_overview,
-        name='categories',
-    ),
-    path(
-        'categories/save/',
-        views.save_category,
-        name='save_category',
-    ),
-    path(
-        'categories/<int:category_id>/delete/',
-        views.delete_category,
-        name='delete_category',
-    ),
+    # No trailing slash on <path:subpath> — it matches both
+    # 'x' and 'x/', so client-side routes don't depend on
+    # an APPEND_SLASH redirect hop.
+    path('<path:subpath>', react_app_finance, name='spa_subpath'),
 ]

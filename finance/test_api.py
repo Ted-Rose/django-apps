@@ -1,7 +1,8 @@
 """Coverage for the django-ninja layer at /api/finance/ (Stage 0 of
 the React rewrite): session auth, CSRF, per-user isolation, error
-mapping and the JSON mutation contracts — complements the template
-view coverage in tests.py."""
+mapping and the JSON mutation contracts — complements the service-
+and command-level coverage in tests.py (its HTTP-layer tests were
+repointed at this API in Stage 6)."""
 import json
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -853,26 +854,50 @@ class SyncAndBalancesApiTests(ApiTestCase):
 
 
 class SpaMountTests(ApiTestCase):
-    """Stage 1 strangler mount: the SPA shell serves /finance/app/*
-    while the template views keep serving /finance/*. Also covers
-    the regression surface of promoting react_app/app_redirect to
-    django_apps.views — the /tasks/ cutover must be unchanged."""
+    """Stage 6 cutover: the SPA owns /finance/* — named shell routes
+    keep reverse('finance:…') working, /finance/app/* 301s to the
+    real routes, and retired form-POST URLs 404. Also covers the
+    shared react_app/app_redirect regression surface — the /tasks/
+    cutover must be unchanged."""
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(
             username='alice', password='pw'
         )
 
-    def test_app_shell_requires_login(self):
-        resp = self.client.get('/finance/app/')
+    def test_named_page_routes_resolve(self):
+        """reverse('finance:…') stays alive for home.html,
+        evaluate_spending_limits and the callback redirects."""
+        self.assertEqual(reverse('finance:index'), '/finance/')
+        self.assertEqual(reverse('finance:connect'), '/finance/connect/')
+        self.assertEqual(
+            reverse('finance:accounts'), '/finance/accounts/'
+        )
+        self.assertEqual(
+            reverse('finance:transactions'), '/finance/transactions/'
+        )
+        self.assertEqual(
+            reverse('finance:balances'), '/finance/balances/'
+        )
+        self.assertEqual(reverse('finance:limits'), '/finance/limits/')
+        self.assertEqual(reverse('finance:rules'), '/finance/rules/')
+        self.assertEqual(
+            reverse('finance:categories'), '/finance/categories/'
+        )
+        self.assertEqual(
+            reverse('finance:callback'), '/finance/callback/'
+        )
+
+    def test_shell_requires_login(self):
+        resp = self.client.get('/finance/')
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(
             resp['Location'].startswith('/login/?next=')
         )
 
-    def test_app_shell_get_renders(self):
+    def test_shell_get_renders(self):
         self.client.force_login(self.user)
-        resp = self.client.get('/finance/app/')
+        resp = self.client.get('/finance/')
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Finance - Tedis')
         # Whether or not frontend_dist/manifest.json exists in this
@@ -881,28 +906,52 @@ class SpaMountTests(ApiTestCase):
         # not a 500.
         self.assertContains(resp, 'spa-bootstrap')
 
-    def test_app_deep_link_renders_shell(self):
+    def test_named_page_serves_shell(self):
         self.client.force_login(self.user)
-        resp = self.client.get('/finance/app/transactions')
+        resp = self.client.get(reverse('finance:accounts'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'spa-bootstrap')
 
-    def test_app_post_is_404(self):
-        # The shell is GET/HEAD-only — a stale POST under the mount
-        # must not receive the HTML page.
+    def test_deep_link_renders_shell(self):
         self.client.force_login(self.user)
-        for url in ('/finance/app/', '/finance/app/transactions'):
+        resp = self.client.get('/finance/transactions')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'spa-bootstrap')
+
+    def test_post_to_page_routes_is_404(self):
+        # The shell is GET/HEAD-only — the retired form-POST URLs
+        # (rules/save/, push/subscribe/, transactions/sync/) must
+        # not answer with the HTML page.
+        self.client.force_login(self.user)
+        for url in (
+            '/finance/',
+            '/finance/accounts/',
+            '/finance/rules/save/',
+            '/finance/push/subscribe/',
+            '/finance/transactions/sync/',
+        ):
             resp = self.client.post(
                 url, data='{}', content_type='application/json'
             )
             self.assertEqual(resp.status_code, 404, url)
 
-    def test_template_routes_untouched(self):
-        # The existing template UI keeps serving /finance/*.
-        self.client.force_login(self.user)
-        resp = self.client.get('/finance/accounts/')
-        self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'Connect Bank')
+    def test_legacy_app_paths_301(self):
+        for source, target in (
+            ('/finance/app', '/finance/'),
+            ('/finance/app/', '/finance/'),
+            ('/finance/app/rules', '/finance/rules'),
+            ('/finance/app/transactions/', '/finance/transactions/'),
+        ):
+            resp = self.client.get(source)
+            self.assertEqual(resp.status_code, 301, source)
+            self.assertEqual(resp['Location'], target, source)
+
+    def test_legacy_app_redirect_keeps_query(self):
+        resp = self.client.get('/finance/app/limits?month=2026-01')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(
+            resp['Location'], '/finance/limits?month=2026-01'
+        )
 
     def test_tasks_dashboard_still_resolves(self):
         self.assertEqual(

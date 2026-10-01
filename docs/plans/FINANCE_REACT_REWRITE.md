@@ -1,6 +1,8 @@
 # Finance React Rewrite — second app on the shared platform
 
-> **Status**: 📋 Plan. The platform built for google_tasks
+> **Status**: ✅ Done — all six stages merged; the SPA serves
+> `/finance/` (templates/static deleted) and `/finance/app/*` 301s.
+> The platform built for google_tasks
 > (`frontend/` workspace, `django_apps/api.py` NinjaAPI,
 > `spa_shell`, django-vite, generated types, TanStack Query,
 > `shared/` client/NavBar/Modal/Dropdown) is already live and
@@ -194,7 +196,9 @@ npm run gen:types --prefix frontend
 `gen:types` becomes two commands (or a loop) emitting
 `src/tasks/api-types.ts` and `src/finance/api-types.ts` — per-entry
 files per the original plan; both derive from the one committed
-`openapi.json`, and the existing CI diff-check covers the new file.
+`openapi.json`. The `frontend.yml` drift check currently diffs only
+`src/tasks/api-types.ts` — generalize it to `src/**/api-types.ts`
+in Stage 0 (also recorded in `NEW_APP_REACT_GUIDELINES.md`).
 
 ## URL & cutover design (`finance/urls.py`)
 

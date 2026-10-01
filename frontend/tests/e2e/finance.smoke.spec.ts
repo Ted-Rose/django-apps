@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 /**
  * finance SPA smoke tests (Stage 5 of the React rewrite plan:
- * load /finance/app/, navigate to transactions, open the rules
+ * load /finance/, navigate to transactions, open the rules
  * drawer).
  *
  * Prerequisites — all documented in README.md:
@@ -29,13 +29,11 @@ async function login(page: Page) {
 }
 
 test.describe('unauthenticated', () => {
-  test('/finance/app/ redirects to login (session auth)', async ({
-    request,
-  }) => {
+  test('/finance/ redirects to login (session auth)', async ({ request }) => {
     // @login_required → 302 to LOGIN_URL (/login/?next=…); that view
     // then forwards into Google OAuth. Assert the first hop only —
     // the rest depends on accounts.google.com being reachable.
-    const response = await request.get('/finance/app/', {
+    const response = await request.get('/finance/', {
       maxRedirects: 0,
     });
     expect(response.status()).toBe(302);
@@ -59,9 +57,9 @@ test.describe('authenticated smoke', () => {
 
   test('login renders the accounts page', async ({ page }) => {
     await login(page);
-    await page.goto('/finance/app/');
+    await page.goto('/finance/');
     // `/` inside the SPA redirects to /accounts.
-    await expect(page).toHaveURL(/\/finance\/app\/accounts/);
+    await expect(page).toHaveURL(/\/finance\/accounts/);
     // React mounted: navbar + either the account list or an
     // empty-state alert (never the raw "Loading React app…").
     await expect(page.locator('nav.navbar').first()).toBeVisible();
@@ -71,10 +69,10 @@ test.describe('authenticated smoke', () => {
 
   test('navigates to transactions via the burger menu', async ({ page }) => {
     await login(page);
-    await page.goto('/finance/app/accounts');
+    await page.goto('/finance/accounts');
     await page.getByRole('button', { name: 'Toggle menu' }).click();
     await page.getByRole('link', { name: 'Transactions' }).click();
-    await expect(page).toHaveURL(/\/finance\/app\/transactions/);
+    await expect(page).toHaveURL(/\/finance\/transactions/);
     await expect(
       page.getByRole('heading', { name: 'Transactions' }),
     ).toBeVisible();
@@ -82,7 +80,7 @@ test.describe('authenticated smoke', () => {
 
   test('rules page opens the rule drawer', async ({ page }) => {
     await login(page);
-    await page.goto('/finance/app/rules');
+    await page.goto('/finance/rules');
     await expect(
       page.getByRole('heading', { name: 'Categorization Rules' }),
     ).toBeVisible();

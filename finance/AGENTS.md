@@ -11,8 +11,9 @@ transactions, and get spending-limit alerts.
 
 - Bearer token from `token/new/` cached per-instance with a 60s expiry
   margin; 30s request timeout.
-- Failures raise `GoCardlessError(status_code, body)` — catch it in
-  views and surface via `messages.error`.
+- Failures raise `GoCardlessError(status_code, body)` — API ops map
+  it to `502 {error: 'upstream_error'}`; `requisition_callback`
+  still surfaces it via `messages.error`.
 - `fetch_balances_parallel` uses `ThreadPoolExecutor` (max 8 workers);
   per-account failures are captured in results, not raised.
 - Credentials come from `settings.GOCARDLESS_SECRET_ID` /
@@ -20,17 +21,21 @@ transactions, and get spending-limit alerts.
 
 ## Consent/link flow
 
-1. `connect_bank` (`/finance/connect/`): user picks country →
-   `list_institutions` → POST creates end-user agreement
+1. Connect page (SPA `/finance/connect/`): user picks country →
+   `GET /api/finance/institutions/?country=…` →
+   `POST /api/finance/connect/` creates end-user agreement
    (**730 days history, 180 days access = API maximum**, scopes
    balances/details/transactions) + requisition with `redirect_url =
-   {BASE_URL}/finance/callback/` → user redirected to bank link;
+   {BASE_URL}/finance/callback/` → API returns `{link}` and the
+   browser navigates to it (fetch never follows it);
    `requisition_id` stored in session.
-2. `requisition_callback` (`/finance/callback/`): reads
-   `session['requisition_id']`, refetches requisition, proceeds only
-   when `status == 'LN'` (linked). Creates `Account` rows for each
-   returned account id + fetches details (iban/name/currency) +
-   creates a default `UserAccountPreference`.
+2. `requisition_callback` (`/finance/callback/`, the one remaining
+   Django view in `views.py`): reads `session['requisition_id']`,
+   refetches requisition, proceeds only when `status == 'LN'`
+   (linked). Creates `Account` rows for each returned account id +
+   fetches details (iban/name/currency) + creates a default
+   `UserAccountPreference`, then redirects to `finance:accounts`
+   (the SPA).
 
 ## Data model & access control
 
@@ -60,13 +65,14 @@ transactions, and get spending-limit alerts.
   (`limit_windows`, `monthly_period_start`), spend sums
   (`spent_in_window`), display stats (`limit_window_stats`) and the
   per-past-month breakdown (`monthly_history`) live in
-  `services/limits.py`, shared by the limits page and
-  `evaluate_spending_limits`. The limits page shows progress bars
-  per window plus expandable past-month history, and an "Overview"
-  month dropdown (`?month=YYYY-MM`) re-evaluates every window as of
-  the selected month's last day (`as_of` in `limit_window_stats`);
-  rows are edited via `?edit=<id>` and deleted via
-  `POST /finance/limits/<id>/delete/`.
+  `services/limits.py`, shared by the limits endpoint and
+  `evaluate_spending_limits`. The SPA limits page shows progress
+  bars per window plus expandable past-month history, and an
+  "Overview" month dropdown (`?month=YYYY-MM` on
+  `GET /api/finance/limits/`) re-evaluates every window as of the
+  selected month's last day (`as_of` in `limit_window_stats`); rows
+  are edited via `?edit=<id>` client-side and deleted via
+  `POST /api/finance/limits/<id>/delete/`.
 - `LimitEvaluation` — one row per `(limit, calendar month)` written
   by `evaluate_spending_limits`: the current month's row refreshes
   every run; the just-ended month is backfilled with the full-month
@@ -77,8 +83,10 @@ transactions, and get spending-limit alerts.
   unique); feeds Web Push spending alerts via `services/push.py`
   (`send_limit_alert`, uses `VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`
   settings; 403/404/410 responses delete stale rows). Browsers
-  subscribe via `POST /finance/push/subscribe/` (+ `unsubscribe/`)
-  from the limits page; no-op when `VAPID_*` settings are empty.
+  subscribe via `POST /api/finance/push/subscribe/` (+
+  `unsubscribe/`) from the SPA's limits page
+  (`usePushSubscription` hook); no-op when `VAPID_*` settings are
+  empty.
 - `Category` — per-user, unique on `(user, name)`, optional hex color.
 - `CategoryRule` — per-user auto-categorization rule. Counterparty
   condition: `counterparty_pattern` + `counterparty_match_type`
@@ -130,9 +138,9 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
 - `preview_rule(user, data)` dry-runs a candidate rule over history
   and returns match/apply/change counts + a capped `changes` diff —
   it never writes, and the diff's old/new categories are the
-  *previewing user's* assignments. Used by the rule sandbox drawer
-  (`rules.html` + `static/finance/js/rule_sandbox.js`), which posts
-  to `rules/preview/` — the app's one AJAX/JSON endpoint.
+  *previewing user's* assignments. Used by the SPA's rule drawer
+  (`frontend/src/finance/components/RuleDrawer.tsx`), which posts
+  debounced previews to `POST /api/finance/rules/preview/`.
 
 ## Effective-category reads (`services/categories.py`)
 
@@ -143,10 +151,31 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   no owner-fallback: a user sees exactly the taxonomy their own
   rules/limits operate on.
 
-## Conventions
+## Views & API (post-cutover)
 
-- Forms in `forms.py`; views pass `burger_menu_items` for nav and use
-  `django.contrib.messages` for feedback (this app uses message
-  redirects rather than AJAX JSON).
+- The UI is the React SPA (`frontend/src/finance/`, Vite entry
+  `finance`) served by `react_app` at `/finance/` + a
+  `<path:subpath>` catch-all, with named shell routes
+  (`index`/`connect`/`accounts`/`transactions`/`balances`/`limits`/
+  `rules`/`categories`) so `reverse('finance:…')` keeps working for
+  `home.html`, `evaluate_spending_limits` push URLs and the
+  callback's redirects. `/finance/app/*` 301-redirects to
+  `/finance/*` (legacy strangler mount); non-GET/HEAD requests under
+  `/finance/` 404 — the template views and their form-POST URLs are
+  gone (`finance/templates/` and `finance/static/` deleted).
+- `requisition_callback` (`/finance/callback/`) stays a Django view
+  forever — it's the `redirect_url` configured in GoCardless
+  requisitions, reads the session and mutates the DB, then
+  redirects into the SPA.
+- All reads/mutations are the django-ninja router in `api.py`
+  (`/api/finance/…`). Unlike google_tasks, nothing delegates to
+  `views.py` — finance views were form-POST + `messages` +
+  redirect, so `api.py` implements mutations directly, reusing the
+  same forms (`forms.py` — kept for API validation), `services/`
+  functions and `for_user()` scoping. Mutation successes return
+  `{success, message}` for the SPA to toast; errors are
+  `{error, detail}` (GoCardlessError → 502, limit conflict → 409,
+  form failures → 400).
 - Tests: `tests.py` uses `make_*` factory helpers and mocks the
-  GoCardless client.
+  GoCardless client; HTTP-layer tests post JSON to `/api/finance/`
+  (`test_api.py` covers the API contract itself).

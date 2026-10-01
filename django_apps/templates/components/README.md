@@ -67,6 +67,6 @@ context = {
 
 ### Example
 
-See `finance/views.py` and `finance/templates/finance/` for a
-complete implementation example (google_tasks' templates were
-removed in the React SPA cutover).
+See `google_api/views.py` and `google_api/templates/gmail.html` for
+a complete implementation example (google_tasks' and finance's
+templates were removed in the React SPA cutovers).
