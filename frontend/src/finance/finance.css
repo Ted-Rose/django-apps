@@ -182,7 +182,8 @@ body {
   max-width: 18rem;
 }
 .tx-table .tx-cell-date,
-.tx-table .tx-cell-amount {
+.tx-table .tx-cell-amount,
+.tx-table .tx-cell-actions {
   white-space: nowrap;
 }
 
@@ -279,6 +280,10 @@ body {
   .tx-table .tx-cell-category {
     order: 6;
     margin-left: auto;
+  }
+  /* Line 3 right end: the row's create-rule action button. */
+  .tx-table .tx-cell-actions {
+    order: 7;
   }
   /* The empty-state cell spans the card's full width. */
   .tx-table > tbody > tr > td[colspan] {

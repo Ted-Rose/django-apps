@@ -29,7 +29,7 @@ import { errorDetail } from '../../shared/api/errors';
 const PREVIEW_DEBOUNCE_MS = 400;
 
 /** Form values kept as raw input strings; converted on submit. */
-interface RuleFields {
+export interface RuleFields {
   category: string;
   priority: string;
   counterparty_scope: string;
@@ -137,6 +137,10 @@ function previewSummary(data: RulePreviewOut): string {
   );
 }
 
+/** Field values merged into the defaults of a new rule — e.g. a
+ * transaction's counterparty/description (transactions page). */
+export type RulePrefill = Partial<RuleFields>;
+
 interface RuleDrawerProps {
   /** The rule being edited; `null` for a new rule. */
   rule: RuleOut | null;
@@ -144,6 +148,8 @@ interface RuleDrawerProps {
   /** Highest priority in the current ruleset (new rules seed +1). */
   maxPriority: number;
   onClose: () => void;
+  /** Seed values for a new rule; ignored when editing. */
+  prefill?: RulePrefill;
 }
 
 export function RuleDrawer({
@@ -151,10 +157,13 @@ export function RuleDrawer({
   data,
   maxPriority,
   onClose,
+  prefill,
 }: RuleDrawerProps) {
   const titleId = useId();
   const [fields, setFields] = useState<RuleFields>(() =>
-    rule ? fieldsFromRule(rule) : defaults(data, maxPriority),
+    rule
+      ? fieldsFromRule(rule)
+      : { ...defaults(data, maxPriority), ...prefill },
   );
   // Slide-in: `.offcanvas` starts translated off-screen; `.show`
   // is applied on the next frame so the CSS transition runs.

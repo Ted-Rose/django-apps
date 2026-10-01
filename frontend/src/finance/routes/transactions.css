@@ -53,6 +53,22 @@
   margin-left: 0.125rem;
 }
 
+/* Borderless icon button for the per-row create-rule action —
+   same ghost look as .rules-ghost-btn in rules.css. */
+.tx-rule-btn {
+  color: var(--bs-secondary-color);
+  background: transparent;
+  border: 0;
+}
+.tx-rule-btn:hover:not(:disabled),
+.tx-rule-btn:focus-visible {
+  color: var(--fin-accent);
+  background: var(--fin-bg);
+}
+.tx-rule-btn:disabled {
+  opacity: 0.4;
+}
+
 /* Pill page links matching the chip aesthetic. */
 .tx-pagination .pagination {
   gap: 0.25rem;

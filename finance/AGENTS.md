@@ -141,7 +141,11 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   it never writes, and the diff's old/new categories are the
   *previewing user's* assignments. Used by the SPA's rule drawer
   (`frontend/src/finance/components/RuleDrawer.tsx`), which posts
-  debounced previews to `POST /api/finance/rules/preview/`.
+  debounced previews to `POST /api/finance/rules/preview/`. The
+  drawer also opens from the transactions page — each table row has
+  a "create rule" button that prefills the form with that
+  transaction's counterparty + description (the route lazy-fetches
+  `GET /api/finance/rules/` for the form's choice lists).
 
 ## Effective-category reads (`services/categories.py`)
 

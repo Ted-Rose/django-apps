@@ -14,6 +14,10 @@ export type ParamUpdates = Record<string, string | null>;
 interface TransactionTableProps {
   data: TransactionsOut;
   onUpdate: (updates: ParamUpdates) => void;
+  /** Opens the rule drawer prefilled from the row's transaction. */
+  onAddRule: (tx: TransactionOut) => void;
+  /** Transaction id whose rule form is still loading (spinner). */
+  ruleLoadingId?: number | null;
 }
 
 /**
@@ -31,8 +35,15 @@ interface TransactionTableProps {
  * card) and rearranges cells via their `tx-cell-*` classes — the
  * markup here stays a plain table so desktop is unchanged.
  */
-export function TransactionTable({ data, onUpdate }: TransactionTableProps) {
+export function TransactionTable({
+  data,
+  onUpdate,
+  onAddRule,
+  ruleLoadingId = null,
+}: TransactionTableProps) {
   const { sort, direction } = data;
+  // Rules assign a category, so the row action is pointless without one.
+  const hasCategories = data.categories.length > 0;
 
   const setSort = (column: string, dir: 'asc' | 'desc') => {
     // date+desc is the default ordering — the template's page_url
@@ -250,16 +261,27 @@ export function TransactionTable({ data, onUpdate }: TransactionTableProps) {
                 onClick={() => setSort('amount', 'asc')}
               />
             </ColumnHeader>
+            {/* No header chip on mobile — the action lives in the
+                row card itself. */}
+            <th className="d-none d-lg-table-cell text-end">
+              <span className="visually-hidden">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {data.transactions.length > 0 ? (
             data.transactions.map((tx) => (
-              <TransactionRow key={tx.id} tx={tx} />
+              <TransactionRow
+                key={tx.id}
+                tx={tx}
+                canAddRule={hasCategories}
+                ruleLoading={ruleLoadingId === tx.id}
+                onAddRule={onAddRule}
+              />
             ))
           ) : (
             <tr>
-              <td colSpan={6} className="text-center text-muted py-4">
+              <td colSpan={7} className="text-center text-muted py-4">
                 {data.filters_active
                   ? 'No transactions match the selected filters.'
                   : 'No transactions synced yet. Transactions are synced every 6 hours by a scheduled job.'}
@@ -400,7 +422,17 @@ function CreditorMenuItems({
   );
 }
 
-function TransactionRow({ tx }: { tx: TransactionOut }) {
+function TransactionRow({
+  tx,
+  canAddRule,
+  ruleLoading,
+  onAddRule,
+}: {
+  tx: TransactionOut;
+  canAddRule: boolean;
+  ruleLoading: boolean;
+  onAddRule: (tx: TransactionOut) => void;
+}) {
   // booking_date is a date-only string; appending T00:00:00 parses it
   // as local midnight (the template's local-datetime behavior)
   // instead of UTC midnight, which toLocaleDateString would roll
@@ -429,6 +461,26 @@ function TransactionRow({ tx }: { tx: TransactionOut }) {
         }`}
       >
         <MoneyText amount={tx.amount} currency={tx.currency} />
+      </td>
+      <td className="tx-cell-actions text-end">
+        <button
+          type="button"
+          className="btn btn-sm tx-rule-btn"
+          title={
+            canAddRule
+              ? 'Create a categorization rule from this transaction'
+              : 'Create a category first'
+          }
+          aria-label={`Create categorization rule for transaction ${tx.id}`}
+          disabled={!canAddRule || ruleLoading}
+          onClick={() => onAddRule(tx)}
+        >
+          {ruleLoading ? (
+            <span className="spinner-border spinner-border-sm" role="status" />
+          ) : (
+            <i className="bi bi-tag" aria-hidden="true" />
+          )}
+        </button>
       </td>
     </tr>
   );

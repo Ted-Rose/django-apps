@@ -153,6 +153,7 @@ describe('Transactions', () => {
       'tx-cell-counterparty',
       'tx-cell-category',
       'tx-cell-amount',
+      'tx-cell-actions',
     ]) {
       expect(row.querySelector(`.${cls}`)).not.toBeNull();
     }
@@ -363,6 +364,86 @@ describe('Transactions', () => {
         { account: 5 },
       ),
     );
+  });
+
+  it('opens a prefilled rule drawer from a transaction row', async () => {
+    // The drawer needs the rules payload (categories, match types,
+    // scopes, operators) — fetched lazily on the first click.
+    const rulesPayload = {
+      rules: [],
+      categories: [{ id: 3, name: 'Housing', color: '#ff0000' }],
+      match_types: [{ value: 'contains', label: 'Contains' }],
+      counterparty_scopes: [{ value: 'any', label: 'Debtor or creditor' }],
+      operators: [{ value: 'AND', label: 'AND' }],
+    };
+    mockedApiGet.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/finance/rules/')
+          ? rulesPayload
+          : makeTransactions({
+              count: 1,
+              transactions: [makeTransaction()],
+            }),
+      ),
+    );
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      match_count: 1,
+      apply_count: 1,
+      is_active: true,
+      category: 'Housing',
+      changes_total: 0,
+      gains: 0,
+      losses: 0,
+      other_changes: 0,
+      changes: [],
+    });
+    renderTransactions();
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Create categorization rule for transaction 1',
+      }),
+    );
+    const drawer = await screen.findByTestId('rule-drawer');
+    expect(
+      within(drawer).getByRole('heading', { name: 'New rule' }),
+    ).toBeInTheDocument();
+    expect(within(drawer).getByLabelText('Counterparty name')).toHaveValue(
+      'Landlord Ltd',
+    );
+    expect(within(drawer).getByLabelText('Description')).toHaveValue(
+      'Rent January',
+    );
+    await waitFor(
+      () =>
+        expect(mockedApiPost).toHaveBeenCalledWith(
+          '/api/finance/rules/preview/',
+          expect.objectContaining({
+            rule_id: null,
+            category_id: 3,
+            counterparty_pattern: 'Landlord Ltd',
+            description_pattern: 'Rent January',
+            is_active: true,
+          }),
+        ),
+      { timeout: 2000 },
+    );
+  });
+
+  it('disables the row rule button when no categories exist', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeTransactions({
+        count: 1,
+        categories: [],
+        transactions: [makeTransaction()],
+      }),
+    );
+    renderTransactions();
+    expect(
+      await screen.findByRole('button', {
+        name: 'Create categorization rule for transaction 1',
+      }),
+    ).toBeDisabled();
   });
 
   it('shows an error alert with a working retry', async () => {
