@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Balances from './Balances';
@@ -82,8 +88,12 @@ describe('Balances', () => {
 
     // Card fields mirror the template: iban, amount + currency,
     // balanceType and the localized "Last updated" timestamp.
+    // (Scoped to the account card — the same amount also appears in
+    // the single-currency Total block.)
     expect(screen.getByText('LV80BANK0000435195001')).toBeInTheDocument();
-    expect(screen.getByText(/123\.45/)).toBeInTheDocument();
+    const card = screen.getByText('LV80BANK0000435195001').closest('.card');
+    expect(within(card as HTMLElement).getByText(/123\.45/))
+      .toBeInTheDocument();
     expect(screen.getByText('interimAvailable')).toBeInTheDocument();
     const expected = new Date('2025-01-15T10:30:00Z').toLocaleString();
     expect(screen.getByText(`Last updated: ${expected}`)).toBeInTheDocument();
@@ -94,6 +104,54 @@ describe('Balances', () => {
     expect(
       screen.getByText(/No balance retrieved yet\. Click "Get latest balance"/),
     ).toBeInTheDocument();
+  });
+
+  it('shows a per-currency total over the retrieved balances', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeBalances([
+        makeAccount(),
+        makeAccount({
+          id: 6,
+          account_id: 'remote-acct-6',
+          last_balance: {
+            balanceAmount: { amount: '6.55', currency: 'EUR' },
+            balanceType: 'interimAvailable',
+          },
+        }),
+        makeAccount({
+          id: 7,
+          account_id: 'remote-acct-7',
+          last_balance: {
+            balanceAmount: { amount: '50', currency: 'USD' },
+            balanceType: 'interimAvailable',
+          },
+        }),
+        // No balance yet — contributes nothing to the totals.
+        makeAccount({
+          id: 8,
+          account_id: 'remote-acct-8',
+          last_balance: null,
+          balance_updated_at: null,
+        }),
+      ]),
+    );
+    renderBalances();
+    expect(await screen.findByText('Total')).toBeInTheDocument();
+    expect(screen.getByText('130.00 EUR')).toBeInTheDocument();
+    expect(screen.getByText('50.00 USD')).toBeInTheDocument();
+  });
+
+  it('hides the total when no account has a balance yet', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeBalances([
+        makeAccount({ last_balance: null, balance_updated_at: null }),
+      ]),
+    );
+    renderBalances();
+    expect(
+      await screen.findByText(/No balance retrieved yet/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Total')).not.toBeInTheDocument();
   });
 
   it('shows the empty state linking to the Accounts page', async () => {

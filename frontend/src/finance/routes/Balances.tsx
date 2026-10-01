@@ -10,8 +10,9 @@ import { useRefreshBalances } from '../mutations';
  * React port of balances.html — one card per account opted into
  * the balance check (name/iban, last stored balance + balanceType,
  * "Last updated" rendered via toLocaleString like the template's
- * local-datetime script) and the "Get latest balance" button that
- * POSTs /api/finance/balances/refresh/ with an isPending spinner.
+ * local-datetime script), a per-currency total over all retrieved
+ * balances, and the "Get latest balance" button that POSTs
+ * /api/finance/balances/refresh/ with an isPending spinner.
  */
 export default function Balances() {
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -19,6 +20,7 @@ export default function Balances() {
     queryFn: fetchBalances,
   });
   const refresh = useRefreshBalances();
+  const totals = data ? totalByCurrency(data.accounts) : [];
 
   return (
     <>
@@ -67,6 +69,18 @@ export default function Balances() {
                   )}
                 </button>
               </div>
+              {totals.length > 0 && (
+                <div className="card mb-3">
+                  <div className="card-body d-flex align-items-baseline gap-3 flex-wrap">
+                    <h5 className="card-title mb-0">Total</h5>
+                    {totals.map(([currency, total]) => (
+                      <p className="fs-3 mb-0" key={currency}>
+                        {total.toFixed(2)} {currency}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="row row-cols-1 row-cols-md-2 g-3">
                 {data.accounts.map((account) => (
                   <BalanceCard key={account.id} account={account} />
@@ -89,6 +103,23 @@ export default function Balances() {
 interface LastBalance {
   balanceAmount?: { amount?: string; currency?: string };
   balanceType?: string;
+}
+
+/**
+ * Sum balances per currency — GoCardless amounts are strings and
+ * mixing currencies without conversion is meaningless, so each
+ * currency gets its own total (same rule as CategoryOverview).
+ */
+function totalByCurrency(accounts: AccountOut[]): [string, number][] {
+  const totals = new Map<string, number>();
+  for (const account of accounts) {
+    const amount = (account.last_balance as LastBalance | null)
+      ?.balanceAmount;
+    const value = Number(amount?.amount);
+    if (!amount?.currency || Number.isNaN(value)) continue;
+    totals.set(amount.currency, (totals.get(amount.currency) ?? 0) + value);
+  }
+  return [...totals.entries()];
 }
 
 /** One balance card — mirrors the template's balance block. */
