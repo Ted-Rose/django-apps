@@ -1,0 +1,57 @@
+/* Limits page — the shared CollapsibleCard sections elevated onto
+   the `.fin-card` surface, the limit rows inside the overview, and
+   the grouped "Time windows" inputs. Classes are prefixed
+   `limits-`/`limit-` to stay out of finance.css. */
+
+/* The shared CollapsibleCard restyled as a fin-card: transparent
+   header, and a hairline divider that only shows while the body is
+   expanded (a collapsed `.collapse` is display:none anyway). */
+.limits-section > .card {
+  background: var(--fin-surface);
+  border-color: var(--fin-border);
+  border-radius: var(--fin-radius);
+  box-shadow: var(--fin-shadow);
+}
+.limits-section .card-header {
+  background: transparent;
+  border-bottom: 0;
+}
+.limits-section .card-body {
+  border-top: 1px solid var(--fin-border);
+}
+
+/* "All limits on track" status — a subtle success pill. */
+.limits-on-track {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 2rem;
+  color: #146c43;
+  background: rgba(25, 135, 84, 0.1);
+}
+
+/* One limit row inside the overview card. */
+.limit-item {
+  padding: 0.875rem 1rem;
+  background: var(--fin-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: 0.75rem;
+}
+.limit-item + .limit-item {
+  margin-top: 0.625rem;
+}
+.limit-item .progress {
+  background-color: var(--fin-bg);
+}
+.limit-item details > summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+/* Grouped "Time windows" inputs in LimitForm. */
+.limit-windows {
+  padding: 1rem;
+  background: var(--fin-bg);
+  border: 1px solid var(--fin-border);
+  border-radius: 0.75rem;
+}

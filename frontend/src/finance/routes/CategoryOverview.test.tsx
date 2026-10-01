@@ -19,6 +19,12 @@ vi.mock('../../shared/api/client', () => ({
   getCsrfToken: () => undefined,
 }));
 
+// ResponsiveContainer renders 0-size under jsdom — stub the donut
+// so the suite exercises the page, not recharts internals.
+vi.mock('../components/CategoryChart', () => ({
+  default: () => <div data-testid="category-chart" />,
+}));
+
 const mockedApiGet = vi.mocked(apiGet);
 
 function makeOverview(
@@ -137,12 +143,16 @@ describe('CategoryOverview', () => {
     expect(within(usdTotal!).getByText('+0.00 USD')).toHaveClass(
       'text-success',
     );
-    // The active preset is rendered as the primary button.
+    // The active preset is rendered as the pressed chip.
     const active = screen.getByRole('button', { name: 'Last 7 days' });
-    expect(active).toHaveClass('btn-primary');
-    expect(screen.getByRole('button', { name: 'All time' })).toHaveClass(
-      'btn-outline-secondary',
-    );
+    expect(active).toHaveClass('fin-chip', 'active');
+    expect(active).toHaveAttribute('aria-pressed', 'true');
+    const inactive = screen.getByRole('button', { name: 'All time' });
+    expect(inactive).toHaveClass('fin-chip');
+    expect(inactive).toHaveAttribute('aria-pressed', 'false');
+    // The recharts donut is stubbed (jsdom renders it 0-size) but
+    // the chart card is still wired into the layout.
+    expect(await screen.findByTestId('category-chart')).toBeInTheDocument();
   });
 
   it('writes from/to params when a preset is clicked', async () => {

@@ -1,0 +1,72 @@
+/* Transactions route — page-scoped polish on top of finance.css.
+   Imported by Transactions.tsx only. */
+
+/* The table + pagination sit on a white card on desktop. Below lg
+   finance.css turns each row into its own card, so the panel drops
+   its chrome and lets the row cards float on the gray canvas. */
+.tx-panel {
+  background: var(--fin-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: var(--fin-radius);
+  box-shadow: var(--fin-shadow);
+  padding: 0.75rem 1rem;
+}
+@media (max-width: 991.98px) {
+  .tx-panel {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+}
+/* The card edge is the table's outer frame — kill the outer cell
+   borders so the last row doesn't double up with the panel edge. */
+@media (min-width: 992px) {
+  .tx-panel .tx-table {
+    margin-bottom: 0.25rem;
+  }
+  .tx-panel .tx-table > tbody > tr:last-child > td {
+    border-bottom: 0;
+  }
+}
+
+/* Column-header toggles wear the .fin-chip pill look. `btn-link` is
+   kept on the element so finance.css's mobile chip-bar selector
+   still matches — neutralize its link underline/color here. */
+.tx-table > thead .dropdown > .btn-link.fin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--bs-secondary-color);
+  text-decoration: none;
+}
+.tx-table > thead .dropdown > .btn-link.fin-chip:hover {
+  color: var(--fin-accent);
+  border-color: var(--fin-accent);
+  text-decoration: none;
+}
+/* The dropdown-toggle caret inside the inline-flex chip. */
+.tx-table > thead .dropdown > .btn-link.fin-chip::after {
+  margin-left: 0.125rem;
+}
+
+/* Pill page links matching the chip aesthetic. */
+.tx-pagination .pagination {
+  gap: 0.25rem;
+  --bs-pagination-border-radius: 0.5rem;
+  --bs-pagination-border-color: var(--fin-border);
+  --bs-pagination-hover-border-color: var(--fin-border);
+  --bs-pagination-active-bg: var(--fin-accent);
+  --bs-pagination-active-border-color: var(--fin-accent);
+}
+.tx-pagination .page-item:not(:first-child) .page-link {
+  margin-left: 0;
+}
+.tx-pagination .page-link,
+.tx-pagination .page-item:first-child .page-link,
+.tx-pagination .page-item:last-child .page-link {
+  border-radius: var(--bs-pagination-border-radius);
+}

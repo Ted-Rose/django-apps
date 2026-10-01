@@ -88,10 +88,12 @@ describe('Balances', () => {
 
     // Card fields mirror the template: iban, amount + currency,
     // balanceType and the localized "Last updated" timestamp.
-    // (Scoped to the account card — the same amount also appears in
-    // the single-currency Total block.)
+    // (Scoped to the account card — the same amount also feeds the
+    // per-currency Total stat cards.)
     expect(screen.getByText('LV80BANK0000435195001')).toBeInTheDocument();
-    const card = screen.getByText('LV80BANK0000435195001').closest('.card');
+    const card = screen
+      .getByText('LV80BANK0000435195001')
+      .closest('.fin-card');
     expect(within(card as HTMLElement).getByText(/123\.45/))
       .toBeInTheDocument();
     expect(screen.getByText('interimAvailable')).toBeInTheDocument();
@@ -136,7 +138,8 @@ describe('Balances', () => {
       ]),
     );
     renderBalances();
-    expect(await screen.findByText('Total')).toBeInTheDocument();
+    expect(await screen.findByText('Total (EUR)')).toBeInTheDocument();
+    expect(screen.getByText('Total (USD)')).toBeInTheDocument();
     expect(screen.getByText('130.00 EUR')).toBeInTheDocument();
     expect(screen.getByText('50.00 USD')).toBeInTheDocument();
   });
@@ -151,7 +154,7 @@ describe('Balances', () => {
     expect(
       await screen.findByText(/No balance retrieved yet/),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Total')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Total \(/)).not.toBeInTheDocument();
   });
 
   it('shows the empty state linking to the Accounts page', async () => {
@@ -160,9 +163,10 @@ describe('Balances', () => {
     expect(
       await screen.findByText(/No accounts are included in the balance check/),
     ).toBeInTheDocument();
-    // The burger menu also links to Accounts — scope to the alert.
-    const alert = document.querySelector('.alert-info');
-    expect(alert?.querySelector('a')).toHaveAttribute('href', '/accounts');
+    // The burger menu also links to Accounts — scope to the empty
+    // state block.
+    const empty = document.querySelector('.fin-empty');
+    expect(empty?.querySelector('a')).toHaveAttribute('href', '/accounts');
     expect(
       screen.queryByRole('button', { name: /Get latest balance/ }),
     ).not.toBeInTheDocument();

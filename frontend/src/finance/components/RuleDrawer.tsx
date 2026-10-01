@@ -263,6 +263,7 @@ export function RuleDrawer({
                 />
               </div>
             </div>
+            <div className="rule-section-label">Patterns</div>
             <div className="mb-3">
               <label className="form-label" htmlFor="rule-counterparty-pattern">
                 Counterparty name
@@ -376,7 +377,8 @@ export function RuleDrawer({
                 }
               />
             </div>
-            <div className="row g-2 mb-3">
+            <div className="rule-section-label">Options</div>
+            <div className="row g-2 mb-4">
               <div className="col-4">
                 <label className="form-label" htmlFor="rule-operator">
                   Patterns combine
@@ -395,11 +397,12 @@ export function RuleDrawer({
                 </select>
               </div>
               <div className="col-4 d-flex align-items-end">
-                <div className="form-check mb-2">
+                <div className="form-check form-switch mb-2">
                   <input
                     type="checkbox"
                     id="rule-is-active"
                     className="form-check-input"
+                    role="switch"
                     checked={fields.is_active}
                     onChange={(event) => set('is_active', event.target.checked)}
                   />
@@ -424,13 +427,14 @@ export function RuleDrawer({
             </button>
           </form>
 
-          <hr className="my-4" />
-
-          <div id="preview-panel">
-            <h6>Impact preview</h6>
+          <div id="preview-panel" className="rule-preview">
+            <div className="rule-section-label">Impact preview</div>
             <PreviewSummary preview={preview} />
             <div className="table-responsive">
-              <table className="table table-sm" id="preview-table">
+              <table
+                className="table table-sm align-middle mb-0"
+                id="preview-table"
+              >
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -446,7 +450,7 @@ export function RuleDrawer({
                       <td>{change.booking_date}</td>
                       <td>{change.counterparty || '-'}</td>
                       <td>{change.description || '-'}</td>
-                      <td className="text-end">
+                      <td className="text-end fin-money">
                         {change.amount} {change.currency}
                       </td>
                       <td>

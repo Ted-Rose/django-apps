@@ -2,9 +2,13 @@ import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import FinanceNavBar from '../components/FinanceNavBar';
 import ErrorState from '../components/ErrorState';
+import EmptyState from '../components/EmptyState';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import PageShell from '../components/PageShell';
 import CategoryBadge from '../components/CategoryBadge';
 import RuleDrawer from '../components/RuleDrawer';
 import Toasts from '../../shared/components/Toasts';
+import './rules.css';
 import {
   fetchRules,
   type CategoryOut,
@@ -55,23 +59,15 @@ export default function Rules() {
   return (
     <>
       <FinanceNavBar />
-      <div className="container-fluid px-2 py-4">
-        <h1 className="mb-2">Categorization Rules</h1>
-        <p className="text-muted">
-          Rules run top to bottom — the first matching rule assigns its
-          category. Saving a rule re-categorizes your history (manual categories
-          are never overwritten).
-        </p>
-
-        {isPending && (
-          <div
-            className="text-center py-5"
-            aria-busy="true"
-            aria-label="Loading rules"
-          >
-            <div className="spinner-border" role="status" />
-          </div>
-        )}
+      <PageShell
+        title="Categorization Rules"
+        subtitle={
+          'Rules run top to bottom — the first matching rule assigns its ' +
+          'category. Saving a rule re-categorizes your history (manual ' +
+          'categories are never overwritten).'
+        }
+      >
+        {isPending && <LoadingSkeleton label="Loading rules" rows={5} />}
         {isError && (
           <ErrorState error={error} onRetry={() => refetch()} label="rules" />
         )}
@@ -91,7 +87,7 @@ export default function Rules() {
             </div>
           </div>
         )}
-      </div>
+      </PageShell>
       {drawer && data && (
         <RuleDrawer
           rule={drawer.rule}
@@ -128,8 +124,8 @@ function CollapsibleCard({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="card">
-      <div className="card-header d-flex flex-wrap align-items-center gap-2 py-2">
+    <div className="card fin-card rules-collapsible">
+      <div className="card-header d-flex flex-wrap align-items-center gap-2">
         <button
           type="button"
           className="btn btn-link link-body-emphasis text-decoration-none p-0 d-flex align-items-center gap-2"
@@ -142,7 +138,9 @@ function CollapsibleCard({
           />
           <span className="fw-semibold">{title}</span>
           {count !== undefined && (
-            <span className="badge text-bg-secondary">{count}</span>
+            <span className="badge rounded-pill text-bg-light border">
+              {count}
+            </span>
           )}
         </button>
         {actions && (
@@ -245,19 +243,17 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
         </div>
       </form>
       {categories.length > 0 ? (
-        <ul className="list-group">
+        <ul className="cat-list list-unstyled mb-0">
           {categories.map((category) => (
             <li
               key={category.id}
-              className="list-group-item d-flex justify-content-between align-items-center py-1"
+              className="cat-row d-flex justify-content-between align-items-center py-2"
             >
-              <span>
-                <CategoryBadge category={category} />
-              </span>
+              <CategoryBadge category={category} />
               <span className="d-flex gap-1">
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline-secondary"
+                  className="btn btn-sm rules-ghost-btn"
                   title="Edit category"
                   aria-label={`Edit ${category.name}`}
                   onClick={() => {
@@ -270,7 +266,7 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
                 </button>
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline-danger"
+                  className="btn btn-sm rules-ghost-btn rules-ghost-danger"
                   title="Delete category"
                   aria-label={`Delete ${category.name}`}
                   disabled={deleteCategory.isPending}
@@ -283,9 +279,9 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
           ))}
         </ul>
       ) : (
-        <div className="alert alert-info mb-0">
+        <p className="text-muted small mb-0">
           No categories yet — create one, then add rules that assign it.
-        </div>
+        </p>
       )}
     </CollapsibleCard>
   );
@@ -344,7 +340,7 @@ function RulesCard({
       }
     >
       {data.rules.length > 0 ? (
-        <table className="rules-table table table-striped table-hover mb-0">
+        <table className="rules-table table table-hover mb-0">
           <thead>
             <tr>
               <th>#</th>
@@ -368,10 +364,10 @@ function RulesCard({
           </tbody>
         </table>
       ) : (
-        <div className="alert alert-info mb-0">
-          No rules yet. Rules automatically categorize transactions during sync
-          based on the sender / receiver name or the payment description.
-        </div>
+        <EmptyState icon="diagram-3" title="No rules yet">
+          Rules automatically categorize transactions during sync based on the
+          sender / receiver name or the payment description.
+        </EmptyState>
       )}
     </CollapsibleCard>
   );
@@ -418,47 +414,51 @@ function RuleRow({
         )}
       </td>
       <td className="rule-cell-actions text-nowrap text-end">
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-secondary"
-          title="Edit"
-          aria-label={`Edit rule ${rule.priority}`}
-          onClick={onEdit}
-        >
-          <i className="bi bi-pencil" />
-        </button>{' '}
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-secondary"
-          title="Move up"
-          aria-label={`Move rule ${rule.priority} up`}
-          disabled={isFirst || moveRule.isPending}
-          onClick={() => moveRule.mutate({ ruleId: rule.id, direction: 'up' })}
-        >
-          <i className="bi bi-arrow-up" />
-        </button>{' '}
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-secondary"
-          title="Move down"
-          aria-label={`Move rule ${rule.priority} down`}
-          disabled={isLast || moveRule.isPending}
-          onClick={() =>
-            moveRule.mutate({ ruleId: rule.id, direction: 'down' })
-          }
-        >
-          <i className="bi bi-arrow-down" />
-        </button>{' '}
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-danger"
-          title="Delete"
-          aria-label={`Delete rule ${rule.priority}`}
-          disabled={deleteRule.isPending}
-          onClick={() => deleteRule.mutate(rule.id)}
-        >
-          <i className="bi bi-trash" />
-        </button>
+        <div className="btn-group btn-group-sm">
+          <button
+            type="button"
+            className="btn rules-ghost-btn"
+            title="Edit"
+            aria-label={`Edit rule ${rule.priority}`}
+            onClick={onEdit}
+          >
+            <i className="bi bi-pencil" />
+          </button>
+          <button
+            type="button"
+            className="btn rules-ghost-btn"
+            title="Move up"
+            aria-label={`Move rule ${rule.priority} up`}
+            disabled={isFirst || moveRule.isPending}
+            onClick={() =>
+              moveRule.mutate({ ruleId: rule.id, direction: 'up' })
+            }
+          >
+            <i className="bi bi-arrow-up" />
+          </button>
+          <button
+            type="button"
+            className="btn rules-ghost-btn"
+            title="Move down"
+            aria-label={`Move rule ${rule.priority} down`}
+            disabled={isLast || moveRule.isPending}
+            onClick={() =>
+              moveRule.mutate({ ruleId: rule.id, direction: 'down' })
+            }
+          >
+            <i className="bi bi-arrow-down" />
+          </button>
+          <button
+            type="button"
+            className="btn rules-ghost-btn rules-ghost-danger"
+            title="Delete"
+            aria-label={`Delete rule ${rule.priority}`}
+            disabled={deleteRule.isPending}
+            onClick={() => deleteRule.mutate(rule.id)}
+          >
+            <i className="bi bi-trash" />
+          </button>
+        </div>
       </td>
     </tr>
   );

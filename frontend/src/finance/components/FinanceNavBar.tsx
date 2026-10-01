@@ -1,3 +1,4 @@
+import { NavLink } from 'react-router-dom';
 import NavBar from '../../shared/components/NavBar';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import useBootstrap from '../../shared/hooks/useBootstrap';
@@ -5,7 +6,9 @@ import useBootstrap from '../../shared/hooks/useBootstrap';
 /**
  * React port of finance/views.py `_burger_menu_items` — the shared
  * NavBar plus a burger menu listing the same entries the template
- * UI shows.
+ * UI shows, followed by a `.fin-tabs` pill tab bar that keeps the
+ * six primary sections visible (the burger menu stays for Home,
+ * Connect Bank and Logout).
  *
  * In-SPA entries use `to` (react-router Links — no page reload);
  * Home and Logout stay plain `url` anchors because both navigate
@@ -67,7 +70,33 @@ export function FinanceNavBar() {
     },
   ];
 
-  return <NavBar title="Finance" items={items} />;
+  return (
+    <>
+      <NavBar title="Finance" items={items} />
+      <div className="fin-tabs">
+        <div className="container fin-tabs-inner">
+          {TABS.map((tab) => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              className={({ isActive }) => (isActive ? 'active' : '')}
+            >
+              {tab.label}
+            </NavLink>
+          ))}
+        </div>
+      </div>
+    </>
+  );
 }
+
+const TABS = [
+  { to: '/accounts', label: 'Accounts' },
+  { to: '/transactions', label: 'Transactions' },
+  { to: '/categories', label: 'Categories' },
+  { to: '/balances', label: 'Balances' },
+  { to: '/limits', label: 'Limits' },
+  { to: '/rules', label: 'Rules' },
+];
 
 export default FinanceNavBar;

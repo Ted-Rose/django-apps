@@ -19,11 +19,11 @@ function PushCardBody({ config }: { config: PushConfigOut }) {
 
   return (
     <>
-      <p className="text-muted">
-        Get a browser push notification when a spending limit is exceeded — even
-        when this site is closed.
+      <p className="text-muted mb-2">
+        Get a browser push notification when a spending limit is
+        exceeded — even when this site is closed.
       </p>
-      <p className="mb-2">
+      <p className="small text-muted mb-3">
         Enabled on {config.subscription_count} device(s){' '}
         <span data-testid="push-status">{status}</span>
       </p>
@@ -43,6 +43,7 @@ function PushCardBody({ config }: { config: PushConfigOut }) {
           disabled={!supported || busy}
           onClick={() => void subscribe()}
         >
+          <i className="bi bi-bell me-1" aria-hidden="true" />
           Enable spending alerts
         </button>
       )}

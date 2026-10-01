@@ -66,7 +66,7 @@ export function Pagination({
 }: PaginationProps) {
   if (numPages <= 1) return null;
   return (
-    <nav className="mt-3" aria-label="Transaction pages">
+    <nav className="mt-3 tx-pagination" aria-label="Transaction pages">
       <ul className="pagination pagination-sm justify-content-center flex-wrap">
         <li className={`page-item${hasPrevious ? '' : ' disabled'}`}>
           <button

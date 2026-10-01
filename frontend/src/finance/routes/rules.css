@@ -1,0 +1,76 @@
+/* Page-scoped styles for the Rules route — supplements the frozen
+   .rules-table mobile card-collapse in finance.css. */
+
+/* Collapsible cards: transparent header, hairline divider. */
+.rules-collapsible > .card-header {
+  padding-block: 0.7rem;
+  background: transparent;
+  border-bottom: 1px solid var(--fin-border);
+}
+
+/* Category list — plain rows with hairline dividers. */
+.cat-row + .cat-row {
+  border-top: 1px solid var(--fin-border);
+}
+
+/* Borderless icon buttons for row actions. */
+.rules-ghost-btn {
+  color: var(--bs-secondary-color);
+  background: transparent;
+  border: 0;
+}
+.rules-ghost-btn:hover:not(:disabled),
+.rules-ghost-btn:focus-visible {
+  color: var(--bs-body-color);
+  background: var(--fin-bg);
+}
+.rules-ghost-btn.rules-ghost-danger:hover:not(:disabled),
+.rules-ghost-btn.rules-ghost-danger:focus-visible {
+  color: var(--bs-danger);
+  background: rgba(220, 53, 69, 0.08);
+}
+.rules-ghost-btn:disabled {
+  opacity: 0.4;
+}
+
+/* Rules table — quiet uppercase header, vertically centered cells. */
+.rules-table > thead > tr > th {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+}
+.rules-table > tbody > tr > td {
+  vertical-align: middle;
+}
+.rules-table .rule-cell-priority {
+  color: var(--bs-secondary-color);
+}
+/* Soften the condition summary: code becomes a small neutral chip. */
+.rules-table .rule-cell-matches code {
+  padding: 0.1rem 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--bs-body-color);
+  background: var(--fin-bg);
+  border-radius: 0.3rem;
+}
+
+/* RuleDrawer — form section labels and the bordered preview panel.
+   The drawer renders outside .fin-app, so only --bs-* tokens are
+   available here. */
+.rule-section-label {
+  margin-bottom: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+}
+.rule-preview {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.75rem;
+}

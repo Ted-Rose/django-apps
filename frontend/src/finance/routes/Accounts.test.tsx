@@ -100,7 +100,7 @@ describe('Accounts', () => {
       included_in_balance_check: true,
     });
     renderAccounts();
-    const toggle = await screen.findByRole('button', {
+    const toggle = await screen.findByRole('switch', {
       name: /Balance check/,
     });
     fireEvent.click(toggle);
@@ -154,9 +154,9 @@ describe('Accounts', () => {
     expect(
       screen.queryByRole('button', { name: /Share/ }),
     ).not.toBeInTheDocument();
-    // The balance-check toggle stays available for sharers.
+    // The balance-check switch stays available for sharers.
     expect(
-      screen.getByRole('button', { name: /Balance check/ }),
+      screen.getByRole('switch', { name: /Balance check/ }),
     ).toBeInTheDocument();
   });
 
@@ -169,7 +169,7 @@ describe('Accounts', () => {
     );
     renderAccounts();
     fireEvent.click(
-      await screen.findByRole('button', { name: /Balance check/ }),
+      await screen.findByRole('switch', { name: /Balance check/ }),
     );
     expect(
       await screen.findByText(/No Account matches the given query/),

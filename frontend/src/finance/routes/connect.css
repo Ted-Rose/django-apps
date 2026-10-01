@@ -1,0 +1,124 @@
+/* ConnectBank page — the two forms become numbered steps inside one
+   .fin-card: 1) country code, 2) bank radio-cards + Connect CTA.
+   Scoped under .fin-app via the PageShell wrapper like the rest of
+   the finance UI. */
+
+.connect-card {
+  padding: 1.5rem;
+}
+
+.connect-step + .connect-step {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--fin-border);
+}
+
+/* Numbered step header — also used as the bank-list <legend>, so it
+   has to undo the reboot legend defaults (float, 100% width, big
+   font-size). */
+.connect-step-title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  float: none;
+  width: auto;
+  padding: 0;
+  margin-bottom: 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.connect-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--fin-accent);
+  background: rgba(13, 110, 253, 0.1);
+  border-radius: 50%;
+}
+
+.connect-step-fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.connect-country-input {
+  max-width: 7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Bank list: one radio-card row per institution, logo when the API
+   provides one, BIC muted on the right. Long country lists scroll
+   instead of stretching the card. */
+.connect-banks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 22rem;
+  margin-bottom: 1rem;
+  overflow-y: auto;
+}
+
+.connect-bank {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  margin: 0;
+  font-weight: 500;
+  border: 1px solid var(--fin-border);
+  border-radius: 0.625rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.connect-bank:hover {
+  border-color: var(--fin-accent);
+}
+
+.connect-bank:has(:checked) {
+  border-color: var(--fin-accent);
+  background: rgba(13, 110, 253, 0.06);
+}
+
+.connect-bank .form-check-input {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.connect-bank-logo {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: contain;
+  border-radius: 0.375rem;
+}
+
+.connect-bank-icon {
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  color: var(--bs-secondary-color);
+}
+
+.connect-bank-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.connect-bank-bic {
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--bs-secondary-color);
+}

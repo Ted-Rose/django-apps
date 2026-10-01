@@ -1,7 +1,9 @@
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import FinanceNavBar from '../components/FinanceNavBar';
+import PageShell from '../components/PageShell';
 import ErrorState from '../components/ErrorState';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import Toasts from '../../shared/components/Toasts';
 import TransactionTable, {
   type ParamUpdates,
@@ -9,6 +11,7 @@ import TransactionTable, {
 import Pagination from '../components/Pagination';
 import { fetchTransactions } from '../api';
 import { useSyncTransactions } from '../mutations';
+import './transactions.css';
 
 /**
  * React port of transactions.html — the biggest finance page:
@@ -64,13 +67,60 @@ export default function Transactions() {
       ? Number(params.account)
       : null;
 
+  // One removable chip per active filter — labels come from the
+  // payload's option lists/echoes, each × clears just that param.
+  const activeFilters: {
+    key: string;
+    label: string;
+    clear: ParamUpdates;
+  }[] = [];
+  if (data?.filters_active) {
+    if (data.selected_account != null) {
+      const match = data.accounts.find(
+        (option) => option.id === data.selected_account,
+      );
+      activeFilters.push({
+        key: 'account',
+        label: `Account: ${match?.label ?? data.selected_account}`,
+        clear: { account: null },
+      });
+    }
+    if (data.selected_category) {
+      const match = data.categories.find(
+        (option) => String(option.id) === data.selected_category,
+      );
+      const name =
+        data.selected_category === 'none'
+          ? 'Uncategorized'
+          : (match?.name ?? data.selected_category);
+      activeFilters.push({
+        key: 'category',
+        label: `Category: ${name}`,
+        clear: { category: null },
+      });
+    }
+    if (data.selected_creditor) {
+      activeFilters.push({
+        key: 'creditor',
+        label: `Creditor: ${data.selected_creditor}`,
+        clear: { creditor: null },
+      });
+    }
+    if (data.search_query) {
+      activeFilters.push({
+        key: 'q',
+        label: `Search: ${data.search_query}`,
+        clear: { q: null },
+      });
+    }
+  }
+
   return (
     <>
       <FinanceNavBar />
-      <div className="container-fluid px-2 py-4">
-        <h1 className="mb-4">Transactions</h1>
-
-        <div className="mb-4 d-flex align-items-center flex-wrap gap-3">
+      <PageShell
+        title="Transactions"
+        actions={
           <button
             type="button"
             className="btn btn-outline-primary"
@@ -95,25 +145,14 @@ export default function Transactions() {
               </>
             )}
           </button>
-          {data?.filters_active && (
-            <button
-              type="button"
-              className="btn btn-link btn-sm"
-              onClick={clearFilters}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-
+        }
+      >
         {isPending && (
-          <div
-            className="text-center py-5"
-            aria-busy="true"
-            aria-label="Loading transactions"
-          >
-            <div className="spinner-border" role="status" />
-          </div>
+          <LoadingSkeleton
+            rows={6}
+            height="2.5rem"
+            label="Loading transactions"
+          />
         )}
         {isError && (
           <ErrorState
@@ -124,18 +163,43 @@ export default function Transactions() {
         )}
         {data && (
           <>
-            <TransactionTable data={data} onUpdate={updateParams} />
-            <Pagination
-              page={data.page}
-              numPages={data.num_pages}
-              count={data.count}
-              hasNext={data.has_next}
-              hasPrevious={data.has_previous}
-              onPage={(page) => updateParams({ page: String(page) })}
-            />
+            {data.filters_active && (
+              <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+                {activeFilters.map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    className="fin-chip"
+                    aria-label={`Remove filter: ${filter.label}`}
+                    onClick={() => updateParams(filter.clear)}
+                  >
+                    {filter.label}
+                    <i className="bi bi-x" aria-hidden="true" />
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm"
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
+            <div className="tx-panel">
+              <TransactionTable data={data} onUpdate={updateParams} />
+              <Pagination
+                page={data.page}
+                numPages={data.num_pages}
+                count={data.count}
+                hasNext={data.has_next}
+                hasPrevious={data.has_previous}
+                onPage={(page) => updateParams({ page: String(page) })}
+              />
+            </div>
           </>
         )}
-      </div>
+      </PageShell>
       <Toasts />
     </>
   );

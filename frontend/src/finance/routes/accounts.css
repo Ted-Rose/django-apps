@@ -1,0 +1,47 @@
+/* Accounts page — `.fin-card` account rows, the balance-check
+   switch, and the inline share form that expands under the card
+   header. Classes are prefixed `acct-` to stay out of finance.css. */
+
+.acct-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.acct-card {
+  padding: 1rem 1.25rem;
+}
+
+/* Card header row: account name block left, actions right. */
+.acct-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Soft tinted badge instead of the stock `bg-info` chip. */
+.acct-shared-badge {
+  font-weight: 500;
+  color: var(--fin-accent);
+  background: rgba(13, 110, 253, 0.08);
+  border: 1px solid rgba(13, 110, 253, 0.18);
+}
+
+/* Ghost icon button — quiet until hovered. */
+.acct-icon-btn {
+  color: var(--bs-secondary-color);
+}
+.acct-icon-btn:hover,
+.acct-icon-btn:focus-visible {
+  color: var(--fin-accent);
+  background: var(--fin-bg);
+}
+
+/* The share form expands as a full-width row below the header. */
+.acct-share-form {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--fin-border);
+}

@@ -1,0 +1,19 @@
+/* Page-scoped styles for the Balances route — imported by
+   routes/Balances.tsx. Shared tokens/classes live in finance.css. */
+
+/* Per-currency totals: auto-fitting stat tiles. */
+.balances-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+/* Hairline-separated muted footer pinned to the card bottom so the
+   "type · last updated" line stays aligned across uneven cards. */
+.balances-card-footer {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--fin-border);
+  color: var(--bs-secondary-color);
+  font-size: 0.875rem;
+}

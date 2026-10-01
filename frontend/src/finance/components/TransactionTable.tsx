@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import Dropdown from '../../shared/components/Dropdown';
 import CategoryBadge from './CategoryBadge';
+import MoneyText from './MoneyText';
 import type { TransactionOut, TransactionsOut } from '../api';
 
 /**
@@ -50,7 +51,7 @@ export function TransactionTable({ data, onUpdate }: TransactionTableProps) {
 
   return (
     <div className="table-responsive">
-      <table className="table table-striped table-hover tx-table">
+      <table className="table table-hover align-middle tx-table">
         <thead>
           <tr>
             <ColumnHeader
@@ -272,9 +273,10 @@ export function TransactionTable({ data, onUpdate }: TransactionTableProps) {
 }
 
 /**
- * A column header: the shared Dropdown restyled as the template's
- * `btn-link` toggle, with the sort-direction arrow and the
- * `bi-funnel-fill` marker when that column's filter is active.
+ * A column header: the shared Dropdown with a `.fin-chip` pill
+ * toggle, the sort-direction arrow and the `bi-funnel-fill` marker
+ * when that column's filter is active. `btn-link` stays on the
+ * button so finance.css's mobile chip-bar rules still match.
  */
 function ColumnHeader({
   label,
@@ -299,7 +301,7 @@ function ColumnHeader({
   return (
     <th className={end ? 'text-end' : undefined}>
       <Dropdown
-        buttonClassName="btn btn-link p-0 border-0 text-reset fw-bold dropdown-toggle"
+        buttonClassName="btn btn-link fin-chip dropdown-toggle"
         menuClassName={end ? 'dropdown-menu-end' : ''}
         menuStyle={menuStyle}
         label={
@@ -426,7 +428,7 @@ function TransactionRow({ tx }: { tx: TransactionOut }) {
           negative ? 'text-danger' : 'text-success'
         }`}
       >
-        {tx.amount} {tx.currency}
+        <MoneyText amount={tx.amount} currency={tx.currency} />
       </td>
     </tr>
   );

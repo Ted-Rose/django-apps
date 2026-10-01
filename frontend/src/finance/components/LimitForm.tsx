@@ -121,57 +121,63 @@ export function LimitForm({
             ))}
           </select>
         </div>
-        <p className="fw-semibold mb-1">Time windows</p>
-        <p className="text-muted small mb-2">
-          Set any combination — leave a field blank to disable that window.
-        </p>
-        <div className="mb-3">
-          <label className="form-label" htmlFor="limit-7-days">
-            Limit per 7 days
-          </label>
-          <input
-            type="number"
-            id="limit-7-days"
-            className="form-control"
-            step="0.01"
-            min="0"
-            value={limit7Days}
-            onChange={(event) => setLimit7Days(event.target.value)}
-          />
+        <div className="limit-windows mb-3">
+          <p className="fw-semibold mb-1">Time windows</p>
+          <p className="text-muted small mb-3">
+            Set any combination — leave a field blank to disable that
+            window.
+          </p>
+          <div className="row g-3">
+            <div className="col-md-4">
+              <label className="form-label" htmlFor="limit-7-days">
+                Limit per 7 days
+              </label>
+              <input
+                type="number"
+                id="limit-7-days"
+                className="form-control"
+                step="0.01"
+                min="0"
+                value={limit7Days}
+                onChange={(event) => setLimit7Days(event.target.value)}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label" htmlFor="limit-30-days">
+                Limit per 30 days
+              </label>
+              <input
+                type="number"
+                id="limit-30-days"
+                className="form-control"
+                step="0.01"
+                min="0"
+                value={limit30Days}
+                onChange={(event) => setLimit30Days(event.target.value)}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label" htmlFor="limit-monthly">
+                Limit per calendar month
+              </label>
+              <input
+                type="number"
+                id="limit-monthly"
+                className="form-control"
+                step="0.01"
+                min="0"
+                value={limitMonthly}
+                onChange={(event) => setLimitMonthly(event.target.value)}
+              />
+            </div>
+          </div>
         </div>
-        <div className="mb-3">
-          <label className="form-label" htmlFor="limit-30-days">
-            Limit per 30 days
-          </label>
-          <input
-            type="number"
-            id="limit-30-days"
-            className="form-control"
-            step="0.01"
-            min="0"
-            value={limit30Days}
-            onChange={(event) => setLimit30Days(event.target.value)}
-          />
-        </div>
-        <div className="mb-3">
-          <label className="form-label" htmlFor="limit-monthly">
-            Limit per calendar month
-          </label>
-          <input
-            type="number"
-            id="limit-monthly"
-            className="form-control"
-            step="0.01"
-            min="0"
-            value={limitMonthly}
-            onChange={(event) => setLimitMonthly(event.target.value)}
-          />
-        </div>
-        <div className="mb-3 form-check">
+        <div className="mb-3 form-check form-switch">
           <input
             type="checkbox"
             id="limit-is-active"
             className="form-check-input"
+            role="switch"
             checked={isActive}
             onChange={(event) => setIsActive(event.target.checked)}
           />

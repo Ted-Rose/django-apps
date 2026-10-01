@@ -1,18 +1,25 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import FinanceNavBar from '../components/FinanceNavBar';
+import PageShell from '../components/PageShell';
+import StatCard from '../components/StatCard';
+import MoneyText from '../components/MoneyText';
+import EmptyState from '../components/EmptyState';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import ErrorState from '../components/ErrorState';
 import Toasts from '../../shared/components/Toasts';
 import { fetchBalances, type AccountOut } from '../api';
 import { useRefreshBalances } from '../mutations';
+import './balances.css';
 
 /**
- * React port of balances.html — one card per account opted into
- * the balance check (name/iban, last stored balance + balanceType,
- * "Last updated" rendered via toLocaleString like the template's
- * local-datetime script), a per-currency total over all retrieved
- * balances, and the "Get latest balance" button that POSTs
- * /api/finance/balances/refresh/ with an isPending spinner.
+ * React port of balances.html — one .fin-card per account opted
+ * into the balance check (name/iban, last stored balance +
+ * balanceType, "Last updated" rendered via toLocaleString like the
+ * template's local-datetime script), a StatCard per-currency total
+ * over all retrieved balances, and the "Get latest balance" PageShell
+ * action that POSTs /api/finance/balances/refresh/ with an isPending
+ * spinner.
  */
 export default function Balances() {
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -21,21 +28,49 @@ export default function Balances() {
   });
   const refresh = useRefreshBalances();
   const totals = data ? totalByCurrency(data.accounts) : [];
+  const hasAccounts = !!data && data.accounts.length > 0;
 
   return (
     <>
       <FinanceNavBar />
-      <div className="container-fluid px-2 py-4">
-        <h1 className="mb-4">Balances</h1>
-
+      <PageShell
+        title="Balances"
+        subtitle="Latest reported balance per account"
+        actions={
+          hasAccounts ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={refresh.isPending}
+              onClick={() => refresh.mutate()}
+            >
+              {refresh.isPending ? (
+                <>
+                  <span
+                    className="spinner-border spinner-border-sm"
+                    role="status"
+                  />{' '}
+                  Fetching...
+                </>
+              ) : (
+                <>
+                  <i
+                    className="bi bi-arrow-repeat"
+                    aria-hidden="true"
+                  />{' '}
+                  Get latest balance
+                </>
+              )}
+            </button>
+          ) : undefined
+        }
+      >
         {isPending && (
-          <div
-            className="text-center py-5"
-            aria-busy="true"
-            aria-label="Loading balances"
-          >
-            <div className="spinner-border" role="status" />
-          </div>
+          <LoadingSkeleton
+            rows={3}
+            height="6rem"
+            label="Loading balances"
+          />
         )}
         {isError && (
           <ErrorState
@@ -45,40 +80,18 @@ export default function Balances() {
           />
         )}
         {data &&
-          (data.accounts.length > 0 ? (
+          (hasAccounts ? (
             <>
-              <div className="mb-4">
-                <button
-                  type="button"
-                  className="btn btn-outline-primary"
-                  disabled={refresh.isPending}
-                  onClick={() => refresh.mutate()}
-                >
-                  {refresh.isPending ? (
-                    <>
-                      <span
-                        className="spinner-border spinner-border-sm"
-                        role="status"
-                      />{' '}
-                      Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-arrow-repeat" /> Get latest balance
-                    </>
-                  )}
-                </button>
-              </div>
               {totals.length > 0 && (
-                <div className="card mb-3">
-                  <div className="card-body d-flex align-items-baseline gap-3 flex-wrap">
-                    <h5 className="card-title mb-0">Total</h5>
-                    {totals.map(([currency, total]) => (
-                      <p className="fs-3 mb-0" key={currency}>
-                        {total.toFixed(2)} {currency}
-                      </p>
-                    ))}
-                  </div>
+                <div className="balances-totals mb-4">
+                  {totals.map(([currency, total]) => (
+                    <StatCard
+                      key={currency}
+                      label={`Total (${currency})`}
+                      value={`${total.toFixed(2)} ${currency}`}
+                      icon="cash-stack"
+                    />
+                  ))}
                 </div>
               )}
               <div className="row row-cols-1 row-cols-md-2 g-3">
@@ -88,12 +101,15 @@ export default function Balances() {
               </div>
             </>
           ) : (
-            <div className="alert alert-info">
-              No accounts are included in the balance check. Enable them on the{' '}
+            <EmptyState
+              icon="wallet2"
+              title="No accounts are included in the balance check"
+            >
+              Enable them on the{' '}
               <Link to="/accounts">Accounts</Link> page.
-            </div>
+            </EmptyState>
           ))}
-      </div>
+      </PageShell>
       <Toasts />
     </>
   );
@@ -129,36 +145,45 @@ function BalanceCard({ account }: { account: AccountOut }) {
   const updatedAt = account.balance_updated_at
     ? new Date(account.balance_updated_at)
     : null;
+  const updatedLabel =
+    updatedAt && !Number.isNaN(updatedAt.getTime())
+      ? updatedAt.toLocaleString()
+      : null;
 
   return (
     <div className="col">
-      <div className="card">
-        <div className="card-body">
-          <h5 className="card-title">
-            {account.name || account.iban || account.account_id}
-          </h5>
-          <p className="card-text text-muted mb-2">{account.iban}</p>
-          {balance ? (
-            <>
-              <p className="fs-3 mb-0">
-                {amount?.amount} {amount?.currency}
+      <div className="fin-card p-3 h-100 d-flex flex-column">
+        <h2 className="h6 fw-semibold mb-1">
+          {account.name || account.iban || account.account_id}
+        </h2>
+        <p className="text-muted small mb-3 text-break">
+          {account.iban}
+        </p>
+        {balance ? (
+          <>
+            <MoneyText
+              amount={amount?.amount ?? '0'}
+              currency={amount?.currency}
+              className="fs-3 fw-semibold d-block mb-2"
+            />
+            {(balance.balanceType || updatedLabel) && (
+              <p className="balances-card-footer mb-0">
+                {balance.balanceType && (
+                  <span>{balance.balanceType}</span>
+                )}
+                {balance.balanceType && updatedLabel && ' · '}
+                {updatedLabel && (
+                  <span>Last updated: {updatedLabel}</span>
+                )}
               </p>
-              <p className="text-muted mb-0">
-                <small>{balance.balanceType}</small>
-              </p>
-              {updatedAt && !Number.isNaN(updatedAt.getTime()) && (
-                <p className="text-muted mb-0">
-                  <small>Last updated: {updatedAt.toLocaleString()}</small>
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-muted mb-0">
-              No balance retrieved yet. Click &quot;Get latest balance&quot; to
-              fetch it.
-            </p>
-          )}
-        </div>
+            )}
+          </>
+        ) : (
+          <p className="text-muted small mb-0">
+            No balance retrieved yet. Click &quot;Get latest
+            balance&quot; to fetch it.
+          </p>
+        )}
       </div>
     </div>
   );

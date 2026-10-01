@@ -70,7 +70,9 @@ describe('ConnectBank', () => {
     renderConnectBank();
     expect(await screen.findByLabelText('Country')).toHaveValue('lv');
     expect(mockedApiGet).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText('Select your bank')).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: 'Select your bank' }),
+    ).toBeNull();
   });
 
   it('fetches institutions for the submitted country', async () => {
@@ -82,8 +84,9 @@ describe('ConnectBank', () => {
         '/api/finance/institutions/?country=lv',
       ),
     );
-    const select = await screen.findByLabelText('Select your bank');
-    expect(select).toBeInTheDocument();
+    expect(
+      await screen.findByRole('group', { name: 'Select your bank' }),
+    ).toBeInTheDocument();
     expect(await screen.findByText('Swedbank')).toBeInTheDocument();
     expect(screen.getByText('SEB banka')).toBeInTheDocument();
   });
@@ -108,8 +111,8 @@ describe('ConnectBank', () => {
     });
     try {
       renderConnectBank('/connect?country=lv');
-      const select = await screen.findByLabelText('Select your bank');
-      fireEvent.change(select, { target: { value: SEB.id } });
+      await screen.findByRole('group', { name: 'Select your bank' });
+      fireEvent.click(screen.getByRole('radio', { name: 'SEB banka' }));
       fireEvent.click(screen.getByRole('button', { name: /Connect/ }));
       await waitFor(() =>
         expect(mockedApiPost).toHaveBeenCalledWith('/api/finance/connect/', {
@@ -137,7 +140,10 @@ describe('ConnectBank', () => {
     );
     try {
       renderConnectBank('/connect?country=lv');
-      await screen.findByLabelText('Select your bank');
+      await screen.findByRole('group', { name: 'Select your bank' });
+      fireEvent.click(
+        screen.getByRole('radio', { name: 'Swedbank' }),
+      );
       fireEvent.click(screen.getByRole('button', { name: /Connect/ }));
       await waitFor(() => expect(mockedApiPost).toHaveBeenCalled());
       expect(
@@ -158,6 +164,8 @@ describe('ConnectBank', () => {
     expect(
       await screen.findByText(/Could not load institutions: rate limited/),
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText('Select your bank')).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: 'Select your bank' }),
+    ).toBeNull();
   });
 });

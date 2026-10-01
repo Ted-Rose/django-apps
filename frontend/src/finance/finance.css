@@ -19,6 +19,150 @@ body {
   row-gap: 0.25rem;
 }
 
+/* --- Design tokens ------------------------------------------------------
+   Light-fintech layer on top of stock Bootstrap 5: soft gray canvas,
+   white elevated cards, pill tabs/chips, tabular money numerals.
+   Everything is scoped under .fin-app so other pages are untouched. */
+.fin-app {
+  --fin-bg: #f4f6f8;
+  --fin-surface: #ffffff;
+  --fin-border: #e5e9ef;
+  --fin-radius: 0.875rem;
+  --fin-shadow: 0 1px 2px rgba(16, 24, 40, 0.04),
+    0 1px 3px rgba(16, 24, 40, 0.07);
+  --fin-accent: #0d6efd;
+  background-color: var(--fin-bg);
+  min-height: calc(100vh - 160px);
+}
+
+.fin-card {
+  background: var(--fin-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: var(--fin-radius);
+  box-shadow: var(--fin-shadow);
+}
+
+.fin-page {
+  max-width: 71.25rem;
+  padding-block: 1.5rem 2.5rem;
+}
+.fin-page-narrow {
+  max-width: 44rem;
+}
+
+.fin-page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.fin-money {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* Pill filter chips — used for active-filter rows and period presets. */
+.fin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  background: var(--fin-surface);
+  border: 1px solid var(--fin-border);
+  border-radius: 2rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+}
+.fin-chip:hover {
+  border-color: var(--fin-accent);
+  color: var(--fin-accent);
+}
+.fin-chip.active,
+.fin-chip[aria-pressed='true'] {
+  color: #fff;
+  background: var(--fin-accent);
+  border-color: var(--fin-accent);
+}
+
+/* Sub-navbar pill tabs under the fixed navbar. */
+.fin-tabs {
+  background: var(--fin-surface);
+  border-bottom: 1px solid var(--fin-border);
+}
+.fin-tabs .fin-tabs-inner {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding-block: 0.5rem;
+}
+.fin-tabs a {
+  padding: 0.35rem 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  border-radius: 2rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.fin-tabs a:hover {
+  color: var(--bs-body-color);
+  background: var(--fin-bg);
+}
+.fin-tabs a.active {
+  color: var(--fin-accent);
+  background: rgba(13, 110, 253, 0.1);
+}
+
+/* Shimmer loading blocks — replaces bare spinners. */
+.fin-skeleton {
+  border-radius: 0.5rem;
+  background: linear-gradient(
+    90deg,
+    #eceff3 25%,
+    #f7f9fb 50%,
+    #eceff3 75%
+  );
+  background-size: 200% 100%;
+  animation: fin-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes fin-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Centered empty state: big icon, title, muted hint. */
+.fin-empty {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--bs-secondary-color);
+}
+.fin-empty > i {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
+  opacity: 0.5;
+}
+
+/* Tinted category pill — color comes from the inline style. */
+.fin-cat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 2rem;
+  border: 1px solid var(--fin-border);
+}
+
 /* --- Transactions table -------------------------------------------------
    Long values wrap at every viewport so a huge remittance text or IBAN
    can't stretch the table into horizontal scroll on its own. */

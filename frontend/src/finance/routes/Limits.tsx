@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import FinanceNavBar from '../components/FinanceNavBar';
+import PageShell from '../components/PageShell';
+import EmptyState from '../components/EmptyState';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import ErrorState from '../components/ErrorState';
 import LimitForm from '../components/LimitForm';
 import LimitItem from '../components/LimitItem';
@@ -9,6 +12,7 @@ import PushCard from '../components/PushCard';
 import CollapsibleCard from '../../shared/components/CollapsibleCard';
 import Toasts from '../../shared/components/Toasts';
 import { fetchLimits } from '../api';
+import './limits.css';
 
 /**
  * React port of limits.html as a mobile-first column of
@@ -86,40 +90,37 @@ export default function Limits() {
   return (
     <>
       <FinanceNavBar />
-      <div className="container-fluid px-2 py-4">
-        <div className="mx-auto" style={{ maxWidth: '44rem' }}>
-          <h1 className="mb-2">Spending Limits</h1>
-          <p className="text-muted small">
-            Per-account spending limits over 7-day, 30-day or calendar-month
-            windows, optionally scoped to a single category — you are alerted
-            when spending exceeds the limit.
-          </p>
-
-          {isPending && (
-            <div
-              className="text-center py-5"
-              aria-busy="true"
-              aria-label="Loading limits"
-            >
-              <div className="spinner-border" role="status" />
-            </div>
-          )}
-          {isError && (
-            <ErrorState
-              error={error}
-              onRetry={() => refetch()}
-              label="limits"
-            />
-          )}
-          {data && (
-            <>
+      <PageShell
+        narrow
+        title="Spending Limits"
+        subtitle={
+          <span className="small">
+            Per-account spending limits over 7-day, 30-day or
+            calendar-month windows, optionally scoped to a single
+            category — you are alerted when spending exceeds the limit.
+          </span>
+        }
+      >
+        {isPending && (
+          <LoadingSkeleton rows={3} height="4.5rem" label="Loading limits" />
+        )}
+        {isError && (
+          <ErrorState
+            error={error}
+            onRetry={() => refetch()}
+            label="limits"
+          />
+        )}
+        {data && (
+          <>
+            <div className="limits-section">
               <CollapsibleCard
                 title="Limit overview"
                 open={overviewOpen}
                 onToggle={() => setOverviewOpen((open) => !open)}
                 badge={
                   overCount > 0 ? (
-                    <span className="badge text-bg-danger">
+                    <span className="badge rounded-pill text-bg-danger">
                       {overCount} over
                     </span>
                   ) : undefined
@@ -158,7 +159,9 @@ export default function Limits() {
                       )}
                       <span
                         className={`ms-auto small ${
-                          overCount > 0 ? 'text-danger' : 'text-muted'
+                          overCount > 0
+                            ? 'text-danger'
+                            : 'limits-on-track'
                         }`}
                       >
                         <i
@@ -194,33 +197,36 @@ export default function Limits() {
                     ))}
                   </>
                 ) : (
-                  <div className="alert alert-info mb-0">
-                    No limits set yet.
-                  </div>
+                  <EmptyState
+                    icon="speedometer2"
+                    title="No limits set yet."
+                  />
                 )}
               </CollapsibleCard>
+            </div>
 
-              <div ref={formSectionRef}>
-                <CollapsibleCard
-                  title={editing ? 'Edit limit' : 'Set a limit'}
-                  open={formOpen}
-                  onToggle={() => setFormOpen((open) => !open)}
-                >
-                  <LimitForm
-                    // Remount on edit target change so the fields
-                    // re-initialize from that limit (the template's
-                    // form instance swap).
-                    key={editing?.id ?? 'new'}
-                    accounts={data.accounts}
-                    categories={data.categories}
-                    editing={editing}
-                    onSaved={finishEditing}
-                    onCancelEdit={finishEditing}
-                  />
-                </CollapsibleCard>
-              </div>
+            <div ref={formSectionRef} className="limits-section">
+              <CollapsibleCard
+                title={editing ? 'Edit limit' : 'Set a limit'}
+                open={formOpen}
+                onToggle={() => setFormOpen((open) => !open)}
+              >
+                <LimitForm
+                  // Remount on edit target change so the fields
+                  // re-initialize from that limit (the template's
+                  // form instance swap).
+                  key={editing?.id ?? 'new'}
+                  accounts={data.accounts}
+                  categories={data.categories}
+                  editing={editing}
+                  onSaved={finishEditing}
+                  onCancelEdit={finishEditing}
+                />
+              </CollapsibleCard>
+            </div>
 
-              {data.push_config.vapid_public_key && (
+            {data.push_config.vapid_public_key && (
+              <div className="limits-section">
                 <CollapsibleCard
                   title="Spending alerts"
                   open={alertsOpen}
@@ -228,11 +234,11 @@ export default function Limits() {
                 >
                   <PushCard config={data.push_config} />
                 </CollapsibleCard>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+              </div>
+            )}
+          </>
+        )}
+      </PageShell>
       <Toasts />
     </>
   );

@@ -1,0 +1,22 @@
+/* CategoryOverview page styles — imported by the route, scoped via
+   the `.fin-app` wrapper like the rest of the redesign layer. */
+
+/* Fixed-height donut box: ResponsiveContainer measures only its
+   parent. jsdom renders it 0×0, so the Vitest suite stubs the chart
+   component instead of exercising recharts. */
+.cat-chart {
+  height: 17.5rem;
+}
+
+/* Quieter table chrome inside the fin-card: small-caps header and
+   no trailing border under the last row. */
+.cat-table > thead > tr > th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+}
+.cat-table > tbody > tr:last-child > td {
+  border-bottom: 0;
+}

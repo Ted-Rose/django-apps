@@ -10,10 +10,10 @@ type HistoryMonthOut = WindowStatOut['history'][number];
  * One limit in the overview list — a compact card meant to stack
  * without scrolling on a phone, replacing the old five-column
  * table. The header line carries the category badge ("All" when
- * unset), the account name, a "Paused" badge for inactive limits,
- * and the edit/delete actions; each window renders as one label +
- * amounts line above a thin progress bar, with the past-month
- * <details> history kept on the monthly window.
+ * unset), the account name, a "Paused" pill for inactive limits,
+ * and the grouped edit/delete ghost icon buttons; each window
+ * renders as one label + amounts line above a progress bar, with
+ * the past-month <details> history kept on the monthly window.
  *
  * `spent`/`threshold`/`remaining`/`over`/`pct`/`bar_pct` arrive
  * precomputed as Decimal strings from `limit_window_stats` —
@@ -30,15 +30,12 @@ export function LimitItem({
   const currency = limit.account.currency;
 
   return (
-    <div
-      className="border rounded-3 px-2 px-sm-3 py-2 mb-2"
-      data-testid={`limit-${limit.id}`}
-    >
+    <div className="limit-item" data-testid={`limit-${limit.id}`}>
       <div className="d-flex align-items-center gap-2">
         {limit.category ? (
           <CategoryBadge category={limit.category} />
         ) : (
-          <span className="text-muted">All</span>
+          <span className="text-muted small">All</span>
         )}
         <span
           className="text-muted small text-truncate flex-grow-1"
@@ -47,27 +44,31 @@ export function LimitItem({
           {limit.account.name || limit.account.iban}
         </span>
         {!limit.is_active && (
-          <span className="badge text-bg-secondary">Paused</span>
+          <span className="badge rounded-pill text-bg-secondary">
+            Paused
+          </span>
         )}
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-primary"
-          title="Edit"
-          aria-label={`Edit limit ${limit.id}`}
-          onClick={onEdit}
-        >
-          <i className="bi bi-pencil" />
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-danger"
-          title="Delete"
-          aria-label={`Delete limit ${limit.id}`}
-          disabled={deleteLimit.isPending}
-          onClick={() => deleteLimit.mutate(limit.id)}
-        >
-          <i className="bi bi-trash" />
-        </button>
+        <div className="btn-group btn-group-sm">
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            title="Edit"
+            aria-label={`Edit limit ${limit.id}`}
+            onClick={onEdit}
+          >
+            <i className="bi bi-pencil" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-danger"
+            title="Delete"
+            aria-label={`Delete limit ${limit.id}`}
+            disabled={deleteLimit.isPending}
+            onClick={() => deleteLimit.mutate(limit.id)}
+          >
+            <i className="bi bi-trash" />
+          </button>
+        </div>
       </div>
       {limit.window_stats.length > 0 ? (
         limit.window_stats.map((window) => (
@@ -95,13 +96,17 @@ function WindowStat({
   currency: string;
 }) {
   return (
-    <div className="mt-2">
+    <div className="mt-3">
       <div className="d-flex justify-content-between align-items-baseline gap-2 flex-wrap small">
         <span className="text-muted">{stat.label}</span>
         <span className="ms-auto text-nowrap">
-          {stat.spent} / {stat.threshold} {currency}{' '}
+          <span className="fin-money">
+            {stat.spent} / {stat.threshold} {currency}
+          </span>{' '}
           <span
-            className={stat.over ? 'text-danger fw-semibold' : 'text-muted'}
+            className={`fin-money ${
+              stat.over ? 'text-danger fw-semibold' : 'text-muted'
+            }`}
           >
             {stat.over
               ? `${stat.over} ${currency} over`
@@ -109,7 +114,7 @@ function WindowStat({
           </span>
         </span>
       </div>
-      <div className="progress mt-1" style={{ height: '5px' }}>
+      <div className="progress mt-1" style={{ height: '8px' }}>
         <div
           className={`progress-bar ${stat.bar_class}`}
           role="progressbar"
@@ -140,11 +145,11 @@ function HistoryMonth({
     <div className="mt-2">
       <div className="d-flex justify-content-between small">
         <span>{month.label}</span>
-        <span>
+        <span className="fin-money">
           {month.spent} / {month.threshold} {currency}
         </span>
       </div>
-      <div className="progress" style={{ height: '4px' }}>
+      <div className="progress" style={{ height: '5px' }}>
         <div
           className={`progress-bar ${month.bar_class}`}
           style={{ width: `${month.bar_pct}%` }}
