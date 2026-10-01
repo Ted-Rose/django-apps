@@ -6,11 +6,13 @@ from . import views
 from django_apps.api import api
 from google_tasks.api import router as tasks_router
 from finance.api import router as finance_router
+from tv_archive.api import router as tv_archive_router
 
 app_name = 'main'
 
 api.add_router('/tasks/', tasks_router)
 api.add_router('/finance/', finance_router)
+api.add_router('/tv-arhivs/', tv_archive_router)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

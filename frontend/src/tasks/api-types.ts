@@ -868,6 +868,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tv-arhivs/contents/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Content List */
+        get: operations["tv_archive_api_content_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1729,6 +1746,56 @@ export interface components {
              * @default
              */
             endpoint: string;
+        };
+        /** ContentOut */
+        ContentOut: {
+            /** Id */
+            id: number;
+            /** Title Lv */
+            title_lv: string;
+            /** Title Eng */
+            title_eng: string;
+            /** Type */
+            type: string;
+            /** Description Lv */
+            description_lv?: string | null;
+            /** Description Eng */
+            description_eng?: string | null;
+            /** Image */
+            image?: string | null;
+            /** Url */
+            url: string;
+            /** Content Rating */
+            content_rating?: string | null;
+            /** Rating Value */
+            rating_value?: number | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Channel */
+            channel: string;
+            /** Ratio */
+            ratio?: number | null;
+        };
+        /**
+         * ContentsOut
+         * @description One page of contents plus every filter-dropdown option list
+         *     the page needs — a single endpoint per the rewrite plan.
+         */
+        ContentsOut: {
+            /** Contents */
+            contents: components["schemas"]["ContentOut"][];
+            /** Page */
+            page: number;
+            /** Num Pages */
+            num_pages: number;
+            /** Count */
+            count: number;
+            /** Channels */
+            channels: string[];
+            /** Content Ratings */
+            content_ratings: string[];
+            /** Types */
+            types: string[];
         };
     };
     responses: never;
@@ -2795,6 +2862,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessOut"];
+                };
+            };
+        };
+    };
+    tv_archive_api_content_list: {
+        parameters: {
+            query?: {
+                content_rating?: string;
+                not_content_rating?: string;
+                rating_value?: number | null;
+                start_date?: string | null;
+                end_date?: string | null;
+                ratio?: number | null;
+                channel?: string;
+                not_channel?: string;
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentsOut"];
                 };
             };
         };
