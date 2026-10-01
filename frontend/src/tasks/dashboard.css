@@ -109,16 +109,33 @@
 .task-content:active {
   cursor: grabbing;
 }
-.task-order-badge {
+/* Order badge: a borderless right-edge strip inside .task-card (no
+   divider between card and badge). The '#' marks it as a priority
+   rank; the click opens the preset-rank dropdown. */
+.task-order-badge,
+.task-order-badge .dropdown {
   display: flex;
-  align-items: center;
 }
 .task-order-badge .order-btn {
   font-size: 0.875rem;
+  font-weight: 600;
+  color: #6c757d;
   padding: 0.25rem 0.5rem;
   min-width: 40px;
-  height: 100%;
-  border-radius: 0.25rem;
+  border: none;
+  border-radius: 0 var(--bs-card-border-radius, 0.375rem)
+    var(--bs-card-border-radius, 0.375rem) 0;
+  background: transparent;
+}
+.task-order-badge .order-btn::before {
+  content: '#';
+  margin-right: 1px;
+  font-weight: 400;
+  opacity: 0.5;
+}
+.task-order-badge .order-btn:hover {
+  color: #0d6efd;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 .divider-card {
   background-color: transparent;

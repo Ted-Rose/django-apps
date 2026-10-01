@@ -109,7 +109,7 @@ export function TaskCard({
       }}
     >
       <div
-        className="card task-card flex-grow-1 task-content"
+        className="card task-card flex-grow-1 task-content flex-row"
         onPointerDownCapture={noteCardPressStart}
         {...(draggable ? attributes : {})}
         {...(draggable ? listeners : {})}
@@ -265,40 +265,40 @@ export function TaskCard({
             </div>
           </div>
         </div>
-      </div>
-      <div className="task-order-badge ms-2">
-        {onSetRank ? (
-          <Dropdown
-            label={<>{position}</>}
-            buttonClassName="btn btn-sm btn-outline-secondary order-btn"
-            ariaLabel="Change order"
-            menuClassName="dropdown-menu-end"
-          >
-            {ORDER_PRESETS.map((rank) => (
-              <li key={rank}>
-                <a
-                  className="dropdown-item"
-                  href="#"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onSetRank(rank);
-                  }}
-                >
-                  {rank}
-                </a>
-              </li>
-            ))}
-          </Dropdown>
-        ) : (
-          <button
-            className="btn btn-sm btn-outline-secondary order-btn"
-            type="button"
-            title="Change order"
-          >
-            {position}
-          </button>
-        )}
+        <div className="task-order-badge">
+          {onSetRank ? (
+            <Dropdown
+              label={<>{position}</>}
+              buttonClassName="btn btn-sm order-btn"
+              ariaLabel="Change order"
+              menuClassName="dropdown-menu-end"
+            >
+              {ORDER_PRESETS.map((rank) => (
+                <li key={rank}>
+                  <a
+                    className="dropdown-item"
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onSetRank(rank);
+                    }}
+                  >
+                    {rank}
+                  </a>
+                </li>
+              ))}
+            </Dropdown>
+          ) : (
+            <button
+              className="btn btn-sm order-btn"
+              type="button"
+              title="Priority — change order"
+            >
+              {position}
+            </button>
+          )}
+        </div>
       </div>
 
       <ConfirmModal
