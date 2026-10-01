@@ -33,6 +33,11 @@ interface DropdownProps {
   ariaLabel?: string;
   /** Extra classes for the `<ul>` menu (e.g. `dropdown-menu-end`). */
   menuClassName?: string;
+  /**
+   * Inline style for the `<ul>` menu — the finance templates use
+   * `max-height`/`overflow-y` to scroll long option lists.
+   */
+  menuStyle?: CSSProperties;
   children: ReactNode;
 }
 
@@ -42,6 +47,7 @@ export function Dropdown({
   buttonStyle,
   ariaLabel,
   menuClassName = '',
+  menuStyle,
   children,
 }: DropdownProps) {
   const [open, setOpen] = useState(false);
@@ -77,6 +83,7 @@ export function Dropdown({
       </button>
       <ul
         className={`dropdown-menu ${menuClassName}${open ? ' show' : ''}`.trim()}
+        style={menuStyle}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest('.dropdown-item')) {
             setOpen(false);

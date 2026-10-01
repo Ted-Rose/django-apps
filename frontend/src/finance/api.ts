@@ -57,12 +57,12 @@ export function fetchInstitutions(country = ''): Promise<InstitutionsOut> {
 }
 
 export interface TransactionParams {
-  account?: number | null;
+  account?: number | string | null;
   category?: string | null;
   creditor?: string | null;
   q?: string | null;
-  sort?: string;
-  direction?: string;
+  sort?: string | null;
+  direction?: string | null;
   page?: number | string | null;
 }
 
