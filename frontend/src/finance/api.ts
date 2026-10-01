@@ -38,6 +38,7 @@ export type RulePreviewChangeOut =
   components['schemas']['RulePreviewChangeOut'];
 export type RulesChangedOut = components['schemas']['RulesChangedOut'];
 export type CategorySaveIn = components['schemas']['CategorySaveIn'];
+export type PushConfigOut = components['schemas']['PushConfigOut'];
 export type PushSubscribeIn = components['schemas']['PushSubscribeIn'];
 export type PushUnsubscribeIn = components['schemas']['PushUnsubscribeIn'];
 export type MessageOut = components['schemas']['MessageOut'];
