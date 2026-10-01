@@ -13,7 +13,7 @@ import {
 } from './mutations';
 import { apiPost } from '../shared/api/client';
 import { ApiError } from '../shared/api/errors';
-import { clearToasts, useToasts } from './toasts';
+import { clearToasts, useToasts } from '../shared/toasts';
 import type { DashboardOut, TaskOut } from './api';
 
 vi.mock('../shared/api/client', () => ({

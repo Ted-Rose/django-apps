@@ -7,7 +7,7 @@ import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchTrash, type TaskOut } from '../api';
 import ConfirmModal from '../components/ConfirmModal';
 import SecondaryLabelDropdown from '../components/SecondaryLabelDropdown';
-import Toasts from '../components/Toasts';
+import Toasts from '../../shared/components/Toasts';
 import { usePermanentDeleteTask, useRestoreTask } from '../mutations';
 import { formatFullDate, truncateWords } from '../utils';
 import { ErrorState, LoadingSkeleton } from './TaskListPage';

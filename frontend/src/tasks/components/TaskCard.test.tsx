@@ -13,7 +13,7 @@ import { TaskCard } from './TaskCard';
 import DividerCard from './DividerCard';
 import { apiPost } from '../../shared/api/client';
 import { resetActionHistory } from '../actionHistory';
-import { clearToasts } from '../toasts';
+import { clearToasts } from '../../shared/toasts';
 import type { TaskOut } from '../api';
 
 vi.mock('../../shared/api/client', () => ({

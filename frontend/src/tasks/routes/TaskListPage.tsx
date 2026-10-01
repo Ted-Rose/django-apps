@@ -31,7 +31,7 @@ import DividerCard from '../components/DividerCard';
 import TaskCard from '../components/TaskCard';
 import TaskFormModal from '../components/TaskFormModal';
 import TaskNavBar from '../components/TaskNavBar';
-import Toasts from '../components/Toasts';
+import Toasts from '../../shared/components/Toasts';
 import {
   useCreateDivider,
   useProcessLabels,
@@ -45,7 +45,7 @@ import {
   noteDragFinished,
   positionField,
 } from '../reorder';
-import { pushToast } from '../toasts';
+import { pushToast } from '../../shared/toasts';
 import useAutosync from '../useAutosync';
 import useUndoRedo from '../useUndoRedo';
 

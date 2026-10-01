@@ -205,20 +205,8 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
-.action-toast {
-  position: fixed;
-  bottom: 5rem;
-  left: 1.5rem;
-  z-index: 1001;
-  min-width: 250px;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: all 0.3s ease;
-}
-.action-toast.show {
-  opacity: 1;
-  transform: translateY(0);
-}
+/* .action-toast styles moved to shared/components/Toasts.css
+   (finance Stage 1) — imported by the Toasts component itself. */
 .floating-add-btn {
   position: fixed;
   bottom: 1.5rem;

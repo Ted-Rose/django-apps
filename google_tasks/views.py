@@ -14,10 +14,10 @@ contract and guard against accidental re-mounting.
 import json
 import math
 import uuid
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.http import Http404, JsonResponse
+from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
@@ -33,7 +33,6 @@ from google_tasks.services import (
     get_tasks_service
 )
 from google_api.utils import get_user_credentials
-from django_apps.views import spa_shell
 
 # Maximum number of position updates accepted by a single reorder
 # request (task lists exceed bible's 100-note scale).
@@ -976,36 +975,6 @@ def update_task_view(request, task_id):
         }, status=400)
 
 
-@login_required
-def react_app(request, subpath=''):
-    """React SPA shell — the google_tasks UI itself since Stage 6.
-
-    Mounted at /tasks/ with a <path:subpath> catch-all so client-side
-    routes (/tasks/starred/, /tasks/task/<id>/, ...) all render the
-    shell and React Router resolves the page. The name 'dashboard' on
-    the '' route keeps reverse('google_tasks:dashboard') working for
-    home.html and the google_api OAuth redirect fallback.
-
-    Non-GET/HEAD requests 404: the pre-cutover mutation URLs under
-    /tasks/ (sync/, task/<id>/complete/, ...) are gone — mutations live
-    exclusively under /api/tasks/ — so a stale POST must not receive
-    the HTML shell with a 200.
-    """
-    if request.method not in ('GET', 'HEAD'):
-        raise Http404
-    return spa_shell(request, entry='tasks', title='Tasks')
-
-
-def app_redirect(request, subpath=''):
-    """301 /tasks/app/<subpath> → /tasks/<subpath>.
-
-    The strangler mount lived at /tasks/app/ between Stages 1–5; keep
-    old links/bookmarks working without serving the shell twice.
-    Deliberately NOT login_required: anonymous users are bounced to
-    login by the destination page after the redirect, avoiding a
-    double hop.
-    """
-    target = f'/tasks/{subpath}'
-    if request.GET:
-        target = f'{target}?{request.GET.urlencode()}'
-    return redirect(target, permanent=True)
+# The SPA shell + strangler-redirect views moved to
+# django_apps.views (react_app / app_redirect) in finance Stage 1 —
+# urls.py binds them via functools.partial for entry='tasks'.

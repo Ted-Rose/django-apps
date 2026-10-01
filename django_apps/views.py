@@ -5,7 +5,7 @@ import re
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -17,7 +17,7 @@ def home(request):
 # --- Progressive Web App (PWA) endpoints ---
 
 # Bump this to force clients to refresh the service worker cache.
-PWA_CACHE_VERSION = '5'
+PWA_CACHE_VERSION = '6'
 
 
 def manifest(request):
@@ -105,3 +105,45 @@ def spa_shell(request, entry, title=''):
         ),
         'bootstrap': {'user': request.user.get_username()},
     })
+
+
+@login_required
+def react_app(request, entry, title='', subpath=''):
+    """React SPA shell shared by every app-level mount.
+
+    Mount with functools.partial (or a thin wrapper) binding `entry`
+    (the frontend/src/<entry>/ folder and vite input key) and
+    `title`, e.g.::
+
+        path('', partial(react_app, entry='tasks', title='Tasks'))
+        path('app/<path:subpath>',
+             partial(react_app, entry='finance', title='Finance'))
+
+    Every GET/HEAD path under the mount renders the shell and React
+    Router resolves the page client-side; `subpath` is captured by
+    <path:subpath> catch-alls and intentionally unused.
+
+    Non-GET/HEAD requests 404: retired template-mutation URLs must
+    not answer with the HTML shell — mutations live under /api/.
+    """
+    if request.method not in ('GET', 'HEAD'):
+        raise Http404
+    return spa_shell(request, entry=entry, title=title)
+
+
+def app_redirect(request, base, subpath=''):
+    """301 /<base>/app/<subpath> → /<base>/<subpath>.
+
+    Used for the strangler-mount cleanup: while an SPA is staged at
+    /<base>/app/ the mount serves `react_app`; after cutover the app
+    paths 301 here so old links/bookmarks keep working without
+    serving the shell twice. `base` tolerates missing slashes
+    ('tasks' and '/tasks/' behave the same). Deliberately NOT
+    login_required: anonymous users are bounced to login by the
+    destination page after the redirect, avoiding a double hop.
+    """
+    prefix = f"/{base.strip('/')}/"
+    target = f'{prefix}{subpath}'
+    if request.GET:
+        target = f'{target}?{request.GET.urlencode()}'
+    return redirect(target, permanent=True)

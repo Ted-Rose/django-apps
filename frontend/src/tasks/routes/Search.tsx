@@ -6,7 +6,7 @@ import { BurgerMenu } from '../../shared/components/BurgerMenu';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import { fetchSearchTasks, type TaskOut } from '../api';
-import Toasts from '../components/Toasts';
+import Toasts from '../../shared/components/Toasts';
 import { useSync, useToggleStar } from '../mutations';
 import { formatFullDate, spaPathFromStoredUrl, truncateWords } from '../utils';
 import { ErrorState } from './TaskListPage';

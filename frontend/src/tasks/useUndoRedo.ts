@@ -18,7 +18,7 @@ import {
   useUpdateDivider,
 } from './mutations';
 import { fullOrderUpdates } from './reorder';
-import { pushToast } from './toasts';
+import { pushToast } from '../shared/toasts';
 
 interface UndoRedoContext {
   /** Current full active list (for REORDER id filtering). */

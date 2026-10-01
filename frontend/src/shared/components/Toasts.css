@@ -1,0 +1,16 @@
+/* Fixed bottom-left toast stack — shared by every SPA entry
+   (moved out of tasks/dashboard.css in finance Stage 1). */
+.action-toast {
+  position: fixed;
+  bottom: 5rem;
+  left: 1.5rem;
+  z-index: 1001;
+  min-width: 250px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.3s ease;
+}
+.action-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
