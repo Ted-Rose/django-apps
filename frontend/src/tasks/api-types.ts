@@ -429,6 +429,445 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/finance/accounts/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Account List */
+        get: operations["finance_api_account_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/institutions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Institutions */
+        get: operations["finance_api_institutions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/transactions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Transaction List */
+        get: operations["finance_api_transaction_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/categories/overview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Category Overview
+         * @description Per-category spending totals over a selectable time window.
+         */
+        get: operations["finance_api_category_overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/limits/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Limits */
+        get: operations["finance_api_limits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/balances/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Balances
+         * @description Stored balances for accounts the user included.
+         */
+        get: operations["finance_api_balances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/rules/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rules
+         * @description Categories, prioritized rules and the choice lists the rule
+         *     form renders as dropdowns.
+         */
+        get: operations["finance_api_rules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/connect/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect
+         * @description Create a requisition; the SPA navigates to the returned
+         *     GoCardless link itself (fetch must never follow it).
+         */
+        post: operations["finance_api_connect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/accounts/{account_id}/toggle-balance-check/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle Balance Check */
+        post: operations["finance_api_toggle_balance_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/accounts/{account_id}/share/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Account
+         * @description Owner-only: share an owned account with another user.
+         */
+        post: operations["finance_api_share_account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/transactions/sync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Transactions
+         * @description Fetch latest transactions for the user's linked accounts.
+         */
+        post: operations["finance_api_sync_transactions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/balances/refresh/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Balances
+         * @description Fetch the latest balances from GoCardless on demand.
+         */
+        post: operations["finance_api_refresh_balances"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/limits/save/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Limit
+         * @description Create (update_or_create) or edit a TransactionLimit — same
+         *     form + messages as the template view's POST branch.
+         */
+        post: operations["finance_api_save_limit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/limits/{limit_id}/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete Limit */
+        post: operations["finance_api_delete_limit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/rules/save/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Rule
+         * @description Create or update a rule, then re-apply rules over history.
+         */
+        post: operations["finance_api_save_rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/rules/{rule_id}/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete Rule */
+        post: operations["finance_api_delete_rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/rules/{rule_id}/move/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move Rule
+         * @description Move a rule up/down; renumbers all priorities to 1..n.
+         */
+        post: operations["finance_api_move_rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/rules/apply/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Rules Endpoint
+         * @description Re-run all rules over the user's transaction history.
+         */
+        post: operations["finance_api_apply_rules_endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/rules/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Rule Endpoint
+         * @description Dry-run a candidate rule against transaction history.
+         */
+        post: operations["finance_api_preview_rule_endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/categories/save/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Category
+         * @description Create a category (or update color when the name exists).
+         */
+        post: operations["finance_api_save_category"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/categories/{category_id}/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete Category */
+        post: operations["finance_api_delete_category"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/push/subscribe/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Subscribe
+         * @description Register this browser's Web Push subscription.
+         */
+        post: operations["finance_api_push_subscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/push/unsubscribe/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Unsubscribe
+         * @description Drop this browser's Web Push subscription.
+         */
+        post: operations["finance_api_push_unsubscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -631,6 +1070,665 @@ export interface components {
             notes?: string | null;
             /** Label Ids */
             label_ids?: number[] | null;
+        };
+        /** AccountOut */
+        AccountOut: {
+            /** Id */
+            id: number;
+            /** Account Id */
+            account_id: string;
+            /** Name */
+            name: string;
+            /** Iban */
+            iban?: string | null;
+            /** Institution Id */
+            institution_id: string;
+            /** Currency */
+            currency: string;
+            /** Display Name */
+            display_name: string;
+            /** Is Owner */
+            is_owner: boolean;
+            /** Owner Username */
+            owner_username: string;
+            /** Included In Balance Check */
+            included_in_balance_check: boolean;
+            /** Last Balance */
+            last_balance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Balance Updated At */
+            balance_updated_at?: string | null;
+        };
+        /** AccountsOut */
+        AccountsOut: {
+            /** Accounts */
+            accounts: components["schemas"]["AccountOut"][];
+        };
+        /** InstitutionOut */
+        InstitutionOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Bic */
+            bic?: string | null;
+            /** Logo */
+            logo?: string | null;
+        };
+        /** InstitutionsOut */
+        InstitutionsOut: {
+            /** Institutions */
+            institutions: components["schemas"]["InstitutionOut"][];
+        };
+        /** AccountOptionOut */
+        AccountOptionOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+        };
+        /** AccountRef */
+        AccountRef: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Iban */
+            iban?: string | null;
+            /** Currency */
+            currency: string;
+        };
+        /** CategoryOut */
+        CategoryOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Color */
+            color: string;
+        };
+        /** TransactionOut */
+        TransactionOut: {
+            /** Id */
+            id: number;
+            /** Transaction Id */
+            transaction_id: string;
+            /**
+             * Booking Date
+             * Format: date
+             */
+            booking_date: string;
+            account: components["schemas"]["AccountRef"];
+            /** Remittance Information */
+            remittance_information?: string | null;
+            /** Counterparty */
+            counterparty?: string | null;
+            effective_category?: components["schemas"]["CategoryOut"] | null;
+            /** Amount */
+            amount: string;
+            /** Currency */
+            currency: string;
+        };
+        /**
+         * TransactionsOut
+         * @description One page of transactions plus every filter-dropdown option
+         *     list the page needs — a single endpoint per the rewrite plan.
+         */
+        TransactionsOut: {
+            /** Transactions */
+            transactions: components["schemas"]["TransactionOut"][];
+            /** Page */
+            page: number;
+            /** Num Pages */
+            num_pages: number;
+            /** Count */
+            count: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Accounts */
+            accounts: components["schemas"]["AccountOptionOut"][];
+            /** Categories */
+            categories: components["schemas"]["CategoryOut"][];
+            /** Counterparties */
+            counterparties: string[];
+            /** Selected Account */
+            selected_account?: number | null;
+            /**
+             * Selected Category
+             * @default
+             */
+            selected_category: string;
+            /**
+             * Selected Creditor
+             * @default
+             */
+            selected_creditor: string;
+            /**
+             * Search Query
+             * @default
+             */
+            search_query: string;
+            /** Sort */
+            sort: string;
+            /** Direction */
+            direction: string;
+            /** Filters Active */
+            filters_active: boolean;
+        };
+        /** CategoryOverviewOut */
+        CategoryOverviewOut: {
+            /** Rows */
+            rows: components["schemas"]["CategoryRowOut"][];
+            /** Totals */
+            totals: {
+                [key: string]: components["schemas"]["CurrencyTotalOut"];
+            };
+            /** Periods */
+            periods: components["schemas"]["PeriodOut"][];
+            /** Date From */
+            date_from: string;
+            /** Date To */
+            date_to: string;
+            /** Accounts */
+            accounts: components["schemas"]["AccountOptionOut"][];
+            /**
+             * Selected Account
+             * @default
+             */
+            selected_account: string;
+        };
+        /** CategoryRowOut */
+        CategoryRowOut: {
+            /** Category Name */
+            category_name: string;
+            /** Category Color */
+            category_color: string;
+            /** Spent */
+            spent: string;
+            /** Received */
+            received: string;
+            /** Net */
+            net: string;
+            /** Share */
+            share: number;
+            /** Currency */
+            currency: string;
+            /** Tx Count */
+            tx_count: number;
+        };
+        /** CurrencyTotalOut */
+        CurrencyTotalOut: {
+            /** Spent */
+            spent: string;
+            /** Received */
+            received: string;
+        };
+        /** PeriodOut */
+        PeriodOut: {
+            /** Label */
+            label: string;
+            /** Date From */
+            date_from: string;
+            /** Date To */
+            date_to: string;
+            /** Active */
+            active: boolean;
+        };
+        /** LimitOut */
+        LimitOut: {
+            /** Id */
+            id: number;
+            account: components["schemas"]["AccountRef"];
+            category?: components["schemas"]["CategoryOut"] | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Limit 7 Days */
+            limit_7_days?: string | null;
+            /** Limit 30 Days */
+            limit_30_days?: string | null;
+            /** Limit Monthly */
+            limit_monthly?: string | null;
+            /**
+             * Window Stats
+             * @default []
+             */
+            window_stats: components["schemas"]["WindowStatOut"][];
+        };
+        /** LimitsOut */
+        LimitsOut: {
+            /** Limits */
+            limits: components["schemas"]["LimitOut"][];
+            /** Overview Months */
+            overview_months: components["schemas"]["MonthOptionOut"][];
+            /** Selected Month */
+            selected_month?: string | null;
+            /** As Of */
+            as_of?: string | null;
+            /** Accounts */
+            accounts: components["schemas"]["AccountOptionOut"][];
+            /** Categories */
+            categories: components["schemas"]["CategoryOut"][];
+            push_config: components["schemas"]["PushConfigOut"];
+        };
+        /** MonthOptionOut */
+        MonthOptionOut: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+            /** Active */
+            active: boolean;
+        };
+        /** PushConfigOut */
+        PushConfigOut: {
+            /** Vapid Public Key */
+            vapid_public_key: string;
+            /** Subscription Count */
+            subscription_count: number;
+            /** Subscribe Url */
+            subscribe_url: string;
+            /** Unsubscribe Url */
+            unsubscribe_url: string;
+        };
+        /** WindowStatBase */
+        WindowStatBase: {
+            /** Label */
+            label: string;
+            /** Spent */
+            spent: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** Pct */
+            pct: string;
+            /** Bar Pct */
+            bar_pct: string;
+            /** Bar Class */
+            bar_class: string;
+            /** Remaining */
+            remaining: string;
+            /** Over */
+            over?: string | null;
+        };
+        /** WindowStatOut */
+        WindowStatOut: {
+            /** Label */
+            label: string;
+            /** Spent */
+            spent: string;
+            /** Threshold */
+            threshold?: string | null;
+            /** Pct */
+            pct: string;
+            /** Bar Pct */
+            bar_pct: string;
+            /** Bar Class */
+            bar_class: string;
+            /** Remaining */
+            remaining: string;
+            /** Over */
+            over?: string | null;
+            /**
+             * History
+             * @default []
+             */
+            history: components["schemas"]["WindowStatBase"][];
+        };
+        /** BalancesOut */
+        BalancesOut: {
+            /** Accounts */
+            accounts: components["schemas"]["AccountOut"][];
+        };
+        /** ChoiceOut */
+        ChoiceOut: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /** RuleOut */
+        RuleOut: {
+            /** Id */
+            id: number;
+            /** Category Id */
+            category_id: number;
+            /** Priority */
+            priority: number;
+            /** Counterparty Scope */
+            counterparty_scope: string;
+            /** Counterparty Pattern */
+            counterparty_pattern: string;
+            /** Counterparty Match Type */
+            counterparty_match_type: string;
+            /** Description Pattern */
+            description_pattern: string;
+            /** Description Match Type */
+            description_match_type: string;
+            /** Description Exclusion */
+            description_exclusion: string;
+            /** Operator */
+            operator: string;
+            /** Is Active */
+            is_active: boolean;
+        };
+        /** RulesOut */
+        RulesOut: {
+            /** Rules */
+            rules: components["schemas"]["RuleOut"][];
+            /** Categories */
+            categories: components["schemas"]["CategoryOut"][];
+            /** Match Types */
+            match_types: components["schemas"]["ChoiceOut"][];
+            /** Counterparty Scopes */
+            counterparty_scopes: components["schemas"]["ChoiceOut"][];
+            /** Operators */
+            operators: components["schemas"]["ChoiceOut"][];
+        };
+        /** ConnectOut */
+        ConnectOut: {
+            /** Link */
+            link: string;
+            /** Requisition Id */
+            requisition_id: string;
+        };
+        /** ConnectIn */
+        ConnectIn: {
+            /** Institution Id */
+            institution_id: string;
+        };
+        /** ToggleBalanceCheckOut */
+        ToggleBalanceCheckOut: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Included In Balance Check */
+            included_in_balance_check: boolean;
+        };
+        /** MessageOut */
+        MessageOut: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+        };
+        /** ShareIn */
+        ShareIn: {
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+        };
+        /** SyncOut */
+        SyncOut: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Created */
+            created: number;
+            /** Updated */
+            updated: number;
+            /** Failed */
+            failed: number;
+        };
+        /** SyncIn */
+        SyncIn: {
+            /** Account */
+            account?: number | null;
+        };
+        /** RefreshOut */
+        RefreshOut: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Updated */
+            updated: number;
+            /** Rate Limited */
+            rate_limited: number;
+            /** Failed */
+            failed: number;
+        };
+        /**
+         * LimitSaveIn
+         * @description Mirrors the TransactionLimitForm POST; ``account``/``category``
+         *     are resolved against per-user form querysets.
+         */
+        LimitSaveIn: {
+            /** Limit Id */
+            limit_id?: number | null;
+            /** Account */
+            account?: number | null;
+            /** Category */
+            category?: number | null;
+            /** Limit 7 Days */
+            limit_7_days?: number | string | null;
+            /** Limit 30 Days */
+            limit_30_days?: number | string | null;
+            /** Limit Monthly */
+            limit_monthly?: number | string | null;
+            /**
+             * Is Active
+             * @default false
+             */
+            is_active: boolean;
+        };
+        /** RulesChangedOut */
+        RulesChangedOut: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Changed */
+            changed: number;
+        };
+        /**
+         * RuleSaveIn
+         * @description Mirrors the CategoryRuleForm POST (``rule_id`` edits).
+         */
+        RuleSaveIn: {
+            /** Rule Id */
+            rule_id?: number | null;
+            /** Category */
+            category?: number | null;
+            /** Priority */
+            priority?: number | null;
+            /**
+             * Counterparty Scope
+             * @default any
+             */
+            counterparty_scope: string;
+            /**
+             * Counterparty Pattern
+             * @default
+             */
+            counterparty_pattern: string;
+            /**
+             * Counterparty Match Type
+             * @default contains
+             */
+            counterparty_match_type: string;
+            /**
+             * Description Pattern
+             * @default
+             */
+            description_pattern: string;
+            /**
+             * Description Match Type
+             * @default contains
+             */
+            description_match_type: string;
+            /**
+             * Description Exclusion
+             * @default
+             */
+            description_exclusion: string;
+            /**
+             * Operator
+             * @default AND
+             */
+            operator: string;
+            /**
+             * Is Active
+             * @default false
+             */
+            is_active: boolean;
+        };
+        /** MoveRuleIn */
+        MoveRuleIn: {
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+        };
+        /** RulePreviewChangeOut */
+        RulePreviewChangeOut: {
+            /** Id */
+            id: number;
+            /** Booking Date */
+            booking_date: string;
+            /** Account */
+            account: string;
+            /** Counterparty */
+            counterparty: string;
+            /** Description */
+            description: string;
+            /** Amount */
+            amount: string;
+            /** Currency */
+            currency: string;
+            /** Old Category */
+            old_category?: string | null;
+            /** New Category */
+            new_category?: string | null;
+        };
+        /** RulePreviewOut */
+        RulePreviewOut: {
+            /** Success */
+            success: boolean;
+            /** Match Count */
+            match_count: number;
+            /** Apply Count */
+            apply_count: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Category */
+            category: string;
+            /** Changes Total */
+            changes_total: number;
+            /** Gains */
+            gains: number;
+            /** Losses */
+            losses: number;
+            /** Other Changes */
+            other_changes: number;
+            /** Changes */
+            changes: components["schemas"]["RulePreviewChangeOut"][];
+        };
+        /** RulePreviewIn */
+        RulePreviewIn: {
+            /** Rule Id */
+            rule_id?: number | null;
+            /** Category Id */
+            category_id?: number | null;
+            /**
+             * Priority
+             * @default 1
+             */
+            priority: number;
+            /**
+             * Counterparty Scope
+             * @default any
+             */
+            counterparty_scope: string;
+            /**
+             * Counterparty Pattern
+             * @default
+             */
+            counterparty_pattern: string;
+            /**
+             * Counterparty Match Type
+             * @default contains
+             */
+            counterparty_match_type: string;
+            /**
+             * Description Pattern
+             * @default
+             */
+            description_pattern: string;
+            /**
+             * Description Match Type
+             * @default contains
+             */
+            description_match_type: string;
+            /**
+             * Description Exclusion
+             * @default
+             */
+            description_exclusion: string;
+            /**
+             * Operator
+             * @default AND
+             */
+            operator: string;
+            /**
+             * Is Active
+             * @default false
+             */
+            is_active: boolean;
+        };
+        /** CategorySaveIn */
+        CategorySaveIn: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Color
+             * @default
+             */
+            color: string;
+        };
+        /** SuccessOut */
+        SuccessOut: {
+            /** Success */
+            success: boolean;
+        };
+        /** PushKeysIn */
+        PushKeysIn: {
+            /**
+             * P256Dh
+             * @default
+             */
+            p256dh: string;
+            /**
+             * Auth
+             * @default
+             */
+            auth: string;
+        };
+        /** PushSubscribeIn */
+        PushSubscribeIn: {
+            /**
+             * Endpoint
+             * @default
+             */
+            endpoint: string;
+            keys?: components["schemas"]["PushKeysIn"] | null;
+        };
+        /** PushUnsubscribeIn */
+        PushUnsubscribeIn: {
+            /**
+             * Endpoint
+             * @default
+             */
+            endpoint: string;
         };
     };
     responses: never;
@@ -1170,6 +2268,534 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    finance_api_account_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsOut"];
+                };
+            };
+        };
+    };
+    finance_api_institutions: {
+        parameters: {
+            query?: {
+                country?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionsOut"];
+                };
+            };
+        };
+    };
+    finance_api_transaction_list: {
+        parameters: {
+            query?: {
+                account?: string;
+                category?: string;
+                creditor?: string;
+                q?: string;
+                sort?: string;
+                direction?: string;
+                page?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionsOut"];
+                };
+            };
+        };
+    };
+    finance_api_category_overview: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                account?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryOverviewOut"];
+                };
+            };
+        };
+    };
+    finance_api_limits: {
+        parameters: {
+            query?: {
+                month?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitsOut"];
+                };
+            };
+        };
+    };
+    finance_api_balances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalancesOut"];
+                };
+            };
+        };
+    };
+    finance_api_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesOut"];
+                };
+            };
+        };
+    };
+    finance_api_connect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectOut"];
+                };
+            };
+        };
+    };
+    finance_api_toggle_balance_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToggleBalanceCheckOut"];
+                };
+            };
+        };
+    };
+    finance_api_share_account: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_sync_transactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncOut"];
+                };
+            };
+        };
+    };
+    finance_api_refresh_balances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshOut"];
+                };
+            };
+        };
+    };
+    finance_api_save_limit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LimitSaveIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_delete_limit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                limit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_save_rule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleSaveIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesChangedOut"];
+                };
+            };
+        };
+    };
+    finance_api_delete_rule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesChangedOut"];
+                };
+            };
+        };
+    };
+    finance_api_move_rule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRuleIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesChangedOut"];
+                };
+            };
+        };
+    };
+    finance_api_apply_rules_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesChangedOut"];
+                };
+            };
+        };
+    };
+    finance_api_preview_rule_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulePreviewIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulePreviewOut"];
+                };
+            };
+        };
+    };
+    finance_api_save_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategorySaveIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_delete_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesChangedOut"];
+                };
+            };
+        };
+    };
+    finance_api_push_subscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscribeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessOut"];
+                };
+            };
+        };
+    };
+    finance_api_push_unsubscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushUnsubscribeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessOut"];
+                };
             };
         };
     };
