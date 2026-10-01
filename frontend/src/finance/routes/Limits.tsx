@@ -1,20 +1,24 @@
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import FinanceNavBar from '../components/FinanceNavBar';
 import ErrorState from '../components/ErrorState';
 import LimitForm from '../components/LimitForm';
-import LimitRow from '../components/LimitRow';
+import LimitItem from '../components/LimitItem';
 import PushCard from '../components/PushCard';
+import CollapsibleCard from '../../shared/components/CollapsibleCard';
 import Toasts from '../../shared/components/Toasts';
 import { fetchLimits } from '../api';
 
 /**
- * React port of limits.html — the limit create/edit form (driven by
- * the `?edit=<id>` param, like the template view's `request.GET`),
- * the per-limit table with window progress bars and past-month
- * history, the overview month dropdown (`?month=YYYY-MM`
- * re-evaluates windows as of that month's last day server-side),
- * and the push-alert card.
+ * React port of limits.html as a mobile-first column of
+ * collapsible cards: "Limit overview" (open by default) holds the
+ * month dropdown (`?month=YYYY-MM` re-evaluates windows as of that
+ * month's last day server-side) and a compact list of limit cards
+ * with window progress bars and past-month history; "Set a limit"
+ * holds the create/edit form (driven by the `?edit=<id>` param,
+ * auto-opens while editing); "Spending alerts" holds the push
+ * card and is hidden when no VAPID key is configured.
  *
  * All money figures arrive precomputed as Decimal strings inside
  * `window_stats` — rendered verbatim, never parsed into floats.
@@ -29,132 +33,205 @@ export default function Limits() {
     queryFn: () => fetchLimits(month),
   });
 
+  const [overviewOpen, setOverviewOpen] = useState(true);
+  const [formOpen, setFormOpen] = useState(Boolean(editParam));
+  const [alertsOpen, setAlertsOpen] = useState(false);
+
+  // Opening a limit for edit (deep link or the row's pencil)
+  // expands the form section, like the template swapping the
+  // form instance.
+  useEffect(() => {
+    if (editParam) setFormOpen(true);
+  }, [editParam]);
+  // With nothing configured yet the form is the useful next step.
+  useEffect(() => {
+    if (data && data.limits.length === 0) setFormOpen(true);
+  }, [data]);
+
   // The template resolves ?edit= against the user's limits;
   // an unknown/stale id just falls back to the create form.
   const editing =
     data?.limits.find((limit) => String(limit.id) === editParam) ?? null;
 
+  // The form sits below the overview — when an edit starts,
+  // bring it on screen (the pencil tap happened up top).
+  const formSectionRef = useRef<HTMLDivElement>(null);
+  const editingId = editing?.id ?? null;
+  useEffect(() => {
+    if (editingId !== null) {
+      formSectionRef.current?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
+  }, [editingId]);
+
   // Every param write mirrors a template navigation: the overview
   // GET form only carried `month`, the edit link only `edit`, and
-  // save/cancel redirected to the bare limits URL.
+  // save/cancel redirected to the bare limits URL — collapsing the
+  // form is the equivalent return-to-overview.
   const selectMonth = (value: string) =>
     setSearchParams(value ? { month: value } : {});
   const startEdit = (id: number) => setSearchParams({ edit: String(id) });
   const clearParams = () => setSearchParams({});
+  const finishEditing = () => {
+    clearParams();
+    setFormOpen(false);
+  };
+
+  const overCount =
+    data?.limits.filter((limit) => limit.window_stats.some((stat) => stat.over))
+      .length ?? 0;
 
   return (
     <>
       <FinanceNavBar />
       <div className="container-fluid px-2 py-4">
-        <h1 className="mb-4">Spending Limits</h1>
-        <p className="text-muted">
-          Outgoing spending limits per account, optionally scoped to a single
-          category. A limit can cover the last 7 days, the last 30 days, or the
-          current calendar month. You are alerted when spending within a window
-          exceeds the limit.
-        </p>
+        <div className="mx-auto" style={{ maxWidth: '44rem' }}>
+          <h1 className="mb-2">Spending Limits</h1>
+          <p className="text-muted small">
+            Per-account spending limits over 7-day, 30-day or calendar-month
+            windows, optionally scoped to a single category — you are alerted
+            when spending exceeds the limit.
+          </p>
 
-        {isPending && (
-          <div
-            className="text-center py-5"
-            aria-busy="true"
-            aria-label="Loading limits"
-          >
-            <div className="spinner-border" role="status" />
-          </div>
-        )}
-        {isError && (
-          <ErrorState error={error} onRetry={() => refetch()} label="limits" />
-        )}
-        {data && (
-          <div className="row g-3">
-            <div className="col-md-5">
-              <LimitForm
-                // Remount on edit target change so the fields
-                // re-initialize from that limit (the template's
-                // form instance swap).
-                key={editing?.id ?? 'new'}
-                accounts={data.accounts}
-                categories={data.categories}
-                editing={editing}
-                onSaved={clearParams}
-                onCancelEdit={clearParams}
-              />
-              <PushCard config={data.push_config} />
+          {isPending && (
+            <div
+              className="text-center py-5"
+              aria-busy="true"
+              aria-label="Loading limits"
+            >
+              <div className="spinner-border" role="status" />
             </div>
-            <div className="col-md-7">
-              {data.limits.length > 0 ? (
-                <>
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <label
-                      className="form-label mb-0 small text-muted"
-                      htmlFor="overview-month"
-                    >
-                      Overview
-                    </label>
-                    <select
-                      id="overview-month"
-                      name="month"
-                      className="form-select form-select-sm w-auto"
-                      value={data.selected_month ?? ''}
-                      onChange={(event) => selectMonth(event.target.value)}
-                    >
-                      {data.overview_months.map((option) => (
-                        <option key={option.label} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    {data.selected_month && (
-                      <button
-                        type="button"
-                        className="btn btn-link btn-sm"
-                        onClick={clearParams}
+          )}
+          {isError && (
+            <ErrorState
+              error={error}
+              onRetry={() => refetch()}
+              label="limits"
+            />
+          )}
+          {data && (
+            <>
+              <CollapsibleCard
+                title="Limit overview"
+                open={overviewOpen}
+                onToggle={() => setOverviewOpen((open) => !open)}
+                badge={
+                  overCount > 0 ? (
+                    <span className="badge text-bg-danger">
+                      {overCount} over
+                    </span>
+                  ) : undefined
+                }
+              >
+                {data.limits.length > 0 ? (
+                  <>
+                    <div className="d-flex align-items-center gap-2 flex-wrap mb-2">
+                      <label
+                        className="form-label mb-0 small text-muted"
+                        htmlFor="overview-month"
                       >
-                        Back to this month
-                      </button>
-                    )}
-                  </div>
-                  {data.selected_month && data.as_of && (
-                    <p className="text-muted small">
-                      Windows evaluated as of{' '}
-                      {new Date(`${data.as_of}T00:00:00`).toLocaleDateString(
-                        undefined,
-                        { month: 'long', day: 'numeric', year: 'numeric' },
-                      )}{' '}
-                      — the last day of the selected month — using current limit
-                      values.
-                    </p>
-                  )}
-                  <div className="table-responsive">
-                    <table className="table table-striped">
-                      <thead>
-                        <tr>
-                          <th>Account</th>
-                          <th>Category</th>
-                          <th style={{ minWidth: '240px' }}>Spent / limit</th>
-                          <th>Active</th>
-                          <th />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.limits.map((limit) => (
-                          <LimitRow
-                            key={limit.id}
-                            limit={limit}
-                            onEdit={() => startEdit(limit.id)}
-                          />
+                        Overview
+                      </label>
+                      <select
+                        id="overview-month"
+                        name="month"
+                        className="form-select form-select-sm w-auto"
+                        value={data.selected_month ?? ''}
+                        onChange={(event) => selectMonth(event.target.value)}
+                      >
+                        {data.overview_months.map((option) => (
+                          <option key={option.label} value={option.value}>
+                            {option.label}
+                          </option>
                         ))}
-                      </tbody>
-                    </table>
+                      </select>
+                      {data.selected_month && (
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm"
+                          onClick={clearParams}
+                        >
+                          Back to this month
+                        </button>
+                      )}
+                      <span
+                        className={`ms-auto small ${
+                          overCount > 0 ? 'text-danger' : 'text-muted'
+                        }`}
+                      >
+                        <i
+                          className={`bi me-1 ${
+                            overCount > 0
+                              ? 'bi-exclamation-circle'
+                              : 'bi-check-circle'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        {overCount > 0
+                          ? `${overCount} of ${data.limits.length} limits exceeded`
+                          : 'All limits on track'}
+                      </span>
+                    </div>
+                    {data.selected_month && data.as_of && (
+                      <p className="text-muted small">
+                        Windows evaluated as of{' '}
+                        {new Date(`${data.as_of}T00:00:00`).toLocaleDateString(
+                          undefined,
+                          { month: 'long', day: 'numeric', year: 'numeric' },
+                        )}{' '}
+                        — the last day of the selected month — using current
+                        limit values.
+                      </p>
+                    )}
+                    {data.limits.map((limit) => (
+                      <LimitItem
+                        key={limit.id}
+                        limit={limit}
+                        onEdit={() => startEdit(limit.id)}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  <div className="alert alert-info mb-0">
+                    No limits set yet.
                   </div>
-                </>
-              ) : (
-                <div className="alert alert-info">No limits set yet.</div>
+                )}
+              </CollapsibleCard>
+
+              <div ref={formSectionRef}>
+                <CollapsibleCard
+                  title={editing ? 'Edit limit' : 'Set a limit'}
+                  open={formOpen}
+                  onToggle={() => setFormOpen((open) => !open)}
+                >
+                  <LimitForm
+                    // Remount on edit target change so the fields
+                    // re-initialize from that limit (the template's
+                    // form instance swap).
+                    key={editing?.id ?? 'new'}
+                    accounts={data.accounts}
+                    categories={data.categories}
+                    editing={editing}
+                    onSaved={finishEditing}
+                    onCancelEdit={finishEditing}
+                  />
+                </CollapsibleCard>
+              </div>
+
+              {data.push_config.vapid_public_key && (
+                <CollapsibleCard
+                  title="Spending alerts"
+                  open={alertsOpen}
+                  onToggle={() => setAlertsOpen((open) => !open)}
+                >
+                  <PushCard config={data.push_config} />
+                </CollapsibleCard>
               )}
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
       <Toasts />
     </>

@@ -7,16 +7,19 @@ import { useDeleteLimit } from '../mutations';
 type HistoryMonthOut = WindowStatOut['history'][number];
 
 /**
- * One row of the limits table ported from limits.html — account
- * name (iban fallback), category badge ("All" when unset), the
- * per-window progress bars with their past-month <details>
- * history, the active icon, and edit/delete actions.
+ * One limit in the overview list — a compact card meant to stack
+ * without scrolling on a phone, replacing the old five-column
+ * table. The header line carries the category badge ("All" when
+ * unset), the account name, a "Paused" badge for inactive limits,
+ * and the edit/delete actions; each window renders as one label +
+ * amounts line above a thin progress bar, with the past-month
+ * <details> history kept on the monthly window.
  *
  * `spent`/`threshold`/`remaining`/`over`/`pct`/`bar_pct` arrive
  * precomputed as Decimal strings from `limit_window_stats` —
  * rendered verbatim, never parsed into floats.
  */
-export function LimitRow({
+export function LimitItem({
   limit,
   onEdit,
 }: {
@@ -27,32 +30,25 @@ export function LimitRow({
   const currency = limit.account.currency;
 
   return (
-    <tr>
-      <td>{limit.account.name || limit.account.iban}</td>
-      <td>
+    <div
+      className="border rounded-3 px-2 px-sm-3 py-2 mb-2"
+      data-testid={`limit-${limit.id}`}
+    >
+      <div className="d-flex align-items-center gap-2">
         {limit.category ? (
           <CategoryBadge category={limit.category} />
         ) : (
           <span className="text-muted">All</span>
         )}
-      </td>
-      <td>
-        {limit.window_stats.length > 0 ? (
-          limit.window_stats.map((window) => (
-            <WindowStat key={window.label} stat={window} currency={currency} />
-          ))
-        ) : (
-          <span className="text-muted">No windows set</span>
+        <span
+          className="text-muted small text-truncate flex-grow-1"
+          style={{ minWidth: 0 }}
+        >
+          {limit.account.name || limit.account.iban}
+        </span>
+        {!limit.is_active && (
+          <span className="badge text-bg-secondary">Paused</span>
         )}
-      </td>
-      <td>
-        {limit.is_active ? (
-          <i className="bi bi-check-circle text-success" />
-        ) : (
-          <i className="bi bi-x-circle text-muted" />
-        )}
-      </td>
-      <td className="text-nowrap">
         <button
           type="button"
           className="btn btn-sm btn-outline-primary"
@@ -61,7 +57,7 @@ export function LimitRow({
           onClick={onEdit}
         >
           <i className="bi bi-pencil" />
-        </button>{' '}
+        </button>
         <button
           type="button"
           className="btn btn-sm btn-outline-danger"
@@ -72,16 +68,24 @@ export function LimitRow({
         >
           <i className="bi bi-trash" />
         </button>
-      </td>
-    </tr>
+      </div>
+      {limit.window_stats.length > 0 ? (
+        limit.window_stats.map((window) => (
+          <WindowStat key={window.label} stat={window} currency={currency} />
+        ))
+      ) : (
+        <div className="small text-muted mt-2">No windows set</div>
+      )}
+    </div>
   );
 }
 
 /**
- * One window's spend-vs-threshold block: label, `spent / threshold
- * currency`, the colored progress bar (bar_class + bar_pct are
- * precomputed server-side), the remaining/over line, and the
- * expandable past-month history the monthly window carries.
+ * One window's spend-vs-threshold block compressed to two lines:
+ * the label + `spent / threshold currency` + colored
+ * remaining/over text on one line (wrapping under on narrow
+ * screens), then the progress bar (bar_class + bar_pct are
+ * precomputed server-side).
  */
 function WindowStat({
   stat,
@@ -91,34 +95,26 @@ function WindowStat({
   currency: string;
 }) {
   return (
-    <div className="mb-3">
-      <div className="d-flex justify-content-between small">
-        <span>{stat.label}</span>
-        <span>
-          {stat.spent} / {stat.threshold} {currency}
+    <div className="mt-2">
+      <div className="d-flex justify-content-between align-items-baseline gap-2 flex-wrap small">
+        <span className="text-muted">{stat.label}</span>
+        <span className="ms-auto text-nowrap">
+          {stat.spent} / {stat.threshold} {currency}{' '}
+          <span
+            className={stat.over ? 'text-danger fw-semibold' : 'text-muted'}
+          >
+            {stat.over
+              ? `${stat.over} ${currency} over`
+              : `${stat.remaining} ${currency} left`}
+          </span>
         </span>
       </div>
-      <div className="progress" style={{ height: '6px' }}>
+      <div className="progress mt-1" style={{ height: '5px' }}>
         <div
           className={`progress-bar ${stat.bar_class}`}
           role="progressbar"
           style={{ width: `${stat.bar_pct}%` }}
         />
-      </div>
-      <div
-        className={`small ${
-          stat.over ? 'text-danger fw-semibold' : 'text-muted'
-        }`}
-      >
-        {stat.over ? (
-          <>
-            {stat.over} {currency} over
-          </>
-        ) : (
-          <>
-            {stat.remaining} {currency} left
-          </>
-        )}
       </div>
       {stat.history.length > 0 && (
         <details className="mt-1">
@@ -158,4 +154,4 @@ function HistoryMonth({
   );
 }
 
-export default LimitRow;
+export default LimitItem;

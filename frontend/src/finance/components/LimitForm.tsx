@@ -68,137 +68,134 @@ export function LimitForm({
   };
 
   return (
-    <div className="card mb-4">
-      <div className="card-body">
-        <h5 className="card-title">{editing ? 'Edit limit' : 'Set a limit'}</h5>
-        {editing && (
-          <div className="alert alert-secondary py-2">
-            Editing an existing limit.{' '}
-            <button
-              type="button"
-              className="btn btn-link btn-sm p-0 align-baseline"
-              onClick={onCancelEdit}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-        <form onSubmit={submit}>
-          <div className="mb-3">
-            <label className="form-label" htmlFor="limit-account">
-              Account
-            </label>
-            <select
-              id="limit-account"
-              className="form-select"
-              required
-              value={account}
-              onChange={(event) => setAccount(event.target.value)}
-            >
-              <option value="" disabled>
-                Select an account
-              </option>
-              {accounts.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="mb-3">
-            <label className="form-label" htmlFor="limit-category">
-              Category
-            </label>
-            <select
-              id="limit-category"
-              className="form-select"
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-            >
-              <option value="">All categories</option>
-              {categories.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="fw-semibold mb-1">Time windows</p>
-          <p className="text-muted small mb-2">
-            Set any combination — leave a field blank to disable that window.
-          </p>
-          <div className="mb-3">
-            <label className="form-label" htmlFor="limit-7-days">
-              Limit per 7 days
-            </label>
-            <input
-              type="number"
-              id="limit-7-days"
-              className="form-control"
-              step="0.01"
-              min="0"
-              value={limit7Days}
-              onChange={(event) => setLimit7Days(event.target.value)}
-            />
-          </div>
-          <div className="mb-3">
-            <label className="form-label" htmlFor="limit-30-days">
-              Limit per 30 days
-            </label>
-            <input
-              type="number"
-              id="limit-30-days"
-              className="form-control"
-              step="0.01"
-              min="0"
-              value={limit30Days}
-              onChange={(event) => setLimit30Days(event.target.value)}
-            />
-          </div>
-          <div className="mb-3">
-            <label className="form-label" htmlFor="limit-monthly">
-              Limit per calendar month
-            </label>
-            <input
-              type="number"
-              id="limit-monthly"
-              className="form-control"
-              step="0.01"
-              min="0"
-              value={limitMonthly}
-              onChange={(event) => setLimitMonthly(event.target.value)}
-            />
-          </div>
-          <div className="mb-3 form-check">
-            <input
-              type="checkbox"
-              id="limit-is-active"
-              className="form-check-input"
-              checked={isActive}
-              onChange={(event) => setIsActive(event.target.checked)}
-            />
-            <label className="form-check-label" htmlFor="limit-is-active">
-              Is active
-            </label>
-          </div>
+    <>
+      {editing && (
+        <div className="alert alert-secondary py-2">
+          Editing an existing limit.{' '}
           <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={saveLimit.isPending}
+            type="button"
+            className="btn btn-link btn-sm p-0 align-baseline"
+            onClick={onCancelEdit}
           >
-            {saveLimit.isPending && (
-              <>
-                <span
-                  className="spinner-border spinner-border-sm"
-                  role="status"
-                />{' '}
-              </>
-            )}
-            {editing ? 'Update' : 'Save'}
+            Cancel
           </button>
-        </form>
-      </div>
-    </div>
+        </div>
+      )}
+      <form onSubmit={submit}>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="limit-account">
+            Account
+          </label>
+          <select
+            id="limit-account"
+            className="form-select"
+            required
+            value={account}
+            onChange={(event) => setAccount(event.target.value)}
+          >
+            <option value="" disabled>
+              Select an account
+            </option>
+            {accounts.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="limit-category">
+            Category
+          </label>
+          <select
+            id="limit-category"
+            className="form-select"
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+          >
+            <option value="">All categories</option>
+            {categories.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="fw-semibold mb-1">Time windows</p>
+        <p className="text-muted small mb-2">
+          Set any combination — leave a field blank to disable that window.
+        </p>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="limit-7-days">
+            Limit per 7 days
+          </label>
+          <input
+            type="number"
+            id="limit-7-days"
+            className="form-control"
+            step="0.01"
+            min="0"
+            value={limit7Days}
+            onChange={(event) => setLimit7Days(event.target.value)}
+          />
+        </div>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="limit-30-days">
+            Limit per 30 days
+          </label>
+          <input
+            type="number"
+            id="limit-30-days"
+            className="form-control"
+            step="0.01"
+            min="0"
+            value={limit30Days}
+            onChange={(event) => setLimit30Days(event.target.value)}
+          />
+        </div>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="limit-monthly">
+            Limit per calendar month
+          </label>
+          <input
+            type="number"
+            id="limit-monthly"
+            className="form-control"
+            step="0.01"
+            min="0"
+            value={limitMonthly}
+            onChange={(event) => setLimitMonthly(event.target.value)}
+          />
+        </div>
+        <div className="mb-3 form-check">
+          <input
+            type="checkbox"
+            id="limit-is-active"
+            className="form-check-input"
+            checked={isActive}
+            onChange={(event) => setIsActive(event.target.checked)}
+          />
+          <label className="form-check-label" htmlFor="limit-is-active">
+            Is active
+          </label>
+        </div>
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={saveLimit.isPending}
+        >
+          {saveLimit.isPending && (
+            <>
+              <span
+                className="spinner-border spinner-border-sm"
+                role="status"
+              />{' '}
+            </>
+          )}
+          {editing ? 'Update' : 'Save'}
+        </button>
+      </form>
+    </>
   );
 }
 

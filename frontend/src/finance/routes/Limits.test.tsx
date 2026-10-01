@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Limits from './Limits';
@@ -180,10 +186,9 @@ describe('Limits', () => {
     );
     renderLimits();
     // The account name also appears as a form select option —
-    // assert the table cell specifically.
-    expect(
-      await screen.findByRole('cell', { name: 'Everyday account' }),
-    ).toBeInTheDocument();
+    // scope the assertion to the limit item.
+    const item = await screen.findByTestId('limit-7');
+    expect(within(item).getByText('Everyday account')).toBeInTheDocument();
     expect(mockedApiGet).toHaveBeenCalledWith('/api/finance/limits/');
 
     // Window progress bars: label, spent / threshold, bar class +
@@ -211,6 +216,30 @@ describe('Limits', () => {
     expect(await screen.findByText('No limits set yet.')).toBeInTheDocument();
     // The overview dropdown only renders when limits exist.
     expect(screen.queryByLabelText('Overview')).not.toBeInTheDocument();
+  });
+
+  it('collapses and expands sections via their chevron headers', async () => {
+    mockedApiGet.mockResolvedValue(makeLimits({ limits: [makeLimit()] }));
+    renderLimits();
+    const overviewToggle = await screen.findByRole('button', {
+      name: 'Limit overview',
+    });
+    expect(overviewToggle).toHaveAttribute('aria-expanded', 'true');
+    const body = document.getElementById(
+      overviewToggle.getAttribute('aria-controls')!,
+    )!;
+    expect(body).toHaveClass('show');
+
+    fireEvent.click(overviewToggle);
+    expect(overviewToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(body).toHaveClass('collapse');
+    expect(body).not.toHaveClass('show');
+
+    // The form section starts collapsed when not editing.
+    const formToggle = screen.getByRole('button', { name: 'Set a limit' });
+    expect(formToggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(formToggle);
+    expect(formToggle).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('creates a limit via POST limits/save/', async () => {
@@ -390,6 +419,9 @@ describe('Limits', () => {
     );
     mockedApiPost.mockResolvedValue({ success: true });
     renderLimits();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Spending alerts' }),
+    );
     const enable = await screen.findByRole('button', {
       name: 'Enable spending alerts',
     });
@@ -427,6 +459,9 @@ describe('Limits', () => {
     );
     mockedApiPost.mockResolvedValue({ success: true });
     renderLimits();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Spending alerts' }),
+    );
     const disable = await screen.findByRole('button', {
       name: 'Disable on this browser',
     });
@@ -457,6 +492,9 @@ describe('Limits', () => {
       }),
     );
     renderLimits();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Spending alerts' }),
+    );
     const enable = await screen.findByRole('button', {
       name: 'Enable spending alerts',
     });
@@ -474,8 +512,7 @@ describe('Limits', () => {
     renderLimits();
     expect(await screen.findByText(/Couldn't load limits/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
-    expect(
-      await screen.findByRole('cell', { name: 'Everyday account' }),
-    ).toBeInTheDocument();
+    const item = await screen.findByTestId('limit-7');
+    expect(within(item).getByText('Everyday account')).toBeInTheDocument();
   });
 });

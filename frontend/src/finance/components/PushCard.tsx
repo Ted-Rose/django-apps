@@ -18,38 +18,35 @@ function PushCardBody({ config }: { config: PushConfigOut }) {
     usePushSubscription(config);
 
   return (
-    <div className="card mb-4">
-      <div className="card-body">
-        <h5 className="card-title">Spending alerts</h5>
-        <p className="card-text text-muted">
-          Get a browser push notification when a spending limit is exceeded —
-          even when this site is closed.
-        </p>
-        <p className="mb-2">
-          Enabled on {config.subscription_count} device(s){' '}
-          <span data-testid="push-status">{status}</span>
-        </p>
-        {subscribed ? (
-          <button
-            type="button"
-            className="btn btn-outline-secondary"
-            disabled={busy}
-            onClick={() => void unsubscribe()}
-          >
-            Disable on this browser
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!supported || busy}
-            onClick={() => void subscribe()}
-          >
-            Enable spending alerts
-          </button>
-        )}
-      </div>
-    </div>
+    <>
+      <p className="text-muted">
+        Get a browser push notification when a spending limit is exceeded — even
+        when this site is closed.
+      </p>
+      <p className="mb-2">
+        Enabled on {config.subscription_count} device(s){' '}
+        <span data-testid="push-status">{status}</span>
+      </p>
+      {subscribed ? (
+        <button
+          type="button"
+          className="btn btn-outline-secondary"
+          disabled={busy}
+          onClick={() => void unsubscribe()}
+        >
+          Disable on this browser
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!supported || busy}
+          onClick={() => void subscribe()}
+        >
+          Enable spending alerts
+        </button>
+      )}
+    </>
   );
 }
 
