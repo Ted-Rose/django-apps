@@ -4,7 +4,7 @@
  * Same semantics: two stacks persisted to localStorage under
  * `taskActionHistory`, each capped at 50 actions; recording a new
  * action clears the redo stack. Module-level singleton (like
- * toasts.ts) so cards can record without prop drilling; React sees
+ * shared/toasts.ts) so cards can record without prop drilling; React sees
  * `canUndo`/`canRedo` through useSyncExternalStore.
  *
  * Action payloads match the old store. Undo/redo dispatch lives in

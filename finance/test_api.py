@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from finance.models import (
     AccountShare,
@@ -849,3 +850,73 @@ class SyncAndBalancesApiTests(ApiTestCase):
         accounts = resp.json()['accounts']
         self.assertEqual(len(accounts), 1)
         self.assertTrue(accounts[0]['included_in_balance_check'])
+
+
+class SpaMountTests(ApiTestCase):
+    """Stage 1 strangler mount: the SPA shell serves /finance/app/*
+    while the template views keep serving /finance/*. Also covers
+    the regression surface of promoting react_app/app_redirect to
+    django_apps.views — the /tasks/ cutover must be unchanged."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+
+    def test_app_shell_requires_login(self):
+        resp = self.client.get('/finance/app/')
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(
+            resp['Location'].startswith('/login/?next=')
+        )
+
+    def test_app_shell_get_renders(self):
+        self.client.force_login(self.user)
+        resp = self.client.get('/finance/app/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Finance - Tedis')
+        # Whether or not frontend_dist/manifest.json exists in this
+        # environment, the shell renders the bootstrap payload —
+        # a missing manifest degrades to the diagnostic warning,
+        # not a 500.
+        self.assertContains(resp, 'spa-bootstrap')
+
+    def test_app_deep_link_renders_shell(self):
+        self.client.force_login(self.user)
+        resp = self.client.get('/finance/app/transactions')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'spa-bootstrap')
+
+    def test_app_post_is_404(self):
+        # The shell is GET/HEAD-only — a stale POST under the mount
+        # must not receive the HTML page.
+        self.client.force_login(self.user)
+        for url in ('/finance/app/', '/finance/app/transactions'):
+            resp = self.client.post(
+                url, data='{}', content_type='application/json'
+            )
+            self.assertEqual(resp.status_code, 404, url)
+
+    def test_template_routes_untouched(self):
+        # The existing template UI keeps serving /finance/*.
+        self.client.force_login(self.user)
+        resp = self.client.get('/finance/accounts/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Connect Bank')
+
+    def test_tasks_dashboard_still_resolves(self):
+        self.assertEqual(
+            reverse('google_tasks:dashboard'), '/tasks/'
+        )
+        self.client.force_login(self.user)
+        resp = self.client.get('/tasks/')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_tasks_app_still_301s(self):
+        resp = self.client.get('/tasks/app/x')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(resp['Location'], '/tasks/x')
+
+        resp = self.client.get('/tasks/app/starred/')
+        self.assertEqual(resp.status_code, 301)
+        self.assertEqual(resp['Location'], '/tasks/starred/')

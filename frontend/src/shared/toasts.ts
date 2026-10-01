@@ -1,8 +1,10 @@
 /**
  * Minimal toast store for mutation feedback — the template UI uses
  * alert(); the SPA renders floating Bootstrap alerts in the
- * `.action-toast` corner (styles already in dashboard.css). Lives at
+ * `.action-toast` corner (styles in components/Toasts.css). Lives at
  * module level so any mutation hook can report without prop drilling.
+ * Shared by every SPA entry (moved out of src/tasks/ in finance
+ * Stage 1).
  */
 import { useSyncExternalStore } from 'react';
 

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TaskDetail from './TaskDetail';
 import { apiGet, apiPost } from '../../shared/api/client';
 import { resetActionHistory } from '../actionHistory';
-import { clearToasts } from '../toasts';
+import { clearToasts } from '../../shared/toasts';
 import type { TaskDetailOut, TaskOut } from '../api';
 
 vi.mock('../../shared/api/client', () => ({

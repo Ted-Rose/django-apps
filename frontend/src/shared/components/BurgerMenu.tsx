@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import './BurgerMenu.css';
 
 /**
@@ -7,12 +8,17 @@ import './BurgerMenu.css';
  * Items mirror the `burger_menu_items` dicts that Django views build:
  * `label`, `url`, `icon` (Bootstrap Icons name), `btn_class`
  * (default `btn-light`). The template's string `onclick` becomes a
- * real `onClick` callback here. Items with neither `url` nor
+ * real `onClick` callback here. Items with neither `url`, `to` nor
  * `onClick` are skipped, matching the template.
+ *
+ * `url` renders a plain <a> (full-page navigation out of the SPA —
+ * e.g. Home or /admin/logout/); `to` renders a react-router <Link>
+ * for in-SPA navigation (added in finance Stage 1).
  */
 export interface BurgerMenuItem {
   label: string;
   url?: string;
+  to?: string;
   icon?: string;
   btn_class?: string;
   onClick?: () => void;
@@ -60,7 +66,9 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
     };
   }, [open]);
 
-  const visibleItems = items.filter((item) => item.url || item.onClick);
+  const visibleItems = items.filter(
+    (item) => item.url || item.to || item.onClick,
+  );
 
   return (
     <div className="burger-menu" ref={rootRef}>
@@ -92,6 +100,16 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
               <ItemIcon icon={item.icon} />
               {item.label}
             </a>
+          ) : item.to ? (
+            <Link
+              key={`${item.label}-${index}`}
+              to={item.to}
+              className={itemClass(item)}
+              onClick={() => setOpen(false)}
+            >
+              <ItemIcon icon={item.icon} />
+              {item.label}
+            </Link>
           ) : (
             <button
               key={`${item.label}-${index}`}

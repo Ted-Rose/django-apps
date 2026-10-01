@@ -7,7 +7,7 @@ import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import { fetchArchived, type TaskOut } from '../api';
 import SecondaryLabelDropdown from '../components/SecondaryLabelDropdown';
-import Toasts from '../components/Toasts';
+import Toasts from '../../shared/components/Toasts';
 import { useToggleStar, useUnarchiveTask } from '../mutations';
 import { formatFullDate, formatShortDate, truncateWords } from '../utils';
 import { ErrorState, LoadingSkeleton } from './TaskListPage';

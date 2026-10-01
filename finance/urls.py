@@ -1,10 +1,28 @@
+from functools import partial
+
 from django.urls import path
 
+from django_apps.views import react_app
 from finance import views
 
 app_name = 'finance'
 
+# Stage 1 strangler mount: the React SPA skeleton lives under
+# /finance/app/ while the template UI keeps serving /finance/*.
+# react_app is the shared shell helper (django_apps.views); non-
+# GET/HEAD requests under app/ 404 there. At Stage 6 cutover the SPA
+# takes over the page names below and these app/ routes 301 instead.
+react_app_finance = partial(
+    react_app, entry='finance', title='Finance'
+)
+
 urlpatterns = [
+    path('app/', react_app_finance, name='spa_app'),
+    path(
+        'app/<path:subpath>',
+        react_app_finance,
+        name='spa_app_subpath',
+    ),
     path('connect/', views.connect_bank, name='connect'),
     path('callback/', views.requisition_callback, name='callback'),
     path('accounts/', views.account_list, name='accounts'),

@@ -21,7 +21,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { apiPost } from '../shared/api/client';
-import { ApiError } from '../shared/api/errors';
+import { ApiError, errorDetail } from '../shared/api/errors';
 import type {
   DashboardOut,
   DividerCreateIn,
@@ -37,7 +37,7 @@ import {
   reorderUrl,
   type ReorderUpdate,
 } from './reorder';
-import { pushToast } from './toasts';
+import { pushToast } from '../shared/toasts';
 
 const DASHBOARD_KEY = ['dashboard'] as const;
 
@@ -68,21 +68,9 @@ function invalidateDashboards(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
 }
 
-/**
- * Best-effort human-readable message for a failed mutation — the
- * API's uniform error shape is `{error, detail}`.
- */
-export function errorDetail(error: unknown): string {
-  if (error instanceof ApiError) {
-    const body = error.body;
-    if (body && typeof body === 'object' && 'detail' in body) {
-      const detail = (body as { detail?: unknown }).detail;
-      if (typeof detail === 'string' && detail) return detail;
-    }
-    return error.message;
-  }
-  return 'Could not reach the server. Check your connection.';
-}
+// errorDetail lives in shared/api/errors.ts since finance Stage 1 —
+// re-exported here so existing '../mutations' imports keep working.
+export { errorDetail };
 
 function mapTask(
   data: DashboardOut,

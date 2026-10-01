@@ -12,7 +12,10 @@ export default defineConfig({
     emptyOutDir: true,
     manifest: 'manifest.json',
     rollupOptions: {
-      input: { tasks: 'src/tasks/main.tsx' },
+      input: {
+        tasks: 'src/tasks/main.tsx',
+        finance: 'src/finance/main.tsx',
+      },
       output: {
         entryFileNames: '[name]/[name].[hash].js',
         chunkFileNames: 'shared/[name].[hash].js',

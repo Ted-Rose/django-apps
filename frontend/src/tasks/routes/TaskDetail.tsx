@@ -5,7 +5,7 @@ import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import NavBar from '../../shared/components/NavBar';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchTaskDetail } from '../api';
-import Toasts from '../components/Toasts';
+import Toasts from '../../shared/components/Toasts';
 import { errorDetail, useToggleStar, useUpdateTask } from '../mutations';
 import { formatDateTime, formatFullDate, spaPathFromStoredUrl } from '../utils';
 import { ErrorState, LoadingSkeleton } from './TaskListPage';

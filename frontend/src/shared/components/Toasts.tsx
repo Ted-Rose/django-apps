@@ -1,4 +1,5 @@
 import { dismissToast, useToasts, type ToastKind } from '../toasts';
+import './Toasts.css';
 
 const ICONS: Record<ToastKind, string> = {
   success: 'check-circle',
@@ -10,7 +11,7 @@ const ICONS: Record<ToastKind, string> = {
 /**
  * Fixed bottom-left stack of mutation feedback alerts — the React
  * counterpart of floating_controls.html's `#action-toast` (the
- * `.action-toast` styles come from dashboard.css).
+ * `.action-toast` styles come from the sibling Toasts.css).
  */
 export function Toasts() {
   const toasts = useToasts();
