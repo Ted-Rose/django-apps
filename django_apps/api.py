@@ -45,6 +45,7 @@ _ERROR_SLUGS = {
     422: 'validation_error',
     429: 'throttled',
     500: 'server_error',
+    502: 'upstream_error',
 }
 
 
