@@ -68,6 +68,21 @@ python manage.py sync_bank_transactions --dry-run
 python manage.py evaluate_spending_limits
 ```
 
+React dev loop (HMR, no rebuilds) — two terminals, browse `:8000`:
+
+```bash
+VITE_DEV=1 python manage.py runserver   # django-vite dev_mode:
+                                        # vite_asset emits :5173 URLs
+npm run dev --prefix frontend           # vite dev server on :5173
+```
+
+Or `npx vite build --watch` (cwd `frontend/`) + a normal `runserver`
+for manual-reload dev without the env var. Without either, Django
+serves the last-built `frontend_dist/` — editing `frontend/src/`
+alone never reaches the page. VS Code: the "Django + Vite" compound
+in `.vscode/launch.json` launches both. The PWA service worker is
+not registered on localhost (it would stale-serve vite modules).
+
 No linter/formatter is configured. Follow the existing style: PEP 8,
 **max line length 79 chars**, compact function-based views, double
 quotes vs single quotes are mixed — match the surrounding file.
