@@ -1,24 +1,67 @@
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { fetchContents, type ContentOut } from '../api';
+import { fetchContents, type ContentsParams } from '../api';
 import { errorDetail } from '../../shared/api/errors';
+import FilterBar, {
+  FILTER_FIELDS,
+  type FilterValues,
+} from '../components/FilterBar';
+import ContentCard from '../components/ContentCard';
+import Pagination from '../../shared/components/Pagination';
 
 /**
- * Content feed — Stage 1 skeleton that already exercises the
- * anonymous end-to-end path (public shell → GET
- * /api/tv-arhivs/contents/ with auth=None). Stage 2 builds the real
- * feed: FilterBar driven by useSearchParams, ContentCard feed and
- * pagination.
+ * Content feed — the React port of content_list.html (Stage 2 of
+ * the rewrite plan). All filter state lives in the query string
+ * with the template's exact param names, so a copied
+ * `/tv-arhivs?…` URL works verbatim in the SPA and filtered views
+ * stay shareable/bookmarkable.
  *
  * The template page has no navbar, so the shared <NavBar> is
  * deliberately not used — a slim header with a link back to the
  * Django home page suffices (and bootstrap.user is '' for the
- * anonymous visitors this page serves).
+ * anonymous visitors this public page serves).
  */
 export default function Feed() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Every filter field + `page` straight from the URL — the query
+  // key and fetcher both read this, so editing the URL (or a
+  // copied template-page link) drives the request directly.
+  const params: ContentsParams = {};
+  const filterValues: FilterValues = {};
+  for (const field of FILTER_FIELDS) {
+    const value = searchParams.get(field);
+    if (value) {
+      params[field] = value;
+      filterValues[field] = value;
+    }
+  }
+  const page = searchParams.get('page');
+  if (page) params.page = page;
+
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: ['tv_archive', 'contents'],
-    queryFn: () => fetchContents(),
+    queryKey: ['tv_archive', 'contents', params],
+    queryFn: () => fetchContents(params),
   });
+
+  // The form covers the entire filter state, so applying it
+  // replaces the query string outright — empty fields are omitted
+  // and `page` resets to 1 (the template's GET form never carried
+  // page either).
+  const applyFilters = (values: FilterValues) => {
+    const next = new URLSearchParams();
+    for (const field of FILTER_FIELDS) {
+      const value = values[field];
+      if (value) next.set(field, value);
+    }
+    setSearchParams(next);
+  };
+
+  const goToPage = (nextPage: number) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('page', String(nextPage));
+    setSearchParams(next);
+  };
 
   return (
     <div className="feed-container">
@@ -27,6 +70,17 @@ export default function Feed() {
         {/* Plain anchor: leaves the SPA for Django's home page. */}
         <a href="/">← Home</a>
       </header>
+
+      {/* Remount on URL change so the uncontrolled form's
+          defaultValues always reflect the active params. */}
+      <FilterBar
+        key={searchParams.toString()}
+        values={filterValues}
+        channels={data?.channels ?? []}
+        contentRatings={data?.content_ratings ?? []}
+        types={data?.types ?? []}
+        onApply={applyFilters}
+      />
 
       {isPending && (
         <p aria-busy="true" aria-label="Loading content">
@@ -47,39 +101,25 @@ export default function Feed() {
       )}
       {data && (
         <>
-          <p className="feed-metadata">
-            {data.count} item{data.count === 1 ? '' : 's'} — page {data.page} of{' '}
-            {data.num_pages}
-          </p>
           {data.contents.length === 0 ? (
             <p>No content available</p>
           ) : (
-            data.contents
-              .slice(0, 10)
-              .map((content) => <FeedCard key={content.id} content={content} />)
+            data.contents.map((content) => (
+              <ContentCard key={content.id} content={content} />
+            ))
           )}
+          <Pagination
+            page={data.page}
+            numPages={data.num_pages}
+            count={data.count}
+            hasNext={data.page < data.num_pages}
+            hasPrevious={data.page > 1}
+            itemLabel="items"
+            navLabel="Content pages"
+            onPage={goToPage}
+          />
         </>
       )}
-    </div>
-  );
-}
-
-/** Minimal card — Stage 2 replaces it with the full ContentCard. */
-function FeedCard({ content }: { content: ContentOut }) {
-  return (
-    <div className="feed-card">
-      <div className="feed-content">
-        <div className="feed-title">{content.title_lv}</div>
-        <div className="feed-metadata">
-          <span>Channel: {content.channel}</span>
-          {content.start_date && (
-            <span> | Start Date: {content.start_date}</span>
-          )}
-          {content.rating_value != null && (
-            <span> | Rating: {content.rating_value}</span>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

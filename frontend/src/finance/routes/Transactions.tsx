@@ -6,7 +6,7 @@ import Toasts from '../../shared/components/Toasts';
 import TransactionTable, {
   type ParamUpdates,
 } from '../components/TransactionTable';
-import Pagination from '../components/Pagination';
+import Pagination from '../../shared/components/Pagination';
 import { fetchTransactions } from '../api';
 import { useSyncTransactions } from '../mutations';
 
@@ -131,6 +131,8 @@ export default function Transactions() {
               count={data.count}
               hasNext={data.has_next}
               hasPrevious={data.has_previous}
+              itemLabel="transactions"
+              navLabel="Transaction pages"
               onPage={(page) => updateParams({ page: String(page) })}
             />
           </>

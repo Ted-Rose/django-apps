@@ -21,6 +21,8 @@ export interface ContentsParams {
   ratio?: number | string | null;
   channel?: string | null;
   not_channel?: string | null;
+  /** Exact-match content type — added in Stage 2 for the type <select>. */
+  type?: string | null;
   page?: number | string | null;
 }
 

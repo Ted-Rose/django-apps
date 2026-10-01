@@ -1,8 +1,9 @@
 /**
- * Pagination bar for the transactions page — a React port of the
- * `page_items`/`prev_page_url`/`next_page_url` block in
- * transactions.html. Page clicks write `?page=` via the `onPage`
- * callback instead of following pre-rendered hrefs.
+ * Shared pagination bar — originally a React port of the
+ * `page_items`/`prev_page_url`/`next_page_url` block in finance's
+ * transactions.html, lifted here for the tv_archive feed (Stage 2).
+ * Page clicks write `?page=` via the `onPage` callback instead of
+ * following pre-rendered hrefs.
  */
 
 // Same arguments the view passes to get_elided_page_range.
@@ -54,6 +55,10 @@ interface PaginationProps {
   hasNext: boolean;
   hasPrevious: boolean;
   onPage: (page: number) => void;
+  /** Noun in the "Page X of Y — N <itemLabel>" summary line. */
+  itemLabel?: string;
+  /** aria-label for the <nav> landmark. */
+  navLabel?: string;
 }
 
 export function Pagination({
@@ -63,10 +68,12 @@ export function Pagination({
   hasNext,
   hasPrevious,
   onPage,
+  itemLabel = 'items',
+  navLabel = 'Pages',
 }: PaginationProps) {
   if (numPages <= 1) return null;
   return (
-    <nav className="mt-3" aria-label="Transaction pages">
+    <nav className="mt-3" aria-label={navLabel}>
       <ul className="pagination pagination-sm justify-content-center flex-wrap">
         <li className={`page-item${hasPrevious ? '' : ' disabled'}`}>
           <button
@@ -112,7 +119,7 @@ export function Pagination({
         </li>
       </ul>
       <p className="text-muted text-center small">
-        Page {page} of {numPages} — {count} transactions
+        Page {page} of {numPages} — {count} {itemLabel}
       </p>
     </nav>
   );

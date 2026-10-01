@@ -147,6 +147,15 @@ class ContentsApiTests(TestCase):
         self.assertEqual(self.ids('ratio=0.5'), [high.pk])
         self.assertEqual(self.ids('ratio=0.9'), [high.pk])
 
+    def test_type_filter_is_exact_match(self):
+        """Stage 2 added ``type`` so the SPA's type <select> can
+        filter — exact match, same style as ``channel``."""
+        a = make_content(type='movie')
+        b = make_content(type='series')
+        self.assertEqual(self.ids('type=movie'), [a.pk])
+        self.assertEqual(self.ids('type=series'), [b.pk])
+        self.assertEqual(self.ids('type=mov'), [])
+
     def test_option_lists_are_distinct_and_non_empty(self):
         make_content(channel='ltv7_hd', content_rating='TV-MA',
                      type='series')

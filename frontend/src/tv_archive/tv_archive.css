@@ -28,11 +28,17 @@ body {
 }
 
 .filter-form input,
+.filter-form select,
 .filter-form button {
   margin-right: 10px;
+  margin-bottom: 8px;
   padding: 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
+}
+
+.filter-form label {
+  margin-bottom: 8px;
 }
 
 .feed-card {
@@ -51,6 +57,25 @@ body {
   object-fit: cover;
   border-radius: 8px;
   margin-right: 15px;
+  flex-shrink: 0;
+}
+
+/* Local placeholder swapped in when a card has no image URL or the
+   image fails to load — replaces the template's via.placeholder.com
+   fallback so the SPA keeps no third-party image dependency. */
+.feed-image-placeholder {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  margin-right: 15px;
+  flex-shrink: 0;
+  background-color: #e4e6eb;
+  color: #8a8d91;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  text-align: center;
 }
 
 .feed-content {

@@ -15,8 +15,11 @@ float equality almost never hits) and results are paginated at 50
 per page with a fixed ``-start_date, -id`` ordering instead of one
 unbounded list in arbitrary order. ``start_date``/``end_date`` both
 filter ``start_date`` (``__gte``/``__lte``) — the template's quirk,
-kept verbatim. The dropdown option lists ride in the same response
-so the SPA never needs a second call.
+kept verbatim. ``type`` is a new exact-match filter backing the
+SPA's type ``<select>`` (``ContentsOut.types`` already shipped the
+option list; the dropdown needed a param). The dropdown option
+lists ride in the same response so the SPA never needs a second
+call.
 """
 from datetime import date
 from typing import List, Optional
@@ -78,6 +81,7 @@ def content_list(request, content_rating: str = '',
                  end_date: Optional[date] = None,
                  ratio: Optional[float] = None,
                  channel: str = '', not_channel: str = '',
+                 type: str = '',
                  page: int = 1):
     query = Q()
     if content_rating:
@@ -96,6 +100,8 @@ def content_list(request, content_rating: str = '',
         query &= Q(channel=channel)
     if not_channel:
         query &= ~Q(channel=not_channel)
+    if type:
+        query &= Q(type=type)
 
     contents = Content.objects.filter(query).order_by(
         '-start_date', '-id'

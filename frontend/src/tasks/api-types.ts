@@ -2877,6 +2877,7 @@ export interface operations {
                 ratio?: number | null;
                 channel?: string;
                 not_channel?: string;
+                type?: string;
                 page?: number;
             };
             header?: never;
