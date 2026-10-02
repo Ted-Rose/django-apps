@@ -170,7 +170,8 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   `/api/<app>/…`); see `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`.
 - **New apps are React-first** — no templates, no app `static/`, no
   form-POST views; go straight to the post-cutover shape. Canonical
-  checklist (full playbook: `docs/plans/NEW_APP_REACT_GUIDELINES.md`):
+  checklist (full playbook: the `/new-react-app` skill at
+  `.devin/skills/new-react-app/SKILL.md`):
   `startapp` + `INSTALLED_APPS` → `<app>/urls.py` mounting
   `partial(react_app, entry='<entry>', title=…)` on `''` +
   `'<path:subpath>'` → `<app>/api.py` ninja `Router` (mutations
