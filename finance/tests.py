@@ -8,6 +8,7 @@ from pywebpush import WebPushException
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from finance.models import (
@@ -2768,3 +2769,43 @@ class RefreshBalancesViewTests(TestCase):
         body = response.json()
         self.assertFalse(body['success'])
         self.assertIn('No accounts are included', body['message'])
+
+
+class RequisitionCallbackCurrencyTests(TestCase):
+    """Account currency fallback when the bank reports no real
+    currency in the details payload."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.client.force_login(self.user)
+        make_requisition(self.user)
+        session = self.client.session
+        session['requisition_id'] = 'req-1'
+        session.save()
+
+    def link_account(self, details):
+        client = MagicMock()
+        client.get_requisition_data.return_value = {
+            'status': 'LN',
+            'accounts': ['acc-1'],
+        }
+        client.get_account_details.return_value = details
+        with patch(
+            'finance.views.GoCardlessClient', return_value=client
+        ):
+            self.client.get(reverse('finance:callback'))
+        return Account.objects.get(account_id='acc-1')
+
+    def test_xxx_currency_falls_back_to_eur(self):
+        account = self.link_account({'currency': 'XXX'})
+        self.assertEqual(account.currency, 'EUR')
+
+    def test_missing_currency_falls_back_to_eur(self):
+        account = self.link_account({})
+        self.assertEqual(account.currency, 'EUR')
+
+    def test_real_currency_is_kept(self):
+        account = self.link_account({'currency': 'USD'})
+        self.assertEqual(account.currency, 'USD')

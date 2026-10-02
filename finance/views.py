@@ -66,7 +66,12 @@ def requisition_callback(request):
                 details = {}
             account.iban = details.get('iban')
             account.name = details.get('name', '')
-            account.currency = details.get('currency', 'EUR')
+            # GoCardless reports ISO 4217 'XXX' when the bank does
+            # not supply a currency — treat it like a missing key.
+            currency = details.get('currency')
+            account.currency = (
+                currency if currency and currency != 'XXX' else 'EUR'
+            )
             account.save()
         UserAccountPreference.objects.get_or_create(
             user=request.user, account=account
