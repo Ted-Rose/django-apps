@@ -54,8 +54,11 @@ transactions, and get spending-limit alerts.
   (`signals.py`, wired via `FinanceConfig.ready`) deletes the
   ex-viewer's rows when a share is revoked. No row = uncategorized
   for that user — sharers never see the owner's categories.
-- `TransactionLimit` — per `(account, user, category)` outgoing
-  spending limits over three window kinds: rolling 7 days, rolling
+- `TransactionLimit` — per-user outgoing spending limits covering
+  one or more `accounts` (M2M — the SPA form checks accounts, a
+  same-category limit must not overlap another's accounts, enforced
+  as a 409 in `save_limit` since unique constraints can't span a
+  M2M). Three window kinds: rolling 7 days, rolling
   30 days, or the current calendar month. `category` is optional —
   when set, only the limit user's own category assignments count.
   `alerted_7d_at` / `alerted_30d_at` / `alerted_monthly_at` are

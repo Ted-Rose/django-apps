@@ -91,9 +91,18 @@ class CategoryRuleAdmin(admin.ModelAdmin):
 @admin.register(TransactionLimit)
 class TransactionLimitAdmin(admin.ModelAdmin):
     list_display = [
-        'user', 'account', 'category', 'limit_7_days',
+        'user', 'accounts_display', 'category', 'limit_7_days',
         'limit_30_days', 'limit_monthly', 'is_active', 'updated_at',
     ]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related(
+            'accounts'
+        )
+
+    @admin.display(description='Accounts')
+    def accounts_display(self, obj):
+        return ', '.join(str(a) for a in obj.accounts.all())
     list_filter = ['is_active', 'user']
     readonly_fields = [
         'alerted_7d_at', 'alerted_30d_at', 'alerted_monthly_at',

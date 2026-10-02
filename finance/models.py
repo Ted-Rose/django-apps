@@ -329,16 +329,17 @@ class CategoryRule(models.Model):
 
 
 class TransactionLimit(models.Model):
-    """Per user+account outgoing-spending limits.
+    """Per user outgoing-spending limits over a set of accounts.
 
     Three window kinds: rolling 7 days, rolling 30 days, or the
     current calendar month. When ``category`` is set, only
     transactions in that category count towards the limit; when
-    null, all outgoing spending counts.
+    null, all outgoing spending counts. A user's limits with the
+    same category must cover disjoint account sets — enforced in
+    the API since unique constraints can't span a M2M.
     """
-    account = models.ForeignKey(
+    accounts = models.ManyToManyField(
         Account,
-        on_delete=models.CASCADE,
         related_name='limits'
     )
     user = models.ForeignKey(
@@ -391,13 +392,11 @@ class TransactionLimit(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        unique_together = ('account', 'user', 'category')
-
     def __str__(self):
         scope = self.category.name if self.category else 'All'
+        accounts = ', '.join(str(a) for a in self.accounts.all())
         return (
-            f'{scope} limits for {self.account} ({self.user.username})'
+            f'{scope} limits for {accounts} ({self.user.username})'
         )
 
 

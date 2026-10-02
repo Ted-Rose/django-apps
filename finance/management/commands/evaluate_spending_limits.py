@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = (
-        'Evaluate active per-account outgoing-spending limits; log '
+        'Evaluate active outgoing-spending limits; log '
         'and push-notify when a 7-day, 30-day or monthly limit is '
         'exceeded. Each run also records one LimitEvaluation row '
         'per monthly limit per month.'
@@ -31,7 +31,9 @@ class Command(BaseCommand):
         today = timezone.now().date()
         limits = TransactionLimit.objects.filter(
             is_active=True
-        ).select_related('account', 'user', 'category')
+        ).select_related('user', 'category').prefetch_related(
+            'accounts'
+        )
 
         alerts = 0
         for limit in limits:
@@ -59,13 +61,14 @@ class Command(BaseCommand):
                         limit, spent, window.start
                     )
                 if spent > window.threshold:
+                    accounts = list(limit.accounts.all())
                     alerts += 1
                     logger.warning(
-                        'SPENDING_LIMIT_EXCEEDED user=%s account=%s '
+                        'SPENDING_LIMIT_EXCEEDED user=%s accounts=%s '
                         'category=%s window=%s spent=%s limit=%s '
                         'currency=%s',
                         limit.user.username,
-                        limit.account.account_id,
+                        ','.join(a.account_id for a in accounts),
                         (
                             limit.category.name
                             if limit.category else '*'
@@ -73,7 +76,7 @@ class Command(BaseCommand):
                         window.label,
                         spent,
                         window.threshold,
-                        limit.account.currency,
+                        accounts[0].currency if accounts else '',
                     )
                     if getattr(limit, alert_field) is None:
                         new_breaches.append(
@@ -148,11 +151,11 @@ class Command(BaseCommand):
             'days30': _('the last 30 days'),
             'thisMonth': _('this month'),
         }
-        account = (
-            limit.account.name or limit.account.iban
-            or limit.account.account_id
+        accounts = list(limit.accounts.all())
+        account = ', '.join(
+            a.name or a.iban or a.account_id for a in accounts
         )
-        currency = limit.account.currency
+        currency = accounts[0].currency if accounts else ''
         with translation.override(user_language(limit.user)):
             scope = (
                 limit.category.name if limit.category_id

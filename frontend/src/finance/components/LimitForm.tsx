@@ -14,8 +14,9 @@ import { useSaveLimit } from '../mutations';
  * LimitOut and passes it as `editing`; the form remounts via `key`
  * so initial state always matches the row being edited).
  *
- * Field order and labels mirror TransactionLimitForm: account,
- * category ("All categories" empty option), the three window
+ * Field order and labels mirror TransactionLimitForm: accounts
+ * (checkboxes — one limit covers one or more accounts), category
+ * ("All categories" empty option), the three window
  * amounts — any combination may stay blank to disable that
  * window — and the is_active checkbox. Validation stays
  * server-side (the API runs the same Django form), so errors come
@@ -38,8 +39,8 @@ export function LimitForm({
 }) {
   const { t } = useTranslation('finance');
   const saveLimit = useSaveLimit();
-  const [account, setAccount] = useState(
-    editing ? String(editing.account.id) : '',
+  const [selectedAccounts, setSelectedAccounts] = useState<number[]>(
+    editing ? editing.accounts.map((a) => a.id) : [],
   );
   const [category, setCategory] = useState(
     editing?.category ? String(editing.category.id) : '',
@@ -51,10 +52,17 @@ export function LimitForm({
   );
   const [isActive, setIsActive] = useState(editing?.is_active ?? true);
 
+  const toggleAccount = (id: number) =>
+    setSelectedAccounts((selected) =>
+      selected.includes(id)
+        ? selected.filter((a) => a !== id)
+        : [...selected, id],
+    );
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const payload: LimitSaveIn = {
-      account: account ? Number(account) : null,
+      accounts: selectedAccounts,
       category: category ? Number(category) : null,
       limit_7_days: limit7Days || null,
       limit_30_days: limit30Days || null,
@@ -84,27 +92,28 @@ export function LimitForm({
         </div>
       )}
       <form onSubmit={submit}>
-        <div className="mb-3">
-          <label className="form-label" htmlFor="limit-account">
-            {t('limits.form.account')}
-          </label>
-          <select
-            id="limit-account"
-            className="form-select"
-            required
-            value={account}
-            onChange={(event) => setAccount(event.target.value)}
-          >
-            <option value="" disabled>
-              {t('limits.form.selectAccount')}
-            </option>
-            {accounts.map((option) => (
-              <option key={option.id} value={option.id}>
+        <fieldset className="mb-3">
+          <legend className="form-label mb-1">
+            {t('limits.form.accounts')}
+          </legend>
+          {accounts.map((option) => (
+            <div className="form-check" key={option.id}>
+              <input
+                type="checkbox"
+                id={`limit-account-${option.id}`}
+                className="form-check-input"
+                checked={selectedAccounts.includes(option.id)}
+                onChange={() => toggleAccount(option.id)}
+              />
+              <label
+                className="form-check-label"
+                htmlFor={`limit-account-${option.id}`}
+              >
                 {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+              </label>
+            </div>
+          ))}
+        </fieldset>
         <div className="mb-3">
           <label className="form-label" htmlFor="limit-category">
             {t('limits.form.category')}

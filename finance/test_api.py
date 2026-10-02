@@ -30,6 +30,7 @@ from finance.tests import (
     make_account,
     make_assignment,
     make_category,
+    make_limit,
     make_requisition,
     make_rule,
     make_subscription,
@@ -652,7 +653,7 @@ class LimitsApiTests(ApiTestCase):
         self.client.force_login(self.user)
 
     def test_limits_get_includes_push_config(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -684,7 +685,7 @@ class LimitsApiTests(ApiTestCase):
 
     def test_save_limit_creates_row(self):
         resp = self.post_json('/limits/save/', {
-            'account': self.account.pk,
+            'accounts': [self.account.pk],
             'limit_7_days': '100.00',
             'is_active': True,
         })
@@ -694,7 +695,7 @@ class LimitsApiTests(ApiTestCase):
             resp.json()['message'], 'Spending limit saved.'
         )
         limit = TransactionLimit.objects.get(
-            account=self.account, user=self.user
+            accounts=self.account, user=self.user
         )
         self.assertEqual(limit.limit_7_days, Decimal('100.00'))
 
@@ -704,36 +705,36 @@ class LimitsApiTests(ApiTestCase):
         )
         foreign = make_account(other, self.req, 'acc-b')
         resp = self.post_json('/limits/save/', {
-            'account': foreign.pk,
+            'accounts': [foreign.pk],
             'limit_7_days': '100.00',
         })
         self.assertEqual(resp.status_code, 400)
         self.assertFalse(
             TransactionLimit.objects.filter(
-                account=foreign
+                accounts=foreign
             ).exists()
         )
 
     def test_save_limit_edit_conflict_is_409(self):
         cat_a = make_category(self.user, 'A')
         cat_b = make_category(self.user, 'B')
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             category=cat_a,
             limit_7_days=Decimal('10.00'),
         )
-        second = TransactionLimit.objects.create(
+        second = make_limit(
             account=self.account,
             user=self.user,
             category=cat_b,
             limit_7_days=Decimal('20.00'),
         )
-        # Editing `second` to collide on (account, user, category)
-        # hits the unique constraint → 409.
+        # Editing `second` to collide on (accounts, user, category)
+        # hits the overlap check → 409.
         resp = self.post_json('/limits/save/', {
             'limit_id': second.pk,
-            'account': self.account.pk,
+            'accounts': [self.account.pk],
             'category': cat_a.pk,
             'limit_7_days': '30.00',
             'is_active': True,
@@ -742,14 +743,12 @@ class LimitsApiTests(ApiTestCase):
         body = resp.json()
         self.assertEqual(body['error'], 'conflict')
         self.assertIn('already exists', body['detail'])
-        # NB: the caught IntegrityError breaks the test's atomic
-        # block — assert on the response only, no further queries.
 
     def test_delete_limit_scoped_to_user(self):
         other = get_user_model().objects.create_user(
             username='bob', password='pw'
         )
-        foreign = TransactionLimit.objects.create(
+        foreign = make_limit(
             account=self.account,
             user=other,
             limit_7_days=Decimal('100.00'),
@@ -1466,7 +1465,7 @@ class CodeContractTests(ApiTestCase):
         )
         foreign = make_account(other, self.req, 'acc-b')
         resp = self.post_json('/limits/save/', {
-            'account': foreign.pk,
+            'accounts': [foreign.pk],
             'limit_7_days': '100.00',
         })
         self.assertEqual(resp.status_code, 400)
@@ -1475,17 +1474,17 @@ class CodeContractTests(ApiTestCase):
     def test_limit_edit_conflict(self):
         cat_a = make_category(self.user, 'A')
         cat_b = make_category(self.user, 'B')
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account, user=self.user, category=cat_a,
             limit_7_days=Decimal('10.00'),
         )
-        second = TransactionLimit.objects.create(
+        second = make_limit(
             account=self.account, user=self.user, category=cat_b,
             limit_7_days=Decimal('20.00'),
         )
         resp = self.post_json('/limits/save/', {
             'limit_id': second.pk,
-            'account': self.account.pk,
+            'accounts': [self.account.pk],
             'category': cat_a.pk,
             'limit_7_days': '30.00',
         })
@@ -1494,7 +1493,7 @@ class CodeContractTests(ApiTestCase):
 
     def test_limit_saved_code(self):
         resp = self.post_json('/limits/save/', {
-            'account': self.account.pk,
+            'accounts': [self.account.pk],
             'limit_7_days': '100.00',
             'is_active': True,
         })

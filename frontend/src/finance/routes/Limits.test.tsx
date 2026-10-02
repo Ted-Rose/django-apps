@@ -55,7 +55,9 @@ function makeWindowStat(overrides: Partial<WindowStatOut> = {}): WindowStatOut {
 function makeLimit(overrides: Partial<LimitOut> = {}): LimitOut {
   return {
     id: 7,
-    account: { id: 5, name: 'Everyday account', currency: 'EUR' },
+    accounts: [
+      { id: 5, name: 'Everyday account', iban: null, currency: 'EUR' },
+    ],
     category: { id: 3, name: 'Groceries', color: '#00aa00' },
     is_active: true,
     limit_7_days: '100.00',
@@ -185,7 +187,7 @@ describe('Limits', () => {
       }),
     );
     renderLimits();
-    // The account name also appears as a form select option —
+    // The account name also appears as a form checkbox label —
     // scope the assertion to the limit item.
     const item = await screen.findByTestId('limit-7');
     expect(within(item).getByText('Everyday account')).toBeInTheDocument();
@@ -249,9 +251,9 @@ describe('Limits', () => {
       message: 'Spending limit saved.',
     });
     renderLimits();
-    fireEvent.change(await screen.findByLabelText('Account'), {
-      target: { value: '5' },
-    });
+    // Accounts are checkboxes — a limit can cover several at once.
+    fireEvent.click(await screen.findByLabelText('Everyday account'));
+    fireEvent.click(screen.getByLabelText('Savings'));
     fireEvent.change(screen.getByLabelText('Category'), {
       target: { value: '3' },
     });
@@ -261,7 +263,7 @@ describe('Limits', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith('/api/finance/limits/save/', {
-        account: 5,
+        accounts: [5, 6],
         category: 3,
         limit_7_days: null,
         limit_30_days: null,
@@ -284,7 +286,8 @@ describe('Limits', () => {
     expect(
       await screen.findByRole('heading', { name: 'Edit limit' }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Account')).toHaveValue('5');
+    expect(screen.getByLabelText('Everyday account')).toBeChecked();
+    expect(screen.getByLabelText('Savings')).not.toBeChecked();
     expect(screen.getByLabelText('Category')).toHaveValue('3');
     expect(screen.getByLabelText('Limit per 7 days')).toHaveValue(100);
     expect(screen.getByLabelText('Limit per calendar month')).toHaveValue(400);
@@ -299,7 +302,7 @@ describe('Limits', () => {
         '/api/finance/limits/save/',
         expect.objectContaining({
           limit_id: 7,
-          account: 5,
+          accounts: [5],
           category: 3,
           limit_7_days: '80',
           limit_monthly: '400.00',
@@ -318,17 +321,16 @@ describe('Limits', () => {
     mockedApiGet.mockResolvedValue(makeLimits());
     mockedApiPost.mockRejectedValue(
       new ApiError('Request failed: 409 Conflict', 409, 'Conflict', {
-        detail: 'A limit already exists for this account and category.',
+        detail:
+          'A limit already exists for one of these accounts and this category.',
       }),
     );
     renderLimits();
-    fireEvent.change(await screen.findByLabelText('Account'), {
-      target: { value: '5' },
-    });
+    fireEvent.click(await screen.findByLabelText('Everyday account'));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(
       await screen.findByText(
-        'A limit already exists for this account and category.',
+        'A limit already exists for one of these accounts and this category.',
       ),
     ).toBeInTheDocument();
   });

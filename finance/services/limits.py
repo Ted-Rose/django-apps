@@ -79,7 +79,7 @@ def limit_windows(limit, today=None):
 
 def _spend_queryset(limit):
     transactions = Transaction.objects.filter(
-        account=limit.account,
+        account__in=limit.accounts.all(),
         amount__lt=0,
     )
     if limit.category_id:

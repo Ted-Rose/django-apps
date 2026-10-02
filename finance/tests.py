@@ -120,6 +120,13 @@ def make_rule(user, category, priority=1, sender='', description='',
     )
 
 
+def make_limit(**kwargs):
+    account = kwargs.pop('account')
+    limit = TransactionLimit.objects.create(**kwargs)
+    limit.accounts.set([account])
+    return limit
+
+
 class AccountManagerTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -226,7 +233,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         return mock_logger
 
     def test_limit_exceeded_logs_warning(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -242,7 +249,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         )
 
     def test_limit_not_exceeded_no_warning(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -253,7 +260,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         mock_logger.warning.assert_not_called()
 
     def test_inactive_limit_ignored(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('10.00'),
@@ -265,7 +272,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         mock_logger.warning.assert_not_called()
 
     def test_30_day_window_excludes_older_transactions(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_30_days=Decimal('100.00'),
@@ -276,7 +283,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         mock_logger.warning.assert_not_called()
 
     def test_incoming_transactions_ignored(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('10.00'),
@@ -288,7 +295,7 @@ class EvaluateSpendingLimitsTests(TestCase):
 
     def test_category_limit_exceeded_logs_warning(self):
         groceries = make_category(self.user)
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             category=groceries,
@@ -316,7 +323,7 @@ class EvaluateSpendingLimitsTests(TestCase):
     def test_category_limit_ignores_other_categories(self):
         groceries = make_category(self.user)
         dining = make_category(self.user, 'Dining')
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             category=groceries,
@@ -343,7 +350,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         )
         owner_cat = make_category(self.user, 'OwnerCat')
         sharer_cat = make_category(sharer, 'Groceries')
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=sharer,
             category=sharer_cat,
@@ -367,7 +374,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         )
         owner_cat = make_category(self.user, 'OwnerCat')
         sharer_cat = make_category(sharer, 'Groceries')
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=sharer,
             category=sharer_cat,
@@ -385,7 +392,7 @@ class EvaluateSpendingLimitsTests(TestCase):
 
     def test_monthly_window_exceeded_logs_warning(self):
         start = timezone.now().date().replace(day=1)
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -399,7 +406,7 @@ class EvaluateSpendingLimitsTests(TestCase):
 
     def test_monthly_window_excludes_previous_period(self):
         start = timezone.now().date().replace(day=1)
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -417,7 +424,7 @@ class EvaluateSpendingLimitsTests(TestCase):
 
     def test_monthly_run_records_evaluation(self):
         start = timezone.now().date().replace(day=1)
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -437,7 +444,7 @@ class EvaluateSpendingLimitsTests(TestCase):
 
     def test_monthly_run_updates_existing_evaluation(self):
         start = timezone.now().date().replace(day=1)
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -468,7 +475,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         previous = (
             start - timezone.timedelta(days=1)
         ).replace(day=1)
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -491,7 +498,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         previous = (
             start - timezone.timedelta(days=1)
         ).replace(day=1)
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -515,7 +522,7 @@ class EvaluateSpendingLimitsTests(TestCase):
         self.assertEqual(evaluation.spent, Decimal('80.00'))
 
     def test_no_evaluation_recorded_without_monthly_limit(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -550,7 +557,7 @@ class LimitWindowStatsTests(TestCase):
         self.account = make_account(self.user, self.req)
 
     def test_stats_report_spent_and_overage(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -566,7 +573,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(stats[0]['bar_class'], 'bg-danger')
 
     def test_stats_under_limit(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -580,7 +587,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(stats[0]['bar_class'], 'bg-success')
 
     def test_stats_warn_when_mostly_used(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -592,7 +599,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(stats[0]['bar_class'], 'bg-warning')
 
     def test_stats_omit_windows_without_threshold(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -604,7 +611,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(stats[0]['label'], 'This month')
 
     def test_monthly_history_covers_past_months(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -641,7 +648,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(history[1]['over'], Decimal('50.00'))
 
     def test_monthly_history_prefers_recorded_values(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -668,7 +675,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(history[0]['over'], Decimal('30.00'))
 
     def test_monthly_history_before_bounds_results(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -694,7 +701,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(history[0]['spent'], Decimal('10.00'))
 
     def test_selected_month_stat(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -716,7 +723,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(stats[0]['over'], Decimal('20.00'))
 
     def test_rolling_windows_evaluated_as_of_past_date(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -739,7 +746,7 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(stats[0]['remaining'], Decimal('60.00'))
 
     def test_monthly_history_empty_without_past_data(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -763,7 +770,7 @@ class LimitsViewTests(TestCase):
         )
         self.req = make_requisition(self.user)
         self.account = make_account(self.user, self.req)
-        self.limit = TransactionLimit.objects.create(
+        self.limit = make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -803,7 +810,7 @@ class LimitsViewTests(TestCase):
         other = get_user_model().objects.create_user(
             username='bob', password='pw'
         )
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=other,
             limit_7_days=Decimal('100.00'),
@@ -855,7 +862,7 @@ class LimitsViewTests(TestCase):
         other = get_user_model().objects.create_user(
             username='bob', password='pw'
         )
-        foreign = TransactionLimit.objects.create(
+        foreign = make_limit(
             account=self.account,
             user=other,
             limit_7_days=Decimal('100.00'),
@@ -2075,7 +2082,7 @@ class LimitPushAlertCommandTests(TestCase):
         return mock_send
 
     def test_breach_sends_one_push_and_sets_flag(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -2092,7 +2099,7 @@ class LimitPushAlertCommandTests(TestCase):
         self.assertIsNotNone(limit.alerted_7d_at)
 
     def test_second_run_while_exceeded_sends_nothing(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -2105,7 +2112,7 @@ class LimitPushAlertCommandTests(TestCase):
         mock_send.assert_not_called()
 
     def test_flag_cleared_when_back_under_then_realerts(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -2126,7 +2133,7 @@ class LimitPushAlertCommandTests(TestCase):
         mock_send.assert_called_once()
 
     def test_both_windows_breach_sends_single_push(self):
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -2147,7 +2154,7 @@ class LimitPushAlertCommandTests(TestCase):
         self.assertIsNotNone(limit.alerted_30d_at)
 
     def test_flag_cleared_when_threshold_removed(self):
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -2167,7 +2174,7 @@ class LimitPushAlertCommandTests(TestCase):
 
     def test_monthly_breach_sends_push_and_sets_flag(self):
         start = timezone.now().date().replace(day=1)
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),
@@ -2186,7 +2193,7 @@ class LimitPushAlertCommandTests(TestCase):
     def test_alert_text_localized_for_lv_user(self):
         from django_apps.models import UserSettings
         UserSettings.objects.create(user=self.user, language='lv')
-        TransactionLimit.objects.create(
+        make_limit(
             account=self.account,
             user=self.user,
             limit_7_days=Decimal('100.00'),
@@ -2202,7 +2209,7 @@ class LimitPushAlertCommandTests(TestCase):
 
     def test_monthly_flag_cleared_when_threshold_removed(self):
         start = timezone.now().date().replace(day=1)
-        limit = TransactionLimit.objects.create(
+        limit = make_limit(
             account=self.account,
             user=self.user,
             limit_monthly=Decimal('100.00'),

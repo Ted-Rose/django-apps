@@ -13,7 +13,7 @@ type StatBase = Omit<WindowStatOut, 'history'>;
  * One limit in the overview list — a compact card meant to stack
  * without scrolling on a phone, replacing the old five-column
  * table. The header line carries the category badge ("All" when
- * unset), the account name, a "Paused" pill for inactive limits,
+ * unset), the account names, a "Paused" pill for inactive limits,
  * and the grouped edit/delete ghost icon buttons; each window
  * renders as one label + amounts line above a progress bar, with
  * the past-month <details> history kept on the monthly window.
@@ -31,7 +31,7 @@ export function LimitItem({
 }) {
   const { t } = useTranslation('finance');
   const deleteLimit = useDeleteLimit();
-  const currency = limit.account.currency;
+  const currency = limit.accounts[0]?.currency ?? '';
 
   return (
     <div className="limit-item" data-testid={`limit-${limit.id}`}>
@@ -47,7 +47,7 @@ export function LimitItem({
           className="text-muted small text-truncate flex-grow-1"
           style={{ minWidth: 0 }}
         >
-          {limit.account.name || limit.account.iban}
+          {limit.accounts.map((a) => a.name || a.iban).join(', ')}
         </span>
         {!limit.is_active && (
           <span className="badge rounded-pill text-bg-secondary">

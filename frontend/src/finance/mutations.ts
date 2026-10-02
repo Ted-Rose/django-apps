@@ -483,12 +483,12 @@ export function useDeleteCategory() {
 }
 
 /**
- * POST /api/finance/limits/save/ — create (`update_or_create` on
- * account+user+category) or edit (`limit_id`) a TransactionLimit,
- * validated server-side by the same TransactionLimitForm the
- * template view uses. A second limit on the same
- * account+category during an edit comes back as a 409 — toast its
- * `detail` verbatim, like the template's `messages.error`.
+ * POST /api/finance/limits/save/ — create or edit (`limit_id`) a
+ * TransactionLimit spanning one or more accounts, validated
+ * server-side by TransactionLimitForm. A same-category limit
+ * already covering any selected account comes back as a 409 —
+ * toast its `detail` verbatim, like the template's
+ * `messages.error`.
  */
 export function useSaveLimit() {
   const { t } = useTranslation('finance');

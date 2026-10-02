@@ -58,7 +58,7 @@ class TransactionLimitForm(forms.ModelForm):
     class Meta:
         model = TransactionLimit
         fields = [
-            'account', 'category', 'limit_7_days', 'limit_30_days',
+            'accounts', 'category', 'limit_7_days', 'limit_30_days',
             'limit_monthly', 'is_active',
         ]
         labels = {
@@ -71,7 +71,7 @@ class TransactionLimitForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['category'].empty_label = 'All categories'
         if user is not None:
-            self.fields['account'].queryset = (
+            self.fields['accounts'].queryset = (
                 Account.objects.for_user(user)
             )
             self.fields['category'].queryset = Category.objects.filter(

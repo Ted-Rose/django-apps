@@ -1627,7 +1627,8 @@ export interface components {
         LimitOut: {
             /** Id */
             id: number;
-            account: components["schemas"]["AccountRef"];
+            /** Accounts */
+            accounts: components["schemas"]["AccountRef"][];
             category?: components["schemas"]["CategoryOut"] | null;
             /** Is Active */
             is_active: boolean;
@@ -1943,14 +1944,17 @@ export interface components {
         };
         /**
          * LimitSaveIn
-         * @description Mirrors the TransactionLimitForm POST; ``account``/``category``
+         * @description Mirrors the TransactionLimitForm POST; ``accounts``/``category``
          *     are resolved against per-user form querysets.
          */
         LimitSaveIn: {
             /** Limit Id */
             limit_id?: number | null;
-            /** Account */
-            account?: number | null;
+            /**
+             * Accounts
+             * @default []
+             */
+            accounts: number[];
             /** Category */
             category?: number | null;
             /** Limit 7 Days */

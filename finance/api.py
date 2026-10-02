@@ -24,7 +24,6 @@ from typing import Any, Dict, List, Literal, Optional
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
-from django.db import IntegrityError
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
 from django.shortcuts import get_object_or_404
@@ -335,7 +334,7 @@ class WindowStatOut(WindowStatBase):
 
 class LimitOut(Schema):
     id: int
-    account: AccountRef
+    accounts: List[AccountRef]
     category: Optional[CategoryOut] = None
     is_active: bool
     limit_7_days: Optional[Decimal] = None
@@ -463,10 +462,10 @@ class RulesChangedOut(MessageOut):
 
 
 class LimitSaveIn(Schema):
-    """Mirrors the TransactionLimitForm POST; ``account``/``category``
+    """Mirrors the TransactionLimitForm POST; ``accounts``/``category``
     are resolved against per-user form querysets."""
     limit_id: Optional[int] = None
-    account: Optional[int] = None
+    accounts: List[int] = []
     category: Optional[int] = None
     limit_7_days: Optional[Decimal] = None
     limit_30_days: Optional[Decimal] = None
@@ -852,8 +851,8 @@ def limits(request, month: str = ''):
         ).replace(day=1) - timedelta(days=1)
 
     limits = user.transactionlimit_set.select_related(
-        'account', 'category'
-    )
+        'category'
+    ).prefetch_related('accounts')
     for limit in limits:
         limit.window_stats = limit_window_stats(limit, as_of=as_of)
 
@@ -1338,34 +1337,35 @@ def save_limit(request, payload: LimitSaveIn):
             code='couldNotSaveLimit',
             params={'errors': _flatten_errors(form)},
         )
+    # Limits of the same user+category must cover disjoint account
+    # sets — the M2M replacement for the old (account, user,
+    # category) unique constraint, which can't span a M2M field.
+    overlap = (
+        TransactionLimit.objects
+        .filter(
+            user=request.user,
+            category=form.cleaned_data['category'],
+            accounts__in=form.cleaned_data['accounts'],
+        )
+        .exclude(pk=editing.pk if editing else None)
+    )
+    if overlap.exists():
+        raise ApiHttpError(
+            409,
+            'A limit already exists for one of these accounts '
+            'and this category.',
+            code='limitConflict',
+        )
+    limit = form.save(commit=False)
+    limit.user = request.user
+    limit.save()
+    form.save_m2m()
     if editing is not None:
-        limit = form.save(commit=False)
-        limit.user = request.user
-        try:
-            limit.save()
-        except IntegrityError:
-            raise ApiHttpError(
-                409,
-                'A limit already exists for this account '
-                'and category.',
-                code='limitConflict',
-            )
         return {
             'success': True,
             'message': 'Spending limit updated.',
             'code': 'limitUpdated',
         }
-    TransactionLimit.objects.update_or_create(
-        account=form.cleaned_data['account'],
-        user=request.user,
-        category=form.cleaned_data['category'],
-        defaults={
-            'limit_7_days': form.cleaned_data['limit_7_days'],
-            'limit_30_days': form.cleaned_data['limit_30_days'],
-            'limit_monthly': form.cleaned_data['limit_monthly'],
-            'is_active': form.cleaned_data['is_active'],
-        },
-    )
     return {
         'success': True,
         'message': 'Spending limit saved.',
