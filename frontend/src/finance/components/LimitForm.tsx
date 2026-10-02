@@ -208,9 +208,7 @@ export function LimitForm({
               />{' '}
             </>
           )}
-          {editing
-            ? t('common:common.update')
-            : t('common:common.save')}
+          {editing ? t('common:common.update') : t('common:common.save')}
         </button>
       </form>
     </>

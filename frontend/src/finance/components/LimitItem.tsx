@@ -39,9 +39,7 @@ export function LimitItem({
         {limit.category ? (
           <CategoryBadge category={limit.category} />
         ) : (
-          <span className="text-muted small">
-            {t('limits.item.all')}
-          </span>
+          <span className="text-muted small">{t('limits.item.all')}</span>
         )}
         <span
           className="text-muted small text-truncate flex-grow-1"
