@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import NavBar from '../../shared/components/NavBar';
@@ -19,6 +20,16 @@ export function FinanceNavBar() {
   const { t } = useTranslation('finance');
   const bootstrap = useBootstrap();
   const user = bootstrap.user ?? 'unknown';
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  // Every route mounts a fresh nav bar, so the scrollable tab
+  // strip resets to the start on each navigation — re-center the
+  // active tab after mount.
+  useEffect(() => {
+    tabsRef.current
+      ?.querySelector('a.active')
+      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, []);
 
   const items: BurgerMenuItem[] = [
     {
@@ -90,7 +101,7 @@ export function FinanceNavBar() {
     <>
       <NavBar title={t('nav.title')} items={items} />
       <div className="fin-tabs">
-        <div className="container fin-tabs-inner">
+        <div className="container fin-tabs-inner" ref={tabsRef}>
           {tabs.map((tab) => (
             <NavLink
               key={tab.to}

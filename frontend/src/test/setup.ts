@@ -103,5 +103,15 @@ if (
   }
 }
 
+// jsdom never implemented Element.prototype.scrollIntoView — stub
+// it so components that scroll the active nav tab into view on
+// mount don't crash under tests.
+if (
+  typeof Element !== 'undefined' &&
+  typeof Element.prototype.scrollIntoView !== 'function'
+) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 // vitest runs with globals disabled, so register RTL cleanup here.
 afterEach(cleanup);
