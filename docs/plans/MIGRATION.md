@@ -198,11 +198,12 @@ deploy against the new project, which doesn't exist yet.
 ## Phase 4 — Provision django-apps
 
 > ⚠️ **Known bug hit on the `django-apps-7345` migration:** the
-> Cloud Run service can be created before `cloudrun-sa`'s
-> `secretAccessor` grant exists → revision stuck at
-> `SecretsAccessCheckFailed`, site 503s. Fix + workaround:
-> `GCP_MIGRATION_SECRETS_RACE.md` — apply the IAM targets first and
-> let them propagate before the full apply below.
+> Cloud Run service was created before `cloudrun-sa`'s
+> `secretAccessor` grant existed → revision stuck at
+> `SecretsAccessCheckFailed`, site 503s. The `depends_on` fix is in
+> the repo and the commands below pre-apply the IAM grant + let it
+> propagate — don't skip them on a fresh project. Full diagnosis and
+> recovery: `GCP_MIGRATION_SECRETS_RACE.md`.
 
 Terraform state bucket chicken-and-egg: `backend.tf` points at a
 bucket that doesn't exist yet. Same trick `bootstrap_gcp.sh` used,
@@ -228,6 +229,14 @@ before `google_cloud_run_v2_service` applies:
 terraform apply -auto-approve \
   -target=google_artifact_registry_repository.gae_standard
 
+# Fresh project: pre-apply the Cloud Run service account + its
+# secretAccessor grant so the IAM edge exists before Cloud Run
+# creation is attempted — `depends_on` (already in the repo) orders
+# creation, but IAM grants need ~60-90s to propagate inside GCP.
+terraform apply -auto-approve \
+  -target=google_service_account.cloudrun \
+  -target=google_project_iam_member.cloudrun_secret_accessor
+
 # Build in Cloud Build — no local Docker needed
 cd ..
 gcloud builds submit \
@@ -235,9 +244,15 @@ gcloud builds submit \
   --project=$NEW --timeout=1800
 
 cd terraform
+sleep 60                       # finish IAM propagation
 terraform apply -auto-approve    # SAs, WIF, Cloud Run svc+jobs, scheduler, buckets
 terraform output                 # keep cloud_run_url + workload_identity_provider
 ```
+
+If the Cloud Run service still comes up `SecretsAccessCheckFailed`
+(a revision stuck there never self-heals — it must be deleted and
+re-created), follow the recovery steps at the bottom of
+`GCP_MIGRATION_SECRETS_RACE.md`.
 
 If `terraform output workload_identity_provider` disagrees with the
 `WIF_PROVIDER` written in Phase 3, fix the workflows to match the

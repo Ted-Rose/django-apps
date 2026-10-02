@@ -223,7 +223,13 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   scales 0→1 and Vercel absorbs front-end traffic for that reason.
   Prefer free-tier-friendly choices when changing infra.
 - `bootstrap_gcp.sh` = one-time GCP setup; `migrate_to_django_apps.sh` =
-  move infra to a new GCP project.
+  move infra to a new GCP project. Both are stale (see the appendix of
+  `docs/plans/MIGRATION.md`) — for a fresh project follow
+  `docs/plans/MIGRATION.md` Phase 4, which pre-applies the
+  `cloudrun-sa` + `secretAccessor` IAM grant before the full apply.
+  Cloud Run's SecretsAccessCheck runs once at revision creation and
+  never retries; a revision stuck `SecretsAccessCheckFailed` must be
+  deleted and re-created (`docs/plans/GCP_MIGRATION_SECRETS_RACE.md`).
 - Dockerfile builds `collectstatic` against a dummy
   `private_settings.json` created at build time — keep that block
   strict, a silent failure ships a site with no CSS/JS.
