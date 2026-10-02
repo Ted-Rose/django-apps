@@ -105,7 +105,7 @@ export default function Balances() {
               <Trans
                 i18nKey="balances.emptyBody"
                 ns="finance"
-                components={{ link: <Link to="/accounts" /> }}
+                components={{ lnk: <Link to="/accounts" /> }}
               />
             </EmptyState>
           ))}

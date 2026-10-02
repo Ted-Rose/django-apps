@@ -1,42 +1,32 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import PageShell from '../components/PageShell';
 import CategoryBadge from '../components/CategoryBadge';
+import CollapsibleCard from '../components/CollapsibleCard';
 import RuleDrawer from '../components/RuleDrawer';
 import Toasts from '../../shared/components/Toasts';
 import './rules.css';
-import {
-  fetchRules,
-  type CategoryOut,
-  type RuleOut,
-  type RulesOut,
-} from '../api';
-import {
-  useApplyRules,
-  useDeleteCategory,
-  useDeleteRule,
-  useMoveRule,
-  useSaveCategory,
-} from '../mutations';
+import { fetchRules, type RuleOut, type RulesOut } from '../api';
+import { useApplyRules, useDeleteRule, useMoveRule } from '../mutations';
 
 /**
- * React port of rules.html — a collapsible categories card (name +
- * color form, per-category edit/delete; delete re-applies rules
- * server-side) and a collapsible rules card holding the prioritized
- * rules table with edit/move/delete actions, a "Re-apply rules"
- * button, and the RuleDrawer sandbox (offcanvas form + debounced
- * preview, ported from rule_sandbox.js).
+ * React port of rules.html — a collapsible rules card holding the
+ * prioritized rules table with edit/move/delete actions, a
+ * "Re-apply rules" button, and the RuleDrawer sandbox (offcanvas
+ * form + debounced preview, ported from rule_sandbox.js). Category
+ * management moved to the categories page (CategoriesCard); this
+ * payload still carries the category list because rules reference
+ * categories by id.
  *
- * Both sections are CollapsibleCards (the `collapse`/`show` + chevron
- * pattern from tasks' CompletedSection); categories start collapsed
- * on narrow screens so the rules are first. Below md the rules table
- * collapses into cards via the `.rules-table` rules in finance.css
- * (same approach as `.tx-table` on the transactions page).
+ * Below md the rules table collapses into cards via the
+ * `.rules-table` rules in finance.css (same approach as `.tx-table`
+ * on the transactions page).
  *
  * Condition summaries mirror the template: lowercased choice labels
  * for the counterparty scope/match type, the `operator` badge when
@@ -71,20 +61,13 @@ export default function Rules() {
           />
         )}
         {data && (
-          <div className="row g-3">
-            <div className="col-12 col-md-4">
-              <CategoriesCard categories={data.categories} />
-            </div>
-            <div className="col-12 col-md-8">
-              <RulesCard
-                data={data}
-                applying={applyRules.isPending}
-                onApply={() => applyRules.mutate()}
-                onNew={() => setDrawer({ rule: null })}
-                onEdit={(rule) => setDrawer({ rule })}
-              />
-            </div>
-          </div>
+          <RulesCard
+            data={data}
+            applying={applyRules.isPending}
+            onApply={() => applyRules.mutate()}
+            onNew={() => setDrawer({ rule: null })}
+            onEdit={(rule) => setDrawer({ rule })}
+          />
         )}
       </PageShell>
       {drawer && data && (
@@ -97,197 +80,6 @@ export default function Rules() {
       )}
       <Toasts />
     </>
-  );
-}
-
-/**
- * Card with a clickable header (title + count badge + chevron) that
- * expands/collapses the body — the `collapse`/`show` class toggle
- * from tasks' CompletedSection. `actions` render right-aligned in
- * the header so they stay reachable while the body is collapsed.
- */
-function CollapsibleCard({
-  id,
-  title,
-  count,
-  actions,
-  defaultOpen = true,
-  children,
-}: {
-  id: string;
-  title: string;
-  count?: number;
-  actions?: ReactNode;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="card fin-card rules-collapsible">
-      <div className="card-header d-flex flex-wrap align-items-center gap-2">
-        <button
-          type="button"
-          className="btn btn-link link-body-emphasis text-decoration-none p-0 d-flex align-items-center gap-2"
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => setOpen((prev) => !prev)}
-        >
-          <i
-            className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-right'}`}
-          />
-          <span className="fw-semibold">{title}</span>
-          {count !== undefined && (
-            <span className="badge rounded-pill text-bg-light border">
-              {count}
-            </span>
-          )}
-        </button>
-        {actions && (
-          <div className="ms-auto d-flex flex-wrap gap-2">{actions}</div>
-        )}
-      </div>
-      <div id={id} className={`collapse${open ? ' show' : ''}`}>
-        <div className="card-body">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-/** Narrow screens start with categories collapsed — rules are the
- *  primary content. jsdom has no matchMedia, so fall back to open. */
-const isNarrowScreen = () =>
-  typeof window.matchMedia === 'function' &&
-  !window.matchMedia('(min-width: 768px)').matches;
-
-/**
- * The categories card: name + color create/edit form (the API
- * update_or_creates on (user, name), so "edit" just refills the
- * form) and the category list with edit/delete actions.
- */
-function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
-  const { t } = useTranslation('finance');
-  const saveCategory = useSaveCategory();
-  const deleteCategory = useDeleteCategory();
-  const [name, setName] = useState('');
-  const [color, setColor] = useState('#6c757d');
-  const [editingId, setEditingId] = useState<number | null>(null);
-
-  const reset = () => {
-    setName('');
-    setColor('#6c757d');
-    setEditingId(null);
-  };
-
-  return (
-    <CollapsibleCard
-      id="categoriesCollapse"
-      title={t('rules.categoriesTitle')}
-      count={categories.length}
-      defaultOpen={!isNarrowScreen()}
-    >
-      <form
-        className="row g-2 align-items-end mb-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const trimmed = name.trim();
-          if (!trimmed) return;
-          saveCategory.mutate(
-            { name: trimmed, color },
-            { onSuccess: (result) => result?.success && reset() },
-          );
-        }}
-      >
-        <div className="col-6">
-          <label className="form-label" htmlFor="cat-name">
-            {t('rules.nameLabel')}
-          </label>
-          <input
-            type="text"
-            id="cat-name"
-            maxLength={100}
-            className="form-control"
-            required
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </div>
-        <div className="col-3">
-          <label className="form-label" htmlFor="cat-color">
-            {t('rules.colorLabel')}
-          </label>
-          <input
-            type="color"
-            id="cat-color"
-            className="form-control form-control-color"
-            value={color}
-            onChange={(event) => setColor(event.target.value)}
-          />
-        </div>
-        <div className="col-3 d-flex gap-1">
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={saveCategory.isPending}
-          >
-            {editingId !== null
-              ? t('common:common.save')
-              : t('common:common.add')}
-          </button>
-          {editingId !== null && (
-            <button
-              type="button"
-              className="btn btn-link btn-sm"
-              onClick={reset}
-            >
-              {t('common:common.cancel')}
-            </button>
-          )}
-        </div>
-      </form>
-      {categories.length > 0 ? (
-        <ul className="cat-list list-unstyled mb-0">
-          {categories.map((category) => (
-            <li
-              key={category.id}
-              className="cat-row d-flex justify-content-between align-items-center py-2"
-            >
-              <CategoryBadge category={category} />
-              <span className="d-flex gap-1">
-                <button
-                  type="button"
-                  className="btn btn-sm rules-ghost-btn"
-                  title={t('rules.editCategory')}
-                  aria-label={t('rules.editCategoryAria', {
-                    name: category.name,
-                  })}
-                  onClick={() => {
-                    setName(category.name);
-                    setColor(category.color || '#6c757d');
-                    setEditingId(category.id);
-                  }}
-                >
-                  <i className="bi bi-pencil" />
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm rules-ghost-btn rules-ghost-danger"
-                  title={t('rules.deleteCategory')}
-                  aria-label={t('rules.deleteCategoryAria', {
-                    name: category.name,
-                  })}
-                  disabled={deleteCategory.isPending}
-                  onClick={() => deleteCategory.mutate(category.id)}
-                >
-                  <i className="bi bi-trash" />
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-muted small mb-0">{t('rules.emptyCategories')}</p>
-      )}
-    </CollapsibleCard>
   );
 }
 
@@ -371,6 +163,15 @@ function RulesCard({
       ) : (
         <EmptyState icon="diagram-3" title={t('rules.emptyTitle')}>
           {t('rules.emptyBody')}
+          {data.categories.length === 0 && (
+            <div className="mt-2">
+              <Trans
+                i18nKey="rules.noCategoriesYet"
+                ns="finance"
+                components={{ lnk: <Link to="/categories" /> }}
+              />
+            </div>
+          )}
         </EmptyState>
       )}
     </CollapsibleCard>
@@ -428,7 +229,7 @@ function RuleRow({
         <div className="btn-group btn-group-sm">
           <button
             type="button"
-            className="btn rules-ghost-btn"
+            className="btn fin-ghost-btn"
             title={t('common:common.edit')}
             aria-label={t('rules.editAria', { priority: rule.priority })}
             onClick={onEdit}
@@ -437,7 +238,7 @@ function RuleRow({
           </button>
           <button
             type="button"
-            className="btn rules-ghost-btn"
+            className="btn fin-ghost-btn"
             title={t('rules.moveUp')}
             aria-label={t('rules.moveUpAria', { priority: rule.priority })}
             disabled={isFirst || moveRule.isPending}
@@ -449,7 +250,7 @@ function RuleRow({
           </button>
           <button
             type="button"
-            className="btn rules-ghost-btn"
+            className="btn fin-ghost-btn"
             title={t('rules.moveDown')}
             aria-label={t('rules.moveDownAria', {
               priority: rule.priority,
@@ -463,7 +264,7 @@ function RuleRow({
           </button>
           <button
             type="button"
-            className="btn rules-ghost-btn rules-ghost-danger"
+            className="btn fin-ghost-btn fin-ghost-danger"
             title={t('common:common.delete')}
             aria-label={t('rules.deleteAria', {
               priority: rule.priority,

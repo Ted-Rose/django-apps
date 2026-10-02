@@ -362,7 +362,7 @@ function AccountRow({
               <Trans
                 i18nKey="accounts.noDevices"
                 ns="finance"
-                components={{ link: <Link to="/limits" /> }}
+                components={{ lnk: <Link to="/limits" /> }}
               />
             ) : (
               t('accounts.pushEnabled', {

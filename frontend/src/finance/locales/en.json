@@ -30,7 +30,7 @@
     "thresholdAria": "Alert threshold in {{currency}}",
     "cancelBalanceAlert": "Cancel balance alert",
     "lastBalance": "Last reported balance: {{amount}} {{currency}}.",
-    "noDevices": "No devices subscribed — enable alerts on the <link>Limits page</link>.",
+    "noDevices": "No devices subscribed — enable alerts on the <lnk>Limits page</lnk>.",
     "pushEnabled_zero": "Push notifications are enabled on {{count}} devices.",
     "pushEnabled_one": "Push notifications are enabled on {{count}} device.",
     "pushEnabled_other": "Push notifications are enabled on {{count}} devices."
@@ -47,7 +47,7 @@
     "noBalance": "No balance retrieved yet. Click \"Get latest balance\" to fetch it.",
     "alertBelow": "Alert below {{threshold}} {{currency}}",
     "emptyTitle": "No accounts are included in the balance check",
-    "emptyBody": "Enable them on the <link>Accounts</link> page."
+    "emptyBody": "Enable them on the <lnk>Accounts</lnk> page."
   },
   "categories": {
     "title": "Category spending",
@@ -70,7 +70,15 @@
     "txCount_zero": "{{count}} transactions",
     "txCount_one": "{{count}} transaction",
     "txCount_other": "{{count}} transactions",
-    "emptyTitle": "No transactions in this period."
+    "emptyTitle": "No transactions in this period.",
+    "manageTitle": "Categories",
+    "nameLabel": "Name",
+    "colorLabel": "Color",
+    "editCategory": "Edit category",
+    "editCategoryAria": "Edit {{name}}",
+    "deleteCategory": "Delete category",
+    "deleteCategoryAria": "Delete {{name}}",
+    "emptyCategories": "No categories yet — create one, then add rules that assign it."
   },
   "connect": {
     "title": "Connect a Bank",
@@ -209,14 +217,6 @@
     "subtitle": "Rules run top to bottom — the first matching rule assigns its category. Saving a rule re-categorizes your history (manual categories are never overwritten).",
     "loading": "Loading rules",
     "loadLabel": "rules",
-    "categoriesTitle": "Categories",
-    "nameLabel": "Name",
-    "colorLabel": "Color",
-    "editCategory": "Edit category",
-    "editCategoryAria": "Edit {{name}}",
-    "deleteCategory": "Delete category",
-    "deleteCategoryAria": "Delete {{name}}",
-    "emptyCategories": "No categories yet — create one, then add rules that assign it.",
     "rulesTitle": "Rules",
     "newRule": "New rule",
     "reapply": "Re-apply rules",
@@ -234,6 +234,7 @@
     "deleteAria": "Delete rule {{priority}}",
     "emptyTitle": "No rules yet",
     "emptyBody": "Rules automatically categorize transactions during sync based on the sender / receiver name or the payment description.",
+    "noCategoriesYet": "No categories yet — create one on the <lnk>Categories page</lnk> first.",
     "summaryExcept": "except",
     "summaryCounterparty": "{{scope}} {{match}} \"{{pattern}}\"",
     "summaryDescription": "description {{match}} \"{{pattern}}\"",

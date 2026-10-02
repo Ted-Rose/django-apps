@@ -30,7 +30,7 @@
     "thresholdAria": "Brīdinājuma slieksnis {{currency}}",
     "cancelBalanceAlert": "Atcelt atlikuma brīdinājumu",
     "lastBalance": "Pēdējais ziņotais atlikums: {{amount}} {{currency}}.",
-    "noDevices": "Nav abonētu ierīču — ieslēdz brīdinājumus <link>Limitu lapā</link>.",
+    "noDevices": "Nav abonētu ierīču — ieslēdz brīdinājumus <lnk>Limitu lapā</lnk>.",
     "pushEnabled_zero": "Push paziņojumi ieslēgti {{count}} ierīcēs.",
     "pushEnabled_one": "Push paziņojumi ieslēgti {{count}} ierīcē.",
     "pushEnabled_other": "Push paziņojumi ieslēgti {{count}} ierīcēs."
@@ -47,7 +47,7 @@
     "noBalance": "Atlikums vēl nav ielādēts. Nospied \"Iegūt jaunāko atlikumu\", lai to ielādētu.",
     "alertBelow": "Brīdinājums zem {{threshold}} {{currency}}",
     "emptyTitle": "Atlikuma pārbaudē nav iekļauts neviens konts",
-    "emptyBody": "Ieslēdz tos <link>Kontu lapā</link>."
+    "emptyBody": "Ieslēdz tos <lnk>Kontu lapā</lnk>."
   },
   "categories": {
     "title": "Tēriņi pa kategorijām",
@@ -70,7 +70,15 @@
     "txCount_zero": "{{count}} transakciju",
     "txCount_one": "{{count}} transakcija",
     "txCount_other": "{{count}} transakcijas",
-    "emptyTitle": "Šajā periodā nav transakciju."
+    "emptyTitle": "Šajā periodā nav transakciju.",
+    "manageTitle": "Kategorijas",
+    "nameLabel": "Nosaukums",
+    "colorLabel": "Krāsa",
+    "editCategory": "Rediģēt kategoriju",
+    "editCategoryAria": "Rediģēt {{name}}",
+    "deleteCategory": "Dzēst kategoriju",
+    "deleteCategoryAria": "Dzēst {{name}}",
+    "emptyCategories": "Kategoriju vēl nav — izveido vienu, tad pievieno noteikumus, kas to piešķir."
   },
   "connect": {
     "title": "Pievienot banku",
@@ -209,14 +217,6 @@
     "subtitle": "Noteikumi izpildās no augšas uz leju — pirmais atbilstošais noteikums piešķir savu kategoriju. Saglabājot noteikumu, vēsture tiek pārkategorizēta (manuāli iestatītās kategorijas netiek pārrakstītas).",
     "loading": "Ielādē noteikumus",
     "loadLabel": "noteikumus",
-    "categoriesTitle": "Kategorijas",
-    "nameLabel": "Nosaukums",
-    "colorLabel": "Krāsa",
-    "editCategory": "Rediģēt kategoriju",
-    "editCategoryAria": "Rediģēt {{name}}",
-    "deleteCategory": "Dzēst kategoriju",
-    "deleteCategoryAria": "Dzēst {{name}}",
-    "emptyCategories": "Kategoriju vēl nav — izveido vienu, tad pievieno noteikumus, kas to piešķir.",
     "rulesTitle": "Noteikumi",
     "newRule": "Jauns noteikums",
     "reapply": "Pielietot noteikumus vēlreiz",
@@ -234,6 +234,7 @@
     "deleteAria": "Dzēst noteikumu {{priority}}",
     "emptyTitle": "Noteikumu vēl nav",
     "emptyBody": "Noteikumi automātiski kategorizē transakcijas sinhronizācijas laikā pēc maksātāja / saņēmēja vārda vai maksājuma apraksta.",
+    "noCategoriesYet": "Kategoriju vēl nav — vispirms izveido vienu <lnk>Kategoriju lapā</lnk>.",
     "summaryExcept": "izņemot",
     "summaryCounterparty": "{{scope}} {{match}} \"{{pattern}}\"",
     "summaryDescription": "apraksts {{match}} \"{{pattern}}\"",

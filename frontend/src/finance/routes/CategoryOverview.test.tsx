@@ -9,9 +9,10 @@ import {
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CategoryOverview from './CategoryOverview';
-import { apiGet } from '../../shared/api/client';
+import { apiGet, apiPost } from '../../shared/api/client';
 import { ApiError } from '../../shared/api/errors';
-import type { CategoryOverviewOut } from '../api';
+import { clearToasts } from '../../shared/toasts';
+import type { CategoryOut, CategoryOverviewOut } from '../api';
 
 vi.mock('../../shared/api/client', () => ({
   apiGet: vi.fn(),
@@ -26,6 +27,14 @@ vi.mock('../components/CategoryChart', () => ({
 }));
 
 const mockedApiGet = vi.mocked(apiGet);
+const mockedApiPost = vi.mocked(apiPost);
+
+// Deliberately different names from the breakdown rows so queries
+// can tell the management card and the spending table apart.
+const CATEGORIES: CategoryOut[] = [
+  { id: 3, name: 'Dining', color: '#00aa00' },
+  { id: 4, name: 'Housing', color: '#0000ff' },
+];
 
 function makeOverview(
   overrides: Partial<CategoryOverviewOut> = {},
@@ -87,6 +96,7 @@ function makeOverview(
     date_to: '2025-01-15',
     accounts: [{ id: 5, label: 'Everyday account' }],
     selected_account: '',
+    categories: CATEGORIES,
     ...overrides,
   };
 }
@@ -106,6 +116,8 @@ function renderOverview(initialEntry = '/categories') {
 
 beforeEach(() => {
   mockedApiGet.mockReset();
+  mockedApiPost.mockReset();
+  clearToasts();
 });
 
 describe('CategoryOverview', () => {
@@ -276,5 +288,83 @@ describe('CategoryOverview', () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
     expect(await screen.findByText('Groceries')).toBeInTheDocument();
+  });
+
+  it('renders the categories card and collapses it via the header', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview();
+
+    // The management card lists every category (jsdom has no
+    // matchMedia, so the narrow-screen default-collapsed branch
+    // doesn't kick in).
+    const list = await screen.findByRole('list');
+    expect(within(list).getByText('Dining')).toBeInTheDocument();
+    expect(within(list).getByText('Housing')).toBeInTheDocument();
+
+    const section = document.getElementById('categoriesCollapse')!;
+    expect(section).toHaveClass('collapse', 'show');
+    const toggle = screen.getByRole('button', { name: /Categories/ });
+    fireEvent.click(toggle);
+    expect(section).not.toHaveClass('show');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(section).toHaveClass('show');
+  });
+
+  it('creates a category and toasts the API message', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Category "Travel" saved.',
+    });
+    renderOverview();
+    fireEvent.change(await screen.findByLabelText('Name'), {
+      target: { value: 'Travel' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/categories/save/',
+        { name: 'Travel', color: '#6c757d' },
+      ),
+    );
+    expect(
+      await screen.findByText('Category "Travel" saved.'),
+    ).toBeInTheDocument();
+  });
+
+  it('loads a category into the form for editing', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Dining' }));
+    expect(screen.getByLabelText('Name')).toHaveValue('Dining');
+    expect(screen.getByLabelText('Color')).toHaveValue('#00aa00');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    // Cancel restores the plain "Add" form.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByLabelText('Name')).toHaveValue('');
+  });
+
+  it('deletes a category and toasts the recategorized count', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Category deleted; 2 transaction(s) recategorized.',
+      changed: 2,
+    });
+    renderOverview();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete Dining' }),
+    );
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/categories/3/delete/',
+      ),
+    );
+    expect(
+      await screen.findByText(
+        'Category deleted; 2 transaction(s) recategorized.',
+      ),
+    ).toBeInTheDocument();
   });
 });

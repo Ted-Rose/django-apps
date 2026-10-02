@@ -161,6 +161,34 @@ body {
   border: 1px solid var(--fin-border);
 }
 
+/* Collapsible cards (components/CollapsibleCard.tsx): transparent
+   header, hairline divider. */
+.fin-collapsible > .card-header {
+  padding-block: 0.7rem;
+  background: transparent;
+  border-bottom: 1px solid var(--fin-border);
+}
+
+/* Borderless icon buttons for row actions. */
+.fin-ghost-btn {
+  color: var(--bs-secondary-color);
+  background: transparent;
+  border: 0;
+}
+.fin-ghost-btn:hover:not(:disabled),
+.fin-ghost-btn:focus-visible {
+  color: var(--bs-body-color);
+  background: var(--fin-bg);
+}
+.fin-ghost-btn.fin-ghost-danger:hover:not(:disabled),
+.fin-ghost-btn.fin-ghost-danger:focus-visible {
+  color: var(--bs-danger);
+  background: rgba(220, 53, 69, 0.08);
+}
+.fin-ghost-btn:disabled {
+  opacity: 0.4;
+}
+
 /* --- Transactions table -------------------------------------------------
    Long values wrap at every viewport so a huge remittance text or IBAN
    can't stretch the table into horizontal scroll on its own. */

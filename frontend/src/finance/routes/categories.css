@@ -1,6 +1,11 @@
 /* CategoryOverview page styles — imported by the route, scoped via
    the `.fin-app` wrapper like the rest of the redesign layer. */
 
+/* Category list — plain rows with hairline dividers. */
+.cat-row + .cat-row {
+  border-top: 1px solid var(--fin-border);
+}
+
 /* Fixed-height donut box: ResponsiveContainer measures only its
    parent. jsdom renders it 0×0, so the Vitest suite stubs the chart
    component instead of exercising recharts. */

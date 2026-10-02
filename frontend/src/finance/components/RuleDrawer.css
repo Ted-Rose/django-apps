@@ -1,0 +1,29 @@
+/* RuleDrawer styles — imported by RuleDrawer.tsx itself because the
+   drawer also opens from the Transactions route (routes/rules.css
+   would not be loaded there). The drawer renders outside .fin-app,
+   so only --bs-* tokens are available here. */
+
+/* Form section labels and the bordered preview panel. */
+.rule-section-label {
+  margin-bottom: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+}
+.rule-preview {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.75rem;
+}
+
+/* Auto-growing pattern textareas (AutoGrowTextarea sets the height
+   inline on every change): no manual resize handle, no scrollbar —
+   long patterns wrap instead of scrolling out of view. */
+.rule-autogrow {
+  overflow-y: hidden;
+  resize: none;
+}

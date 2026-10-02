@@ -9,6 +9,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import ErrorState from '../components/ErrorState';
 import CategoryBadge from '../components/CategoryBadge';
+import CategoriesCard from '../components/CategoriesCard';
 // Lazy-loaded so recharts stays out of the main finance chunk.
 const CategoryChart = lazy(() => import('../components/CategoryChart'));
 import MoneyText from '../components/MoneyText';
@@ -18,7 +19,9 @@ import './categories.css';
 
 /**
  * React port of category_overview.html — per-category spending
- * totals over a selectable time window. `from`/`to`/`account` live
+ * totals over a selectable time window, plus the collapsible
+ * categories management card (create/edit/delete, moved here from
+ * the rules page). `from`/`to`/`account` live
  * in the URL (the template's GET form + preset hrefs become
  * `useSearchParams` writes), the `periods` list renders the preset
  * chips ("All time" clears the dates), and the table groups rows +
@@ -172,6 +175,12 @@ export default function CategoryOverview() {
             </form>
           )}
         </div>
+
+        {data && (
+          <div className="mb-3">
+            <CategoriesCard categories={data.categories} />
+          </div>
+        )}
 
         {data && (
           <div className="d-flex flex-wrap gap-2 mb-4">

@@ -5,6 +5,7 @@ media/recordings/*
 !media/recordings/.gitkeep
 venv
 google_api/app_secrets.json
+client_secret_*.json
 settings.json
 ca.pem
 data/

@@ -1,11 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Rules from './Rules';
@@ -122,7 +116,7 @@ beforeEach(() => {
 });
 
 describe('Rules', () => {
-  it('fetches /api/finance/rules/ and renders the table plus categories card', async () => {
+  it('fetches /api/finance/rules/ and renders the rules table', async () => {
     mockedApiGet.mockResolvedValue(
       makeRules({
         rules: [
@@ -142,17 +136,10 @@ describe('Rules', () => {
     renderRules();
     expect(mockedApiGet).toHaveBeenCalledWith('/api/finance/rules/');
 
-    // Categories card lists both categories.
-    expect(
-      await screen.findAllByRole('cell', { name: 'Groceries' }),
-    ).not.toHaveLength(0);
-    const categoriesList = screen.getByRole('list');
-    expect(within(categoriesList).getByText('Housing')).toBeInTheDocument();
-
     // Condition summary mirrors the template: lowercased scope and
     // match-type labels, operator badge, "except" exclusion.
     expect(
-      screen.getByText(/debtor or creditor contains "rimi"/),
+      await screen.findByText(/debtor or creditor contains "rimi"/),
     ).toBeInTheDocument();
     expect(screen.getByText('AND')).toBeInTheDocument();
     expect(
@@ -173,102 +160,28 @@ describe('Rules', () => {
     ).toBeDisabled();
   });
 
-  it('collapses and expands the categories and rules cards', async () => {
+  it('collapses and expands the rules card', async () => {
     mockedApiGet.mockResolvedValue(makeRules());
     renderRules();
     await screen.findByText(/debtor or creditor contains "rimi"/);
 
-    // Both sections render expanded (jsdom has no matchMedia, so the
-    // narrow-screen default-collapsed branch doesn't kick in).
-    for (const id of ['categoriesCollapse', 'rulesCollapse']) {
-      const section = document.getElementById(id)!;
-      expect(section).toHaveClass('collapse', 'show');
-    }
+    const section = document.getElementById('rulesCollapse')!;
+    expect(section).toHaveClass('collapse', 'show');
 
-    const categoriesToggle = screen.getByRole('button', {
-      name: /Categories/,
-    });
-    fireEvent.click(categoriesToggle);
-    expect(document.getElementById('categoriesCollapse')!).toHaveClass(
-      'collapse',
-    );
-    expect(document.getElementById('categoriesCollapse')!).not.toHaveClass(
-      'show',
-    );
-    expect(categoriesToggle).toHaveAttribute('aria-expanded', 'false');
+    const toggle = screen.getByRole('button', { name: /Rules/ });
+    fireEvent.click(toggle);
+    expect(section).toHaveClass('collapse');
+    expect(section).not.toHaveClass('show');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
-    // Collapsing categories keeps the rules section (and its header
-    // actions) usable.
-    fireEvent.click(screen.getByRole('button', { name: /Rules/ }));
-    expect(document.getElementById('rulesCollapse')!).not.toHaveClass('show');
-
-    fireEvent.click(categoriesToggle);
-    expect(document.getElementById('categoriesCollapse')!).toHaveClass('show');
+    fireEvent.click(toggle);
+    expect(section).toHaveClass('show');
   });
 
   it('shows the empty state when there are no rules', async () => {
     mockedApiGet.mockResolvedValue(makeRules({ rules: [] }));
     renderRules();
     expect(await screen.findByText(/No rules yet/)).toBeInTheDocument();
-  });
-
-  it('creates a category and toasts the API message', async () => {
-    mockedApiGet.mockResolvedValue(makeRules());
-    mockedApiPost.mockResolvedValue({
-      success: true,
-      message: 'Category "Travel" saved.',
-    });
-    renderRules();
-    fireEvent.change(await screen.findByLabelText('Name'), {
-      target: { value: 'Travel' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-    await waitFor(() =>
-      expect(mockedApiPost).toHaveBeenCalledWith(
-        '/api/finance/categories/save/',
-        { name: 'Travel', color: '#6c757d' },
-      ),
-    );
-    expect(
-      await screen.findByText('Category "Travel" saved.'),
-    ).toBeInTheDocument();
-  });
-
-  it('loads a category into the form for editing', async () => {
-    mockedApiGet.mockResolvedValue(makeRules());
-    renderRules();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Edit Groceries' }),
-    );
-    expect(screen.getByLabelText('Name')).toHaveValue('Groceries');
-    expect(screen.getByLabelText('Color')).toHaveValue('#00aa00');
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
-    // Cancel restores the plain "Add" form.
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.getByLabelText('Name')).toHaveValue('');
-  });
-
-  it('deletes a category and toasts the recategorized count', async () => {
-    mockedApiGet.mockResolvedValue(makeRules());
-    mockedApiPost.mockResolvedValue({
-      success: true,
-      message: 'Category deleted; 2 transaction(s) recategorized.',
-      changed: 2,
-    });
-    renderRules();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Delete Groceries' }),
-    );
-    await waitFor(() =>
-      expect(mockedApiPost).toHaveBeenCalledWith(
-        '/api/finance/categories/3/delete/',
-      ),
-    );
-    expect(
-      await screen.findByText(
-        'Category deleted; 2 transaction(s) recategorized.',
-      ),
-    ).toBeInTheDocument();
   });
 
   it('moves a rule via POST rules/{id}/move/ {direction}', async () => {
@@ -450,15 +363,15 @@ describe('Rules', () => {
     );
   });
 
-  it('disables New rule when no categories exist', async () => {
-    mockedApiGet.mockResolvedValue(makeRules({ categories: [] }));
+  it('disables New rule and links to the categories page when no categories exist', async () => {
+    mockedApiGet.mockResolvedValue(makeRules({ rules: [], categories: [] }));
     renderRules();
     expect(
       await screen.findByRole('button', { name: /New rule/ }),
     ).toBeDisabled();
     expect(
-      screen.getByText(/No categories yet — create one/),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: 'Categories page' }),
+    ).toHaveAttribute('href', '/categories');
   });
 
   it('shows an error alert with a working retry', async () => {

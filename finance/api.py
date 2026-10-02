@@ -310,6 +310,9 @@ class CategoryOverviewOut(Schema):
     date_to: str
     accounts: List[AccountOptionOut]
     selected_account: str = ''
+    # The user's full category list (filter-independent) — the page
+    # also hosts the category create/edit/delete card.
+    categories: List[CategoryOut]
 
 
 class WindowStatBase(Schema):
@@ -825,6 +828,7 @@ def category_overview(request,
         'date_to': date_to.isoformat() if date_to else '',
         'accounts': _account_options(request.user),
         'selected_account': account,
+        'categories': list(category_by_id.values()),
     }
 
 

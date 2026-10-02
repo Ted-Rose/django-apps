@@ -1581,6 +1581,8 @@ export interface components {
              * @default
              */
             selected_account: string;
+            /** Categories */
+            categories: components["schemas"]["CategoryOut"][];
         };
         /** CategoryRowOut */
         CategoryRowOut: {

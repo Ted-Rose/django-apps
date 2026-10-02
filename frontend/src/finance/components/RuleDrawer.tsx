@@ -1,4 +1,11 @@
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type TextareaHTMLAttributes,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type {
@@ -10,6 +17,7 @@ import type {
 } from '../api';
 import { usePreviewRule, useSaveRule } from '../mutations';
 import { errorDetail } from '../../shared/api/errors';
+import './RuleDrawer.css';
 
 /**
  * Offcanvas rule drawer — the React port of rules.html's
@@ -279,7 +287,7 @@ export function RuleDrawer({
         <div className="offcanvas-body">
           <form onSubmit={submit}>
             <div className="row g-2 mb-3">
-              <div className="col-8">
+              <div className="col-12 col-md-8">
                 <label className="form-label" htmlFor="rule-category">
                   {t('rules.drawer.categoryLabel')}
                 </label>
@@ -302,7 +310,7 @@ export function RuleDrawer({
                   ))}
                 </select>
               </div>
-              <div className="col-4">
+              <div className="col-12 col-md-4">
                 <label className="form-label" htmlFor="rule-priority">
                   {t('rules.drawer.priority')}
                 </label>
@@ -325,7 +333,7 @@ export function RuleDrawer({
                 {t('rules.drawer.counterpartyName')}
               </label>
               <div className="row g-2">
-                <div className="col-4">
+                <div className="col-12 col-md-4">
                   <select
                     id="rule-counterparty-scope"
                     className="form-select"
@@ -343,7 +351,7 @@ export function RuleDrawer({
                     ))}
                   </select>
                 </div>
-                <div className="col-3">
+                <div className="col-12 col-md-3">
                   <select
                     id="rule-counterparty-match-type"
                     className="form-select"
@@ -366,12 +374,11 @@ export function RuleDrawer({
                     ))}
                   </select>
                 </div>
-                <div className="col-5">
-                  <input
-                    type="text"
+                <div className="col-12 col-md-5">
+                  <AutoGrowTextarea
                     id="rule-counterparty-pattern"
                     maxLength={255}
-                    className="form-control"
+                    className="form-control rule-autogrow"
                     placeholder={t('rules.drawer.counterpartyPlaceholder')}
                     value={fields.counterparty_pattern}
                     onChange={(event) =>
@@ -386,7 +393,7 @@ export function RuleDrawer({
                 {t('rules.drawer.descriptionLabel')}
               </label>
               <div className="row g-2">
-                <div className="col-4">
+                <div className="col-12 col-md-4">
                   <select
                     id="rule-description-match-type"
                     className="form-select"
@@ -409,12 +416,11 @@ export function RuleDrawer({
                     ))}
                   </select>
                 </div>
-                <div className="col-8">
-                  <input
-                    type="text"
+                <div className="col-12 col-md-8">
+                  <AutoGrowTextarea
                     id="rule-description"
                     maxLength={255}
-                    className="form-control"
+                    className="form-control rule-autogrow"
                     placeholder={t('rules.drawer.descriptionPlaceholder')}
                     value={fields.description_pattern}
                     onChange={(event) =>
@@ -431,11 +437,10 @@ export function RuleDrawer({
               >
                 {t('rules.drawer.excludeLabel')}
               </label>
-              <input
-                type="text"
+              <AutoGrowTextarea
                 id="rule-description-exclusion"
                 maxLength={255}
-                className="form-control"
+                className="form-control rule-autogrow"
                 placeholder={t('rules.drawer.excludePlaceholder')}
                 value={fields.description_exclusion}
                 onChange={(event) =>
@@ -447,7 +452,7 @@ export function RuleDrawer({
               {t('rules.drawer.options')}
             </div>
             <div className="row g-2 mb-4">
-              <div className="col-4">
+              <div className="col-12 col-md-4">
                 <label className="form-label" htmlFor="rule-operator">
                   {t('rules.drawer.combine')}
                 </label>
@@ -469,7 +474,7 @@ export function RuleDrawer({
                   ))}
                 </select>
               </div>
-              <div className="col-4 d-flex align-items-end">
+              <div className="col-12 col-md-4 d-flex align-items-end">
                 <div className="form-check form-switch mb-2">
                   <input
                     type="checkbox"
@@ -543,6 +548,27 @@ export function RuleDrawer({
       <div className="offcanvas-backdrop fade show" onClick={onClose} />
     </>
   );
+}
+
+/**
+ * Single-line-looking textarea that grows to fit its content. A
+ * text <input> can't wrap, so a long pattern would scroll out of
+ * view — worst on mobile where the fields stack full-width. Height
+ * is synced to scrollHeight on every value change.
+ */
+function AutoGrowTextarea({
+  value,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  }, [value]);
+  return <textarea ref={ref} rows={1} value={value} {...props} />;
 }
 
 /**
