@@ -5,12 +5,14 @@ from django.conf.urls.static import static
 from . import views
 from django_apps.api import api
 from django_apps.me import router as me_router
+from gmail.api import router as gmail_router
 from google_tasks.api import router as tasks_router
 from finance.api import router as finance_router
 
 app_name = 'main'
 
 api.add_router('/me/', me_router)
+api.add_router('/gmail/', gmail_router)
 api.add_router('/tasks/', tasks_router)
 api.add_router('/finance/', finance_router)
 
@@ -23,6 +25,7 @@ urlpatterns = [
     path('manifest.webmanifest', views.manifest, name='manifest'),
     path('offline/', views.offline, name='offline'),
     path('', include('google_api.urls', namespace='google_api')),
+    path('', include('gmail.urls', namespace='gmail')),
     path('tasks/', include('google_tasks.urls', namespace='google_tasks')),
     path('finance/', include('finance.urls', namespace='finance')),
     path('', include('single_pages.urls', namespace='single_pages')),

@@ -7,24 +7,16 @@ calls, same OAuth session state, same per-user scoping — stay
 identical; _adapt() maps their reauth_required / error payloads onto
 the API contract (401 google_reauth, uniform {error, detail}).
 """
-import json
 from datetime import datetime
 from typing import List, Optional
-from urllib.parse import urlencode
 
 from django.db.models import F, Q
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
-from django.urls import reverse
 from django.utils import timezone
 from ninja import Query, Router, Schema
 from pydantic import Field
 
-from django_apps.api import (
-    GoogleReauthRequired,
-    error_slug,
-    spa_url_for,
-)
+from django_apps.api import GoogleReauthRequired, _adapt, _reauth_url
 from google_tasks import views
 from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
 
@@ -165,15 +157,10 @@ class TaskUpdateIn(Schema):
 
 
 # --- Shared helpers ---
-
-def _reauth_url(request):
-    """Google OAuth login URL whose `next` sends the user back to the
-    SPA page for this request (never to a raw /api/ JSON URL)."""
-    return (
-        f"{reverse('google_api:login')}"
-        f"?{urlencode({'next': spa_url_for(request)})}"
-    )
-
+#
+# `_adapt` / `_reauth_url` now live in django_apps.api (shared with
+# gmail and future feature apps — google_features must not import
+# each other).
 
 def _creds_or_reauth(request):
     """Return the Google creds dict for request.user, or raise
@@ -434,50 +421,6 @@ def search(request, q: str = Query('', max_length=200)):
 
 
 # --- Mutation endpoints (delegate to the existing JSON views) ---
-
-def _adapt(request, response):
-    """Map a mutation view's JsonResponse onto the API contract:
-    reauth_required / missing creds → 401 google_reauth; failures →
-    uniform {error, detail}. Success bodies pass through unchanged.
-    """
-    if not isinstance(response, JsonResponse):
-        return response
-    try:
-        payload = json.loads(response.content)
-    except ValueError:
-        return response
-    if payload.get('reauth_required') or (
-            payload.get('error') == 'No credentials found'):
-        # The view already stored OAuth state in the session when a
-        # flow URL exists; otherwise bounce through /login/ (the same
-        # target the removed views.reauth_redirect used for dead
-        # creds).
-        authorization_url = (
-            payload.get('authorization_url') or _reauth_url(request)
-        )
-        return JsonResponse({
-            'error': 'google_reauth',
-            'authorization_url': authorization_url,
-        }, status=401)
-    if 'success' in payload and not payload['success']:
-        # Non-2xx keeps the view's status verbatim. A 2xx with
-        # success:false is a server-side failure (e.g. sync_view emits
-        # {'success': False} with status 200), so floor at 500 — a 400
-        # would misreport it as a client error.
-        status = response.status_code
-        if status < 400:
-            status = 500
-        extra = {
-            k: v for k, v in payload.items()
-            if k not in ('success', 'error')
-        }
-        return JsonResponse({
-            'error': error_slug(status),
-            'detail': payload.get('error') or 'Operation failed',
-            **extra,
-        }, status=status)
-    return response
-
 
 @router.post('/sync/')
 def sync(request):

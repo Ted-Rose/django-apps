@@ -168,6 +168,7 @@ INSTALLED_APPS = [
     'sslserver',
     'django_apps',
     'google_api',
+    'gmail',
     'google_tasks',
     'finance',
     'single_pages',

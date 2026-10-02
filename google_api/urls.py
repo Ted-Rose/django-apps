@@ -6,9 +6,8 @@ app_name = 'google_api'
 
 urlpatterns = [
     path('login/', views.login_view, name='login'),
-    path('gmail-to-audio', views.gmail, name='gmail'),
-    path('gmail-mark-read', views.mark_emails_read,
-         name='mark_emails_read'),
-    path('text-to-audio', views.audio, name='audio'),
     path('google/callback', callback, name='callback'),
+    # Shared JSON endpoint — twister.html fetches it until the
+    # single_pages rewrite removes the last caller.
+    path('text-to-audio', views.audio, name='audio'),
 ]

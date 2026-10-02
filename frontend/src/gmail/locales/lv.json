@@ -1,0 +1,38 @@
+{
+  "nav": {
+    "title": "Gmail uz audio",
+    "tasks": "Uzdevumi"
+  },
+  "reader": {
+    "checkingAccess": "Pārbauda Google piekļuvi…",
+    "filterTitle": "Filtrēt e-pastus",
+    "queryLabel": "Ievadiet Gmail meklēšanas vaicājumu:",
+    "queryPlaceholder": "piem., is:unread",
+    "getEmails": "Ielādēt e-pastus",
+    "loading": "Ielādē e-pastus — tas var aizņemt laiku…",
+    "found_zero": "Atrasti {{count}} e-pasti",
+    "found_one": "Atrasts {{count}} e-pasts",
+    "found_other": "Atrasti {{count}} e-pasti",
+    "markAllRead": "Atzīmēt visus kā izlasītus",
+    "markAllConfirm_zero": "Atzīmēt visus {{count}} e-pastus kā izlasītus?",
+    "markAllConfirm_one": "Atzīmēt {{count}} e-pastu kā izlasītu?",
+    "markAllConfirm_other": "Atzīmēt visus {{count}} e-pastus kā izlasītus?",
+    "empty": "E-pasti nav atrasti. Lietojiet filtru, lai ielādētu e-pastus.",
+    "loadError": "Neizdevās ielādēt e-pastus: {{detail}}"
+  },
+  "message": {
+    "showBody": "Rādīt saturu",
+    "hideBody": "Slēpt saturu",
+    "markRead": "Atzīmēt kā izlasītu",
+    "read": "Izlasīts",
+    "markReadConfirm": "Atzīmēt šo e-pastu kā izlasītu?",
+    "play": "Atskaņot",
+    "playAllFromHere": "Atskaņot visus no šejienes",
+    "bodyLabel": "Saturs:",
+    "idLabel": "ID: {{id}}"
+  },
+  "mutations": {
+    "markReadFailed": "Neizdevās atzīmēt kā izlasītu: {{detail}}",
+    "audioFailed": "Neizdevās ģenerēt audio: {{detail}}"
+  }
+}

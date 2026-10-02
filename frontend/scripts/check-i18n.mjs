@@ -30,7 +30,7 @@ function leafKeys(obj, prefix = '') {
 }
 
 const catalogs = {};
-for (const ns of ['shared', 'finance', 'tasks']) {
+for (const ns of ['shared', 'finance', 'gmail', 'tasks']) {
   catalogs[ns] = {
     en: readJson(join(SRC, ns, 'locales/en.json')),
     lv: readJson(join(SRC, ns, 'locales/lv.json')),
@@ -106,7 +106,7 @@ for (const file of files) {
   for (const [, key] of calls) {
     let leaf = key;
     let candidates = [fileNs, 'common'];
-    const m = key.match(/^(common|finance|tasks|server):(.+)$/);
+    const m = key.match(/^(common|finance|gmail|tasks|server):(.+)$/);
     if (m) {
       leaf = m[2];
       candidates = [m[1]];

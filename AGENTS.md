@@ -16,7 +16,8 @@ same database. PythonAnywhere
 | Path | Purpose |
 |------|---------|
 | `django_apps/` | Project settings, root urls, home page, PWA endpoints (`sw.js`, `manifest.webmanifest`, `offline/`), `gcp.py` (Secret Manager helper), `console_tasks/build.py` (Vercel build-time file generators) |
-| `google_api/` | Shared Google OAuth2 layer + Gmail reader + text-to-audio (gTTS → GCS signed URLs). See `google_api/AGENTS.md` and `google_api/README.md` |
+| `google_api/` | Shared Google OAuth2 platform (per-user credential store, login/callback) + text-to-audio (gTTS → GCS signed URLs). See `google_api/AGENTS.md` and `google_api/README.md` |
+| `gmail/` | Gmail reader ("Gmail to audio") — feature app split out of `google_api`. React SPA at `/gmail/` (`frontend/src/gmail/`), API at `/api/gmail/`; no models. See `gmail/AGENTS.md` |
 | `google_tasks/` | Largest app. Google Tasks bidirectional sync with local-only features (stars, labels, dividers, archive/trash, manual ordering). See `google_tasks/AGENTS.md` and `google_tasks/README.md` |
 | `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits, low-balance alerts, rule-based auto-categorization (`services/rules.py`). React SPA at `/finance/` (`frontend/src/finance/`), API at `/api/finance/`; `views.py` keeps only `requisition_callback`. See `finance/AGENTS.md` |
 | `single_pages/` | One-off pages that don't merit their own app (twister, spoki.lv proxy) |
@@ -24,9 +25,10 @@ same database. PythonAnywhere
 | `frontend/` | React rewrite workspace: Vite 5 + React 19 + TS, one entry per app (`src/tasks/`); builds to gitignored `frontend_dist/` (Vite manifest + hashed assets) |
 | `docs/` | `QUICKSTART.md` (GCP deploy runbook), `changelog.md`, `coding_diary.md` (dev log), `plans/` (design docs) |
 
-URL routing (`django_apps/urls.py`): `google_api` and `single_pages`
-mount at root; `google_tasks` under `/tasks/`; `finance` under
-`/finance/`; `admin/` is Django admin (also used for logout via
+URL routing (`django_apps/urls.py`): `google_api`, `gmail` (legacy
+`/gmail-to-audio` 301s to `/gmail/`) and `single_pages` mount at
+root; `google_tasks` under `/tasks/`; `finance` under `/finance/`;
+`admin/` is Django admin (also used for logout via
 `/admin/logout/`).
 
 ## Environment & settings
@@ -152,11 +154,13 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 - **React SPA mounts**: `django_apps.views.spa_shell(request, entry,
   title)` renders `spa_shell.html` (login + CSRF + `json_script`
   bootstrap) for a `frontend/src/<entry>/main.tsx` Vite entry. The
-  google_tasks and finance cutovers are complete: `/tasks/` and
-  `/finance/` ARE the SPAs (`BrowserRouter basename='/<app>'`),
-  `<path:subpath>` catch-alls serve deep links, non-GET/HEAD
-  requests to the old mutation URLs 404, and `/<app>/app/*`
-  301-redirects to `/<app>/*`.
+  google_tasks, finance and gmail cutovers are complete: `/tasks/`,
+  `/finance/` and `/gmail/` ARE the SPAs (`BrowserRouter
+  basename='/<app>'`), `<path:subpath>` catch-alls serve deep links,
+  non-GET/HEAD requests to the old mutation URLs 404, and
+  `/<app>/app/*` 301-redirects to `/<app>/*` (gmail's legacy
+  `/gmail-to-audio` 301s to `/gmail/` instead — it never had a
+  staging mount).
   New apps should mount the shell at `/<app>/` the same way —
   mutations live in the ninja API (`<app>/api.py` →
   `/api/<app>/…`); see `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`.

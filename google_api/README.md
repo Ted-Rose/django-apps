@@ -1,33 +1,35 @@
-# Gmail to Audio
+# google_api — Shared Google Platform
 
-Listen to your Gmail messages in audio format with a click of a button.
+OAuth2 platform layer for all Google-backed feature apps, plus the
+shared text-to-speech service. The Gmail reader itself moved to the
+`gmail` app (React SPA at `/gmail/`) — see `gmail/AGENTS.md`.
 
 ## Features
 
-- **Gmail Integration**: Fetch and display Gmail messages via Google API
-- **Text-to-Speech**: Convert email content to audio using Google TTS
+- **OAuth2 Authentication**: Secure Google account authentication;
+  per-user credentials stored in `GoogleOAuthCredentials`
+- **Text-to-Speech**: Convert text to audio using Google TTS
 - **Cloud Storage**: Audio files stored in GCP Cloud Storage with 
   automatic 7-day lifecycle deletion
 - **Signed URLs**: Secure, time-limited access to audio files (7-day 
   expiry)
 - **Language Detection**: Automatic language detection for proper 
   pronunciation
-- **OAuth2 Authentication**: Secure Google account authentication
 
 ## Architecture
 
-This app provides core Google API integration utilities used by other 
-apps:
-- **google_api**: OAuth2 authentication, Gmail API, and audio 
-  generation utilities
+This app provides core Google API integration utilities used by 
+feature apps:
+- **gmail**: Gmail reader SPA (separate app, `/gmail/` + `/api/gmail/`)
 - **google_tasks**: Task management (see separate README)
 
 ### Key Components
 
-- **Models**: User authentication and session management
-- **Services** (`utils.py`): Reusable Google API utilities
-- **Views** (`views.py`): Gmail display and audio generation endpoints
-- **Templates**: Bootstrap 5-based responsive UI
+- **Models**: `GoogleOAuthCredentials` — per-user token store
+- **Services** (`utils.py`): OAuth flow, credential refresh, 
+  `text_to_audio()` audio generation
+- **Views** (`views.py`): `login_view`, `callback`, `audio` 
+  (`/text-to-audio` GET endpoint — shared with `single_pages`)
 
 ## Audio Generation Flow
 
@@ -120,10 +122,12 @@ GCS Lifecycle Policy deletes file after 7 days
 
 | URL Pattern | View | Method | Description |
 |------------|------|--------|-------------|
-| `/gmail/` | `gmail` | GET | Gmail message list |
-| `/text-to-audio` | `audio` | GET | Generate audio from text |
-| `/google/auth` | `auth` | GET | Initiate OAuth2 flow |
+| `/login/` | `login_view` | GET | Unified OAuth2 login entry (site `LOGIN_URL`) |
 | `/google/callback` | `callback` | GET | OAuth2 callback handler |
+| `/text-to-audio` | `audio` | GET | Generate audio from text |
+
+The Gmail UI lives in the `gmail` app: `/gmail/` serves the React
+SPA and `/gmail-to-audio` permanently redirects there.
 
 ## API Endpoints
 
@@ -323,11 +327,24 @@ Output: "Check web link for info more text"
 ## Usage
 
 ### Gmail to Audio
-1. Navigate to `/gmail/`
-2. Authenticate with Google (if not already authenticated)
-3. View Gmail messages
-4. Click "Listen" button to generate audio
-5. Audio plays directly from GCS via signed URL
+The reader is a React SPA in the `gmail` app: navigate to `/gmail/`,
+authenticate with Google if bounced to `/login/?next=…`, pick a
+query, and press Play on a message — the SPA fetches signed audio
+URLs via `GET /api/gmail/audio/` which wraps `text_to_audio()`.
+Bookmarks to `/gmail-to-audio?get_messages&query=…` 301-redirect
+there with the query string preserved.
+
+### Adding a new Google integration
+
+New Django app `<feature>` → scope constant in
+`<feature>/services.py` **plus the literal added to
+`ALL_APP_SCOPES`** in `google_api/utils.py` → ninja router in
+`<feature>/api.py` mounted at `/api/<slug>/` (use the shared
+`_adapt`/`_reauth_url`/`GoogleReauthRequired` helpers from
+`django_apps.api`) → Vite entry `frontend/src/<slug>/` mounted at
+`/<slug>/` via `react_app`. Never duplicate OAuth, credential
+storage or login — always go through `google_auth` /
+`get_user_credentials` in this app.
 
 ### Direct Audio Generation
 ```javascript

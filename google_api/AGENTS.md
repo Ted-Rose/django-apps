@@ -1,8 +1,11 @@
 # google_api — Agent Guide
 
-Shared Google OAuth2 layer plus the "Gmail to audio" feature. Other
-apps (google_tasks) depend on this app's auth utilities. Full feature
-docs: `README.md` in this directory.
+The shared Google OAuth2 **platform** plus the text-to-audio service
+(gTTS → GCS signed URLs). The Gmail reader feature moved to the
+`gmail` app in the React rewrite — this app is infrastructure only.
+Feature apps (`gmail`, `google_tasks`) depend on this app's auth
+utilities; `google_api` must never import them. Full docs:
+`README.md` in this directory.
 
 ## Architecture
 
@@ -12,8 +15,12 @@ docs: `README.md` in this directory.
   `request.session['google_credentials']` dict exists only for
   backward compatibility.
 - `utils.py` — all the machinery:
-  - `ALL_APP_SCOPES` — openid, userinfo.email, gmail.readonly, tasks.
-    `login_view` requests all of them at once.
+  - `ALL_APP_SCOPES` — openid, userinfo.email, gmail.readonly,
+    gmail.modify, tasks. `login_view` requests all of them at once.
+    Feature-app scope constants live in `<feature>/services.py`
+    (e.g. `gmail.services.GMAIL_MODIFY_SCOPE`) but are duplicated
+    here as literals on purpose — the platform must not import
+    feature apps.
   - `google_auth(creds, scopes, user)` — central entry point. Returns a
     `Credentials` object **or** a dict
     `{'authorization_url', 'state', 'scopes'}` when reauth is needed.
@@ -32,13 +39,34 @@ docs: `README.md` in this directory.
   - `text_to_audio(text, lang, filename)` — gTTS → upload to GCS
     `recordings/` → v4 signed URL (7 days, matches bucket lifecycle).
     Requires `GCS_AUDIO_BUCKET` env var + GCP credentials.
-  - `get_messages(query, creds)` — Gmail fetch with MIME parsing; has
-    special-case boilerplate stripping for `e-klase.lv` sender.
 - `decorators.py` — `@google_auth_required(scopes=[...])`: redirects to
   `google_api:login` when unauthenticated, scopes missing, or stored
-  credentials are unusable (e.g. revoked refresh token).
-- `views.py` — `login_view` (unified auth entry),
-  `gmail` (`/gmail-to-audio`), `audio` (`/text-to-audio` GET endpoint).
+  credentials are unusable. **Currently unconsumed** — it lost its
+  last caller when the gmail template page was deleted at cutover;
+  kept as platform API for future template-rendered pages.
+- `views.py` — `login_view` (unified auth entry — every feature's
+  reauth bounce points at `google_api:login`, and it's the site's
+  `LOGIN_URL`) and `audio` (`/text-to-audio` GET endpoint — shared
+  TTS service, also fetched by `single_pages/twister.html`; stays
+  unauthenticated until the single_pages rewrite removes that
+  caller). `urls.py` routes `login/`, `google/callback` (the
+  `redirect_uri` registered in Google Cloud Console) and
+  `text-to-audio` — all plain Django views, never ninja ops, and
+  never behind a root-level catch-all.
+
+## Recipe: adding a new Google integration
+
+New Django app `<feature>` → scope constant in
+`<feature>/services.py` **plus the literal added to
+`ALL_APP_SCOPES`** → ninja router in `<feature>/api.py` mounted at
+`/api/<slug>/` (`api.add_router` in `django_apps/urls.py`; use the
+shared `_adapt`/`_reauth_url`/`GoogleReauthRequired` from
+`django_apps.api`) → Vite entry `frontend/src/<slug>/` mounted at
+`/<slug>/` via `react_app`. OAuth, credential storage, refresh and
+login are never duplicated — always go through `google_auth` /
+`get_user_credentials` here. Feature apps must not import other
+feature apps (that's why `_adapt`/`_reauth_url` were promoted to
+`django_apps/api.py`).
 
 ## Gotchas
 

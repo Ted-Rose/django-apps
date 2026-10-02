@@ -1,0 +1,38 @@
+{
+  "nav": {
+    "title": "Gmail to Audio",
+    "tasks": "Tasks"
+  },
+  "reader": {
+    "checkingAccess": "Checking Google access…",
+    "filterTitle": "Filter Emails",
+    "queryLabel": "Enter your Gmail search query:",
+    "queryPlaceholder": "e.g., is:unread",
+    "getEmails": "Get Emails",
+    "loading": "Fetching emails — this can take a while…",
+    "found_zero": "Found {{count}} emails",
+    "found_one": "Found {{count}} email",
+    "found_other": "Found {{count}} emails",
+    "markAllRead": "Mark all as read",
+    "markAllConfirm_zero": "Mark all {{count}} emails as read?",
+    "markAllConfirm_one": "Mark all {{count}} emails as read?",
+    "markAllConfirm_other": "Mark all {{count}} emails as read?",
+    "empty": "No emails found. Use the filter above to fetch emails.",
+    "loadError": "Could not load emails: {{detail}}"
+  },
+  "message": {
+    "showBody": "Show Body",
+    "hideBody": "Hide Body",
+    "markRead": "Mark as read",
+    "read": "Read",
+    "markReadConfirm": "Mark this email as read?",
+    "play": "Play",
+    "playAllFromHere": "Play All From Here",
+    "bodyLabel": "Body:",
+    "idLabel": "ID: {{id}}"
+  },
+  "mutations": {
+    "markReadFailed": "Failed to mark as read: {{detail}}",
+    "audioFailed": "Failed to generate audio: {{detail}}"
+  }
+}

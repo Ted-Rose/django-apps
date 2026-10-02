@@ -7,10 +7,12 @@ enforced on unsafe methods) with JSON 401s instead of redirects,
 plus the google_reauth contract the SPA uses to bounce users into
 the OAuth flow (fetch must never follow Google redirects).
 """
+import json
 from urllib.parse import urlencode
 
 from django.contrib.admin.views.decorators import staff_member_required
-from django.http import Http404
+from django.http import Http404, JsonResponse
+from django.urls import reverse
 from ninja import NinjaAPI
 from ninja.errors import AuthenticationError, HttpError, ValidationError
 from ninja.security import django_auth
@@ -70,6 +72,14 @@ def error_slug(status_code):
     return _ERROR_SLUGS.get(status_code, 'error')
 
 
+# Apps whose SPA is a single-page mount: the API subpath carries no
+# page meaning for them (one page serves all state), so it collapses
+# to the SPA base and only the query string survives —
+# /api/gmail/messages/?query=x → /gmail/?query=x. Unmapped apps keep
+# the /<app>/<sub> rewrite.
+SPA_BASES = {'gmail': '/gmail'}
+
+
 def spa_url_for(request):
     """Map an /api/<app>/<sub> request URL onto the SPA page the user
     should return to after auth. API paths are JSON endpoints, not
@@ -79,13 +89,69 @@ def spa_url_for(request):
     prefix = '/api/'
     if path.startswith(prefix):
         app, _, sub = path[len(prefix):].partition('/')
-        if sub.startswith('dashboard'):
-            # The SPA mounts its dashboard at the app root.
-            sub = ''
-        path = f'/{app}/{sub}'
+        if app in SPA_BASES:
+            path = f'{SPA_BASES[app]}/'
+        else:
+            if sub.startswith('dashboard'):
+                # The SPA mounts its dashboard at the app root.
+                sub = ''
+            path = f'/{app}/{sub}'
     if request.GET:
         path = f'{path}?{request.GET.urlencode()}'
     return path
+
+
+def _reauth_url(request):
+    """Google OAuth login URL whose `next` sends the user back to the
+    SPA page for this request (never to a raw /api/ JSON URL)."""
+    return (
+        f"{reverse('google_api:login')}"
+        f"?{urlencode({'next': spa_url_for(request)})}"
+    )
+
+
+def _adapt(request, response):
+    """Map a mutation view's JsonResponse onto the API contract:
+    reauth_required / missing creds → 401 google_reauth; failures →
+    uniform {error, detail}. Success bodies pass through unchanged.
+    """
+    if not isinstance(response, JsonResponse):
+        return response
+    try:
+        payload = json.loads(response.content)
+    except ValueError:
+        return response
+    if payload.get('reauth_required') or (
+            payload.get('error') == 'No credentials found'):
+        # The view already stored OAuth state in the session when a
+        # flow URL exists; otherwise bounce through /login/ (the same
+        # target the removed views.reauth_redirect used for dead
+        # creds).
+        authorization_url = (
+            payload.get('authorization_url') or _reauth_url(request)
+        )
+        return JsonResponse({
+            'error': 'google_reauth',
+            'authorization_url': authorization_url,
+        }, status=401)
+    if 'success' in payload and not payload['success']:
+        # Non-2xx keeps the view's status verbatim. A 2xx with
+        # success:false is a server-side failure (e.g. sync_view emits
+        # {'success': False} with status 200), so floor at 500 — a 400
+        # would misreport it as a client error.
+        status = response.status_code
+        if status < 400:
+            status = 500
+        extra = {
+            k: v for k, v in payload.items()
+            if k not in ('success', 'error')
+        }
+        return JsonResponse({
+            'error': error_slug(status),
+            'detail': payload.get('error') or 'Operation failed',
+            **extra,
+        }, status=status)
+    return response
 
 
 @api.exception_handler(AuthenticationError)

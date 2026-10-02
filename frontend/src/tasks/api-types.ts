@@ -22,6 +22,89 @@ export interface paths {
         patch: operations["django_apps_me_patch_me"];
         trace?: never;
     };
+    "/api/gmail/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status
+         * @description API equivalent of @google_auth_required's eager check: the SPA
+         *     calls this on mount and navigates to /login/?next=<spa url>
+         *     itself when has_credentials is false — same eager bounce the
+         *     decorator did before rendering gmail.html.
+         */
+        get: operations["gmail_api_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gmail/messages/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Messages
+         * @description Port of the gmail view's ?get_messages branch — same
+         *     get_user_credentials → services.get_messages call path.
+         */
+        get: operations["gmail_api_messages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gmail/audio/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audio
+         * @description Session-authenticated sibling of /text-to-audio (which stays
+         *     public for twister.html). Same {audio_url} shape; the legacy 500
+         *     maps to the API's 502 upstream_error taxonomy.
+         */
+        get: operations["gmail_api_audio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gmail/mark-read/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Read */
+        post: operations["gmail_api_mark_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/dashboard/": {
         parameters: {
             query?: never;
@@ -981,6 +1064,41 @@ export interface components {
         LanguageIn: {
             /** Language */
             language: string;
+        };
+        /** GmailStatusOut */
+        GmailStatusOut: {
+            /** Has Credentials */
+            has_credentials: boolean;
+            /** Scopes */
+            scopes: string[];
+        };
+        /** GmailMessageOut */
+        GmailMessageOut: {
+            /** Id */
+            id: string;
+            /** Subject */
+            subject?: string | null;
+            /** Sender */
+            sender?: string | null;
+            /** Body */
+            body?: string | null;
+        };
+        /** GmailMessagesOut */
+        GmailMessagesOut: {
+            /** Messages */
+            messages: components["schemas"]["GmailMessageOut"][];
+            /** Query */
+            query: string;
+        };
+        /** AudioOut */
+        AudioOut: {
+            /** Audio Url */
+            audio_url: string;
+        };
+        /** MarkReadIn */
+        MarkReadIn: {
+            /** Message Ids */
+            message_ids: string[];
         };
         /** DashboardOut */
         DashboardOut: {
@@ -2010,6 +2128,94 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MeOut"];
                 };
+            };
+        };
+    };
+    gmail_api_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GmailStatusOut"];
+                };
+            };
+        };
+    };
+    gmail_api_messages: {
+        parameters: {
+            query?: {
+                query?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GmailMessagesOut"];
+                };
+            };
+        };
+    };
+    gmail_api_audio: {
+        parameters: {
+            query?: {
+                text?: string;
+                lang?: string | null;
+                filename?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AudioOut"];
+                };
+            };
+        };
+    };
+    gmail_api_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReadIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
