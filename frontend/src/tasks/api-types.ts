@@ -1466,6 +1466,35 @@ export interface components {
              */
             username: string;
         };
+        /**
+         * SyncAccountOut
+         * @description Per-account sync outcome — makes 'fetched but empty'
+         *     distinguishable from 'skipped'/'failed' in the UI.
+         */
+        SyncAccountOut: {
+            /** Account */
+            account: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "synced" | "failed" | "skipped";
+            /**
+             * Created
+             * @default 0
+             */
+            created: number;
+            /**
+             * Updated
+             * @default 0
+             */
+            updated: number;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        };
         /** SyncOut */
         SyncOut: {
             /** Success */
@@ -1478,6 +1507,11 @@ export interface components {
             updated: number;
             /** Failed */
             failed: number;
+            /**
+             * Accounts
+             * @default []
+             */
+            accounts: components["schemas"]["SyncAccountOut"][];
         };
         /** SyncIn */
         SyncIn: {

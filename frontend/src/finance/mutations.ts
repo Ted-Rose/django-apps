@@ -59,6 +59,16 @@ export function useSyncTransactions() {
       if (data?.message) {
         pushToast(data.message, data.success ? 'success' : 'warning');
       }
+      // Per-account breakdown — the aggregate message alone can't
+      // distinguish "fetched, nothing new" from "skipped/failed".
+      const breakdown = (data?.accounts ?? [])
+        .map((a) =>
+          a.status === 'synced'
+            ? `${a.account}: +${a.created} new, ${a.updated} updated`
+            : `${a.account}: ${a.status} — ${a.detail}`,
+        )
+        .join(' · ');
+      if (breakdown) pushToast(breakdown, 'info');
     },
     onError: (error) =>
       pushToast(`Sync failed: ${errorDetail(error)}`, 'warning'),

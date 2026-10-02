@@ -361,6 +361,16 @@ class SyncIn(Schema):
     account: Optional[int] = None
 
 
+class SyncAccountOut(Schema):
+    """Per-account sync outcome — makes 'fetched but empty'
+    distinguishable from 'skipped'/'failed' in the UI."""
+    account: str
+    status: Literal['synced', 'failed', 'skipped']
+    created: int = 0
+    updated: int = 0
+    detail: str = ''
+
+
 class MessageOut(Schema):
     success: bool
     message: str
@@ -380,6 +390,7 @@ class SyncOut(MessageOut):
     created: int
     updated: int
     failed: int
+    accounts: List[SyncAccountOut] = []
 
 
 class RefreshOut(MessageOut):
@@ -910,31 +921,65 @@ def share_account(request, account_id: int, payload: ShareIn):
 @router.post('/transactions/sync/', response=SyncOut)
 def sync_transactions(request, payload: Optional[SyncIn] = None):
     """Fetch latest transactions for the user's linked accounts."""
-    accounts = Account.objects.for_user(request.user).filter(
-        requisition__status='LN'
+    visible = list(
+        Account.objects.for_user(request.user)
+        .select_related('requisition')
     )
-    if not accounts.exists():
+    accounts = [
+        a for a in visible if a.requisition.status == 'LN'
+    ]
+    skipped = [
+        {
+            'account': str(a),
+            'status': 'skipped',
+            'created': 0,
+            'updated': 0,
+            'detail': (
+                f'Requisition status is {a.requisition.status} '
+                f'(not LN) — bank must be relinked.'
+            ),
+        }
+        for a in visible
+        if a.requisition.status != 'LN'
+    ]
+    if not accounts:
         return {
             'success': False,
             'message': 'No linked bank accounts to sync.',
             'created': 0,
             'updated': 0,
             'failed': 0,
+            'accounts': skipped,
         }
 
     client = GoCardlessClient()
     created = updated = failed = 0
+    results = []
     for account in accounts:
         try:
             c, u = sync_account_transactions(client, account)
             created += c
             updated += u
+            results.append({
+                'account': str(account),
+                'status': 'synced',
+                'created': c,
+                'updated': u,
+                'detail': '',
+            })
         except Exception as exc:
             failed += 1
             logger.exception(
                 'Transaction sync failed for account %s: %s',
                 account.account_id, exc,
             )
+            results.append({
+                'account': str(account),
+                'status': 'failed',
+                'created': 0,
+                'updated': 0,
+                'detail': str(exc)[:200],
+            })
 
     if failed:
         message = (
@@ -952,6 +997,7 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
         'created': created,
         'updated': updated,
         'failed': failed,
+        'accounts': results + skipped,
     }
 
 

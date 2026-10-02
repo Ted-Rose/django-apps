@@ -28,6 +28,7 @@ export type ConnectOut = components['schemas']['ConnectOut'];
 export type ShareIn = components['schemas']['ShareIn'];
 export type SyncIn = components['schemas']['SyncIn'];
 export type SyncOut = components['schemas']['SyncOut'];
+export type SyncAccountOut = components['schemas']['SyncAccountOut'];
 export type RefreshOut = components['schemas']['RefreshOut'];
 export type LimitSaveIn = components['schemas']['LimitSaveIn'];
 export type RuleSaveIn = components['schemas']['RuleSaveIn'];

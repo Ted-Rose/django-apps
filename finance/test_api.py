@@ -775,6 +775,9 @@ class SyncAndBalancesApiTests(ApiTestCase):
         self.assertEqual(
             body['message'], 'No linked bank accounts to sync.'
         )
+        self.assertEqual(len(body['accounts']), 1)
+        self.assertEqual(body['accounts'][0]['status'], 'skipped')
+        self.assertIn('CR', body['accounts'][0]['detail'])
 
     def test_sync_accepts_missing_body(self):
         """The SPA posts no body when no account filter is set —
@@ -810,6 +813,47 @@ class SyncAndBalancesApiTests(ApiTestCase):
         self.assertEqual(body['created'], 1)
         self.assertEqual(body['failed'], 0)
         self.assertIn('Synced 1 new transactions', body['message'])
+        self.assertEqual(len(body['accounts']), 1)
+        self.assertEqual(body['accounts'][0]['status'], 'synced')
+        self.assertEqual(body['accounts'][0]['created'], 1)
+
+    def test_sync_itemizes_synced_failed_and_skipped_accounts(self):
+        """Per-account results make 'fetched but empty'
+        distinguishable from skipped (non-LN requisition) and
+        failed (upstream error) — the diagnosis surface for
+        'sync only fetched one account'."""
+        client = MagicMock()
+
+        def fetch(account_id, date_from=None):
+            if account_id == 'acc-2':
+                raise GoCardlessError(429, 'rate limited')
+            return {'booked': []}
+
+        client.fetch_transactions.side_effect = fetch
+        make_account(self.user, self.req, account_id='acc-2')
+        stale_req = make_requisition(
+            self.user, requisition_id='req-stale', status='EX'
+        )
+        make_account(self.user, stale_req, account_id='acc-3')
+        with patch(
+            'finance.api.GoCardlessClient', return_value=client
+        ):
+            resp = self.post_json('/transactions/sync/')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertFalse(body['success'])
+        self.assertEqual(body['failed'], 1)
+        by_status = {
+            a['status']: a['account'] for a in body['accounts']
+        }
+        self.assertEqual(by_status['synced'], 'acc-1')
+        self.assertEqual(by_status['failed'], 'acc-2')
+        self.assertEqual(by_status['skipped'], 'acc-3')
+        detail = {
+            a['account']: a['detail'] for a in body['accounts']
+        }
+        self.assertIn('429', detail['acc-2'])
+        self.assertIn('EX', detail['acc-3'])
 
     def test_refresh_balances_without_included_accounts(self):
         resp = self.post_json('/balances/refresh/')

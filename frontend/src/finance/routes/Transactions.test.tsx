@@ -366,6 +366,53 @@ describe('Transactions', () => {
     );
   });
 
+  it('toasts a per-account breakdown after sync', async () => {
+    mockedApiGet.mockResolvedValue(makeTransactions());
+    mockedApiPost.mockResolvedValue({
+      success: false,
+      message: 'Synced 1 new transactions, but 1 account(s) failed.',
+      created: 1,
+      updated: 0,
+      failed: 1,
+      accounts: [
+        {
+          account: 'Everyday account',
+          status: 'synced',
+          created: 1,
+          updated: 0,
+          detail: '',
+        },
+        {
+          account: 'Savings',
+          status: 'failed',
+          created: 0,
+          updated: 0,
+          detail: 'GoCardless API error 429',
+        },
+        {
+          account: 'Joint',
+          status: 'skipped',
+          created: 0,
+          updated: 0,
+          detail: 'Requisition status is EX (not LN)',
+        },
+      ],
+    });
+    renderTransactions();
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Sync transactions/ }),
+    );
+    expect(
+      await screen.findByText(/Everyday account: \+1 new, 0 updated/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Savings: failed — GoCardless API error 429/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Joint: skipped — Requisition status is EX/),
+    ).toBeInTheDocument();
+  });
+
   it('opens a prefilled rule drawer from a transaction row', async () => {
     // The drawer needs the rules payload (categories, match types,
     // scopes, operators) — fetched lazily on the first click.
