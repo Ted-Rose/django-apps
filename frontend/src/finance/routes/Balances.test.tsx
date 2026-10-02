@@ -91,11 +91,10 @@ describe('Balances', () => {
     // (Scoped to the account card — the same amount also feeds the
     // per-currency Total stat cards.)
     expect(screen.getByText('LV80BANK0000435195001')).toBeInTheDocument();
-    const card = screen
-      .getByText('LV80BANK0000435195001')
-      .closest('.fin-card');
-    expect(within(card as HTMLElement).getByText(/123\.45/))
-      .toBeInTheDocument();
+    const card = screen.getByText('LV80BANK0000435195001').closest('.fin-card');
+    expect(
+      within(card as HTMLElement).getByText(/123\.45/),
+    ).toBeInTheDocument();
     expect(screen.getByText('interimAvailable')).toBeInTheDocument();
     const expected = new Date('2025-01-15T10:30:00Z').toLocaleString();
     expect(screen.getByText(`Last updated: ${expected}`)).toBeInTheDocument();
@@ -157,18 +156,16 @@ describe('Balances', () => {
       ]),
     );
     renderBalances();
-    const card = (
-      await screen.findByText('Everyday account')
-    ).closest('.fin-card') as HTMLElement;
+    const card = (await screen.findByText('Everyday account')).closest(
+      '.fin-card',
+    ) as HTMLElement;
     expect(
       within(card).getByText(/Alert below 50\.00 EUR/),
     ).toBeInTheDocument();
     const other = screen
       .getByText('Shared savings')
       .closest('.fin-card') as HTMLElement;
-    expect(
-      within(other).queryByText(/Alert below/),
-    ).not.toBeInTheDocument();
+    expect(within(other).queryByText(/Alert below/)).not.toBeInTheDocument();
   });
 
   it('hides the total when no account has a balance yet', async () => {

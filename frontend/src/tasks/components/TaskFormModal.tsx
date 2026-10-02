@@ -106,9 +106,7 @@ export function TaskFormModal({
   return (
     <Modal
       show={show}
-      title={
-        mode === 'create' ? t('form.createTitle') : t('form.editTitle')
-      }
+      title={mode === 'create' ? t('form.createTitle') : t('form.editTitle')}
       onClose={onClose}
       footer={
         <>
@@ -135,9 +133,7 @@ export function TaskFormModal({
                 }`}
               />
             )}{' '}
-            {mode === 'create'
-              ? t('form.createSubmit')
-              : t('form.saveSubmit')}
+            {mode === 'create' ? t('form.createSubmit') : t('form.saveSubmit')}
           </button>
         </>
       }
@@ -155,8 +151,7 @@ export function TaskFormModal({
         )}
         <div className="mb-3">
           <label htmlFor="taskFormTitle" className="form-label">
-            {t('form.titleLabel')}{' '}
-            <span className="text-danger">*</span>
+            {t('form.titleLabel')} <span className="text-danger">*</span>
           </label>
           <input
             type="text"

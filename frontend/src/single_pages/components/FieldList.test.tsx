@@ -21,15 +21,9 @@ describe('FieldList', () => {
   it('appends an empty field via Pievienot lauku', () => {
     const onChange = vi.fn();
     render(
-      <FieldList
-        label="Spelētāji"
-        values={['Kārlis']}
-        onChange={onChange}
-      />,
+      <FieldList label="Spelētāji" values={['Kārlis']} onChange={onChange} />,
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Pievienot lauku' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Pievienot lauku' }));
     expect(onChange).toHaveBeenCalledWith(['Kārlis', '']);
   });
 
@@ -42,9 +36,7 @@ describe('FieldList', () => {
         onChange={onChange}
       />,
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Remove Spelētāji 2' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Spelētāji 2' }));
     expect(onChange).toHaveBeenCalledWith(['Kārlis']);
   });
 });

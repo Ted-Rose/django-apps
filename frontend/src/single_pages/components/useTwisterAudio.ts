@@ -23,9 +23,7 @@ export function useTwisterAudio() {
 
   /** Fetch (once per unique non-empty text) and cache every URL. */
   const prefetch = useCallback(async (texts: string[]) => {
-    const unique = new Set(
-      texts.map((t) => t.trim()).filter((t) => t !== ''),
-    );
+    const unique = new Set(texts.map((t) => t.trim()).filter((t) => t !== ''));
     await Promise.all(
       [...unique].map(async (text) => {
         const key = hashOf(text);

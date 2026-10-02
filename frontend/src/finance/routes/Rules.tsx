@@ -61,13 +61,8 @@ export default function Rules() {
   return (
     <>
       <FinanceNavBar />
-      <PageShell
-        title={t('rules.title')}
-        subtitle={t('rules.subtitle')}
-      >
-        {isPending && (
-          <LoadingSkeleton label={t('rules.loading')} rows={5} />
-        )}
+      <PageShell title={t('rules.title')} subtitle={t('rules.subtitle')}>
+        {isPending && <LoadingSkeleton label={t('rules.loading')} rows={5} />}
         {isError && (
           <ErrorState
             error={error}
@@ -290,9 +285,7 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
           ))}
         </ul>
       ) : (
-        <p className="text-muted small mb-0">
-          {t('rules.emptyCategories')}
-        </p>
+        <p className="text-muted small mb-0">{t('rules.emptyCategories')}</p>
       )}
     </CollapsibleCard>
   );
@@ -497,9 +490,7 @@ function ConditionSummary({ rule, data }: { rule: RuleOut; data: RulesOut }) {
   // Server values are snake/upper case (starts_with, AND); catalog
   // keys are camel/lower case (startsWith, and).
   const catalogKey = (value: string) =>
-    value.toLowerCase().replace(/_([a-z])/g, (_, c: string) =>
-      c.toUpperCase(),
-    );
+    value.toLowerCase().replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
   const matchLabel = (value: string) =>
     t(`server:matchTypes.${catalogKey(value)}`, {
       defaultValue:
@@ -508,8 +499,7 @@ function ConditionSummary({ rule, data }: { rule: RuleOut; data: RulesOut }) {
   const scopeLabel = (value: string) =>
     t(`server:scopes.${catalogKey(value)}`, {
       defaultValue:
-        data.counterparty_scopes.find((s) => s.value === value)?.label ??
-        value,
+        data.counterparty_scopes.find((s) => s.value === value)?.label ?? value,
     }).toLowerCase();
 
   return (

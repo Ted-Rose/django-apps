@@ -6,11 +6,7 @@ import Accounts from './Accounts';
 import { apiGet, apiPost } from '../../shared/api/client';
 import { ApiError } from '../../shared/api/errors';
 import { clearToasts } from '../../shared/toasts';
-import type {
-  AccountOut,
-  AccountsOut,
-  PushConfigOut,
-} from '../api';
+import type { AccountOut, AccountsOut, PushConfigOut } from '../api';
 
 vi.mock('../../shared/api/client', () => ({
   apiGet: vi.fn(),
@@ -39,9 +35,7 @@ function makeAccount(overrides: Partial<AccountOut> = {}): AccountOut {
   };
 }
 
-function makePushConfig(
-  overrides: Partial<PushConfigOut> = {},
-): PushConfigOut {
+function makePushConfig(overrides: Partial<PushConfigOut> = {}): PushConfigOut {
   return {
     vapid_public_key: 'pub-key',
     subscription_count: 1,
@@ -174,9 +168,7 @@ describe('Accounts', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Set balance alert' }),
     );
-    const input = await screen.findByLabelText(
-      'Alert threshold in EUR',
-    );
+    const input = await screen.findByLabelText('Alert threshold in EUR');
     fireEvent.change(input, { target: { value: '50.00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
@@ -185,9 +177,7 @@ describe('Accounts', () => {
         { threshold: '50.00' },
       ),
     );
-    expect(
-      await screen.findByText('Balance alert saved.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Balance alert saved.')).toBeInTheDocument();
     // The form collapses after a successful save.
     expect(
       screen.queryByLabelText('Alert threshold in EUR'),
@@ -208,9 +198,7 @@ describe('Accounts', () => {
         name: 'Balance alert: 50.00 EUR',
       }),
     );
-    const input = await screen.findByLabelText(
-      'Alert threshold in EUR',
-    );
+    const input = await screen.findByLabelText('Alert threshold in EUR');
     expect(input).toHaveValue(50);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     await waitFor(() =>
@@ -225,10 +213,7 @@ describe('Accounts', () => {
 
   it('warns when no devices are subscribed to push', async () => {
     mockedApiGet.mockResolvedValue(
-      makeAccounts(
-        [makeAccount()],
-        makePushConfig({ subscription_count: 0 }),
-      ),
+      makeAccounts([makeAccount()], makePushConfig({ subscription_count: 0 })),
     );
     renderAccounts();
     fireEvent.click(

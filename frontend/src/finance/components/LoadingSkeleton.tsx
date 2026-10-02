@@ -22,11 +22,7 @@ export function LoadingSkeleton({
       role="status"
     >
       {Array.from({ length: rows }, (_, i) => (
-        <div
-          key={i}
-          className="fin-skeleton mb-2"
-          style={{ height }}
-        />
+        <div key={i} className="fin-skeleton mb-2" style={{ height }} />
       ))}
     </div>
   );

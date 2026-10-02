@@ -188,8 +188,7 @@ function UnarchiveButton({ taskId }: { taskId: string }) {
         unarchiveTask.mutate(taskId);
       }}
     >
-      <i className="bi bi-arrow-counterclockwise" />{' '}
-      {t('archived.unarchive')}
+      <i className="bi bi-arrow-counterclockwise" /> {t('archived.unarchive')}
     </button>
   );
 }
@@ -215,9 +214,7 @@ function ArchivedTaskCard({
                 <span
                   className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
                   role="button"
-                  title={
-                    task.is_starred ? t('task.unstar') : t('task.star')
-                  }
+                  title={task.is_starred ? t('task.unstar') : t('task.star')}
                   onClick={(event) => {
                     event.stopPropagation();
                     actionHistory.recordAction({

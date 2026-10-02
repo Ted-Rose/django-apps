@@ -153,26 +153,14 @@ export default function Twister() {
       </a>
       <h1>Spēlējam Twister!</h1>
       <form onSubmit={(e) => e.preventDefault()}>
-        <FieldList
-          label="Spelētāji"
-          values={players}
-          onChange={setPlayers}
-        />
-        <FieldList
-          label="Ķermeņa daļas"
-          values={parts}
-          onChange={setParts}
-        />
+        <FieldList label="Spelētāji" values={players} onChange={setPlayers} />
+        <FieldList label="Ķermeņa daļas" values={parts} onChange={setParts} />
         <FieldList
           label="Dzīvnieku lauki (ja nav - atstāt tukšu)"
           values={animals}
           onChange={setAnimals}
         />
-        <FieldList
-          label="Krāsu lauki"
-          values={colors}
-          onChange={setColors}
-        />
+        <FieldList label="Krāsu lauki" values={colors} onChange={setColors} />
         <div className="timeout-container">
           <div className="field-list-label">
             <label htmlFor="timeout-value">Starplaiks (s):</label>
@@ -185,19 +173,13 @@ export default function Twister() {
             min="0"
           />
         </div>
-        <button type="button" onClick={() => void start()}
-          disabled={loading}>
+        <button type="button" onClick={() => void start()} disabled={loading}>
           {loading ? 'Ielādē audio…' : 'Spēlēt!'}
         </button>
         {error && <div className="form-error">{error}</div>}
       </form>
       <div className="pause-row">
-        <input
-          className="checkbox"
-          type="checkbox"
-          id="Pause"
-          ref={pauseRef}
-        />
+        <input className="checkbox" type="checkbox" id="Pause" ref={pauseRef} />
         <label htmlFor="Pause">Pauze</label>
       </div>
       {playing && move && move.length > 0 && (

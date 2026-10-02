@@ -57,10 +57,7 @@ export default function Balances() {
                 </>
               ) : (
                 <>
-                  <i
-                    className="bi bi-arrow-repeat"
-                    aria-hidden="true"
-                  />{' '}
+                  <i className="bi bi-arrow-repeat" aria-hidden="true" />{' '}
                   {t('balances.getLatest')}
                 </>
               )}
@@ -104,10 +101,7 @@ export default function Balances() {
               </div>
             </>
           ) : (
-            <EmptyState
-              icon="wallet2"
-              title={t('balances.emptyTitle')}
-            >
+            <EmptyState icon="wallet2" title={t('balances.emptyTitle')}>
               <Trans
                 i18nKey="balances.emptyBody"
                 ns="finance"
@@ -135,8 +129,7 @@ interface LastBalance {
 function totalByCurrency(accounts: AccountOut[]): [string, number][] {
   const totals = new Map<string, number>();
   for (const account of accounts) {
-    const amount = (account.last_balance as LastBalance | null)
-      ?.balanceAmount;
+    const amount = (account.last_balance as LastBalance | null)?.balanceAmount;
     const value = Number(amount?.amount);
     if (!amount?.currency || Number.isNaN(value)) continue;
     totals.set(amount.currency, (totals.get(amount.currency) ?? 0) + value);
@@ -163,9 +156,7 @@ function BalanceCard({ account }: { account: AccountOut }) {
         <h2 className="h6 fw-semibold mb-1">
           {account.name || account.iban || account.account_id}
         </h2>
-        <p className="text-muted small mb-3 text-break">
-          {account.iban}
-        </p>
+        <p className="text-muted small mb-3 text-break">{account.iban}</p>
         {balance ? (
           <>
             <MoneyText
@@ -175,9 +166,7 @@ function BalanceCard({ account }: { account: AccountOut }) {
             />
             {(balance.balanceType || updatedLabel) && (
               <p className="balances-card-footer mb-0">
-                {balance.balanceType && (
-                  <span>{balance.balanceType}</span>
-                )}
+                {balance.balanceType && <span>{balance.balanceType}</span>}
                 {balance.balanceType && updatedLabel && ' · '}
                 {updatedLabel && (
                   <span>
@@ -188,9 +177,7 @@ function BalanceCard({ account }: { account: AccountOut }) {
             )}
           </>
         ) : (
-          <p className="text-muted small mb-0">
-            {t('balances.noBalance')}
-          </p>
+          <p className="text-muted small mb-0">{t('balances.noBalance')}</p>
         )}
         {account.balance_alert != null && (
           <p className="balances-card-footer mb-0 mt-2">

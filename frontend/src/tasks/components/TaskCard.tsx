@@ -134,9 +134,7 @@ export function TaskCard({
                 <span
                   className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
                   role="button"
-                  title={
-                    task.is_starred ? t('task.unstar') : t('task.star')
-                  }
+                  title={task.is_starred ? t('task.unstar') : t('task.star')}
                   onClick={(event) => {
                     event.stopPropagation();
                     // task_actions.js toggleStar records before POSTing.

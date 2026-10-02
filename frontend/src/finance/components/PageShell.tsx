@@ -22,9 +22,7 @@ export function PageShell({
 }) {
   return (
     <div className="fin-app">
-      <div
-        className={`container fin-page${narrow ? ' fin-page-narrow' : ''}`}
-      >
+      <div className={`container fin-page${narrow ? ' fin-page-narrow' : ''}`}>
         <header className="fin-page-header d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
           <div>
             <h1 className="mb-1">{title}</h1>

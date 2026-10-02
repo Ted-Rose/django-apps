@@ -8,11 +8,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import ErrorState from '../components/ErrorState';
 import Toasts from '../../shared/components/Toasts';
-import {
-  fetchAccounts,
-  type AccountOut,
-  type PushConfigOut,
-} from '../api';
+import { fetchAccounts, type AccountOut, type PushConfigOut } from '../api';
 import {
   useDeleteBalanceAlert,
   useSaveBalanceAlert,
@@ -117,20 +113,16 @@ function AccountRow({
   const [threshold, setThreshold] = useState('');
 
   const toggling = toggle.isPending && toggle.variables === account.id;
-  const sharing =
-    share.isPending && share.variables?.accountId === account.id;
+  const sharing = share.isPending && share.variables?.accountId === account.id;
   const savingAlert =
-    saveAlert.isPending &&
-    saveAlert.variables?.accountId === account.id;
+    saveAlert.isPending && saveAlert.variables?.accountId === account.id;
   const removingAlert =
     deleteAlert.isPending && deleteAlert.variables === account.id;
   const details = [account.iban, account.institution_id, account.currency]
     .filter(Boolean)
     .join(' · ');
   const switchId = `balance-check-${account.id}`;
-  const lastBalance = (account.last_balance ?? null) as
-    | LastBalance
-    | null;
+  const lastBalance = (account.last_balance ?? null) as LastBalance | null;
   const lastAmount = lastBalance?.balanceAmount;
 
   const openAlertForm = () => {
@@ -170,10 +162,7 @@ function AccountRow({
             </label>
           </div>
           {toggling && (
-            <span
-              className="spinner-border spinner-border-sm"
-              role="status"
-            />
+            <span className="spinner-border spinner-border-sm" role="status" />
           )}
           {!alertOpen && (
             <button
@@ -201,9 +190,7 @@ function AccountRow({
             >
               <i
                 className={`bi ${
-                  account.balance_alert != null
-                    ? 'bi-bell-fill'
-                    : 'bi-bell'
+                  account.balance_alert != null ? 'bi-bell-fill' : 'bi-bell'
                 }`}
               />
             </button>

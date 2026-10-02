@@ -164,9 +164,7 @@ export default function Limits() {
                       )}
                       <span
                         className={`ms-auto small ${
-                          overCount > 0
-                            ? 'text-danger'
-                            : 'limits-on-track'
+                          overCount > 0 ? 'text-danger' : 'limits-on-track'
                         }`}
                       >
                         <i
@@ -212,9 +210,7 @@ export default function Limits() {
             <div ref={formSectionRef} className="limits-section">
               <CollapsibleCard
                 title={
-                  editing
-                    ? t('limits.formTitleEdit')
-                    : t('limits.formTitleNew')
+                  editing ? t('limits.formTitleEdit') : t('limits.formTitleNew')
                 }
                 open={formOpen}
                 onToggle={() => setFormOpen((open) => !open)}

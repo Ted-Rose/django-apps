@@ -85,9 +85,7 @@ describe('App notification drain', () => {
     // mark-read POST.
     expect(await screen.findByText(/No accounts yet/)).toBeInTheDocument();
     await waitFor(() =>
-      expect(mockedApiGet).toHaveBeenCalledWith(
-        '/api/finance/notifications/',
-      ),
+      expect(mockedApiGet).toHaveBeenCalledWith('/api/finance/notifications/'),
     );
     expect(mockedApiPost).not.toHaveBeenCalled();
   });

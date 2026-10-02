@@ -7,10 +7,7 @@
  */
 import i18n from './i18n';
 
-export function fmtMoney(
-  amount: number | string,
-  currency: string,
-): string {
+export function fmtMoney(amount: number | string, currency: string): string {
   return new Intl.NumberFormat(i18n.language, {
     style: 'currency',
     currency,

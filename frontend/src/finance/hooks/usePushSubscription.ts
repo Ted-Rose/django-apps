@@ -154,9 +154,7 @@ export function usePushSubscription(
       setSubscribed(true);
       await refreshCount();
     } catch (error) {
-      setStatus(
-        `— ${describeError(error, t('limits.push.subscribeFailed'))}`,
-      );
+      setStatus(`— ${describeError(error, t('limits.push.subscribeFailed'))}`);
     } finally {
       setBusy(false);
     }

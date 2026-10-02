@@ -69,8 +69,7 @@ export default function ConnectBank() {
               onSubmit={(event) => {
                 event.preventDefault();
                 const value = String(
-                  new FormData(event.currentTarget).get('country') ??
-                    '',
+                  new FormData(event.currentTarget).get('country') ?? '',
                 ).trim();
                 setSearchParams(value ? { country: value } : {});
               }}
@@ -99,10 +98,7 @@ export default function ConnectBank() {
           {isPending && country && (
             <section className="connect-step">
               <h2 className="connect-step-title">
-                <span
-                  className="connect-step-num"
-                  aria-hidden="true"
-                >
+                <span className="connect-step-num" aria-hidden="true">
                   2
                 </span>
                 {t('connect.stepBank')}
@@ -121,29 +117,22 @@ export default function ConnectBank() {
                 onSubmit={(event) => {
                   event.preventDefault();
                   const institutionId = String(
-                    new FormData(event.currentTarget).get(
-                      'institution_id',
-                    ) ?? '',
+                    new FormData(event.currentTarget).get('institution_id') ??
+                      '',
                   );
                   if (institutionId) connect.mutate(institutionId);
                 }}
               >
                 <fieldset className="connect-step-fieldset">
                   <legend className="connect-step-title">
-                    <span
-                      className="connect-step-num"
-                      aria-hidden="true"
-                    >
+                    <span className="connect-step-num" aria-hidden="true">
                       2
                     </span>
                     {t('connect.stepBank')}
                   </legend>
                   <div className="connect-banks">
                     {institutions.map((institution, index) => (
-                      <label
-                        key={institution.id}
-                        className="connect-bank"
-                      >
+                      <label key={institution.id} className="connect-bank">
                         <input
                           type="radio"
                           name="institution_id"

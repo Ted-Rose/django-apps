@@ -13,11 +13,7 @@ interface FieldListProps {
  * Empty rows are dropped by the caller when the game starts — the
  * template's removeEmptyFields() parity.
  */
-export default function FieldList({
-  label,
-  values,
-  onChange,
-}: FieldListProps) {
+export default function FieldList({ label, values, onChange }: FieldListProps) {
   const setValue = (index: number, value: string) =>
     onChange(values.map((v, i) => (i === index ? value : v)));
   const addField = () => onChange([...values, '']);

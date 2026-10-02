@@ -72,7 +72,10 @@ test.describe('unauthenticated', () => {
   });
 
   test('the API answers 401 without a session', async ({ request }) => {
-    for (const url of ['/api/single_pages/spoki/', '/api/single_pages/tts/?text=x']) {
+    for (const url of [
+      '/api/single_pages/spoki/',
+      '/api/single_pages/tts/?text=x',
+    ]) {
       const response = await request.get(url);
       expect(response.status()).toBe(401);
     }
@@ -107,9 +110,7 @@ test.describe('authenticated smoke', () => {
     await page.goto('/twister');
 
     // React mounted with the template's default field values.
-    await expect(page.locator('#root')).not.toContainText(
-      'Loading React app',
-    );
+    await expect(page.locator('#root')).not.toContainText('Loading React app');
     await expect(
       page.getByRole('textbox', { name: 'Spelētāji 1' }),
     ).toHaveValue('Kārlis');
@@ -141,8 +142,9 @@ test.describe('authenticated smoke', () => {
       page.getByRole('heading', { name: 'Smoke joki' }),
     ).toBeVisible();
     await expect(page.getByText('smieklīgi')).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: /spoki\.lv/ }),
-    ).toHaveAttribute('href', 'https://spoki.lv/joki/x/1');
+    await expect(page.getByRole('link', { name: /spoki\.lv/ })).toHaveAttribute(
+      'href',
+      'https://spoki.lv/joki/x/1',
+    );
   });
 });

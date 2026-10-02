@@ -43,8 +43,7 @@ export function SecondaryLabelDropdown({
     <Dropdown
       label={
         <>
-          <i className="bi bi-funnel" />{' '}
-          {secondaryLabel || t('labels.all')}
+          <i className="bi bi-funnel" /> {secondaryLabel || t('labels.all')}
         </>
       }
       buttonStyle={buttonStyle}
@@ -67,9 +66,7 @@ export function SecondaryLabelDropdown({
             <hr className="dropdown-divider" />
           </li>
           <li>
-            <h6 className="dropdown-header">
-              {t('labels.filterByLabel')}
-            </h6>
+            <h6 className="dropdown-header">{t('labels.filterByLabel')}</h6>
           </li>
           {labels.map((label) => (
             <li key={label.id}>

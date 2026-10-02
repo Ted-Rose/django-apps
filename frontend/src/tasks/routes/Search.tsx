@@ -100,9 +100,7 @@ export default function Search() {
       onClick: () => navigate(backTarget),
     },
     {
-      label: syncMutation.isPending
-        ? t('menu.syncing')
-        : t('menu.syncNow'),
+      label: syncMutation.isPending ? t('menu.syncing') : t('menu.syncNow'),
       icon: 'arrow-repeat',
       btn_class: 'btn-light',
       onClick: () => syncMutation.mutate(),
@@ -230,9 +228,7 @@ function SearchResultCard({ task }: { task: TaskOut }) {
                 <span
                   className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
                   role="button"
-                  title={
-                    task.is_starred ? t('task.unstar') : t('task.star')
-                  }
+                  title={task.is_starred ? t('task.unstar') : t('task.star')}
                   onClick={(event) => {
                     event.stopPropagation();
                     actionHistory.recordAction({

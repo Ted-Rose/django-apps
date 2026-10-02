@@ -5,7 +5,6 @@
  */
 export function hashOf(text: string): string {
   return (
-    'hash' +
-    text.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)
+    'hash' + text.split('').reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0)
   );
 }

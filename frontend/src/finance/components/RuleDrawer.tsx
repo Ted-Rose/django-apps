@@ -515,9 +515,7 @@ export function RuleDrawer({
                     <th>{t('rules.drawer.colDate')}</th>
                     <th>{t('rules.drawer.colCounterparty')}</th>
                     <th>{t('rules.drawer.colDescription')}</th>
-                    <th className="text-end">
-                      {t('rules.drawer.colAmount')}
-                    </th>
+                    <th className="text-end">{t('rules.drawer.colAmount')}</th>
                     <th>{t('rules.drawer.colCategory')}</th>
                   </tr>
                 </thead>

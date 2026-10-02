@@ -121,9 +121,7 @@ export default function TaskDetail() {
           notes: notes.trim(),
           label_ids: labelIds,
           starred_order: parsedStarred,
-          ...(parsedOrder !== undefined
-            ? { task_order: parsedOrder }
-            : {}),
+          ...(parsedOrder !== undefined ? { task_order: parsedOrder } : {}),
         },
       },
       {
@@ -199,9 +197,7 @@ export default function TaskDetail() {
                 className={`star-btn ms-auto${task.is_starred ? ' starred' : ''}`}
                 id="star-btn"
                 role="button"
-                title={
-                  task.is_starred ? t('task.unstar') : t('task.star')
-                }
+                title={task.is_starred ? t('task.unstar') : t('task.star')}
                 onClick={flipStar}
               >
                 <i
@@ -281,8 +277,7 @@ export default function TaskDetail() {
 
               <div className="mb-4">
                 <label htmlFor="task-notes" className="form-label fw-bold">
-                  <i className="bi bi-journal-text" />{' '}
-                  {t('detail.notesLabel')}
+                  <i className="bi bi-journal-text" /> {t('detail.notesLabel')}
                 </label>
                 <textarea
                   className="form-control"
@@ -341,10 +336,7 @@ export default function TaskDetail() {
 
               <div className="row mb-4">
                 <div className="col-md-6">
-                  <label
-                    htmlFor="task-order"
-                    className="form-label fw-bold"
-                  >
+                  <label htmlFor="task-order" className="form-label fw-bold">
                     <i className="bi bi-sort-numeric-down" />{' '}
                     {t('detail.listOrder')}
                   </label>
@@ -355,19 +347,12 @@ export default function TaskDetail() {
                     id="task-order"
                     name="task_order"
                     value={taskOrder}
-                    onChange={(event) =>
-                      setTaskOrder(event.target.value)
-                    }
+                    onChange={(event) => setTaskOrder(event.target.value)}
                   />
-                  <div className="form-text">
-                    {t('detail.listOrderHint')}
-                  </div>
+                  <div className="form-text">{t('detail.listOrderHint')}</div>
                 </div>
                 <div className="col-md-6">
-                  <label
-                    htmlFor="starred-order"
-                    className="form-label fw-bold"
-                  >
+                  <label htmlFor="starred-order" className="form-label fw-bold">
                     <i className="bi bi-star" /> {t('detail.starredOrder')}
                   </label>
                   <input
@@ -377,9 +362,7 @@ export default function TaskDetail() {
                     id="starred-order"
                     name="starred_order"
                     value={starredOrder}
-                    onChange={(event) =>
-                      setStarredOrder(event.target.value)
-                    }
+                    onChange={(event) => setStarredOrder(event.target.value)}
                   />
                   <div className="form-text">
                     {t('detail.starredOrderHint')}

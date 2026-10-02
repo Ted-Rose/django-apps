@@ -141,9 +141,7 @@ describe('ConnectBank', () => {
     try {
       renderConnectBank('/connect?country=lv');
       await screen.findByRole('group', { name: 'Select your bank' });
-      fireEvent.click(
-        screen.getByRole('radio', { name: 'Swedbank' }),
-      );
+      fireEvent.click(screen.getByRole('radio', { name: 'Swedbank' }));
       fireEvent.click(screen.getByRole('button', { name: /Connect/ }));
       await waitFor(() => expect(mockedApiPost).toHaveBeenCalled());
       expect(

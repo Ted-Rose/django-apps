@@ -9,11 +9,10 @@ import { errorText, fetchSpoki } from '../api';
  * "Cits raksts" refetches for another one.
  */
 export default function Spoki() {
-  const { data, isPending, isError, error, refetch, isFetching } =
-    useQuery({
-      queryKey: ['single_pages', 'spoki'],
-      queryFn: fetchSpoki,
-    });
+  const { data, isPending, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['single_pages', 'spoki'],
+    queryFn: fetchSpoki,
+  });
 
   return (
     <div className="container py-4">

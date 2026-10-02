@@ -150,8 +150,7 @@ export function TaskNavBar({
     </>
   ) : selectedList ? (
     <>
-      <i className="bi bi-folder" />{' '}
-      {selectedListTitle ?? t('views.list')}
+      <i className="bi bi-folder" /> {selectedListTitle ?? t('views.list')}
     </>
   ) : selectedLabel ? (
     <>
@@ -223,9 +222,7 @@ export function TaskNavBar({
                     <hr className="dropdown-divider" />
                   </li>
                   <li>
-                    <h6 className="dropdown-header">
-                      {t('views.labels')}
-                    </h6>
+                    <h6 className="dropdown-header">{t('views.labels')}</h6>
                   </li>
                   {data.labels.map((label) => (
                     <li key={label.id}>
@@ -292,8 +289,8 @@ export function TaskNavBar({
                   <i className="bi bi-sort-down" />{' '}
                   {t(
                     `order.${
-                      ORDER_OPTIONS.find((o) => o.key === orderBy)
-                        ?.labelKey ?? 'orderAsc'
+                      ORDER_OPTIONS.find((o) => o.key === orderBy)?.labelKey ??
+                      'orderAsc'
                     }`,
                   )}
                 </>

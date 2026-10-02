@@ -78,9 +78,9 @@ describe('useTwisterAudio', () => {
     });
     const { result } = renderHook(() => useTwisterAudio());
     await result.current.prefetch(['bad', 'ok']);
-    await expect(
-      result.current.playSequence(['bad', 'ok']),
-    ).resolves.toBe(true);
+    await expect(result.current.playSequence(['bad', 'ok'])).resolves.toBe(
+      true,
+    );
     expect(FakeAudio.played).toEqual(['u:ok']);
   });
 

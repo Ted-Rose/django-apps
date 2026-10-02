@@ -81,10 +81,7 @@ export function useUndoRedo({
         break;
       case 'UNCOMPLETE_TASK':
         completeTask.mutate(action.taskId);
-        pushToast(
-          t('undo.uncomplete', { title: action.taskTitle }),
-          'info',
-        );
+        pushToast(t('undo.uncomplete', { title: action.taskTitle }), 'info');
         break;
       case 'ARCHIVE_TASK':
         pushToast(t('undo.archiveUnavailable'), 'info');
@@ -137,10 +134,7 @@ export function useUndoRedo({
         break;
       case 'UNCOMPLETE_TASK':
         uncompleteTask.mutate(action.taskId);
-        pushToast(
-          t('redo.uncomplete', { title: action.taskTitle }),
-          'info',
-        );
+        pushToast(t('redo.uncomplete', { title: action.taskTitle }), 'info');
         break;
       case 'UPDATE_DIVIDER':
         updateDivider.mutate({

@@ -21,9 +21,7 @@ import { pushToast } from '../toasts';
  */
 export function LanguageSwitcher() {
   const { t } = useTranslation();
-  const current: Language = i18n.language?.startsWith('lv')
-    ? 'lv'
-    : 'en';
+  const current: Language = i18n.language?.startsWith('lv') ? 'lv' : 'en';
 
   const switchTo = (language: Language) => {
     if (language === current) return;

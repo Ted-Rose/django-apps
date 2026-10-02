@@ -349,9 +349,7 @@ export function TaskListPage({ view }: { view: ListView }) {
         onClick: () => processLabels.mutate(),
       },
       {
-        label: syncMutation.isPending
-          ? t('menu.syncing')
-          : t('menu.syncNow'),
+        label: syncMutation.isPending ? t('menu.syncing') : t('menu.syncNow'),
         icon: 'arrow-repeat',
         btn_class: 'btn-light',
         onClick: () => syncMutation.mutate(),
@@ -500,11 +498,7 @@ export function TaskListPage({ view }: { view: ListView }) {
 export function LoadingSkeleton() {
   const { t } = useTranslation('tasks');
   return (
-    <div
-      id="task-list"
-      aria-busy="true"
-      aria-label={t('list.loading')}
-    >
+    <div id="task-list" aria-busy="true" aria-label={t('list.loading')}>
       {[0, 1, 2].map((i) => (
         <div className="task-container d-flex mb-2" key={i}>
           <div className="card task-card flex-grow-1 task-content">

@@ -125,9 +125,7 @@ function CompletedTaskCard({
             <span
               className={`star-btn${task.is_starred ? ' starred' : ''}`}
               role="button"
-              title={
-                task.is_starred ? t('task.unstar') : t('task.star')
-              }
+              title={task.is_starred ? t('task.unstar') : t('task.star')}
               onClick={(event) => {
                 event.stopPropagation();
                 actionHistory.recordAction({
