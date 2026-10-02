@@ -104,6 +104,7 @@ resource "google_cloud_run_v2_job" "sync_transactions_job" {
   depends_on = [
     google_project_service.enabled,
     google_artifact_registry_repository.gae_standard,
+    google_project_iam_member.cloudrun_secret_accessor,
   ]
 }
 
@@ -219,6 +220,7 @@ resource "google_cloud_run_v2_job" "evaluate_limits_job" {
   depends_on = [
     google_project_service.enabled,
     google_artifact_registry_repository.gae_standard,
+    google_project_iam_member.cloudrun_secret_accessor,
   ]
 }
 
@@ -334,6 +336,7 @@ resource "google_cloud_run_v2_job" "check_balance_alerts_job" {
   depends_on = [
     google_project_service.enabled,
     google_artifact_registry_repository.gae_standard,
+    google_project_iam_member.cloudrun_secret_accessor,
   ]
 }
 

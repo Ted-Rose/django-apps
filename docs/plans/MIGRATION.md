@@ -197,6 +197,13 @@ deploy against the new project, which doesn't exist yet.
 
 ## Phase 4 — Provision django-apps
 
+> ⚠️ **Known bug hit on the `django-apps-7345` migration:** the
+> Cloud Run service can be created before `cloudrun-sa`'s
+> `secretAccessor` grant exists → revision stuck at
+> `SecretsAccessCheckFailed`, site 503s. Fix + workaround:
+> `GCP_MIGRATION_SECRETS_RACE.md` — apply the IAM targets first and
+> let them propagate before the full apply below.
+
 Terraform state bucket chicken-and-egg: `backend.tf` points at a
 bucket that doesn't exist yet. Same trick `bootstrap_gcp.sh` used,
 non-interactively:

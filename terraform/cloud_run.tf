@@ -122,6 +122,8 @@ resource "google_cloud_run_v2_service" "django_app" {
   depends_on = [
     google_project_service.enabled,
     google_artifact_registry_repository.gae_standard,
+    google_service_account.cloudrun,
+    google_project_iam_member.cloudrun_secret_accessor,
   ]
 }
 
