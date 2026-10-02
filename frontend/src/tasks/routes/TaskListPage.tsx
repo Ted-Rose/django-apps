@@ -16,7 +16,8 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ApiError } from '../../shared/api/errors';
+import { useTranslation } from 'react-i18next';
+import { errorDetail } from '../../shared/api/errors';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
@@ -89,6 +90,7 @@ const FETCHERS: Record<
 };
 
 export function TaskListPage({ view }: { view: ListView }) {
+  const { t } = useTranslation('tasks');
   const [searchParams] = useSearchParams();
   // Only the main dashboard carries the ?list= filter.
   const list = view === 'dashboard' ? searchParams.get('list') : null;
@@ -308,12 +310,17 @@ export function TaskListPage({ view }: { view: ListView }) {
   )}`;
 
   const burgerItems: BurgerMenuItem[] = [
-    { label: 'Home', url: '/', icon: 'house', btn_class: 'btn-light' },
+    {
+      label: t('common:common.home'),
+      url: '/',
+      icon: 'house',
+      btn_class: 'btn-light',
+    },
   ];
   if (hasCredentials) {
     burgerItems.push(
       {
-        label: 'Add Divider',
+        label: t('menu.addDivider'),
         icon: 'dash-lg',
         btn_class: 'btn-primary',
         onClick: () => {
@@ -327,30 +334,30 @@ export function TaskListPage({ view }: { view: ListView }) {
           // without either the template alerted the user to pick one.
           const listId = list ?? data?.task_lists[0]?.list_id;
           if (!listId) {
-            pushToast(
-              'Please select a specific task list first — ' +
-                'dividers must belong to a task list.',
-              'warning',
-            );
+            pushToast(t('list.dividerNoList'), 'warning');
             return;
           }
           createDivider.mutate({ task_list_id: listId, is_starred: false });
         },
       },
       {
-        label: processLabels.isPending ? 'Processing…' : 'Process Labels',
+        label: processLabels.isPending
+          ? t('menu.processing')
+          : t('menu.processLabels'),
         icon: 'tags',
         btn_class: 'btn-success',
         onClick: () => processLabels.mutate(),
       },
       {
-        label: syncMutation.isPending ? 'Syncing…' : 'Sync Now',
+        label: syncMutation.isPending
+          ? t('menu.syncing')
+          : t('menu.syncNow'),
         icon: 'arrow-repeat',
         btn_class: 'btn-light',
         onClick: () => syncMutation.mutate(),
       },
       {
-        label: `Logout (${user})`,
+        label: t('common:common.logout', { user }),
         url: '/admin/logout/',
         icon: 'box-arrow-right',
         btn_class: 'btn-outline-light',
@@ -358,7 +365,7 @@ export function TaskListPage({ view }: { view: ListView }) {
     );
   } else {
     burgerItems.push({
-      label: 'Login with Google',
+      label: t('menu.loginGoogle'),
       url: loginUrl,
       icon: 'google',
       btn_class: 'btn-warning',
@@ -436,7 +443,7 @@ export function TaskListPage({ view }: { view: ListView }) {
           <button
             className="floating-add-btn"
             type="button"
-            title="Create new task"
+            title={t('list.createTask')}
             onClick={() => setCreatingTask(true)}
           >
             <i className="bi bi-plus" />
@@ -454,7 +461,7 @@ export function TaskListPage({ view }: { view: ListView }) {
               id="undo-btn"
               className="btn btn-primary"
               type="button"
-              title="Undo (Ctrl+Z)"
+              title={t('list.undo')}
               disabled={!canUndo}
               onClick={undo}
             >
@@ -464,7 +471,7 @@ export function TaskListPage({ view }: { view: ListView }) {
               id="redo-btn"
               className="btn btn-secondary"
               type="button"
-              title="Redo (Ctrl+Y)"
+              title={t('list.redo')}
               disabled={!canRedo}
               onClick={redo}
             >
@@ -481,7 +488,7 @@ export function TaskListPage({ view }: { view: ListView }) {
         style={{ display: orderSaved ? 'block' : 'none' }}
       >
         <span className="badge bg-success fs-6 px-3 py-2">
-          <i className="bi bi-check-circle" /> Order saved
+          <i className="bi bi-check-circle" /> {t('list.orderSaved')}
         </span>
       </div>
 
@@ -491,8 +498,13 @@ export function TaskListPage({ view }: { view: ListView }) {
 }
 
 export function LoadingSkeleton() {
+  const { t } = useTranslation('tasks');
   return (
-    <div id="task-list" aria-busy="true" aria-label="Loading tasks">
+    <div
+      id="task-list"
+      aria-busy="true"
+      aria-label={t('list.loading')}
+    >
       {[0, 1, 2].map((i) => (
         <div className="task-container d-flex mb-2" key={i}>
           <div className="card task-card flex-grow-1 task-content">
@@ -516,21 +528,18 @@ export function ErrorState({
   error: unknown;
   onRetry: () => void;
 }) {
-  const message =
-    error instanceof ApiError
-      ? `${error.message}`
-      : 'Could not reach the server. Check your connection.';
+  const { t } = useTranslation('tasks');
   return (
     <div className="alert alert-danger text-center py-5" role="alert">
       <i className="bi bi-exclamation-circle fs-1 d-block mb-3" />
-      <h5>Couldn&apos;t load tasks</h5>
-      <p className="mb-3">{message}</p>
+      <h5>{t('list.errorTitle')}</h5>
+      <p className="mb-3">{errorDetail(error)}</p>
       <button
         type="button"
         className="btn btn-outline-danger"
         onClick={onRetry}
       >
-        <i className="bi bi-arrow-repeat" /> Retry
+        <i className="bi bi-arrow-repeat" /> {t('common:common.retry')}
       </button>
     </div>
   );
@@ -538,6 +547,7 @@ export function ErrorState({
 
 /** dashboard.html's empty state: auth prompt or "no tasks" hint. */
 export function EmptyState({ data }: { data: DashboardOut }) {
+  const { t } = useTranslation('tasks');
   if (!data.flags.has_credentials) {
     const loginUrl = `/login/?next=${encodeURIComponent(
       window.location.pathname + window.location.search,
@@ -545,12 +555,10 @@ export function EmptyState({ data }: { data: DashboardOut }) {
     return (
       <div className="alert alert-info text-center py-5">
         <i className="bi bi-shield-lock fs-1 d-block mb-3 text-warning" />
-        <h5>Google Authentication Required</h5>
-        <p className="mb-3">
-          You need to authenticate with Google to access your tasks.
-        </p>
+        <h5>{t('list.authTitle')}</h5>
+        <p className="mb-3">{t('list.authBody')}</p>
         <a href={loginUrl} className="btn btn-warning btn-lg">
-          <i className="bi bi-google" /> Login with Google
+          <i className="bi bi-google" /> {t('menu.loginGoogle')}
         </a>
       </div>
     );
@@ -559,11 +567,9 @@ export function EmptyState({ data }: { data: DashboardOut }) {
   return (
     <div className="alert alert-info text-center py-5">
       <i className="bi bi-info-circle fs-1 d-block mb-3" />
-      <h5>{starred ? 'No starred tasks yet' : 'No tasks found'}</h5>
+      <h5>{starred ? t('list.noStarred') : t('list.noTasks')}</h5>
       <p className="mb-0">
-        {starred
-          ? 'Star tasks from the main dashboard to see them here.'
-          : 'Click "Sync Now" in the menu to fetch your tasks from Google.'}
+        {starred ? t('list.starHint') : t('list.syncHint')}
       </p>
     </div>
   );

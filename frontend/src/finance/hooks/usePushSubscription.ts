@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { apiPost } from '../../shared/api/client';
 import { ApiError, errorDetail } from '../../shared/api/errors';
 import type { PushConfigOut, PushSubscribeIn, PushUnsubscribeIn } from '../api';
@@ -84,6 +85,7 @@ function subscribePayload(subscription: PushSubscription): PushSubscribeIn {
 export function usePushSubscription(
   config: PushConfigOut,
 ): PushSubscriptionState {
+  const { t } = useTranslation('finance');
   const supported =
     typeof navigator !== 'undefined' &&
     'serviceWorker' in navigator &&
@@ -136,7 +138,8 @@ export function usePushSubscription(
     try {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        throw new Error('Notification permission not granted');
+        setStatus(`— ${t('limits.push.permissionDenied')}`);
+        return;
       }
       const registration = await navigator.serviceWorker.ready;
       // Replace any existing subscription so it is bound to the
@@ -151,11 +154,13 @@ export function usePushSubscription(
       setSubscribed(true);
       await refreshCount();
     } catch (error) {
-      setStatus(`— ${describeError(error, 'Subscribe failed')}`);
+      setStatus(
+        `— ${describeError(error, t('limits.push.subscribeFailed'))}`,
+      );
     } finally {
       setBusy(false);
     }
-  }, [config.vapid_public_key, config.subscribe_url, refreshCount]);
+  }, [config.vapid_public_key, config.subscribe_url, refreshCount, t]);
 
   const unsubscribe = useCallback(async () => {
     setBusy(true);
@@ -174,15 +179,17 @@ export function usePushSubscription(
       setSubscribed(false);
       await refreshCount();
     } catch (error) {
-      setStatus(`— ${describeError(error, 'Unsubscribe failed')}`);
+      setStatus(
+        `— ${describeError(error, t('limits.push.unsubscribeFailed'))}`,
+      );
     } finally {
       setBusy(false);
     }
-  }, [config.unsubscribe_url, refreshCount]);
+  }, [config.unsubscribe_url, refreshCount, t]);
 
   const displayStatus = !supported
-    ? '— push notifications are not supported here'
-    : status || (subscribed ? '— this browser is subscribed' : '');
+    ? t('limits.push.notSupported')
+    : status || (subscribed ? t('limits.push.subscribed') : '');
 
   return {
     supported,

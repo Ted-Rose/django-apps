@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import Modal from '../../shared/components/Modal';
 
 /**
@@ -32,6 +33,7 @@ export function ConfirmModal({
   onClose,
   children,
 }: ConfirmModalProps) {
+  const { t } = useTranslation();
   return (
     <Modal
       show={show}
@@ -45,7 +47,7 @@ export function ConfirmModal({
             onClick={onClose}
             disabled={busy}
           >
-            Cancel
+            {t('common:common.cancel')}
           </button>
           <button
             type="button"

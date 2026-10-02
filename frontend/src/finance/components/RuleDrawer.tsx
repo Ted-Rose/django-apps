@@ -1,4 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type {
   RuleOut,
   RulePreviewIn,
@@ -113,28 +115,68 @@ function savePayload(fields: RuleFields, ruleId?: number): RuleSaveIn {
 }
 
 /** Port of rule_sandbox.js `renderPreview`'s summary line. */
-function previewSummary(data: RulePreviewOut): string {
+function previewSummary(t: TFunction, data: RulePreviewOut): string {
   let changeText: string;
   if (data.changes_total) {
     const parts: string[] = [];
-    if (data.gains) parts.push(`${data.gains} gaining "${data.category}"`);
-    if (data.losses) parts.push(`${data.losses} losing it`);
-    if (data.other_changes) parts.push(`${data.other_changes} other`);
-    changeText = ` ${data.changes_total} would change category (${parts.join(', ')}).`;
+    if (data.gains) {
+      parts.push(
+        t('rules.preview.gains', {
+          count: data.gains,
+          category: data.category,
+        }),
+      );
+    }
+    if (data.losses) {
+      parts.push(t('rules.preview.losses', { count: data.losses }));
+    }
+    if (data.other_changes) {
+      parts.push(
+        t('rules.preview.otherChanges', { count: data.other_changes }),
+      );
+    }
+    changeText =
+      ' ' +
+      t('rules.preview.changes', {
+        count: data.changes_total,
+        parts: parts.join(', '),
+      });
   } else {
-    changeText = ' No categories would change.';
+    changeText = ` ${t('rules.preview.noChanges')}`;
   }
   if (!data.is_active) {
     return (
-      'Rule is inactive — it will not categorize anything until ' +
-      `activated. ${data.match_count} transaction(s) would match ` +
-      `its patterns.${changeText}`
+      t('rules.preview.inactive', {
+        count: data.match_count,
+        matchCount: data.match_count,
+      }) + changeText
     );
   }
   return (
-    `${data.match_count} transaction(s) match, rule would apply ` +
-    `to ${data.apply_count}.${changeText}`
+    t('rules.preview.match', {
+      count: data.match_count,
+      matchCount: data.match_count,
+      applyCount: data.apply_count,
+    }) + changeText
   );
+}
+
+/**
+ * Translated label for a server-sent choice value — catalog under
+ * `finance:server.<group>` with the API's English label as
+ * fallback. Values arrive snake/upper case (starts_with, AND);
+ * catalog keys are camel/lower case.
+ */
+function choiceLabel(
+  t: TFunction,
+  group: string,
+  value: string,
+  fallback: string,
+): string {
+  const key = value
+    .toLowerCase()
+    .replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+  return t(`server:${group}.${key}`, { defaultValue: fallback });
 }
 
 /** Field values merged into the defaults of a new rule — e.g. a
@@ -159,6 +201,7 @@ export function RuleDrawer({
   onClose,
   prefill,
 }: RuleDrawerProps) {
+  const { t } = useTranslation('finance');
   const titleId = useId();
   const [fields, setFields] = useState<RuleFields>(() =>
     rule
@@ -222,12 +265,14 @@ export function RuleDrawer({
       >
         <div className="offcanvas-header">
           <h5 className="offcanvas-title" id={titleId}>
-            {rule ? `Edit rule #${rule.priority}` : 'New rule'}
+            {rule
+              ? t('rules.drawer.editTitle', { priority: rule.priority })
+              : t('rules.drawer.newTitle')}
           </h5>
           <button
             type="button"
             className="btn-close"
-            aria-label="Close"
+            aria-label={t('common:common.close')}
             onClick={onClose}
           />
         </div>
@@ -236,7 +281,7 @@ export function RuleDrawer({
             <div className="row g-2 mb-3">
               <div className="col-8">
                 <label className="form-label" htmlFor="rule-category">
-                  Category
+                  {t('rules.drawer.categoryLabel')}
                 </label>
                 <select
                   id="rule-category"
@@ -247,7 +292,7 @@ export function RuleDrawer({
                 >
                   {fields.category === '' && (
                     <option value="" disabled>
-                      No categories yet
+                      {t('rules.drawer.noCategories')}
                     </option>
                   )}
                   {data.categories.map((category) => (
@@ -259,7 +304,7 @@ export function RuleDrawer({
               </div>
               <div className="col-4">
                 <label className="form-label" htmlFor="rule-priority">
-                  Priority
+                  {t('rules.drawer.priority')}
                 </label>
                 <input
                   type="number"
@@ -272,18 +317,20 @@ export function RuleDrawer({
                 />
               </div>
             </div>
-            <div className="rule-section-label">Patterns</div>
+            <div className="rule-section-label">
+              {t('rules.drawer.patterns')}
+            </div>
             <div className="mb-3">
               <label className="form-label" htmlFor="rule-counterparty-pattern">
-                Counterparty name
+                {t('rules.drawer.counterpartyName')}
               </label>
               <div className="row g-2">
                 <div className="col-4">
                   <select
                     id="rule-counterparty-scope"
                     className="form-select"
-                    title="Which name field to match"
-                    aria-label="Counterparty scope"
+                    title={t('rules.drawer.scopeTitle')}
+                    aria-label={t('rules.drawer.scopeAria')}
                     value={fields.counterparty_scope}
                     onChange={(event) =>
                       set('counterparty_scope', event.target.value)
@@ -291,7 +338,7 @@ export function RuleDrawer({
                   >
                     {data.counterparty_scopes.map((scope) => (
                       <option key={scope.value} value={scope.value}>
-                        {scope.label}
+                        {choiceLabel(t, 'scopes', scope.value, scope.label)}
                       </option>
                     ))}
                   </select>
@@ -300,8 +347,8 @@ export function RuleDrawer({
                   <select
                     id="rule-counterparty-match-type"
                     className="form-select"
-                    title="Match type"
-                    aria-label="Counterparty match type"
+                    title={t('rules.drawer.matchTypeTitle')}
+                    aria-label={t('rules.drawer.counterpartyMatchAria')}
                     value={fields.counterparty_match_type}
                     onChange={(event) =>
                       set('counterparty_match_type', event.target.value)
@@ -309,7 +356,12 @@ export function RuleDrawer({
                   >
                     {data.match_types.map((matchType) => (
                       <option key={matchType.value} value={matchType.value}>
-                        {matchType.label}
+                        {choiceLabel(
+                          t,
+                          'matchTypes',
+                          matchType.value,
+                          matchType.label,
+                        )}
                       </option>
                     ))}
                   </select>
@@ -320,7 +372,7 @@ export function RuleDrawer({
                     id="rule-counterparty-pattern"
                     maxLength={255}
                     className="form-control"
-                    placeholder="e.g. Rimi, employer name"
+                    placeholder={t('rules.drawer.counterpartyPlaceholder')}
                     value={fields.counterparty_pattern}
                     onChange={(event) =>
                       set('counterparty_pattern', event.target.value)
@@ -331,15 +383,15 @@ export function RuleDrawer({
             </div>
             <div className="mb-3">
               <label className="form-label" htmlFor="rule-description">
-                Description
+                {t('rules.drawer.descriptionLabel')}
               </label>
               <div className="row g-2">
                 <div className="col-4">
                   <select
                     id="rule-description-match-type"
                     className="form-select"
-                    title="Match type"
-                    aria-label="Description match type"
+                    title={t('rules.drawer.matchTypeTitle')}
+                    aria-label={t('rules.drawer.descriptionMatchAria')}
                     value={fields.description_match_type}
                     onChange={(event) =>
                       set('description_match_type', event.target.value)
@@ -347,7 +399,12 @@ export function RuleDrawer({
                   >
                     {data.match_types.map((matchType) => (
                       <option key={matchType.value} value={matchType.value}>
-                        {matchType.label}
+                        {choiceLabel(
+                          t,
+                          'matchTypes',
+                          matchType.value,
+                          matchType.label,
+                        )}
                       </option>
                     ))}
                   </select>
@@ -358,7 +415,7 @@ export function RuleDrawer({
                     id="rule-description"
                     maxLength={255}
                     className="form-control"
-                    placeholder="e.g. grocery purchase"
+                    placeholder={t('rules.drawer.descriptionPlaceholder')}
                     value={fields.description_pattern}
                     onChange={(event) =>
                       set('description_pattern', event.target.value)
@@ -372,25 +429,27 @@ export function RuleDrawer({
                 className="form-label"
                 htmlFor="rule-description-exclusion"
               >
-                Exclude when description contains
+                {t('rules.drawer.excludeLabel')}
               </label>
               <input
                 type="text"
                 id="rule-description-exclusion"
                 maxLength={255}
                 className="form-control"
-                placeholder="e.g. refund — rule never applies"
+                placeholder={t('rules.drawer.excludePlaceholder')}
                 value={fields.description_exclusion}
                 onChange={(event) =>
                   set('description_exclusion', event.target.value)
                 }
               />
             </div>
-            <div className="rule-section-label">Options</div>
+            <div className="rule-section-label">
+              {t('rules.drawer.options')}
+            </div>
             <div className="row g-2 mb-4">
               <div className="col-4">
                 <label className="form-label" htmlFor="rule-operator">
-                  Patterns combine
+                  {t('rules.drawer.combine')}
                 </label>
                 <select
                   id="rule-operator"
@@ -400,7 +459,12 @@ export function RuleDrawer({
                 >
                   {data.operators.map((operator) => (
                     <option key={operator.value} value={operator.value}>
-                      {operator.label}
+                      {choiceLabel(
+                        t,
+                        'operators',
+                        operator.value,
+                        operator.label,
+                      )}
                     </option>
                   ))}
                 </select>
@@ -416,7 +480,7 @@ export function RuleDrawer({
                     onChange={(event) => set('is_active', event.target.checked)}
                   />
                   <label className="form-check-label" htmlFor="rule-is-active">
-                    Active
+                    {t('rules.drawer.active')}
                   </label>
                 </div>
               </div>
@@ -432,12 +496,14 @@ export function RuleDrawer({
                   role="status"
                 />
               )}
-              Save rule
+              {t('rules.drawer.save')}
             </button>
           </form>
 
           <div id="preview-panel" className="rule-preview">
-            <div className="rule-section-label">Impact preview</div>
+            <div className="rule-section-label">
+              {t('rules.drawer.impactPreview')}
+            </div>
             <PreviewSummary preview={preview} />
             <div className="table-responsive">
               <table
@@ -446,11 +512,13 @@ export function RuleDrawer({
               >
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Counterparty</th>
-                    <th>Description</th>
-                    <th className="text-end">Amount</th>
-                    <th>Category</th>
+                    <th>{t('rules.drawer.colDate')}</th>
+                    <th>{t('rules.drawer.colCounterparty')}</th>
+                    <th>{t('rules.drawer.colDescription')}</th>
+                    <th className="text-end">
+                      {t('rules.drawer.colAmount')}
+                    </th>
+                    <th>{t('rules.drawer.colCategory')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -495,16 +563,18 @@ function PreviewSummary({
     error: unknown;
   };
 }) {
+  const { t } = useTranslation('finance');
   let text: string;
   if (preview.isPending) {
-    text = 'Calculating impact...';
+    text = t('rules.drawer.calculating');
   } else if (preview.isError) {
-    text = preview.error ? errorDetail(preview.error) : 'Preview unavailable.';
+    text = preview.error
+      ? errorDetail(preview.error)
+      : t('rules.drawer.previewUnavailable');
   } else if (preview.data) {
-    text = previewSummary(preview.data);
+    text = previewSummary(t, preview.data);
   } else {
-    text =
-      'Edit the rule to preview how it would categorize your transactions.';
+    text = t('rules.drawer.previewHint');
   }
   return (
     <div id="preview-summary" className="text-muted mb-2">

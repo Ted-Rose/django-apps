@@ -17,8 +17,11 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { apiPost } from '../shared/api/client';
 import { ApiError, errorDetail } from '../shared/api/errors';
+import { serverText } from '../shared/i18n';
 import { pushToast } from '../shared/toasts';
 import type {
   BalanceAlertSaveIn,
@@ -34,6 +37,7 @@ import type {
   RuleSaveIn,
   RulesChangedOut,
   ShareIn,
+  SyncAccountOut,
   SyncIn,
   SyncOut,
   ToggleBalanceCheckOut,
@@ -46,33 +50,94 @@ function invalidateFinance(queryClient: QueryClient) {
 }
 
 /**
+ * Toast body for a mutation response: `code`/`params` resolve via the
+ * `server` catalog namespace; the English `message` is the fallback
+ * while the backend rolls codes out.
+ */
+function resultMessage(
+  data:
+    | { code?: string | null; params?: unknown; message?: string | null }
+    | null
+    | undefined,
+): string | undefined {
+  return serverText(
+    data as { code?: string | null; params?: Record<string, unknown> | null },
+    data?.message,
+  );
+}
+
+/** The sync response's sentence is composed from per-count plural
+ *  fragments (LV needs count-aware forms for each clause). */
+function syncMessage(t: TFunction, data: SyncOut): string | undefined {
+  if (data?.code !== 'synced') return undefined;
+  const head = t('server:syncedNew', { count: data.created });
+  const tail = data.failed
+    ? t('server:syncedFailedNote', { count: data.failed })
+    : t('server:syncedUpdatedNote', { count: data.updated });
+  return `${head}${data.failed ? ', ' : ' '}${tail}.`;
+}
+
+/** One line of the per-account sync breakdown toast. */
+function syncAccountLine(t: TFunction, a: SyncAccountOut): string {
+  if (a.status === 'synced') {
+    return t('server:syncAccountSynced', {
+      count: a.created,
+      account: a.account,
+      updatedNote: t('server:syncedUpdatedNote', { count: a.updated }),
+    });
+  }
+  return t('server:syncAccountStatus', {
+    account: a.account,
+    statusLabel: t(`server:syncStatus.${a.status}`),
+    detail: a.code ? (serverText(a, a.detail) ?? a.detail) : a.detail,
+  });
+}
+
+/** The refresh response joins per-outcome clauses with '; '. */
+function refreshMessage(t: TFunction, data: RefreshOut): string | undefined {
+  if (data?.code !== 'balancesRefreshed') return undefined;
+  const parts: string[] = [];
+  if (data.updated) {
+    parts.push(t('server:balancesUpdated', { count: data.updated }));
+  }
+  if (data.rate_limited) {
+    parts.push(t('server:balancesRateLimited', { count: data.rate_limited }));
+  }
+  if (data.failed) {
+    parts.push(t('server:balancesFailed', { count: data.failed }));
+  }
+  return parts.length ? `${parts.join('; ')}.` : undefined;
+}
+
+/**
  * POST /api/finance/transactions/sync/ — loops `status='LN'`
  * accounts server-side (one request, same as the template button).
  * The body is optional; `{account}` echoes the current filter back
  * like the template form did — the sync itself is not scoped by it.
  */
 export function useSyncTransactions() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload?: SyncIn) =>
       apiPost<SyncOut>('/api/finance/transactions/sync/', payload),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = syncMessage(t, data) ?? resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
       // Per-account breakdown — the aggregate message alone can't
       // distinguish "fetched, nothing new" from "skipped/failed".
       const breakdown = (data?.accounts ?? [])
-        .map((a) =>
-          a.status === 'synced'
-            ? `${a.account}: +${a.created} new, ${a.updated} updated`
-            : `${a.account}: ${a.status} — ${a.detail}`,
-        )
+        .map((a) => syncAccountLine(t, a))
         .join(' · ');
       if (breakdown) pushToast(breakdown, 'info');
     },
     onError: (error) =>
-      pushToast(`Sync failed: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.syncFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -82,16 +147,21 @@ export function useSyncTransactions() {
  * every account opted into the balance check.
  */
 export function useRefreshBalances() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiPost<RefreshOut>('/api/finance/balances/refresh/'),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = refreshMessage(t, data) ?? resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to refresh balances: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.refreshFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -104,6 +174,7 @@ export function useRefreshBalances() {
  * follow the GoCardless redirect (same rule as Google OAuth).
  */
 export function useConnectBank() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (institutionId: string) =>
@@ -114,11 +185,14 @@ export function useConnectBank() {
       if (data?.link) {
         window.location.assign(data.link);
       } else {
-        pushToast('Bank link missing from the response.', 'warning');
+        pushToast(t('mutations.bankLinkMissing'), 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Could not start bank link: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.connectFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -129,6 +203,7 @@ export function useConnectBank() {
  * sharers each have one — the API scopes it to `for_user`).
  */
 export function useToggleBalanceCheck() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (accountId: number) =>
@@ -136,13 +211,14 @@ export function useToggleBalanceCheck() {
         `/api/finance/accounts/${accountId}/toggle-balance-check/`,
       ),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
       pushToast(
-        `Failed to update balance check: ${errorDetail(error)}`,
+        t('mutations.balanceCheckFailed', { detail: errorDetail(error) }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),
@@ -154,6 +230,7 @@ export function useToggleBalanceCheck() {
  * target user read access and creates their default preference.
  */
 export function useShareAccount() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (variables: { accountId: number; username: string }) =>
@@ -162,12 +239,16 @@ export function useShareAccount() {
         { username: variables.username } satisfies ShareIn,
       ),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to share account: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.shareFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -178,6 +259,7 @@ export function useShareAccount() {
  * resets the episode flag server-side so the next breach alerts.
  */
 export function useSaveBalanceAlert() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (variables: { accountId: number; threshold: string }) =>
@@ -186,13 +268,14 @@ export function useSaveBalanceAlert() {
         { threshold: variables.threshold } satisfies BalanceAlertSaveIn,
       ),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
       pushToast(
-        `Failed to save balance alert: ${errorDetail(error)}`,
+        t('mutations.alertSaveFailed', { detail: errorDetail(error) }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),
@@ -204,6 +287,7 @@ export function useSaveBalanceAlert() {
  * the caller's alert; the row is per-user so sharers keep theirs.
  */
 export function useDeleteBalanceAlert() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (accountId: number) =>
@@ -211,13 +295,14 @@ export function useDeleteBalanceAlert() {
         `/api/finance/accounts/${accountId}/balance-alert/delete/`,
       ),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
       pushToast(
-        `Failed to remove balance alert: ${errorDetail(error)}`,
+        t('mutations.alertRemoveFailed', { detail: errorDetail(error) }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),
@@ -230,16 +315,21 @@ export function useDeleteBalanceAlert() {
  * success message the API echoes.
  */
 export function useApplyRules() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiPost<RulesChangedOut>('/api/finance/rules/apply/'),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to apply rules: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.applyFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -250,17 +340,22 @@ export function useApplyRules() {
  * recategorized count inside `message`.
  */
 export function useSaveRule() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: RuleSaveIn) =>
       apiPost<RulesChangedOut>('/api/finance/rules/save/', payload),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to save rule: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.ruleSaveFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -270,17 +365,22 @@ export function useSaveRule() {
  * re-applies rules; `message` carries the changed count.
  */
 export function useDeleteRule() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (ruleId: number) =>
       apiPost<RulesChangedOut>(`/api/finance/rules/${ruleId}/delete/`),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to delete rule: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.ruleDeleteFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -292,6 +392,7 @@ export function useDeleteRule() {
  * `message`, which the toast guard skips.
  */
 export function useMoveRule() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (variables: {
@@ -302,12 +403,16 @@ export function useMoveRule() {
         direction: variables.direction,
       } satisfies MoveRuleIn),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to move rule: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.ruleMoveFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -331,17 +436,22 @@ export function usePreviewRule() {
  * on (user, name)).
  */
 export function useSaveCategory() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: CategorySaveIn) =>
       apiPost<MessageOut>('/api/finance/categories/save/', payload),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to save category: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.categorySaveFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -351,17 +461,22 @@ export function useSaveCategory() {
  * then re-applies rules; `message` carries the changed count.
  */
 export function useDeleteCategory() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (categoryId: number) =>
       apiPost<RulesChangedOut>(`/api/finance/categories/${categoryId}/delete/`),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to delete category: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.categoryDeleteFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }
@@ -375,20 +490,22 @@ export function useDeleteCategory() {
  * `detail` verbatim, like the template's `messages.error`.
  */
 export function useSaveLimit() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: LimitSaveIn) =>
       apiPost<MessageOut>('/api/finance/limits/save/', payload),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
       pushToast(
         error instanceof ApiError && error.status === 409
           ? errorDetail(error)
-          : `Failed to save limit: ${errorDetail(error)}`,
+          : t('mutations.limitSaveFailed', { detail: errorDetail(error) }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),
@@ -400,17 +517,22 @@ export function useSaveLimit() {
  * the template version was a per-row form POST + redirect.
  */
 export function useDeleteLimit() {
+  const { t } = useTranslation('finance');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (limitId: number) =>
       apiPost<MessageOut>(`/api/finance/limits/${limitId}/delete/`),
     onSuccess: (data) => {
-      if (data?.message) {
-        pushToast(data.message, data.success ? 'success' : 'warning');
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
       }
     },
     onError: (error) =>
-      pushToast(`Failed to delete limit: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('mutations.limitDeleteFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }

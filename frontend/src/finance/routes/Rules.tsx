@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -43,6 +44,7 @@ import {
  * `description_exclusion`.
  */
 export default function Rules() {
+  const { t } = useTranslation('finance');
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['finance', 'rules'],
     queryFn: fetchRules,
@@ -60,16 +62,18 @@ export default function Rules() {
     <>
       <FinanceNavBar />
       <PageShell
-        title="Categorization Rules"
-        subtitle={
-          'Rules run top to bottom — the first matching rule assigns its ' +
-          'category. Saving a rule re-categorizes your history (manual ' +
-          'categories are never overwritten).'
-        }
+        title={t('rules.title')}
+        subtitle={t('rules.subtitle')}
       >
-        {isPending && <LoadingSkeleton label="Loading rules" rows={5} />}
+        {isPending && (
+          <LoadingSkeleton label={t('rules.loading')} rows={5} />
+        )}
         {isError && (
-          <ErrorState error={error} onRetry={() => refetch()} label="rules" />
+          <ErrorState
+            error={error}
+            onRetry={() => refetch()}
+            label={t('rules.loadLabel')}
+          />
         )}
         {data && (
           <div className="row g-3">
@@ -166,6 +170,7 @@ const isNarrowScreen = () =>
  * form) and the category list with edit/delete actions.
  */
 function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
+  const { t } = useTranslation('finance');
   const saveCategory = useSaveCategory();
   const deleteCategory = useDeleteCategory();
   const [name, setName] = useState('');
@@ -181,7 +186,7 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
   return (
     <CollapsibleCard
       id="categoriesCollapse"
-      title="Categories"
+      title={t('rules.categoriesTitle')}
       count={categories.length}
       defaultOpen={!isNarrowScreen()}
     >
@@ -199,7 +204,7 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
       >
         <div className="col-6">
           <label className="form-label" htmlFor="cat-name">
-            Name
+            {t('rules.nameLabel')}
           </label>
           <input
             type="text"
@@ -213,7 +218,7 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
         </div>
         <div className="col-3">
           <label className="form-label" htmlFor="cat-color">
-            Color
+            {t('rules.colorLabel')}
           </label>
           <input
             type="color"
@@ -229,7 +234,9 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
             className="btn btn-primary"
             disabled={saveCategory.isPending}
           >
-            {editingId !== null ? 'Save' : 'Add'}
+            {editingId !== null
+              ? t('common:common.save')
+              : t('common:common.add')}
           </button>
           {editingId !== null && (
             <button
@@ -237,7 +244,7 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
               className="btn btn-link btn-sm"
               onClick={reset}
             >
-              Cancel
+              {t('common:common.cancel')}
             </button>
           )}
         </div>
@@ -254,8 +261,10 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
                 <button
                   type="button"
                   className="btn btn-sm rules-ghost-btn"
-                  title="Edit category"
-                  aria-label={`Edit ${category.name}`}
+                  title={t('rules.editCategory')}
+                  aria-label={t('rules.editCategoryAria', {
+                    name: category.name,
+                  })}
                   onClick={() => {
                     setName(category.name);
                     setColor(category.color || '#6c757d');
@@ -267,8 +276,10 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
                 <button
                   type="button"
                   className="btn btn-sm rules-ghost-btn rules-ghost-danger"
-                  title="Delete category"
-                  aria-label={`Delete ${category.name}`}
+                  title={t('rules.deleteCategory')}
+                  aria-label={t('rules.deleteCategoryAria', {
+                    name: category.name,
+                  })}
                   disabled={deleteCategory.isPending}
                   onClick={() => deleteCategory.mutate(category.id)}
                 >
@@ -280,7 +291,7 @@ function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
         </ul>
       ) : (
         <p className="text-muted small mb-0">
-          No categories yet — create one, then add rules that assign it.
+          {t('rules.emptyCategories')}
         </p>
       )}
     </CollapsibleCard>
@@ -305,10 +316,11 @@ function RulesCard({
   onNew: () => void;
   onEdit: (rule: RuleOut) => void;
 }) {
+  const { t } = useTranslation('finance');
   return (
     <CollapsibleCard
       id="rulesCollapse"
-      title="Rules"
+      title={t('rules.rulesTitle')}
       count={data.rules.length}
       actions={
         <>
@@ -318,7 +330,7 @@ function RulesCard({
             disabled={data.categories.length === 0}
             onClick={onNew}
           >
-            <i className="bi bi-plus-lg" /> New rule
+            <i className="bi bi-plus-lg" /> {t('rules.newRule')}
           </button>
           <button
             type="button"
@@ -334,7 +346,7 @@ function RulesCard({
             ) : (
               <i className="bi bi-arrow-repeat" />
             )}{' '}
-            Re-apply rules
+            {t('rules.reapply')}
           </button>
         </>
       }
@@ -343,10 +355,10 @@ function RulesCard({
         <table className="rules-table table table-hover mb-0">
           <thead>
             <tr>
-              <th>#</th>
-              <th>Category</th>
-              <th>Matches</th>
-              <th>Active</th>
+              <th>{t('rules.colPriority')}</th>
+              <th>{t('rules.colCategory')}</th>
+              <th>{t('rules.colMatches')}</th>
+              <th>{t('rules.colActive')}</th>
               <th />
             </tr>
           </thead>
@@ -364,9 +376,8 @@ function RulesCard({
           </tbody>
         </table>
       ) : (
-        <EmptyState icon="diagram-3" title="No rules yet">
-          Rules automatically categorize transactions during sync based on the
-          sender / receiver name or the payment description.
+        <EmptyState icon="diagram-3" title={t('rules.emptyTitle')}>
+          {t('rules.emptyBody')}
         </EmptyState>
       )}
     </CollapsibleCard>
@@ -387,6 +398,7 @@ function RuleRow({
   isLast: boolean;
   onEdit: () => void;
 }) {
+  const { t } = useTranslation('finance');
   const moveRule = useMoveRule();
   const deleteRule = useDeleteRule();
   const category = data.categories.find(
@@ -408,9 +420,15 @@ function RuleRow({
       </td>
       <td className="rule-cell-active">
         {rule.is_active ? (
-          <i className="bi bi-check-circle text-success" title="Active" />
+          <i
+            className="bi bi-check-circle text-success"
+            title={t('rules.activeTitle')}
+          />
         ) : (
-          <i className="bi bi-x-circle text-muted" title="Inactive" />
+          <i
+            className="bi bi-x-circle text-muted"
+            title={t('rules.inactiveTitle')}
+          />
         )}
       </td>
       <td className="rule-cell-actions text-nowrap text-end">
@@ -418,8 +436,8 @@ function RuleRow({
           <button
             type="button"
             className="btn rules-ghost-btn"
-            title="Edit"
-            aria-label={`Edit rule ${rule.priority}`}
+            title={t('common:common.edit')}
+            aria-label={t('rules.editAria', { priority: rule.priority })}
             onClick={onEdit}
           >
             <i className="bi bi-pencil" />
@@ -427,8 +445,8 @@ function RuleRow({
           <button
             type="button"
             className="btn rules-ghost-btn"
-            title="Move up"
-            aria-label={`Move rule ${rule.priority} up`}
+            title={t('rules.moveUp')}
+            aria-label={t('rules.moveUpAria', { priority: rule.priority })}
             disabled={isFirst || moveRule.isPending}
             onClick={() =>
               moveRule.mutate({ ruleId: rule.id, direction: 'up' })
@@ -439,8 +457,10 @@ function RuleRow({
           <button
             type="button"
             className="btn rules-ghost-btn"
-            title="Move down"
-            aria-label={`Move rule ${rule.priority} down`}
+            title={t('rules.moveDown')}
+            aria-label={t('rules.moveDownAria', {
+              priority: rule.priority,
+            })}
             disabled={isLast || moveRule.isPending}
             onClick={() =>
               moveRule.mutate({ ruleId: rule.id, direction: 'down' })
@@ -451,8 +471,10 @@ function RuleRow({
           <button
             type="button"
             className="btn rules-ghost-btn rules-ghost-danger"
-            title="Delete"
-            aria-label={`Delete rule ${rule.priority}`}
+            title={t('common:common.delete')}
+            aria-label={t('rules.deleteAria', {
+              priority: rule.priority,
+            })}
             disabled={deleteRule.isPending}
             onClick={() => deleteRule.mutate(rule.id)}
           >
@@ -471,40 +493,60 @@ function RuleRow({
  * the "except" badge for the description exclusion.
  */
 function ConditionSummary({ rule, data }: { rule: RuleOut; data: RulesOut }) {
+  const { t } = useTranslation('finance');
+  // Server values are snake/upper case (starts_with, AND); catalog
+  // keys are camel/lower case (startsWith, and).
+  const catalogKey = (value: string) =>
+    value.toLowerCase().replace(/_([a-z])/g, (_, c: string) =>
+      c.toUpperCase(),
+    );
   const matchLabel = (value: string) =>
-    (
-      data.match_types.find((matchType) => matchType.value === value)?.label ??
-      value
-    ).toLowerCase();
+    t(`server:matchTypes.${catalogKey(value)}`, {
+      defaultValue:
+        data.match_types.find((m) => m.value === value)?.label ?? value,
+    }).toLowerCase();
   const scopeLabel = (value: string) =>
-    (
-      data.counterparty_scopes.find((scope) => scope.value === value)?.label ??
-      value
-    ).toLowerCase();
+    t(`server:scopes.${catalogKey(value)}`, {
+      defaultValue:
+        data.counterparty_scopes.find((s) => s.value === value)?.label ??
+        value,
+    }).toLowerCase();
 
   return (
     <>
       {rule.counterparty_pattern && (
         <code>
-          {scopeLabel(rule.counterparty_scope)}{' '}
-          {matchLabel(rule.counterparty_match_type)} &quot;
-          {rule.counterparty_pattern}&quot;
+          {t('rules.summaryCounterparty', {
+            scope: scopeLabel(rule.counterparty_scope),
+            match: matchLabel(rule.counterparty_match_type),
+            pattern: rule.counterparty_pattern,
+          })}
         </code>
       )}{' '}
       {rule.counterparty_pattern && rule.description_pattern && (
-        <span className="badge text-bg-light">{rule.operator}</span>
+        <span className="badge text-bg-light">
+          {t(`server:operators.${catalogKey(rule.operator)}`, {
+            defaultValue: rule.operator,
+          })}
+        </span>
       )}{' '}
       {rule.description_pattern && (
         <code>
-          description {matchLabel(rule.description_match_type)} &quot;
-          {rule.description_pattern}&quot;
+          {t('rules.summaryDescription', {
+            match: matchLabel(rule.description_match_type),
+            pattern: rule.description_pattern,
+          })}
         </code>
       )}{' '}
       {rule.description_exclusion && (
         <>
-          <span className="badge text-bg-light">except</span>{' '}
+          <span className="badge text-bg-light">
+            {t('rules.summaryExcept')}
+          </span>{' '}
           <code>
-            description contains &quot;{rule.description_exclusion}&quot;
+            {t('rules.summaryExclusion', {
+              pattern: rule.description_exclusion,
+            })}
           </code>
         </>
       )}

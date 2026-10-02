@@ -196,13 +196,18 @@ def preview_rule(user, data):
     ``is_active``) plus optional ``rule_id`` when editing an
     existing rule.
 
-    Returns ``{'error': msg}`` on invalid input.
+    Returns ``{'error': msg, 'code': slug}`` on invalid input —
+    `code` maps to a `server:*` catalog key for the SPA; `error`
+    stays the English fallback text.
     """
     category = Category.objects.filter(
         user=user, pk=_to_int(data.get('category_id'), 0)
     ).first()
     if category is None:
-        return {'error': 'Pick a category to preview.'}
+        return {
+            'error': 'Pick a category to preview.',
+            'code': 'pickCategory',
+        }
 
     rule_id = _to_int(data.get('rule_id'), 0) or None
     candidate = SimpleNamespace(

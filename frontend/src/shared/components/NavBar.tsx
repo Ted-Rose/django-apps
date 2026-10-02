@@ -1,4 +1,6 @@
+import { useTranslation } from 'react-i18next';
 import { BurgerMenu, type BurgerMenuItem } from './BurgerMenu';
+import LanguageSwitcher from './LanguageSwitcher';
 
 /**
  * Shared Bootstrap navbar matching the site look
@@ -17,14 +19,16 @@ interface NavBarProps {
 }
 
 export function NavBar({ title, user, items = [] }: NavBarProps) {
+  const { t } = useTranslation();
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
       <div className="container-fluid">
         <a className="navbar-brand" href="/">
-          <i className="bi bi-house-heart" /> Tedis&apos;s Tools
+          <i className="bi bi-house-heart" /> {t('nav.brand')}
         </a>
         {title && <span className="navbar-text">{title}</span>}
         <div className="ms-auto d-flex align-items-center gap-2">
+          <LanguageSwitcher />
           {user && <span className="navbar-text">{user}</span>}
           {items.length > 0 && <BurgerMenu items={items} />}
         </div>

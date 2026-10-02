@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import { BurgerMenu } from '../../shared/components/BurgerMenu';
+import LanguageSwitcher from '../../shared/components/LanguageSwitcher';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchTrash, type TaskOut } from '../api';
 import ConfirmModal from '../components/ConfirmModal';
@@ -28,6 +30,7 @@ import { ErrorState, LoadingSkeleton } from './TaskListPage';
  * template doesn't render one either.
  */
 export default function Trash() {
+  const { t } = useTranslation('tasks');
   const [searchParams] = useSearchParams();
   const label = searchParams.get('label');
   const order = searchParams.get('order') ?? 'deleted_desc';
@@ -68,15 +71,20 @@ export default function Trash() {
   }, [data, secondaryLabel]);
 
   const burgerItems: BurgerMenuItem[] = [
-    { label: 'Home', url: '/', icon: 'house', btn_class: 'btn-light' },
     {
-      label: 'Dashboard',
+      label: t('common:common.home'),
+      url: '/',
+      icon: 'house',
+      btn_class: 'btn-light',
+    },
+    {
+      label: t('common:common.dashboard'),
       icon: 'list-task',
       btn_class: 'btn-primary',
       onClick: () => navigate('/'),
     },
     {
-      label: `Logout (${user})`,
+      label: t('common:common.logout', { user }),
       url: '/admin/logout/',
       icon: 'box-arrow-right',
       btn_class: 'btn-outline-light',
@@ -96,7 +104,7 @@ export default function Trash() {
               to="/trash"
               style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}
             >
-              <i className="bi bi-trash" /> Trash
+              <i className="bi bi-trash" /> {t('trash.title')}
             </Link>
             {data && (
               <SecondaryLabelDropdown
@@ -106,11 +114,12 @@ export default function Trash() {
             )}
           </div>
           <div className="ms-auto d-flex flex-row align-items-center gap-2">
+            <LanguageSwitcher />
             <Link
               to="/search"
               className="btn btn-outline-light btn-sm"
               style={{ padding: '0.25rem 0.5rem' }}
-              title="Search tasks"
+              title={t('menu.searchTasks')}
             >
               <i className="bi bi-search" />
             </Link>
@@ -121,8 +130,8 @@ export default function Trash() {
 
       <div className="container-fluid px-2 py-4">
         <div className="alert alert-warning">
-          <i className="bi bi-exclamation-triangle" /> <strong>Note:</strong>{' '}
-          Tasks in trash will be automatically deleted after 30 days.
+          <i className="bi bi-exclamation-triangle" />{' '}
+          <strong>{t('trash.note')}</strong> {t('trash.noteBody')}
         </div>
 
         {isPending && <LoadingSkeleton />}
@@ -140,7 +149,7 @@ export default function Trash() {
             </div>
           ) : (
             <div className="alert alert-info">
-              <i className="bi bi-info-circle" /> Trash is empty.
+              <i className="bi bi-info-circle" /> {t('trash.empty')}
             </div>
           ))}
       </div>
@@ -156,6 +165,7 @@ function TrashTaskCard({
   task: TaskOut;
   labelColors: Map<string, string>;
 }) {
+  const { t } = useTranslation('tasks');
   const restoreTask = useRestoreTask();
   const permanentDelete = usePermanentDeleteTask();
   const [confirming, setConfirming] = useState(false);
@@ -194,7 +204,8 @@ function TrashTaskCard({
               )}
               {deletedAt && (
                 <small className="text-muted">
-                  <i className="bi bi-trash" /> Deleted: {deletedAt}
+                  <i className="bi bi-trash" />{' '}
+                  {t('trash.deleted', { date: deletedAt })}
                 </small>
               )}
             </div>
@@ -206,14 +217,15 @@ function TrashTaskCard({
               disabled={restoreTask.isPending}
               onClick={() => restoreTask.mutate(task.task_id)}
             >
-              <i className="bi bi-arrow-counterclockwise" /> Restore
+              <i className="bi bi-arrow-counterclockwise" />{' '}
+              {t('trash.restore')}
             </button>
             <button
               className="btn btn-sm btn-outline-danger"
               type="button"
               onClick={() => setConfirming(true)}
             >
-              <i className="bi bi-x-circle" /> Delete Forever
+              <i className="bi bi-x-circle" /> {t('trash.deleteForever')}
             </button>
           </div>
         </div>
@@ -221,8 +233,8 @@ function TrashTaskCard({
 
       <ConfirmModal
         show={confirming}
-        title="Permanently Delete Task"
-        confirmLabel="Delete Forever"
+        title={t('trash.modalTitle')}
+        confirmLabel={t('trash.deleteForever')}
         confirmIcon="x-circle"
         confirmClassName="btn-danger"
         busy={permanentDelete.isPending}
@@ -234,9 +246,9 @@ function TrashTaskCard({
         }
       >
         <p>
-          <strong>Warning:</strong> This action cannot be undone!
+          <strong>{t('trash.warning')}</strong> {t('trash.warningBody')}
         </p>
-        <p>Are you sure you want to permanently delete this task?</p>
+        <p>{t('trash.confirm')}</p>
         <p className="fw-bold">{task.title}</p>
       </ConfirmModal>
     </div>

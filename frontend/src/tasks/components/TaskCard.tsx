@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
 import Dropdown from '../../shared/components/Dropdown';
 import { actionHistory } from '../actionHistory';
 import type { LabelOut, LabelRef, TaskOut } from '../api';
@@ -73,6 +74,7 @@ export function TaskCard({
   draggable = false,
   onSetRank,
 }: TaskCardProps) {
+  const { t } = useTranslation('tasks');
   const orderValue = starredView ? task.starred_order : task.task_order;
   const due = formatFullDate(task.due);
 
@@ -121,7 +123,7 @@ export function TaskCard({
                 <span
                   className="complete-btn me-1"
                   role="button"
-                  title="Complete"
+                  title={t('task.complete')}
                   onClick={(event) => {
                     event.stopPropagation();
                     setConfirming('complete');
@@ -132,7 +134,9 @@ export function TaskCard({
                 <span
                   className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
                   role="button"
-                  title={task.is_starred ? 'Unstar' : 'Star'}
+                  title={
+                    task.is_starred ? t('task.unstar') : t('task.star')
+                  }
                   onClick={(event) => {
                     event.stopPropagation();
                     // task_actions.js toggleStar records before POSTing.
@@ -175,7 +179,7 @@ export function TaskCard({
                 {task.needs_push && (
                   <i
                     className="bi bi-cloud-arrow-up text-warning ms-1"
-                    title="Pending sync to Google"
+                    title={t('task.pendingSync')}
                   />
                 )}
               </h5>
@@ -199,13 +203,14 @@ export function TaskCard({
                 <small className="text-muted">
                   {due && (
                     <>
-                      <i className="bi bi-calendar" /> Due: {due}
+                      <i className="bi bi-calendar" />{' '}
+                      {t('task.due', { date: due })}
                     </>
                   )}
                   {task.task_list && (
                     <span
                       className="badge bg-light text-dark border ms-2"
-                      title="Google task list"
+                      title={t('task.googleList')}
                     >
                       <i className="bi bi-folder" /> {task.task_list.title}
                     </span>
@@ -217,7 +222,7 @@ export function TaskCard({
               <Dropdown
                 label={<i className="bi bi-three-dots-vertical" />}
                 buttonClassName="btn btn-sm btn-link text-muted"
-                ariaLabel="Task actions"
+                ariaLabel={t('task.actions')}
                 menuClassName="dropdown-menu-end"
               >
                 <li>
@@ -229,7 +234,7 @@ export function TaskCard({
                       setEditing(true);
                     }}
                   >
-                    <i className="bi bi-pencil" /> Edit
+                    <i className="bi bi-pencil" /> {t('task.edit')}
                   </a>
                 </li>
                 <li>
@@ -246,7 +251,7 @@ export function TaskCard({
                       archiveTask.mutate(task.task_id);
                     }}
                   >
-                    <i className="bi bi-archive" /> Archive
+                    <i className="bi bi-archive" /> {t('task.archive')}
                   </a>
                 </li>
                 <li>
@@ -258,7 +263,7 @@ export function TaskCard({
                       setConfirming('delete');
                     }}
                   >
-                    <i className="bi bi-trash" /> Delete
+                    <i className="bi bi-trash" /> {t('task.delete')}
                   </a>
                 </li>
               </Dropdown>
@@ -270,7 +275,7 @@ export function TaskCard({
             <Dropdown
               label={<>{position}</>}
               buttonClassName="btn btn-sm order-btn"
-              ariaLabel="Change order"
+              ariaLabel={t('task.changeOrder')}
               menuClassName="dropdown-menu-end"
             >
               {ORDER_PRESETS.map((rank) => (
@@ -293,7 +298,7 @@ export function TaskCard({
             <button
               className="btn btn-sm order-btn"
               type="button"
-              title="Priority — change order"
+              title={t('task.priority')}
             >
               {position}
             </button>
@@ -303,8 +308,8 @@ export function TaskCard({
 
       <ConfirmModal
         show={confirming === 'complete'}
-        title="Complete Task"
-        confirmLabel="Complete"
+        title={t('task.completeTitle')}
+        confirmLabel={t('task.complete')}
         confirmIcon="check-circle"
         confirmClassName="btn-success"
         busy={completeTask.isPending}
@@ -320,14 +325,14 @@ export function TaskCard({
           });
         }}
       >
-        <p>Are you sure you want to mark this task as completed?</p>
+        <p>{t('task.completeConfirm')}</p>
         <p className="fw-bold">{task.title}</p>
       </ConfirmModal>
 
       <ConfirmModal
         show={confirming === 'delete'}
-        title="Delete Task"
-        confirmLabel="Delete"
+        title={t('task.deleteTitle')}
+        confirmLabel={t('task.delete')}
         confirmIcon="trash"
         confirmClassName="btn-danger"
         busy={deleteTask.isPending}
@@ -343,7 +348,7 @@ export function TaskCard({
           });
         }}
       >
-        <p>Move this task to trash?</p>
+        <p>{t('task.deleteConfirm')}</p>
         <p className="fw-bold">{task.title}</p>
       </ConfirmModal>
 

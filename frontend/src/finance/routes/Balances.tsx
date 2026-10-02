@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Trans, useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import PageShell from '../components/PageShell';
 import StatCard from '../components/StatCard';
@@ -8,6 +9,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import ErrorState from '../components/ErrorState';
 import Toasts from '../../shared/components/Toasts';
+import { fmtDateTime } from '../../shared/format';
 import { fetchBalances, type AccountOut } from '../api';
 import { useRefreshBalances } from '../mutations';
 import './balances.css';
@@ -22,6 +24,7 @@ import './balances.css';
  * spinner.
  */
 export default function Balances() {
+  const { t } = useTranslation('finance');
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['finance', 'balances'],
     queryFn: fetchBalances,
@@ -34,8 +37,8 @@ export default function Balances() {
     <>
       <FinanceNavBar />
       <PageShell
-        title="Balances"
-        subtitle="Latest reported balance per account"
+        title={t('balances.title')}
+        subtitle={t('balances.subtitle')}
         actions={
           hasAccounts ? (
             <button
@@ -50,7 +53,7 @@ export default function Balances() {
                     className="spinner-border spinner-border-sm"
                     role="status"
                   />{' '}
-                  Fetching...
+                  {t('balances.fetching')}
                 </>
               ) : (
                 <>
@@ -58,7 +61,7 @@ export default function Balances() {
                     className="bi bi-arrow-repeat"
                     aria-hidden="true"
                   />{' '}
-                  Get latest balance
+                  {t('balances.getLatest')}
                 </>
               )}
             </button>
@@ -69,14 +72,14 @@ export default function Balances() {
           <LoadingSkeleton
             rows={3}
             height="6rem"
-            label="Loading balances"
+            label={t('balances.loading')}
           />
         )}
         {isError && (
           <ErrorState
             error={error}
             onRetry={() => refetch()}
-            label="balances"
+            label={t('balances.loadLabel')}
           />
         )}
         {data &&
@@ -87,7 +90,7 @@ export default function Balances() {
                   {totals.map(([currency, total]) => (
                     <StatCard
                       key={currency}
-                      label={`Total (${currency})`}
+                      label={t('balances.total', { currency })}
                       value={`${total.toFixed(2)} ${currency}`}
                       icon="cash-stack"
                     />
@@ -103,10 +106,13 @@ export default function Balances() {
           ) : (
             <EmptyState
               icon="wallet2"
-              title="No accounts are included in the balance check"
+              title={t('balances.emptyTitle')}
             >
-              Enable them on the{' '}
-              <Link to="/accounts">Accounts</Link> page.
+              <Trans
+                i18nKey="balances.emptyBody"
+                ns="finance"
+                components={{ link: <Link to="/accounts" /> }}
+              />
             </EmptyState>
           ))}
       </PageShell>
@@ -140,6 +146,7 @@ function totalByCurrency(accounts: AccountOut[]): [string, number][] {
 
 /** One balance card — mirrors the template's balance block. */
 function BalanceCard({ account }: { account: AccountOut }) {
+  const { t } = useTranslation('finance');
   const balance = (account.last_balance ?? null) as LastBalance | null;
   const amount = balance?.balanceAmount;
   const updatedAt = account.balance_updated_at
@@ -147,7 +154,7 @@ function BalanceCard({ account }: { account: AccountOut }) {
     : null;
   const updatedLabel =
     updatedAt && !Number.isNaN(updatedAt.getTime())
-      ? updatedAt.toLocaleString()
+      ? fmtDateTime(updatedAt)
       : null;
 
   return (
@@ -173,23 +180,26 @@ function BalanceCard({ account }: { account: AccountOut }) {
                 )}
                 {balance.balanceType && updatedLabel && ' · '}
                 {updatedLabel && (
-                  <span>Last updated: {updatedLabel}</span>
+                  <span>
+                    {t('balances.lastUpdated', { datetime: updatedLabel })}
+                  </span>
                 )}
               </p>
             )}
           </>
         ) : (
           <p className="text-muted small mb-0">
-            No balance retrieved yet. Click &quot;Get latest
-            balance&quot; to fetch it.
+            {t('balances.noBalance')}
           </p>
         )}
         {account.balance_alert != null && (
           <p className="balances-card-footer mb-0 mt-2">
             <span className="badge text-bg-secondary">
-              <i className="bi bi-bell-fill" /> Alert below{' '}
-              {account.balance_alert}{' '}
-              {amount?.currency ?? account.currency}
+              <i className="bi bi-bell-fill" />{' '}
+              {t('balances.alertBelow', {
+                threshold: account.balance_alert,
+                currency: amount?.currency ?? account.currency,
+              })}
             </span>
           </p>
         )}

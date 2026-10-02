@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Bootstrap 5 modal markup driven by React state — the SPA shell
@@ -25,6 +26,7 @@ export function Modal({
   onClose,
   dialogClassName = '',
 }: ModalProps) {
+  const { t } = useTranslation();
   const titleId = useId();
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -70,7 +72,7 @@ export function Modal({
               <button
                 type="button"
                 className="btn-close"
-                aria-label="Close"
+                aria-label={t('common.close')}
                 onClick={onClose}
               />
             </div>

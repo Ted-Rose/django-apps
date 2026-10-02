@@ -14,10 +14,12 @@ from django.utils import timezone
 
 from finance.models import Transaction
 
-# (threshold field, alert-episode flag field, window length, label)
+# (threshold field, alert-episode flag field, window length, label,
+#  i18n key — the SPA translates `key`, `label` stays the English
+#  fallback, and gettext uses `key` for the push-alert wording).
 FIXED_WINDOWS = (
-    ('limit_7_days', 'alerted_7d_at', 7, '7 days'),
-    ('limit_30_days', 'alerted_30d_at', 30, '30 days'),
+    ('limit_7_days', 'alerted_7d_at', 7, '7 days', 'days7'),
+    ('limit_30_days', 'alerted_30d_at', 30, '30 days', 'days30'),
 )
 
 # Every threshold field paired with its alert flag, monthly included —
@@ -33,7 +35,7 @@ ALERT_FIELD_BY_THRESHOLD = {
 class LimitWindow:
     """One configured window of a TransactionLimit."""
     label: str            # '7 days', '30 days', 'This month'
-    period_text: str      # 'the last 7 days', 'this month'
+    key: str              # 'days7', 'days30', 'thisMonth'
     threshold_field: str
     alert_field: str
     threshold: Decimal
@@ -50,13 +52,13 @@ def limit_windows(limit, today=None):
     """Active windows of ``limit`` with their current period start."""
     today = today or timezone.now().date()
     windows = []
-    for threshold_field, alert_field, days, label in FIXED_WINDOWS:
+    for threshold_field, alert_field, days, label, key in FIXED_WINDOWS:
         threshold = getattr(limit, threshold_field)
         if threshold is None:
             continue
         windows.append(LimitWindow(
             label=label,
-            period_text=f'the last {label}',
+            key=key,
             threshold_field=threshold_field,
             alert_field=alert_field,
             threshold=threshold,
@@ -66,7 +68,7 @@ def limit_windows(limit, today=None):
     if limit.limit_monthly is not None:
         windows.append(LimitWindow(
             label='This month',
-            period_text='this month',
+            key='thisMonth',
             threshold_field='limit_monthly',
             alert_field='alerted_monthly_at',
             threshold=limit.limit_monthly,
@@ -152,12 +154,20 @@ def monthly_stat(limit, period_start, today=None):
             limit, period_start, end=_next_month(period_start)
         )
         threshold = limit.limit_monthly
+    is_current = period_start == current_start
     label = (
         'This month'
-        if period_start == current_start
+        if is_current
         else period_start.strftime('%B %Y')
     )
-    return {'label': label, **_stat(spent, threshold)}
+    return {
+        'label': label,
+        # The SPA formats `value` (YYYY-MM) via fmtMonth; `key`
+        # selects the catalog window label for the current month.
+        'key': 'thisMonth' if is_current else None,
+        'value': period_start.strftime('%Y-%m'),
+        **_stat(spent, threshold),
+    }
 
 
 def monthly_history(limit, before=None, today=None):
@@ -207,6 +217,7 @@ def monthly_history(limit, before=None, today=None):
             threshold = limit.limit_monthly
         history.append({
             'label': month.strftime('%b %Y'),
+            'value': month.strftime('%Y-%m'),
             **_stat(spent, threshold),
         })
         month = _next_month(month)
@@ -239,6 +250,7 @@ def limit_window_stats(limit, today=None, as_of=None):
             )
             stat = {
                 'label': window.label,
+                'key': window.key,
                 **_stat(spent, window.threshold),
             }
         stats.append(stat)

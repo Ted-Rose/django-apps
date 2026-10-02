@@ -1,0 +1,43 @@
+# Latvian catalog — job-generated notifications and form errors.
+# Wording mirrors the finance SPA's server.* keys (alertTitle,
+# alertLine, lowBalanceTitle, lowBalanceBody, allSpending,
+# periodText.*); compiled to .mo by console_tasks/build.py.
+msgid ""
+msgstr ""
+"Project-Id-Version: django-apps\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 00:00+0300\n"
+"PO-Revision-Date: 2026-10-05 00:00+0300\n"
+"Last-Translator: \n"
+"Language: lv\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "All spending"
+msgstr "Visi tēriņi"
+
+msgid "the last 7 days"
+msgstr "pēdējās 7 dienās"
+
+msgid "the last 30 days"
+msgstr "pēdējās 30 dienās"
+
+msgid "this month"
+msgstr "šajā mēnesī"
+
+msgid "Spending limit exceeded"
+msgstr "Pārsniegts tēriņu limits"
+
+msgid "{scope} on {account}: {spent} of {threshold} in {period}"
+msgstr "{scope} — {account}: {spent} no {threshold} {period}"
+
+msgid "Low balance"
+msgstr "Zems atlikums"
+
+msgid "{account}: {balance} — below your {threshold} alert"
+msgstr ""
+"{account}: {balance} — zem tava {threshold} brīdinājuma sliekšņa"
+
+msgid "Set at least one pattern to match on."
+msgstr "Jānorāda vismaz viens atbilstības šablons."

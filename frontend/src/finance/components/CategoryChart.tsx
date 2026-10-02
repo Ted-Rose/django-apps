@@ -6,6 +6,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
 import type { CategoryRowOut } from '../api';
 
 const FALLBACK_COLOR = '#6c757d';
@@ -19,13 +20,14 @@ const FALLBACK_COLOR = '#6c757d';
  * renders it at 0×0 — the route's tests stub this component).
  */
 export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
+  const { t } = useTranslation('finance');
   const slices = rows.filter((row) => row.share > 0);
   if (slices.length === 0) return null;
   return (
     <div
       className="cat-chart"
       role="img"
-      aria-label="Spending share by category"
+      aria-label={t('categories.chartAria')}
     >
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>

@@ -9,6 +9,8 @@ from django.shortcuts import redirect, render
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from django_apps.models import user_language
+
 
 def home(request):
     return render(request, 'home.html')
@@ -17,7 +19,7 @@ def home(request):
 # --- Progressive Web App (PWA) endpoints ---
 
 # Bump this to force clients to refresh the service worker cache.
-PWA_CACHE_VERSION = '10'
+PWA_CACHE_VERSION = '12'
 
 
 def manifest(request):
@@ -103,14 +105,19 @@ def spa_shell(request, entry, title=''):
         os.path.join(settings.BASE_DIR, 'frontend_dist',
                      'manifest.json'),
     )
+    language = user_language(request.user)
     return render(request, 'spa_shell.html', {
         'title': title,
         'vite_entry': vite_entry,
+        'language': language,
         'manifest_ready': (
             vite_config.get('dev_mode')
             or _manifest_has_entry(manifest_path, vite_entry)
         ),
-        'bootstrap': {'user': request.user.get_username()},
+        'bootstrap': {
+            'user': request.user.get_username(),
+            'language': language,
+        },
     })
 
 

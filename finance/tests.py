@@ -2057,6 +2057,23 @@ class LimitPushAlertCommandTests(TestCase):
         limit.refresh_from_db()
         self.assertIsNotNone(limit.alerted_monthly_at)
 
+    def test_alert_text_localized_for_lv_user(self):
+        from django_apps.models import UserSettings
+        UserSettings.objects.create(user=self.user, language='lv')
+        TransactionLimit.objects.create(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+
+        mock_send = self.run_command()
+
+        mock_send.assert_called_once()
+        title, body = mock_send.call_args[0][1:3]
+        self.assertEqual(title, 'Pārsniegts tēriņu limits')
+        self.assertIn('pēdējās 7 dienās', body)
+
     def test_monthly_flag_cleared_when_threshold_removed(self):
         start = timezone.now().date().replace(day=1)
         limit = TransactionLimit.objects.create(
@@ -2174,6 +2191,25 @@ class CheckBalanceAlertsTests(TestCase):
         mock_send, _ = self.run_command()
         mock_send.assert_not_called()
         self.assertEqual(Notification.objects.count(), 1)
+
+    def test_breach_notification_localized_for_lv_user(self):
+        from django_apps.models import UserSettings
+        UserSettings.objects.create(user=self.user, language='lv')
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, _ = self.run_command()
+
+        mock_send.assert_called_once()
+        self.assertEqual(mock_send.call_args[0][1], 'Zems atlikums')
+        self.assertIn(
+            'zem tava €50.00', mock_send.call_args[0][2]
+        )
+        notification = Notification.objects.get(user=self.user)
+        self.assertEqual(notification.title, 'Zems atlikums')
+        self.assertIn('zem tava', notification.body)
 
     def test_recovery_clears_flag_then_realerts(self):
         alert = BalanceAlert.objects.create(

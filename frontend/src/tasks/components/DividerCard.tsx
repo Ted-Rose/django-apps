@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
 import { actionHistory } from '../actionHistory';
 import type { TaskOut } from '../api';
 import { useDeleteDivider, useUpdateDivider } from '../mutations';
@@ -29,6 +30,7 @@ export function DividerCard({
   draggable = false,
   starredView = false,
 }: DividerCardProps) {
+  const { t } = useTranslation('tasks');
   const [text, setText] = useState(task.title);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const updateDivider = useUpdateDivider();
@@ -84,7 +86,7 @@ export function DividerCard({
         <div className="d-flex align-items-center">
           <span
             className="divider-drag-handle"
-            title="Drag to reorder"
+            title={t('divider.dragToReorder')}
             {...(draggable ? attributes : {})}
             {...(draggable ? listeners : {})}
           >
@@ -95,7 +97,7 @@ export function DividerCard({
             type="text"
             className="divider-text"
             value={text}
-            placeholder="Click to label..."
+            placeholder={t('divider.placeholder')}
             data-task-id={task.task_id}
             onChange={(event) => setText(event.target.value)}
             onBlur={commit}
@@ -109,7 +111,7 @@ export function DividerCard({
             className="btn btn-sm btn-link text-danger delete-divider-btn"
             type="button"
             data-task-id={task.task_id}
-            title="Delete divider"
+            title={t('divider.delete')}
             onClick={(event) => {
               event.stopPropagation();
               setConfirmingDelete(true);
@@ -122,8 +124,8 @@ export function DividerCard({
 
       <ConfirmModal
         show={confirmingDelete}
-        title="Delete Divider"
-        confirmLabel="Delete"
+        title={t('divider.deleteTitle')}
+        confirmLabel={t('common:common.delete')}
         confirmIcon="trash"
         confirmClassName="btn-danger"
         busy={deleteDivider.isPending}
@@ -139,7 +141,7 @@ export function DividerCard({
           });
         }}
       >
-        <p>Delete this divider?</p>
+        <p>{t('divider.deleteConfirm')}</p>
         {task.title && <p className="fw-bold">{task.title}</p>}
       </ConfirmModal>
     </div>

@@ -1,7 +1,9 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import Dropdown from '../../shared/components/Dropdown';
 import CategoryBadge from './CategoryBadge';
 import MoneyText from './MoneyText';
+import { fmtDate } from '../../shared/format';
 import type { TransactionOut, TransactionsOut } from '../api';
 
 /**
@@ -41,6 +43,7 @@ export function TransactionTable({
   onAddRule,
   ruleLoadingId = null,
 }: TransactionTableProps) {
+  const { t } = useTranslation('finance');
   const { sort, direction } = data;
   // Rules assign a category, so the row action is pointless without one.
   const hasCategories = data.categories.length > 0;
@@ -66,24 +69,24 @@ export function TransactionTable({
         <thead>
           <tr>
             <ColumnHeader
-              label="Date"
+              label={t('transactions.columns.date')}
               column="date"
               sort={sort}
               direction={direction}
             >
               <SortItem
-                label="Newest first"
+                label={t('transactions.sort.newestFirst')}
                 active={sort === 'date' && direction === 'desc'}
                 onClick={() => setSort('date', 'desc')}
               />
               <SortItem
-                label="Oldest first"
+                label={t('transactions.sort.oldestFirst')}
                 active={sort === 'date' && direction === 'asc'}
                 onClick={() => setSort('date', 'asc')}
               />
             </ColumnHeader>
             <ColumnHeader
-              label="Account"
+              label={t('transactions.columns.account')}
               column="account"
               sort={sort}
               direction={direction}
@@ -91,12 +94,12 @@ export function TransactionTable({
               menuStyle={scrollableMenu}
             >
               <SortItem
-                label="Sort A → Z"
+                label={t('transactions.sort.az')}
                 active={sort === 'account' && direction === 'asc'}
                 onClick={() => setSort('account', 'asc')}
               />
               <SortItem
-                label="Sort Z → A"
+                label={t('transactions.sort.za')}
                 active={sort === 'account' && direction === 'desc'}
                 onClick={() => setSort('account', 'desc')}
               />
@@ -104,10 +107,12 @@ export function TransactionTable({
                 <hr className="dropdown-divider" />
               </li>
               <li>
-                <h6 className="dropdown-header">Filter</h6>
+                <h6 className="dropdown-header">
+                  {t('transactions.filterHeader')}
+                </h6>
               </li>
               <FilterItem
-                label="All accounts"
+                label={t('transactions.allAccounts')}
                 active={data.selected_account == null}
                 onClick={() => onUpdate({ account: null })}
               />
@@ -121,7 +126,7 @@ export function TransactionTable({
               ))}
             </ColumnHeader>
             <ColumnHeader
-              label="Description"
+              label={t('transactions.columns.description')}
               column="description"
               sort={sort}
               direction={direction}
@@ -129,12 +134,12 @@ export function TransactionTable({
               menuStyle={{ minWidth: '240px' }}
             >
               <SortItem
-                label="Sort A → Z"
+                label={t('transactions.sort.az')}
                 active={sort === 'description' && direction === 'asc'}
                 onClick={() => setSort('description', 'asc')}
               />
               <SortItem
-                label="Sort Z → A"
+                label={t('transactions.sort.za')}
                 active={sort === 'description' && direction === 'desc'}
                 onClick={() => setSort('description', 'desc')}
               />
@@ -159,13 +164,13 @@ export function TransactionTable({
                       className="form-control"
                       key={data.search_query}
                       defaultValue={data.search_query}
-                      placeholder="Search..."
-                      aria-label="Search descriptions"
+                      placeholder={t('transactions.searchPlaceholder')}
+                      aria-label={t('transactions.searchDescriptionsAria')}
                     />
                     <button
                       type="submit"
                       className="btn btn-outline-secondary"
-                      aria-label="Search"
+                      aria-label={t('common:common.search')}
                     >
                       <i className="bi bi-search" />
                     </button>
@@ -174,7 +179,7 @@ export function TransactionTable({
               </li>
             </ColumnHeader>
             <ColumnHeader
-              label="Creditor"
+              label={t('transactions.columns.creditor')}
               column="creditor"
               sort={sort}
               direction={direction}
@@ -182,12 +187,12 @@ export function TransactionTable({
               menuStyle={scrollableMenu}
             >
               <SortItem
-                label="Sort A → Z"
+                label={t('transactions.sort.az')}
                 active={sort === 'creditor' && direction === 'asc'}
                 onClick={() => setSort('creditor', 'asc')}
               />
               <SortItem
-                label="Sort Z → A"
+                label={t('transactions.sort.za')}
                 active={sort === 'creditor' && direction === 'desc'}
                 onClick={() => setSort('creditor', 'desc')}
               />
@@ -201,7 +206,7 @@ export function TransactionTable({
               />
             </ColumnHeader>
             <ColumnHeader
-              label="Category"
+              label={t('transactions.columns.category')}
               column="category"
               sort={sort}
               direction={direction}
@@ -209,12 +214,12 @@ export function TransactionTable({
               menuStyle={scrollableMenu}
             >
               <SortItem
-                label="Sort A → Z"
+                label={t('transactions.sort.az')}
                 active={sort === 'category' && direction === 'asc'}
                 onClick={() => setSort('category', 'asc')}
               />
               <SortItem
-                label="Sort Z → A"
+                label={t('transactions.sort.za')}
                 active={sort === 'category' && direction === 'desc'}
                 onClick={() => setSort('category', 'desc')}
               />
@@ -222,15 +227,17 @@ export function TransactionTable({
                 <hr className="dropdown-divider" />
               </li>
               <li>
-                <h6 className="dropdown-header">Filter</h6>
+                <h6 className="dropdown-header">
+                  {t('transactions.filterHeader')}
+                </h6>
               </li>
               <FilterItem
-                label="All categories"
+                label={t('transactions.allCategories')}
                 active={!data.selected_category}
                 onClick={() => onUpdate({ category: null })}
               />
               <FilterItem
-                label="Uncategorized"
+                label={t('transactions.uncategorized')}
                 active={data.selected_category === 'none'}
                 onClick={() => onUpdate({ category: 'none' })}
               />
@@ -244,19 +251,19 @@ export function TransactionTable({
               ))}
             </ColumnHeader>
             <ColumnHeader
-              label="Amount"
+              label={t('transactions.columns.amount')}
               column="amount"
               sort={sort}
               direction={direction}
               end
             >
               <SortItem
-                label="Largest first"
+                label={t('transactions.sort.largestFirst')}
                 active={sort === 'amount' && direction === 'desc'}
                 onClick={() => setSort('amount', 'desc')}
               />
               <SortItem
-                label="Smallest first"
+                label={t('transactions.sort.smallestFirst')}
                 active={sort === 'amount' && direction === 'asc'}
                 onClick={() => setSort('amount', 'asc')}
               />
@@ -264,7 +271,9 @@ export function TransactionTable({
             {/* No header chip on mobile — the action lives in the
                 row card itself. */}
             <th className="d-none d-lg-table-cell text-end">
-              <span className="visually-hidden">Actions</span>
+              <span className="visually-hidden">
+                {t('transactions.columns.actions')}
+              </span>
             </th>
           </tr>
         </thead>
@@ -283,8 +292,8 @@ export function TransactionTable({
             <tr>
               <td colSpan={7} className="text-center text-muted py-4">
                 {data.filters_active
-                  ? 'No transactions match the selected filters.'
-                  : 'No transactions synced yet. Transactions are synced every 6 hours by a scheduled job.'}
+                  ? t('transactions.emptyFiltered')
+                  : t('transactions.emptyDefault')}
               </td>
             </tr>
           )}
@@ -385,6 +394,7 @@ function CreditorMenuItems({
   selected: string;
   onUpdate: (updates: ParamUpdates) => void;
 }) {
+  const { t } = useTranslation('finance');
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
   const visible = counterparties.filter(
@@ -393,20 +403,22 @@ function CreditorMenuItems({
   return (
     <>
       <li>
-        <h6 className="dropdown-header">Filter</h6>
+        <h6 className="dropdown-header">
+          {t('transactions.filterHeader')}
+        </h6>
       </li>
       <li className="px-3 pb-1">
         <input
           type="text"
           className="form-control form-control-sm"
-          placeholder="Search creditors..."
-          aria-label="Search creditors"
+          placeholder={t('transactions.searchCreditors')}
+          aria-label={t('transactions.searchCreditorsAria')}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
       </li>
       <FilterItem
-        label="All creditors"
+        label={t('transactions.allCreditors')}
         active={!selected}
         onClick={() => onUpdate({ creditor: null })}
       />
@@ -433,16 +445,17 @@ function TransactionRow({
   ruleLoading: boolean;
   onAddRule: (tx: TransactionOut) => void;
 }) {
+  const { t } = useTranslation('finance');
   // booking_date is a date-only string; appending T00:00:00 parses it
   // as local midnight (the template's local-datetime behavior)
   // instead of UTC midnight, which toLocaleDateString would roll
   // back a day behind UTC.
-  const bookingDate = new Date(`${tx.booking_date}T00:00:00`);
+  const bookingDate = `${tx.booking_date}T00:00:00`;
   // Money stays a string — read only the sign for coloring.
   const negative = tx.amount.startsWith('-');
   return (
     <tr>
-      <td className="tx-cell-date">{bookingDate.toLocaleDateString()}</td>
+      <td className="tx-cell-date">{fmtDate(bookingDate)}</td>
       <td className="tx-cell-account">
         {tx.account.name || tx.account.iban || ''}
       </td>
@@ -468,10 +481,10 @@ function TransactionRow({
           className="btn btn-sm tx-rule-btn"
           title={
             canAddRule
-              ? 'Create a categorization rule from this transaction'
-              : 'Create a category first'
+              ? t('transactions.addRule')
+              : t('transactions.addRuleDisabled')
           }
-          aria-label={`Create categorization rule for transaction ${tx.id}`}
+          aria-label={t('transactions.addRuleAria', { id: tx.id })}
           disabled={!canAddRule || ruleLoading}
           onClick={() => onAddRule(tx)}
         >

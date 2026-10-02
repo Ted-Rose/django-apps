@@ -29,6 +29,10 @@ RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.pytho
 COPY . .
 COPY --from=frontend /frontend_dist /app/frontend_dist
 
+# Compile gettext catalogs (pure-Python polib — msgfmt is absent).
+# The console_tasks' other steps no-op without their env vars.
+RUN python django_apps/console_tasks/build.py
+
 # collectstatic needs settings to import, which requires
 # private_settings.json (dockerignored). Create a build-time dummy,
 # collect, then remove it — the GCP runtime uses env vars instead.

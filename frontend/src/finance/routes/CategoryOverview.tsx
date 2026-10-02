@@ -1,6 +1,7 @@
 import { Suspense, lazy, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import PageShell from '../components/PageShell';
 import StatCard from '../components/StatCard';
@@ -31,6 +32,7 @@ import './categories.css';
  * screens — the tx count is secondary text under the badge.
  */
 export default function CategoryOverview() {
+  const { t } = useTranslation('finance');
   const [searchParams, setSearchParams] = useSearchParams();
   const params = {
     from: searchParams.get('from') ?? '',
@@ -77,14 +79,14 @@ export default function CategoryOverview() {
     <>
       <FinanceNavBar />
       <PageShell
-        title="Category spending"
-        subtitle="Per-category totals for the selected period"
+        title={t('categories.title')}
+        subtitle={t('categories.subtitle')}
       >
         <form className="fin-card p-3 mb-3" onSubmit={applyFilters}>
           <div className="row g-2 align-items-end mb-0">
             <div className="col-6 col-sm-auto">
               <label htmlFor="date-from" className="form-label">
-                From
+                {t('categories.dateFrom')}
               </label>
               <input
                 type="date"
@@ -97,7 +99,7 @@ export default function CategoryOverview() {
             </div>
             <div className="col-6 col-sm-auto">
               <label htmlFor="date-to" className="form-label">
-                To
+                {t('categories.dateTo')}
               </label>
               <input
                 type="date"
@@ -110,7 +112,7 @@ export default function CategoryOverview() {
             </div>
             <div className="col-12 col-sm-auto">
               <label htmlFor="account-filter" className="form-label">
-                Account
+                {t('categories.account')}
               </label>
               <select
                 name="account"
@@ -121,7 +123,7 @@ export default function CategoryOverview() {
                 key={`account-${params.account}-${data ? 'ready' : 'loading'}`}
                 defaultValue={params.account}
               >
-                <option value="">All accounts</option>
+                <option value="">{t('categories.allAccounts')}</option>
                 {(data?.accounts ?? []).map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.label}
@@ -131,7 +133,7 @@ export default function CategoryOverview() {
             </div>
             <div className="col-12 col-sm-auto">
               <button type="submit" className="btn btn-primary w-100">
-                Apply
+                {t('common:common.apply')}
               </button>
             </div>
           </div>
@@ -141,26 +143,30 @@ export default function CategoryOverview() {
           <div className="d-flex flex-wrap gap-2 mb-4">
             {data.periods.map((period) => (
               <button
-                key={period.label}
+                key={period.key ?? period.label}
                 type="button"
                 className={`fin-chip${period.active ? ' active' : ''}`}
                 aria-pressed={period.active}
                 onClick={() => selectPeriod(period.date_from, period.date_to)}
               >
-                {period.label}
+                {period.key
+                  ? t(`server:periods.${period.key}`, {
+                      defaultValue: period.label,
+                    })
+                  : period.label}
               </button>
             ))}
           </div>
         )}
 
         {isPending && (
-          <LoadingSkeleton label="Loading category spending" rows={5} />
+          <LoadingSkeleton label={t('categories.loading')} rows={5} />
         )}
         {isError && (
           <ErrorState
             error={error}
             onRetry={() => refetch()}
-            label="category spending"
+            label={t('categories.loadLabel')}
           />
         )}
         {data && (
@@ -173,7 +179,7 @@ export default function CategoryOverview() {
                     key={`${currency}-spent`}
                   >
                     <StatCard
-                      label={`Spent (${currency})`}
+                      label={t('categories.spent', { currency })}
                       icon="arrow-up-circle"
                       value={
                         <MoneyText
@@ -188,7 +194,7 @@ export default function CategoryOverview() {
                     key={`${currency}-received`}
                   >
                     <StatCard
-                      label={`Received (${currency})`}
+                      label={t('categories.received', { currency })}
                       icon="arrow-down-circle"
                       value={
                         <MoneyText
@@ -205,7 +211,9 @@ export default function CategoryOverview() {
               <div className="row g-3">
                 <div className="col-12 col-lg-4">
                   <div className="fin-card p-3 h-100">
-                    <h2 className="h6 text-muted">Spending by category</h2>
+                    <h2 className="h6 text-muted">
+                      {t('categories.chartTitle')}
+                    </h2>
                     <Suspense
                       fallback={
                         <div
@@ -223,9 +231,9 @@ export default function CategoryOverview() {
                     <table className="table table-hover cat-table mb-0">
                       <thead>
                         <tr>
-                          <th>Category</th>
-                          <th className="w-25">Share</th>
-                          <th className="text-end">Net</th>
+                          <th>{t('transactions.columns.category')}</th>
+                          <th className="w-25">{t('categories.share')}</th>
+                          <th className="text-end">{t('categories.net')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -241,7 +249,7 @@ export default function CategoryOverview() {
                         {Object.entries(data.totals).map(
                           ([currency, total]) => (
                             <tr className="fw-bold" key={currency}>
-                              <td>Total ({currency})</td>
+                              <td>{t('categories.total', { currency })}</td>
                               <td />
                               <td className="text-end text-nowrap">
                                 <div className="text-danger fin-money">
@@ -262,7 +270,7 @@ export default function CategoryOverview() {
             ) : (
               <EmptyState
                 icon="pie-chart"
-                title="No transactions in this period."
+                title={t('categories.emptyTitle')}
               />
             )}
           </>
@@ -278,6 +286,7 @@ export default function CategoryOverview() {
  * with the category color, and the signed net amount.
  */
 function OverviewRow({ row, index }: { row: CategoryRowOut; index: number }) {
+  const { t } = useTranslation('finance');
   const net = Number(row.net);
   const color = /^#[0-9a-f]{6}$/i.test(row.category_color)
     ? row.category_color
@@ -290,12 +299,15 @@ function OverviewRow({ row, index }: { row: CategoryRowOut; index: number }) {
         <CategoryBadge
           category={{
             id: index,
-            name: row.category_name,
+            name:
+              row.category_key === 'uncategorized'
+                ? t('transactions.uncategorized')
+                : row.category_name,
             color: row.category_color,
           }}
         />
         <div className="small text-muted">
-          {row.tx_count} {row.tx_count === 1 ? 'transaction' : 'transactions'}
+          {t('categories.txCount', { count: row.tx_count })}
         </div>
       </td>
       <td className="align-middle">

@@ -9,6 +9,8 @@ import type { BurgerMenuItem } from '../components/BurgerMenu';
  */
 export interface BootstrapPayload {
   user?: string;
+  /** Stored per-user language pref ('en'/'lv') — see UserSettings. */
+  language?: string;
   burger_menu_items?: BurgerMenuItem[];
   [key: string]: unknown;
 }

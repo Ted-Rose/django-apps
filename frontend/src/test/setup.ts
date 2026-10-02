@@ -1,6 +1,48 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import { splitServer } from '../shared/i18n';
+import commonEn from '../shared/locales/en.json';
+import commonLv from '../shared/locales/lv.json';
+import financeEn from '../finance/locales/en.json';
+import financeLv from '../finance/locales/lv.json';
+import tasksEn from '../tasks/locales/en.json';
+import tasksLv from '../tasks/locales/lv.json';
+
+// Initialize i18next with the real catalogs synchronously so
+// component tests keep asserting on the default English copy. The
+// `server` sections are hoisted into the `server` namespace exactly
+// like initI18n does per entry; finance's covers the shared codes.
+// lv resources are registered too so tests can switchLanguage() into
+// Latvian — always switch back to 'en' afterwards.
+const financeEnApp = splitServer(financeEn);
+const tasksEnApp = splitServer(tasksEn);
+const financeLvApp = splitServer(financeLv);
+const tasksLvApp = splitServer(tasksLv);
+i18n.use(initReactI18next).init({
+  resources: {
+    en: {
+      common: commonEn,
+      finance: financeEnApp.app,
+      tasks: tasksEnApp.app,
+      server: { ...tasksEnApp.server, ...financeEnApp.server },
+    },
+    lv: {
+      common: commonLv,
+      finance: financeLvApp.app,
+      tasks: tasksLvApp.app,
+      server: { ...tasksLvApp.server, ...financeLvApp.server },
+    },
+  },
+  lng: 'en',
+  fallbackLng: 'en',
+  ns: ['common', 'finance', 'tasks', 'server'],
+  defaultNS: 'common',
+  compatibilityJSON: 'v4',
+  interpolation: { escapeValue: false },
+});
 
 // Node ≥23 exposes a bare `localStorage` global whose Storage methods
 // are inert stubs unless --experimental-webstorage is passed; it ends

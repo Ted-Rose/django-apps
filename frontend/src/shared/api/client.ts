@@ -156,6 +156,13 @@ export function apiPut<T = unknown>(
   return apiFetch<T>(url, { method: 'PUT', body });
 }
 
+export function apiPatch<T = unknown>(
+  url: string,
+  body?: ApiRequestOptions['body'],
+): Promise<T> {
+  return apiFetch<T>(url, { method: 'PATCH', body });
+}
+
 export function apiDelete<T = unknown>(url: string): Promise<T> {
   return apiFetch<T>(url, { method: 'DELETE' });
 }

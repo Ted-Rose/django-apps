@@ -1,0 +1,41 @@
+# English catalog — msgid is already English, msgstr stays empty.
+# Job-generated notifications and form errors; compiled to .mo by
+# console_tasks/build.py::compile_po (polib) at build time.
+msgid ""
+msgstr ""
+"Project-Id-Version: django-apps\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-05 00:00+0300\n"
+"PO-Revision-Date: 2026-10-05 00:00+0300\n"
+"Last-Translator: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "All spending"
+msgstr ""
+
+msgid "the last 7 days"
+msgstr ""
+
+msgid "the last 30 days"
+msgstr ""
+
+msgid "this month"
+msgstr ""
+
+msgid "Spending limit exceeded"
+msgstr ""
+
+msgid "{scope} on {account}: {spent} of {threshold} in {period}"
+msgstr ""
+
+msgid "Low balance"
+msgstr ""
+
+msgid "{account}: {balance} — below your {threshold} alert"
+msgstr ""
+
+msgid "Set at least one pattern to match on."
+msgstr ""

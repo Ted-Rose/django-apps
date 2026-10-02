@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import NavBar from '../../shared/components/NavBar';
 import useBootstrap from '../../shared/hooks/useBootstrap';
@@ -24,6 +25,7 @@ import { ErrorState, LoadingSkeleton } from './TaskListPage';
 const SAVED_REDIRECT_MS = 1500;
 
 export default function TaskDetail() {
+  const { t } = useTranslation('tasks');
   const { taskId = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -93,7 +95,7 @@ export default function TaskDetail() {
     const trimmed = title.trim();
     if (!trimmed) {
       // task_detail.html showAlert('Title cannot be empty', 'danger')
-      setAlert({ kind: 'danger', text: 'Title cannot be empty' });
+      setAlert({ kind: 'danger', text: t('detail.titleEmpty') });
       return;
     }
     const orderRaw = taskOrder.trim();
@@ -106,7 +108,7 @@ export default function TaskDetail() {
       (parsedOrder !== undefined && !Number.isFinite(parsedOrder)) ||
       (parsedStarred !== null && !Number.isFinite(parsedStarred))
     ) {
-      setAlert({ kind: 'danger', text: 'Order values must be numbers' });
+      setAlert({ kind: 'danger', text: t('detail.orderNumbers') });
       return;
     }
     setAlert(null);
@@ -126,7 +128,7 @@ export default function TaskDetail() {
       },
       {
         onSuccess: () => {
-          setAlert({ kind: 'success', text: 'Task updated successfully!' });
+          setAlert({ kind: 'success', text: t('detail.updated') });
           setTimeout(() => navigate(backTarget), SAVED_REDIRECT_MS);
         },
         onError: (mutationError) =>
@@ -156,15 +158,20 @@ export default function TaskDetail() {
   };
 
   const burgerItems: BurgerMenuItem[] = [
-    { label: 'Home', url: '/', icon: 'house', btn_class: 'btn-light' },
     {
-      label: 'Dashboard',
+      label: t('common:common.home'),
+      url: '/',
+      icon: 'house',
+      btn_class: 'btn-light',
+    },
+    {
+      label: t('common:common.dashboard'),
       icon: 'list-task',
       btn_class: 'btn-primary',
       onClick: () => navigate(backTarget),
     },
     {
-      label: `Logout (${user})`,
+      label: t('common:common.logout', { user }),
       url: '/admin/logout/',
       icon: 'box-arrow-right',
       btn_class: 'btn-outline-light',
@@ -173,7 +180,7 @@ export default function TaskDetail() {
 
   return (
     <>
-      <NavBar title="Tasks" items={burgerItems} />
+      <NavBar title={t('nav.title')} items={burgerItems} />
       <div className="container-fluid task-detail-container">
         {isPending && <LoadingSkeleton />}
         {isError && <ErrorState error={error} onRetry={() => refetch()} />}
@@ -185,14 +192,16 @@ export default function TaskDetail() {
                 className="btn btn-secondary btn-sm me-2"
                 id="back-btn"
               >
-                <i className="bi bi-arrow-left" /> Back to Dashboard
+                <i className="bi bi-arrow-left" /> {t('detail.back')}
               </Link>
-              <h5 className="mb-0">Edit Task</h5>
+              <h5 className="mb-0">{t('detail.editTask')}</h5>
               <span
                 className={`star-btn ms-auto${task.is_starred ? ' starred' : ''}`}
                 id="star-btn"
                 role="button"
-                title={task.is_starred ? 'Unstar' : 'Star'}
+                title={
+                  task.is_starred ? t('task.unstar') : t('task.star')
+                }
                 onClick={flipStar}
               >
                 <i
@@ -209,12 +218,14 @@ export default function TaskDetail() {
                   id="starred-badge"
                   style={{ display: task.is_starred ? '' : 'none' }}
                 >
-                  <i className="bi bi-star-fill" /> Starred
+                  <i className="bi bi-star-fill" /> {t('detail.starred')}
                 </span>
                 {task.due && (
                   <span className="badge bg-secondary">
-                    <i className="bi bi-calendar" /> Due:{' '}
-                    {formatFullDate(task.due)}
+                    <i className="bi bi-calendar" />{' '}
+                    {t('detail.due', {
+                      date: formatFullDate(task.due),
+                    })}
                   </span>
                 )}
                 {task.labels.map((label) => {
@@ -234,8 +245,10 @@ export default function TaskDetail() {
               </div>
               {task.updated && (
                 <small className="text-muted d-block mt-2">
-                  <i className="bi bi-clock" /> Last updated:{' '}
-                  {formatDateTime(task.updated)}
+                  <i className="bi bi-clock" />{' '}
+                  {t('detail.lastUpdated', {
+                    datetime: formatDateTime(task.updated),
+                  })}
                 </small>
               )}
             </div>
@@ -249,7 +262,7 @@ export default function TaskDetail() {
             >
               <div className="mb-4">
                 <label htmlFor="task-title" className="form-label fw-bold">
-                  <i className="bi bi-text-left" /> Title
+                  <i className="bi bi-text-left" /> {t('detail.titleLabel')}
                 </label>
                 <textarea
                   className="form-control form-control-lg"
@@ -258,38 +271,35 @@ export default function TaskDetail() {
                   required
                   maxLength={500}
                   rows={1}
-                  placeholder="Enter task title"
+                  placeholder={t('detail.titlePlaceholder')}
                   ref={titleRef}
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                 />
-                <div className="form-text">
-                  Required field (max 500 characters)
-                </div>
+                <div className="form-text">{t('detail.titleHint')}</div>
               </div>
 
               <div className="mb-4">
                 <label htmlFor="task-notes" className="form-label fw-bold">
-                  <i className="bi bi-journal-text" /> Notes
+                  <i className="bi bi-journal-text" />{' '}
+                  {t('detail.notesLabel')}
                 </label>
                 <textarea
                   className="form-control"
                   id="task-notes"
                   name="notes"
                   rows={3}
-                  placeholder="Enter task notes or details..."
+                  placeholder={t('detail.notesPlaceholder')}
                   ref={notesRef}
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                 />
-                <div className="form-text">
-                  Optional field for additional details
-                </div>
+                <div className="form-text">{t('detail.notesHint')}</div>
               </div>
 
               <div className="mb-4">
                 <label className="form-label fw-bold">
-                  <i className="bi bi-tags" /> Labels
+                  <i className="bi bi-tags" /> {t('detail.labelsLabel')}
                 </label>
                 <div id="label-selector" className="d-flex flex-wrap gap-2">
                   {data.labels.length > 0 ? (
@@ -323,14 +333,10 @@ export default function TaskDetail() {
                       </div>
                     ))
                   ) : (
-                    <p className="text-muted mb-0">
-                      No labels available. Create labels in the dashboard.
-                    </p>
+                    <p className="text-muted mb-0">{t('detail.noLabels')}</p>
                   )}
                 </div>
-                <div className="form-text">
-                  Select labels to organize this task
-                </div>
+                <div className="form-text">{t('detail.labelsHint')}</div>
               </div>
 
               <div className="row mb-4">
@@ -339,7 +345,8 @@ export default function TaskDetail() {
                     htmlFor="task-order"
                     className="form-label fw-bold"
                   >
-                    <i className="bi bi-sort-numeric-down" /> List order
+                    <i className="bi bi-sort-numeric-down" />{' '}
+                    {t('detail.listOrder')}
                   </label>
                   <input
                     type="number"
@@ -353,7 +360,7 @@ export default function TaskDetail() {
                     }
                   />
                   <div className="form-text">
-                    Manual position in the task list
+                    {t('detail.listOrderHint')}
                   </div>
                 </div>
                 <div className="col-md-6">
@@ -361,7 +368,7 @@ export default function TaskDetail() {
                     htmlFor="starred-order"
                     className="form-label fw-bold"
                   >
-                    <i className="bi bi-star" /> Starred order
+                    <i className="bi bi-star" /> {t('detail.starredOrder')}
                   </label>
                   <input
                     type="number"
@@ -375,7 +382,7 @@ export default function TaskDetail() {
                     }
                   />
                   <div className="form-text">
-                    Position in the starred view (empty clears it)
+                    {t('detail.starredOrderHint')}
                   </div>
                 </div>
               </div>
@@ -391,10 +398,10 @@ export default function TaskDetail() {
                   ) : (
                     <i className="bi bi-save" />
                   )}{' '}
-                  Save Changes
+                  {t('detail.save')}
                 </button>
                 <Link to={backTarget} className="btn btn-outline-secondary">
-                  <i className="bi bi-x-circle" /> Cancel
+                  <i className="bi bi-x-circle" /> {t('common:common.cancel')}
                 </Link>
               </div>
             </form>
@@ -416,7 +423,7 @@ export default function TaskDetail() {
                   <button
                     type="button"
                     className="btn-close"
-                    aria-label="Close"
+                    aria-label={t('common:common.close')}
                     onClick={() => setAlert(null)}
                   />
                 </div>

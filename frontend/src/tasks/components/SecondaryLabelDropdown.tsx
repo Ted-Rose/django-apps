@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Dropdown from '../../shared/components/Dropdown';
 import type { LabelOut } from '../api';
 
@@ -25,6 +26,7 @@ export function SecondaryLabelDropdown({
   secondaryLabel,
   buttonStyle = { padding: '0.15rem 0.4rem' },
 }: SecondaryLabelDropdownProps) {
+  const { t } = useTranslation('tasks');
   const [searchParams, setSearchParams] = useSearchParams();
 
   const select = (labelName: string) => {
@@ -41,7 +43,8 @@ export function SecondaryLabelDropdown({
     <Dropdown
       label={
         <>
-          <i className="bi bi-funnel" /> {secondaryLabel || 'All'}
+          <i className="bi bi-funnel" />{' '}
+          {secondaryLabel || t('labels.all')}
         </>
       }
       buttonStyle={buttonStyle}
@@ -55,7 +58,7 @@ export function SecondaryLabelDropdown({
             select('');
           }}
         >
-          <i className="bi bi-funnel" /> All Labels
+          <i className="bi bi-funnel" /> {t('labels.allLabels')}
         </a>
       </li>
       {labels.length > 0 && (
@@ -64,7 +67,9 @@ export function SecondaryLabelDropdown({
             <hr className="dropdown-divider" />
           </li>
           <li>
-            <h6 className="dropdown-header">Filter by Label</h6>
+            <h6 className="dropdown-header">
+              {t('labels.filterByLabel')}
+            </h6>
           </li>
           {labels.map((label) => (
             <li key={label.id}>

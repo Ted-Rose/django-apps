@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import PageShell from '../components/PageShell';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -25,6 +26,7 @@ import './connect.css';
  * always tracks ?country= with `lv` as the default.
  */
 export default function ConnectBank() {
+  const { t } = useTranslation('finance');
   const [searchParams, setSearchParams] = useSearchParams();
   const country = (searchParams.get('country') ?? '').trim();
   const connect = useConnectBank();
@@ -41,18 +43,18 @@ export default function ConnectBank() {
   useEffect(() => {
     if (isError) {
       pushToast(
-        `Could not load institutions: ${errorDetail(error)}`,
+        t('connect.loadError', { detail: errorDetail(error) }),
         'warning',
       );
     }
-  }, [isError, error]);
+  }, [isError, error, t]);
 
   return (
     <>
       <FinanceNavBar />
       <PageShell
-        title="Connect a Bank"
-        subtitle="Link your bank through GoCardless to start syncing."
+        title={t('connect.title')}
+        subtitle={t('connect.subtitle')}
         narrow
       >
         <div className="fin-card connect-card">
@@ -61,7 +63,7 @@ export default function ConnectBank() {
               <span className="connect-step-num" aria-hidden="true">
                 1
               </span>
-              Choose country
+              {t('connect.stepCountry')}
             </h2>
             <form
               onSubmit={(event) => {
@@ -74,7 +76,7 @@ export default function ConnectBank() {
               }}
             >
               <label htmlFor="id_country" className="form-label">
-                Country
+                {t('connect.countryLabel')}
               </label>
               <div className="d-flex align-items-start gap-2">
                 <input
@@ -87,12 +89,10 @@ export default function ConnectBank() {
                   defaultValue={country || 'lv'}
                 />
                 <button type="submit" className="btn btn-primary">
-                  <i className="bi bi-search" /> Find Banks
+                  <i className="bi bi-search" /> {t('connect.findBanks')}
                 </button>
               </div>
-              <div className="form-text">
-                Two-letter country code (e.g. lv, gb, de)
-              </div>
+              <div className="form-text">{t('connect.countryHint')}</div>
             </form>
           </section>
 
@@ -105,12 +105,12 @@ export default function ConnectBank() {
                 >
                   2
                 </span>
-                Select your bank
+                {t('connect.stepBank')}
               </h2>
               <LoadingSkeleton
                 rows={3}
                 height="3.25rem"
-                label="Loading banks"
+                label={t('connect.loadingBanks')}
               />
             </section>
           )}
@@ -136,7 +136,7 @@ export default function ConnectBank() {
                     >
                       2
                     </span>
-                    Select your bank
+                    {t('connect.stepBank')}
                   </legend>
                   <div className="connect-banks">
                     {institutions.map((institution, index) => (
@@ -188,7 +188,7 @@ export default function ConnectBank() {
                     ) : (
                       <i className="bi bi-link-45deg" />
                     )}{' '}
-                    Connect
+                    {t('connect.connect')}
                   </button>
                 </fieldset>
               </form>

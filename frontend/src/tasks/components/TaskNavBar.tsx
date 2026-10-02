@@ -1,10 +1,12 @@
 import { Fragment } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   BurgerMenu,
   type BurgerMenuItem,
 } from '../../shared/components/BurgerMenu';
 import Dropdown from '../../shared/components/Dropdown';
+import LanguageSwitcher from '../../shared/components/LanguageSwitcher';
 import type { DashboardOut } from '../api';
 import SecondaryLabelDropdown from './SecondaryLabelDropdown';
 
@@ -23,18 +25,22 @@ import SecondaryLabelDropdown from './SecondaryLabelDropdown';
  */
 const TOGGLE_STYLE = { padding: '0.15rem 0.4rem' };
 
-const ORDER_OPTIONS: { key: string; icon: string; label: string }[] = [
-  { key: 'order_desc', icon: 'sort-numeric-down', label: 'Order Desc' },
-  { key: 'order_asc', icon: 'sort-numeric-up', label: 'Order Asc' },
-  { key: 'created_desc', icon: 'calendar-plus', label: 'Created Desc' },
-  { key: 'created_asc', icon: 'calendar-plus', label: 'Created Asc' },
-  { key: 'due_desc', icon: 'calendar-event', label: 'Due Desc' },
-  { key: 'due_asc', icon: 'calendar-event', label: 'Due Asc' },
-  { key: 'completed_last', icon: 'check-circle', label: 'Completed Last' },
+const ORDER_OPTIONS: { key: string; icon: string; labelKey: string }[] = [
+  { key: 'order_desc', icon: 'sort-numeric-down', labelKey: 'orderDesc' },
+  { key: 'order_asc', icon: 'sort-numeric-up', labelKey: 'orderAsc' },
+  { key: 'created_desc', icon: 'calendar-plus', labelKey: 'createdDesc' },
+  { key: 'created_asc', icon: 'calendar-plus', labelKey: 'createdAsc' },
+  { key: 'due_desc', icon: 'calendar-event', labelKey: 'dueDesc' },
+  { key: 'due_asc', icon: 'calendar-event', labelKey: 'dueAsc' },
+  {
+    key: 'completed_last',
+    icon: 'check-circle',
+    labelKey: 'completedLast',
+  },
   {
     key: 'completed_first',
     icon: 'check-circle-fill',
-    label: 'Completed First',
+    labelKey: 'completedFirst',
   },
 ];
 
@@ -54,6 +60,7 @@ export function TaskNavBar({
   secondaryLabel,
   burgerItems,
 }: TaskNavBarProps) {
+  const { t } = useTranslation('tasks');
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -127,23 +134,25 @@ export function TaskNavBar({
 
   const viewLabel = flags?.is_starred_view ? (
     <>
-      <i className="bi bi-star-fill text-warning" /> Starred
+      <i className="bi bi-star-fill text-warning" /> {t('views.starred')}
     </>
   ) : flags?.is_overdue_view ? (
     <>
-      <i className="bi bi-exclamation-triangle text-warning" /> Overdue
+      <i className="bi bi-exclamation-triangle text-warning" />{' '}
+      {t('views.overdue')}
     </>
   ) : flags?.is_archived_view ? (
     <>
-      <i className="bi bi-archive" /> Archive
+      <i className="bi bi-archive" /> {t('views.archive')}
     </>
   ) : flags?.is_trash_view ? (
     <>
-      <i className="bi bi-trash" /> Trash
+      <i className="bi bi-trash" /> {t('views.trash')}
     </>
   ) : selectedList ? (
     <>
-      <i className="bi bi-folder" /> {selectedListTitle ?? 'List'}
+      <i className="bi bi-folder" />{' '}
+      {selectedListTitle ?? t('views.list')}
     </>
   ) : selectedLabel ? (
     <>
@@ -151,7 +160,7 @@ export function TaskNavBar({
     </>
   ) : (
     <>
-      <i className="bi bi-list-task" /> All Tasks
+      <i className="bi bi-list-task" /> {t('views.allTasks')}
     </>
   );
 
@@ -169,7 +178,7 @@ export function TaskNavBar({
             <Dropdown label={viewLabel} buttonStyle={TOGGLE_STYLE}>
               <li>
                 <Link className={activeClass(isDashboardDefault)} to="/">
-                  <i className="bi bi-list-task" /> All Tasks
+                  <i className="bi bi-list-task" /> {t('views.allTasks')}
                 </Link>
               </li>
               <li>
@@ -180,7 +189,8 @@ export function TaskNavBar({
                   className={activeClass(Boolean(flags?.is_starred_view))}
                   to="/starred"
                 >
-                  <i className="bi bi-star-fill text-warning" /> Starred
+                  <i className="bi bi-star-fill text-warning" />{' '}
+                  {t('views.starred')}
                 </Link>
               </li>
               <li>
@@ -189,7 +199,7 @@ export function TaskNavBar({
                   to="/overdue"
                 >
                   <i className="bi bi-exclamation-triangle text-danger" />{' '}
-                  Overdue
+                  {t('views.overdue')}
                 </Link>
               </li>
               <li>
@@ -197,7 +207,7 @@ export function TaskNavBar({
                   className={activeClass(Boolean(flags?.is_archived_view))}
                   to="/archived"
                 >
-                  <i className="bi bi-archive" /> Archive
+                  <i className="bi bi-archive" /> {t('views.archive')}
                 </Link>
               </li>
               <li>
@@ -205,7 +215,7 @@ export function TaskNavBar({
                   className={activeClass(Boolean(flags?.is_trash_view))}
                   to="/trash"
                 >
-                  <i className="bi bi-trash" /> Trash
+                  <i className="bi bi-trash" /> {t('views.trash')}
                 </Link>
               </li>
               {data.labels.length > 0 && (
@@ -214,7 +224,9 @@ export function TaskNavBar({
                     <hr className="dropdown-divider" />
                   </li>
                   <li>
-                    <h6 className="dropdown-header">Labels</h6>
+                    <h6 className="dropdown-header">
+                      {t('views.labels')}
+                    </h6>
                   </li>
                   {data.labels.map((label) => (
                     <li key={label.id}>
@@ -243,7 +255,9 @@ export function TaskNavBar({
                     <hr className="dropdown-divider" />
                   </li>
                   <li>
-                    <h6 className="dropdown-header">Google Lists</h6>
+                    <h6 className="dropdown-header">
+                      {t('views.googleLists')}
+                    </h6>
                   </li>
                   {data.task_lists.map((list) => (
                     <li key={list.list_id}>
@@ -277,8 +291,12 @@ export function TaskNavBar({
               label={
                 <>
                   <i className="bi bi-sort-down" />{' '}
-                  {ORDER_OPTIONS.find((o) => o.key === orderBy)?.label ??
-                    'Order Asc'}
+                  {t(
+                    `order.${
+                      ORDER_OPTIONS.find((o) => o.key === orderBy)
+                        ?.labelKey ?? 'orderAsc'
+                    }`,
+                  )}
                 </>
               }
               buttonStyle={TOGGLE_STYLE}
@@ -299,7 +317,8 @@ export function TaskNavBar({
                         changeOrder(option.key);
                       }}
                     >
-                      <i className={`bi bi-${option.icon}`} /> {option.label}
+                      <i className={`bi bi-${option.icon}`} />{' '}
+                      {t(`order.${option.labelKey}`)}
                     </a>
                   </li>
                 </Fragment>
@@ -308,11 +327,12 @@ export function TaskNavBar({
           </div>
         )}
         <div className="ms-auto d-flex flex-row align-items-center gap-2">
+          <LanguageSwitcher />
           <Link
             to="/search"
             className="btn btn-outline-light btn-sm"
             style={{ padding: '0.25rem 0.5rem' }}
-            title="Search tasks"
+            title={t('menu.searchTasks')}
           >
             <i className="bi bi-search" />
           </Link>

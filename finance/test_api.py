@@ -1245,3 +1245,152 @@ class SpaMountTests(ApiTestCase):
         resp = self.client.get('/tasks/app/starred/')
         self.assertEqual(resp.status_code, 301)
         self.assertEqual(resp['Location'], '/tasks/starred/')
+
+
+class CodeContractTests(ApiTestCase):
+    """Mutation responses carry a stable `code` (plus `params`
+    where the message interpolates values): the SPA translates
+    `code` through its server catalog while `message`/`detail`
+    stay the English fallback."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.client.force_login(self.user)
+
+    def test_share_unknown_username(self):
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/share/',
+            {'username': 'nobody'},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'unknownUsername')
+
+    def test_share_blank_username(self):
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/share/',
+            {'username': ' '},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'provideUsername')
+
+    def test_share_success_params(self):
+        get_user_model().objects.create_user(
+            username='carol', password='pw'
+        )
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/share/',
+            {'username': 'carol'},
+        )
+        body = resp.json()
+        self.assertEqual(body['code'], 'accountShared')
+        self.assertEqual(body['params'], {'username': 'carol'})
+
+    def test_balance_alert_codes(self):
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/',
+            {'threshold': '10.00'},
+        )
+        self.assertEqual(resp.json()['code'], 'balanceAlertSaved')
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/delete/'
+        )
+        self.assertEqual(resp.json()['code'], 'balanceAlertRemoved')
+
+    def test_sync_no_linked_accounts(self):
+        self.req.status = 'CR'
+        self.req.save()
+        body = self.post_json('/transactions/sync/').json()
+        self.assertEqual(body['code'], 'noLinkedAccounts')
+        self.assertEqual(
+            body['accounts'][0]['code'], 'requisitionNotLinked'
+        )
+        self.assertEqual(
+            body['accounts'][0]['params'], {'status': 'CR'}
+        )
+
+    def test_sync_counts_params(self):
+        client = MagicMock()
+        client.fetch_transactions.return_value = {'booked': []}
+        with patch(
+            'finance.api.GoCardlessClient', return_value=client
+        ):
+            body = self.post_json('/transactions/sync/').json()
+        self.assertEqual(body['code'], 'synced')
+        self.assertEqual(
+            body['params'],
+            {'created': 0, 'updated': 0, 'failed': 0},
+        )
+
+    def test_limit_save_validation_error(self):
+        # An account outside the caller's queryset fails the form —
+        # schema-clean input that still produces a 400 + code.
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign = make_account(other, self.req, 'acc-b')
+        resp = self.post_json('/limits/save/', {
+            'account': foreign.pk,
+            'limit_7_days': '100.00',
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'couldNotSaveLimit')
+
+    def test_limit_edit_conflict(self):
+        cat_a = make_category(self.user, 'A')
+        cat_b = make_category(self.user, 'B')
+        TransactionLimit.objects.create(
+            account=self.account, user=self.user, category=cat_a,
+            limit_7_days=Decimal('10.00'),
+        )
+        second = TransactionLimit.objects.create(
+            account=self.account, user=self.user, category=cat_b,
+            limit_7_days=Decimal('20.00'),
+        )
+        resp = self.post_json('/limits/save/', {
+            'limit_id': second.pk,
+            'account': self.account.pk,
+            'category': cat_a.pk,
+            'limit_7_days': '30.00',
+        })
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.json()['code'], 'limitConflict')
+
+    def test_limit_saved_code(self):
+        resp = self.post_json('/limits/save/', {
+            'account': self.account.pk,
+            'limit_7_days': '100.00',
+            'is_active': True,
+        })
+        self.assertEqual(resp.json()['code'], 'limitSaved')
+
+    def test_rule_preview_missing_category(self):
+        resp = self.post_json(
+            '/rules/preview/', {'description_pattern': 'shop'}
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'pickCategory')
+
+    def test_category_save_empty_name(self):
+        resp = self.post_json('/categories/save/', {'name': '  '})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'categoryNameRequired')
+
+    def test_category_save_success(self):
+        resp = self.post_json('/categories/save/', {
+            'name': 'Food', 'color': '#aabbcc',
+        })
+        body = resp.json()
+        self.assertEqual(body['code'], 'categorySaved')
+        self.assertEqual(body['params'], {'name': 'Food'})
+
+    def test_push_unsubscribe_missing(self):
+        resp = self.post_json('/push/unsubscribe/', {
+            'endpoint': 'https://push.example/x',
+        })
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.json()['code'], 'subscriptionNotFound')

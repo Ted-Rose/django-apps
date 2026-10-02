@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import i18n from 'i18next';
 import { BurgerMenu, type BurgerMenuItem } from './BurgerMenu';
 import NavBar from './NavBar';
 
@@ -61,5 +62,17 @@ describe('NavBar', () => {
       'href',
       '/',
     );
+  });
+
+  it('renders chrome in Latvian when the language is lv', async () => {
+    await i18n.changeLanguage('lv');
+    try {
+      render(<NavBar title="Uzdevumi" user="tedis" items={items} />);
+      expect(
+        screen.getByRole('button', { name: 'Pārslēgt izvēlni' }),
+      ).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 });

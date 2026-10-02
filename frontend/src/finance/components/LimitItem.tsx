@@ -1,10 +1,13 @@
+import { useTranslation } from 'react-i18next';
 import type { LimitOut, WindowStatOut } from '../api';
 import CategoryBadge from './CategoryBadge';
+import { fmtMonth } from '../../shared/format';
 import { useDeleteLimit } from '../mutations';
 
 /** Past-month history rows share the window-stat shape minus
  *  `history` (api.py's WindowStatBase). */
 type HistoryMonthOut = WindowStatOut['history'][number];
+type StatBase = Omit<WindowStatOut, 'history'>;
 
 /**
  * One limit in the overview list — a compact card meant to stack
@@ -26,6 +29,7 @@ export function LimitItem({
   limit: LimitOut;
   onEdit: () => void;
 }) {
+  const { t } = useTranslation('finance');
   const deleteLimit = useDeleteLimit();
   const currency = limit.account.currency;
 
@@ -35,7 +39,9 @@ export function LimitItem({
         {limit.category ? (
           <CategoryBadge category={limit.category} />
         ) : (
-          <span className="text-muted small">All</span>
+          <span className="text-muted small">
+            {t('limits.item.all')}
+          </span>
         )}
         <span
           className="text-muted small text-truncate flex-grow-1"
@@ -45,15 +51,15 @@ export function LimitItem({
         </span>
         {!limit.is_active && (
           <span className="badge rounded-pill text-bg-secondary">
-            Paused
+            {t('limits.item.paused')}
           </span>
         )}
         <div className="btn-group btn-group-sm">
           <button
             type="button"
             className="btn btn-outline-secondary"
-            title="Edit"
-            aria-label={`Edit limit ${limit.id}`}
+            title={t('common:common.edit')}
+            aria-label={t('limits.item.editAria', { id: limit.id })}
             onClick={onEdit}
           >
             <i className="bi bi-pencil" />
@@ -61,8 +67,8 @@ export function LimitItem({
           <button
             type="button"
             className="btn btn-outline-danger"
-            title="Delete"
-            aria-label={`Delete limit ${limit.id}`}
+            title={t('common:common.delete')}
+            aria-label={t('limits.item.deleteAria', { id: limit.id })}
             disabled={deleteLimit.isPending}
             onClick={() => deleteLimit.mutate(limit.id)}
           >
@@ -71,14 +77,38 @@ export function LimitItem({
         </div>
       </div>
       {limit.window_stats.length > 0 ? (
-        limit.window_stats.map((window) => (
-          <WindowStat key={window.label} stat={window} currency={currency} />
+        limit.window_stats.map((window, index) => (
+          <WindowStat
+            key={window.key ?? window.value ?? index}
+            stat={window}
+            currency={currency}
+          />
         ))
       ) : (
-        <div className="small text-muted mt-2">No windows set</div>
+        <div className="small text-muted mt-2">
+          {t('limits.item.noWindows')}
+        </div>
       )}
     </div>
   );
+}
+
+/**
+ * A window or history row's label: the server's `key` selects a
+ * catalog translation (server:windows.*), `value` (YYYY-MM) goes
+ * through fmtMonth, and `label` is the English fallback.
+ */
+function useStatLabel() {
+  const { t } = useTranslation('finance');
+  return (stat: StatBase): string => {
+    if (stat.key) {
+      return t(`server:windows.${stat.key}`, {
+        defaultValue: stat.label,
+      });
+    }
+    if (stat.value) return fmtMonth(stat.value);
+    return stat.label;
+  };
 }
 
 /**
@@ -95,10 +125,12 @@ function WindowStat({
   stat: WindowStatOut;
   currency: string;
 }) {
+  const { t } = useTranslation('finance');
+  const statLabel = useStatLabel();
   return (
     <div className="mt-3">
       <div className="d-flex justify-content-between align-items-baseline gap-2 flex-wrap small">
-        <span className="text-muted">{stat.label}</span>
+        <span className="text-muted">{statLabel(stat)}</span>
         <span className="ms-auto text-nowrap">
           <span className="fin-money">
             {stat.spent} / {stat.threshold} {currency}
@@ -109,8 +141,14 @@ function WindowStat({
             }`}
           >
             {stat.over
-              ? `${stat.over} ${currency} over`
-              : `${stat.remaining} ${currency} left`}
+              ? t('limits.item.over', {
+                  amount: stat.over,
+                  currency,
+                })
+              : t('limits.item.left', {
+                  amount: stat.remaining,
+                  currency,
+                })}
           </span>
         </span>
       </div>
@@ -123,9 +161,15 @@ function WindowStat({
       </div>
       {stat.history.length > 0 && (
         <details className="mt-1">
-          <summary className="small text-muted">Past months</summary>
+          <summary className="small text-muted">
+            {t('limits.item.pastMonths')}
+          </summary>
           {stat.history.map((month) => (
-            <HistoryMonth key={month.label} month={month} currency={currency} />
+            <HistoryMonth
+              key={month.value ?? month.label}
+              month={month}
+              currency={currency}
+            />
           ))}
         </details>
       )}
@@ -141,10 +185,11 @@ function HistoryMonth({
   month: HistoryMonthOut;
   currency: string;
 }) {
+  const statLabel = useStatLabel();
   return (
     <div className="mt-2">
       <div className="d-flex justify-content-between small">
-        <span>{month.label}</span>
+        <span>{statLabel(month)}</span>
         <span className="fin-money">
           {month.spent} / {month.threshold} {currency}
         </span>

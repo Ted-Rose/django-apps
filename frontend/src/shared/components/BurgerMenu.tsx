@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import './BurgerMenu.css';
 
 /**
@@ -38,6 +39,7 @@ function ItemIcon({ icon }: { icon?: string }) {
 }
 
 export function BurgerMenu({ items }: BurgerMenuProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -75,7 +77,7 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
       <button
         type="button"
         className="burger-icon"
-        aria-label="Toggle menu"
+        aria-label={t('burgerMenu.toggle')}
         aria-expanded={open}
         ref={toggleRef}
         onClick={(event) => {

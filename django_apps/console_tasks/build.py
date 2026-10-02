@@ -61,5 +61,29 @@ def create_private_settings_json():
         print("Environment variable 'private_settings' is not set.")
 
 
+def compile_po():
+    """Compile committed locale/**/*.po catalogs to .mo with polib.
+
+    msgfmt is not installed on either build target (Docker slim
+    image, Vercel build image), so the compile step is pure Python
+    and runs identically everywhere. .mo files are gitignored — the
+    .po sources are the committed artifact.
+    """
+    import polib
+
+    locale_dir = BASE_DIR / 'locale'
+    compiled = 0
+    for po_path in sorted(
+        locale_dir.glob('*/LC_MESSAGES/*.po')
+    ):
+        mo_path = po_path.with_suffix('.mo')
+        polib.pofile(str(po_path)).save_as_mofile(str(mo_path))
+        compiled += 1
+        print(f"Compiled {po_path} -> {mo_path}")
+    if not compiled:
+        print("No .po files found under locale/.")
+
+
 create_ca_pem()
 create_private_settings_json()
+compile_po()

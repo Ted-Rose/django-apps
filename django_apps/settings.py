@@ -169,6 +169,7 @@ INSTALLED_APPS = [
     'django_vite',
     'ninja',
     'sslserver',
+    'django_apps',
     'google_api',
     'google_tasks',
     'finance',
@@ -243,6 +244,17 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
+
+# Site is English + Latvian. No LocaleMiddleware — nothing
+# Django-rendered is localized; the SPAs read the pref from the
+# spa_shell bootstrap and jobs wrap rendering in
+# translation.override(). LANGUAGES drives UserSettings.choices and
+# /api/me/ validation.
+LANGUAGES = [
+    ('en', 'English'),
+    ('lv', 'Latvian'),
+]
+LOCALE_PATHS = [BASE_DIR / 'locale']
 
 TIME_ZONE = 'UTC'
 

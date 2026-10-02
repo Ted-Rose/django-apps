@@ -77,7 +77,12 @@ def _apply_reorder(request, order_field, list_id=None):
         data = json.loads(request.body)
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse(
-            {'success': False, 'error': 'Invalid JSON'}, status=400
+            {
+                'success': False,
+                'error': 'Invalid JSON',
+                'code': 'invalidJson',
+            },
+            status=400,
         )
 
     updates = data.get('updates')
@@ -86,13 +91,16 @@ def _apply_reorder(request, order_field, list_id=None):
     if not isinstance(updates, list) or not updates:
         return JsonResponse({
             'success': False,
-            'error': 'updates must be a non-empty list'
+            'error': 'updates must be a non-empty list',
+            'code': 'emptyUpdates',
         }, status=400)
 
     if len(updates) > REORDER_CAP:
         return JsonResponse({
             'success': False,
-            'error': f'Too many updates (max {REORDER_CAP})'
+            'error': f'Too many updates (max {REORDER_CAP})',
+            'code': 'tooManyUpdates',
+            'params': {'max': REORDER_CAP},
         }, status=400)
 
     position_map = {}
@@ -101,7 +109,8 @@ def _apply_reorder(request, order_field, list_id=None):
         if not isinstance(item, dict):
             return JsonResponse({
                 'success': False,
-                'error': 'Each update must be an object'
+                'error': 'Each update must be an object',
+                'code': 'updateNotObject',
             }, status=400)
         task_id = item.get('task_id')
         position = item.get('position')
@@ -112,17 +121,20 @@ def _apply_reorder(request, order_field, list_id=None):
             return JsonResponse({
                 'success': False,
                 'error': 'Each update requires a task_id and a '
-                         'numeric position'
+                         'numeric position',
+                'code': 'updateMissingFields',
             }, status=400)
         if task_id in position_map:
             return JsonResponse({
                 'success': False,
-                'error': 'Duplicate task IDs'
+                'error': 'Duplicate task IDs',
+                'code': 'duplicateTaskIds',
             }, status=400)
         if position in positions:
             return JsonResponse({
                 'success': False,
-                'error': 'Duplicate positions'
+                'error': 'Duplicate positions',
+                'code': 'duplicatePositions',
             }, status=400)
         position_map[task_id] = float(position)
         positions.add(position)
@@ -142,7 +154,8 @@ def _apply_reorder(request, order_field, list_id=None):
             if len(tasks) != len(position_map):
                 return JsonResponse({
                     'success': False,
-                    'error': 'Invalid task IDs'
+                    'error': 'Invalid task IDs',
+                    'code': 'invalidTaskIds',
                 }, status=400)
 
             # Phase 1: temporary negative positions avoid transient
@@ -159,7 +172,8 @@ def _apply_reorder(request, order_field, list_id=None):
         if any(name in str(e) for name in ORDER_CONSTRAINT_NAMES):
             return JsonResponse({
                 'success': False,
-                'error': 'position_conflict'
+                'error': 'position_conflict',
+                'code': 'positionConflict',
             }, status=409)
         raise
 
@@ -260,7 +274,8 @@ def sync_view(request):
     if not creds:
         return JsonResponse({
             'success': False,
-            'error': 'No credentials found'
+            'error': 'No credentials found',
+            'code': 'noCredentials',
         })
 
     result = sync_all(request.user, creds)
@@ -309,7 +324,8 @@ def complete_task_view(request, task_id):
         )
         return JsonResponse({
             'success': False,
-            'error': 'No credentials found'
+            'error': 'No credentials found',
+            'code': 'noCredentials',
         }, status=401)
 
     logger.info(f'Credentials found: {bool(creds)}')
@@ -343,7 +359,8 @@ def complete_task_view(request, task_id):
         logger.error(f'Failed to complete task {task_id}')
         return JsonResponse({
             'success': False,
-            'error': 'Failed to complete task'
+            'error': 'Failed to complete task',
+            'code': 'completeFailed',
         }, status=500)
 
 
@@ -367,7 +384,8 @@ def uncomplete_task_view(request, task_id):
         )
         return JsonResponse({
             'success': False,
-            'error': 'No credentials found'
+            'error': 'No credentials found',
+            'code': 'noCredentials',
         }, status=401)
 
     logger.info(f'Credentials found: {bool(creds)}')
@@ -401,7 +419,8 @@ def uncomplete_task_view(request, task_id):
         logger.error(f'Failed to uncomplete task {task_id}')
         return JsonResponse({
             'success': False,
-            'error': 'Failed to uncomplete task'
+            'error': 'Failed to uncomplete task',
+            'code': 'uncompleteFailed',
         }, status=500)
 
 
@@ -424,7 +443,8 @@ def process_labels_view(request):
         )
         return JsonResponse({
             'success': False,
-            'error': 'No credentials found'
+            'error': 'No credentials found',
+            'code': 'noCredentials',
         }, status=401)
 
     result = process_task_labels(request.user, creds)
@@ -470,7 +490,8 @@ def process_task_label_view(request, task_id):
         )
         return JsonResponse({
             'success': False,
-            'error': 'No credentials found'
+            'error': 'No credentials found',
+            'code': 'noCredentials',
         }, status=401)
 
     # Verify task belongs to user
@@ -564,7 +585,9 @@ def create_divider(request):
         logger.error(f'Error creating divider: {e}')
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'code': 'dividerCreateFailed',
+            'params': {'detail': str(e)},
         }, status=400)
 
 
@@ -625,7 +648,9 @@ def update_divider(request, task_id):
         logger.error(f'Error updating divider: {e}')
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'code': 'dividerUpdateFailed',
+            'params': {'detail': str(e)},
         }, status=400)
 
 
@@ -740,7 +765,8 @@ def create_task_view(request):
         )
         return JsonResponse({
             'success': False,
-            'error': 'No credentials found'
+            'error': 'No credentials found',
+            'code': 'noCredentials',
         }, status=401)
 
     try:
@@ -761,7 +787,8 @@ def create_task_view(request):
         if not title:
             return JsonResponse({
                 'success': False,
-                'error': 'Title cannot be empty'
+                'error': 'Title cannot be empty',
+                'code': 'emptyTitle',
             }, status=400)
 
         # If no task_list_id provided but labels are selected,
@@ -814,7 +841,8 @@ def create_task_view(request):
             logger.error('Failed to create task in Google Tasks API')
             return JsonResponse({
                 'success': False,
-                'error': 'Failed to create task in Google Tasks'
+                'error': 'Failed to create task in Google Tasks',
+                'code': 'createFailed',
             }, status=500)
 
         task_list = None
@@ -902,7 +930,9 @@ def create_task_view(request):
         logger.error(f'Error creating task: {e}')
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'code': 'taskCreateFailed',
+            'params': {'detail': str(e)},
         }, status=400)
 
 
@@ -926,7 +956,9 @@ def _parse_order_update(data, field):
             not math.isfinite(value)):
         return None, JsonResponse({
             'success': False,
-            'error': f'{field} must be a finite number'
+            'error': f'{field} must be a finite number',
+            'code': 'invalidOrderValue',
+            'params': {'field': field},
         }, status=400)
     return float(value), None
 
@@ -967,7 +999,8 @@ def update_task_view(request, task_id):
         if not title:
             return JsonResponse({
                 'success': False,
-                'error': 'Title cannot be empty'
+                'error': 'Title cannot be empty',
+                'code': 'emptyTitle',
             }, status=400)
 
         new_notes = notes if notes else None
@@ -988,7 +1021,8 @@ def update_task_view(request, task_id):
             if len(user_labels) != len(label_ids):
                 return JsonResponse({
                     'success': False,
-                    'error': 'Invalid label IDs'
+                    'error': 'Invalid label IDs',
+                    'code': 'invalidLabelIds',
                 }, status=400)
 
             task.labels.set(user_labels)
@@ -1008,7 +1042,9 @@ def update_task_view(request, task_id):
         logger.error(f'Error updating task: {e}')
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'code': 'taskUpdateFailed',
+            'params': {'detail': str(e)},
         }, status=400)
 
 

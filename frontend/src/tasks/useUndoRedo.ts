@@ -8,6 +8,7 @@
  * still exist (the old code skipped cards absent from the DOM).
  */
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { actionHistory, useActionHistory } from './actionHistory';
 import type { TaskOut } from './api';
 import {
@@ -34,6 +35,7 @@ export function useUndoRedo({
   starredView,
   taskListId,
 }: UndoRedoContext) {
+  const { t } = useTranslation('tasks');
   const { canUndo, canRedo } = useActionHistory();
 
   const toggleStar = useToggleStar();
@@ -69,37 +71,31 @@ export function useUndoRedo({
       case 'TOGGLE_STAR':
         toggleStar.mutate(action.taskId);
         pushToast(
-          `Undid ${action.previousState ? 'unstar' : 'star'} action`,
+          t(action.previousState ? 'undo.unstar' : 'undo.star'),
           'info',
         );
         break;
       case 'COMPLETE_TASK':
         uncompleteTask.mutate(action.taskId);
-        pushToast(`Undid complete: ${action.taskTitle}`, 'info');
+        pushToast(t('undo.complete', { title: action.taskTitle }), 'info');
         break;
       case 'UNCOMPLETE_TASK':
         completeTask.mutate(action.taskId);
-        pushToast(`Undid uncomplete: ${action.taskTitle}`, 'info');
-        break;
-      case 'ARCHIVE_TASK':
         pushToast(
-          'Cannot undo archive - please restore from Archive view',
+          t('undo.uncomplete', { title: action.taskTitle }),
           'info',
         );
+        break;
+      case 'ARCHIVE_TASK':
+        pushToast(t('undo.archiveUnavailable'), 'info');
         actionHistory.recordAction(action);
         break;
       case 'DELETE_TASK':
-        pushToast(
-          'Cannot undo delete - please restore from Trash view',
-          'info',
-        );
+        pushToast(t('undo.deleteUnavailable'), 'info');
         actionHistory.recordAction(action);
         break;
       case 'DELETE_DIVIDER':
-        pushToast(
-          'Cannot undo divider deletion - please recreate manually',
-          'info',
-        );
+        pushToast(t('undo.dividerUnavailable'), 'info');
         actionHistory.recordAction(action);
         break;
       case 'UPDATE_DIVIDER':
@@ -107,14 +103,21 @@ export function useUndoRedo({
           taskId: action.taskId,
           title: action.previousText,
         });
-        pushToast('Undid divider text update', 'info');
+        pushToast(t('undo.dividerText'), 'info');
         break;
       case 'REORDER_TASKS':
         restoreOrder(action.previousOrder);
-        pushToast('Undid task reorder', 'info');
+        pushToast(t('undo.reorder'), 'info');
         break;
     }
-  }, [toggleStar, uncompleteTask, completeTask, updateDivider, restoreOrder]);
+  }, [
+    t,
+    toggleStar,
+    uncompleteTask,
+    completeTask,
+    updateDivider,
+    restoreOrder,
+  ]);
 
   const redo = useCallback(() => {
     const action = actionHistory.redo();
@@ -124,34 +127,44 @@ export function useUndoRedo({
       case 'TOGGLE_STAR':
         toggleStar.mutate(action.taskId);
         pushToast(
-          `Redid ${action.previousState ? 'star' : 'unstar'} action`,
+          t(action.previousState ? 'redo.star' : 'redo.unstar'),
           'info',
         );
         break;
       case 'COMPLETE_TASK':
         completeTask.mutate(action.taskId);
-        pushToast(`Redid complete: ${action.taskTitle}`, 'info');
+        pushToast(t('redo.complete', { title: action.taskTitle }), 'info');
         break;
       case 'UNCOMPLETE_TASK':
         uncompleteTask.mutate(action.taskId);
-        pushToast(`Redid uncomplete: ${action.taskTitle}`, 'info');
+        pushToast(
+          t('redo.uncomplete', { title: action.taskTitle }),
+          'info',
+        );
         break;
       case 'UPDATE_DIVIDER':
         updateDivider.mutate({
           taskId: action.taskId,
           title: action.newText,
         });
-        pushToast('Redid divider text update', 'info');
+        pushToast(t('redo.dividerText'), 'info');
         break;
       case 'REORDER_TASKS':
         restoreOrder(action.newOrder);
-        pushToast('Redid task reorder', 'info');
+        pushToast(t('redo.reorder'), 'info');
         break;
       default:
-        pushToast('Cannot redo this action', 'info');
+        pushToast(t('redo.cannot'), 'info');
         break;
     }
-  }, [toggleStar, completeTask, uncompleteTask, updateDivider, restoreOrder]);
+  }, [
+    t,
+    toggleStar,
+    completeTask,
+    uncompleteTask,
+    updateDivider,
+    restoreOrder,
+  ]);
 
   return { undo, redo, canUndo, canRedo };
 }

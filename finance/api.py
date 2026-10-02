@@ -19,7 +19,7 @@ import logging
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -30,8 +30,9 @@ from django.db.models.functions import Coalesce, TruncMonth
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Query, Router, Schema
-from ninja.errors import HttpError
 from pydantic import Field
+
+from django_apps.api import ApiHttpError
 
 from finance.forms import (
     CategoryRuleForm,
@@ -265,6 +266,9 @@ class TransactionsOut(Schema):
 
 class CategoryRowOut(Schema):
     category_name: str
+    # 'uncategorized' for the no-category bucket — the SPA maps it
+    # to the catalog string; `category_name` stays the EN fallback.
+    category_key: Optional[str] = None
     category_color: str
     spent: Decimal
     received: Decimal
@@ -281,6 +285,9 @@ class CurrencyTotalOut(Schema):
 
 class PeriodOut(Schema):
     label: str
+    # Catalog key under finance:server.periods — the SPA translates
+    # it; `label` stays the English fallback.
+    key: str
     date_from: str
     date_to: str
     active: bool
@@ -298,6 +305,11 @@ class CategoryOverviewOut(Schema):
 
 class WindowStatBase(Schema):
     label: str
+    # i18n hooks: `key` picks a catalog label (server:windows.*) for
+    # fixed/current-month windows; `value` is 'YYYY-MM' for history
+    # months the SPA formats via fmtMonth. `label` stays English.
+    key: Optional[str] = None
+    value: Optional[str] = None
     spent: Decimal
     threshold: Optional[Decimal] = None
     pct: Decimal
@@ -396,11 +408,19 @@ class SyncAccountOut(Schema):
     created: int = 0
     updated: int = 0
     detail: str = ''
+    # i18n hooks — `code` maps to a `server:*` catalog key the SPA
+    # interpolates with `params`; `detail` stays the English fallback.
+    code: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
 
 
 class MessageOut(Schema):
     success: bool
     message: str
+    # `code`/`params` let the SPA rebuild the message in the user's
+    # language; `message` stays as the English fallback.
+    code: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
 
 
 class SuccessOut(Schema):
@@ -410,6 +430,8 @@ class SuccessOut(Schema):
 class ToggleBalanceCheckOut(Schema):
     success: bool
     message: str
+    code: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
     included_in_balance_check: bool
 
 
@@ -573,7 +595,12 @@ def institutions(request, country: str = ''):
     try:
         data = client.list_institutions(country)
     except GoCardlessError as exc:
-        raise HttpError(502, f'Could not load institutions: {exc}')
+        raise ApiHttpError(
+            502,
+            f'Could not load institutions: {exc}',
+            code='couldNotLoadInstitutions',
+            params={'detail': str(exc)},
+        )
     return {'institutions': data}
 
 
@@ -726,6 +753,9 @@ def category_overview(request,
         row['category_name'] = (
             category.name if category else 'Uncategorized'
         )
+        row['category_key'] = (
+            None if category else 'uncategorized'
+        )
         row['category_color'] = (
             category.color if category and category.color
             else '#6c757d'
@@ -745,23 +775,28 @@ def category_overview(request,
     prev_month_end = month_start - timedelta(days=1)
     prev_month_start = prev_month_end.replace(day=1)
     presets = [
-        ('Last 7 days', today - timedelta(days=6), today),
-        ('Last 30 days', today - timedelta(days=29), today),
-        ('Last 90 days', today - timedelta(days=89), today),
-        ('Last 365 days', today - timedelta(days=364), today),
-        ('This month', month_start, today),
-        ('Last month', prev_month_start, prev_month_end),
-        ('All time', None, None),
+        ('Last 7 days', 'last7Days',
+         today - timedelta(days=6), today),
+        ('Last 30 days', 'last30Days',
+         today - timedelta(days=29), today),
+        ('Last 90 days', 'last90Days',
+         today - timedelta(days=89), today),
+        ('Last 365 days', 'last365Days',
+         today - timedelta(days=364), today),
+        ('This month', 'thisMonth', month_start, today),
+        ('Last month', 'lastMonth', prev_month_start, prev_month_end),
+        ('All time', 'allTime', None, None),
     ]
     current = (date_from, date_to)
     periods = [
         {
             'label': label,
+            'key': key,
             'date_from': start.isoformat() if start else '',
             'date_to': end.isoformat() if end else '',
             'active': (start, end) == current,
         }
-        for label, start, end in presets
+        for label, key, start, end in presets
     ]
 
     return {
@@ -908,7 +943,12 @@ def connect(request, payload: ConnectIn):
             reference=reference,
         )
     except GoCardlessError as exc:
-        raise HttpError(502, f'Could not start bank link: {exc}')
+        raise ApiHttpError(
+            502,
+            f'Could not start bank link: {exc}',
+            code='couldNotStartBankLink',
+            params={'detail': str(exc)},
+        )
     Requisition.objects.create(
         user=request.user,
         requisition_id=data['id'],
@@ -943,6 +983,11 @@ def toggle_balance_check(request, account_id: int):
             if pref.included_in_balance_check
             else 'Account excluded from the balance check.'
         ),
+        'code': (
+            'accountIncluded'
+            if pref.included_in_balance_check
+            else 'accountExcluded'
+        ),
         'included_in_balance_check': pref.included_in_balance_check,
     }
 
@@ -955,12 +1000,16 @@ def share_account(request, account_id: int, payload: ShareIn):
     )
     form = ShareAccountForm(payload.model_dump())
     if not form.is_valid():
-        raise HttpError(400, 'Please provide a username.')
+        raise ApiHttpError(
+            400, 'Please provide a username.', code='provideUsername'
+        )
     target = get_user_model().objects.filter(
         username=form.cleaned_data['username']
     ).first()
     if target is None or target == request.user:
-        raise HttpError(400, 'Unknown or invalid username.')
+        raise ApiHttpError(
+            400, 'Unknown or invalid username.', code='unknownUsername'
+        )
     AccountShare.objects.get_or_create(
         account=account, shared_with=target
     )
@@ -970,6 +1019,8 @@ def share_account(request, account_id: int, payload: ShareIn):
     return {
         'success': True,
         'message': f'Account shared with {target.username}.',
+        'code': 'accountShared',
+        'params': {'username': target.username},
     }
 
 
@@ -992,7 +1043,11 @@ def save_balance_alert(request, account_id: int,
             'alerted_at': None,
         },
     )
-    return {'success': True, 'message': 'Balance alert saved.'}
+    return {
+        'success': True,
+        'message': 'Balance alert saved.',
+        'code': 'balanceAlertSaved',
+    }
 
 
 @router.post('/accounts/{account_id}/balance-alert/delete/',
@@ -1004,7 +1059,11 @@ def delete_balance_alert(request, account_id: int):
     BalanceAlert.objects.filter(
         user=request.user, account=account
     ).delete()
-    return {'success': True, 'message': 'Balance alert removed.'}
+    return {
+        'success': True,
+        'message': 'Balance alert removed.',
+        'code': 'balanceAlertRemoved',
+    }
 
 
 @router.post('/notifications/read/', response=SuccessOut)
@@ -1037,6 +1096,8 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
                 f'Requisition status is {a.requisition.status} '
                 f'(not LN) — bank must be relinked.'
             ),
+            'code': 'requisitionNotLinked',
+            'params': {'status': a.requisition.status},
         }
         for a in visible
         if a.requisition.status != 'LN'
@@ -1045,6 +1106,7 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
         return {
             'success': False,
             'message': 'No linked bank accounts to sync.',
+            'code': 'noLinkedAccounts',
             'created': 0,
             'updated': 0,
             'failed': 0,
@@ -1078,6 +1140,9 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
                 'created': 0,
                 'updated': 0,
                 'detail': str(exc)[:200],
+                # Exception text is never translated — the code only
+                # says "the account failed"; detail stays diagnostic.
+                'code': 'operationFailed',
             })
 
     if failed:
@@ -1093,6 +1158,14 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
     return {
         'success': not failed,
         'message': message,
+        # The SPA composes the localized sentence from plural-aware
+        # fragments keyed off these counts (see mutations.ts).
+        'code': 'synced',
+        'params': {
+            'created': created,
+            'updated': updated,
+            'failed': failed,
+        },
         'created': created,
         'updated': updated,
         'failed': failed,
@@ -1110,6 +1183,7 @@ def refresh_balances(request):
             'message': (
                 'No accounts are included in the balance check.'
             ),
+            'code': 'noBalanceAccounts',
             'updated': 0,
             'rate_limited': 0,
             'failed': 0,
@@ -1151,6 +1225,13 @@ def refresh_balances(request):
     return {
         'success': not failed,
         'message': '; '.join(parts) + '.',
+        # The SPA joins per-outcome plural-aware clauses client-side.
+        'code': 'balancesRefreshed',
+        'params': {
+            'updated': updated,
+            'rate_limited': rate_limited,
+            'failed': failed,
+        },
         'updated': updated,
         'rate_limited': rate_limited,
         'failed': failed,
@@ -1172,8 +1253,11 @@ def save_limit(request, payload: LimitSaveIn):
         payload.model_dump(), instance=editing, user=request.user
     )
     if not form.is_valid():
-        raise HttpError(
-            400, f'Could not save limit: {_flatten_errors(form)}'
+        raise ApiHttpError(
+            400,
+            f'Could not save limit: {_flatten_errors(form)}',
+            code='couldNotSaveLimit',
+            params={'errors': _flatten_errors(form)},
         )
     if editing is not None:
         limit = form.save(commit=False)
@@ -1181,14 +1265,16 @@ def save_limit(request, payload: LimitSaveIn):
         try:
             limit.save()
         except IntegrityError:
-            raise HttpError(
+            raise ApiHttpError(
                 409,
                 'A limit already exists for this account '
                 'and category.',
+                code='limitConflict',
             )
         return {
             'success': True,
             'message': 'Spending limit updated.',
+            'code': 'limitUpdated',
         }
     TransactionLimit.objects.update_or_create(
         account=form.cleaned_data['account'],
@@ -1201,7 +1287,11 @@ def save_limit(request, payload: LimitSaveIn):
             'is_active': form.cleaned_data['is_active'],
         },
     )
-    return {'success': True, 'message': 'Spending limit saved.'}
+    return {
+        'success': True,
+        'message': 'Spending limit saved.',
+        'code': 'limitSaved',
+    }
 
 
 @router.post('/limits/{limit_id}/delete/', response=MessageOut)
@@ -1210,7 +1300,11 @@ def delete_limit(request, limit_id: int):
         TransactionLimit, pk=limit_id, user=request.user
     )
     limit.delete()
-    return {'success': True, 'message': 'Spending limit deleted.'}
+    return {
+        'success': True,
+        'message': 'Spending limit deleted.',
+        'code': 'limitDeleted',
+    }
 
 
 @router.post('/rules/save/', response=RulesChangedOut)
@@ -1225,8 +1319,11 @@ def save_rule(request, payload: RuleSaveIn):
         payload.model_dump(), instance=rule, user=request.user
     )
     if not form.is_valid():
-        raise HttpError(
-            400, f'Could not save rule: {_flatten_errors(form)}'
+        raise ApiHttpError(
+            400,
+            f'Could not save rule: {_flatten_errors(form)}',
+            code='couldNotSaveRule',
+            params={'errors': _flatten_errors(form)},
         )
     rule = form.save(commit=False)
     rule.user = request.user
@@ -1237,6 +1334,8 @@ def save_rule(request, payload: RuleSaveIn):
         'message': (
             f'Rule saved; {changed} transaction(s) recategorized.'
         ),
+        'code': 'ruleSaved',
+        'params': {'count': changed},
         'changed': changed,
     }
 
@@ -1253,6 +1352,8 @@ def delete_rule(request, rule_id: int):
         'message': (
             f'Rule deleted; {changed} transaction(s) recategorized.'
         ),
+        'code': 'ruleDeleted',
+        'params': {'count': changed},
         'changed': changed,
     }
 
@@ -1286,6 +1387,8 @@ def move_rule(request, rule_id: int, payload: MoveRuleIn):
         'message': (
             f'Rule moved; {changed} transaction(s) recategorized.'
         ),
+        'code': 'ruleMoved',
+        'params': {'count': changed},
         'changed': changed,
     }
 
@@ -1297,6 +1400,8 @@ def apply_rules_endpoint(request):
     return {
         'success': True,
         'message': f'{changed} transaction(s) recategorized.',
+        'code': 'recategorized',
+        'params': {'count': changed},
         'changed': changed,
     }
 
@@ -1306,7 +1411,9 @@ def preview_rule_endpoint(request, payload: RulePreviewIn):
     """Dry-run a candidate rule against transaction history."""
     result = preview_rule(request.user, payload.model_dump())
     if 'error' in result:
-        raise HttpError(400, result['error'])
+        raise ApiHttpError(
+            400, result['error'], code=result.get('code')
+        )
     return result
 
 
@@ -1315,7 +1422,11 @@ def save_category(request, payload: CategorySaveIn):
     """Create a category (or update color when the name exists)."""
     name = payload.name.strip()
     if not name:
-        raise HttpError(400, 'Category name is required.')
+        raise ApiHttpError(
+            400,
+            'Category name is required.',
+            code='categoryNameRequired',
+        )
     Category.objects.update_or_create(
         user=request.user,
         name=name,
@@ -1324,6 +1435,8 @@ def save_category(request, payload: CategorySaveIn):
     return {
         'success': True,
         'message': f'Category "{name}" saved.',
+        'code': 'categorySaved',
+        'params': {'name': name},
     }
 
 
@@ -1342,6 +1455,8 @@ def delete_category(request, category_id: int):
             f'Category deleted; {changed} transaction(s) '
             'recategorized.'
         ),
+        'code': 'categoryDeleted',
+        'params': {'count': changed},
         'changed': changed,
     }
 
@@ -1350,8 +1465,10 @@ def delete_category(request, category_id: int):
 def push_subscribe(request, payload: PushSubscribeIn):
     """Register this browser's Web Push subscription."""
     if not getattr(settings, 'VAPID_PUBLIC_KEY', ''):
-        raise HttpError(
-            400, 'Push notifications are not configured.'
+        raise ApiHttpError(
+            400,
+            'Push notifications are not configured.',
+            code='pushNotConfigured',
         )
     endpoint = payload.endpoint
     keys = payload.keys
@@ -1362,8 +1479,10 @@ def push_subscribe(request, payload: PushSubscribeIn):
         or not keys.p256dh
         or not keys.auth
     ):
-        raise HttpError(
-            400, 'Missing or invalid subscription fields.'
+        raise ApiHttpError(
+            400,
+            'Missing or invalid subscription fields.',
+            code='invalidSubscription',
         )
     # Endpoint is one browser subscription; if it was registered by a
     # different user (shared browser, changed login), reassign it to
@@ -1386,5 +1505,7 @@ def push_unsubscribe(request, payload: PushUnsubscribeIn):
         user=request.user, endpoint=payload.endpoint
     ).delete()
     if not deleted:
-        raise HttpError(404, 'Subscription not found.')
+        raise ApiHttpError(
+            404, 'Subscription not found.', code='subscriptionNotFound'
+        )
     return {'success': True}

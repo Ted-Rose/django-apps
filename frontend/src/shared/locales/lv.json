@@ -1,0 +1,53 @@
+{
+  "common": {
+    "add": "Pievienot",
+    "apply": "Lietot",
+    "cancel": "Atcelt",
+    "close": "Aizvērt",
+    "dashboard": "Pārskats",
+    "delete": "Dzēst",
+    "edit": "Rediģēt",
+    "home": "Sākums",
+    "loading": "Ielādē",
+    "logout": "Iziet ({{user}})",
+    "remove": "Noņemt",
+    "retry": "Mēģināt vēlreiz",
+    "save": "Saglabāt",
+    "search": "Meklēt",
+    "share": "Koplietot",
+    "update": "Atjaunināt",
+    "am": "priekšp.",
+    "pm": "pēcp.",
+    "months": [
+      "janv.",
+      "febr.",
+      "marts",
+      "apr.",
+      "maijs",
+      "jūn.",
+      "jūl.",
+      "aug.",
+      "sept.",
+      "okt.",
+      "nov.",
+      "dec."
+    ]
+  },
+  "nav": {
+    "brand": "Tedis's Tools"
+  },
+  "language": {
+    "label": "Valoda"
+  },
+  "burgerMenu": {
+    "toggle": "Pārslēgt izvēlni"
+  },
+  "toasts": {
+    "dismiss": "Aizvērt"
+  },
+  "errors": {
+    "network": "Neizdevās sazināties ar serveri. Pārbaudi interneta savienojumu.",
+    "requestFailed": "Pieprasījums neizdevās: {{status}} {{statusText}}",
+    "loadFailed": "Neizdevās ielādēt {{label}}"
+  }
+}

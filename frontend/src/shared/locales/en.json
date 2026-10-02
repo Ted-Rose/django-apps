@@ -1,0 +1,53 @@
+{
+  "common": {
+    "add": "Add",
+    "apply": "Apply",
+    "cancel": "Cancel",
+    "close": "Close",
+    "dashboard": "Dashboard",
+    "delete": "Delete",
+    "edit": "Edit",
+    "home": "Home",
+    "loading": "Loading",
+    "logout": "Logout ({{user}})",
+    "remove": "Remove",
+    "retry": "Retry",
+    "save": "Save",
+    "search": "Search",
+    "share": "Share",
+    "update": "Update",
+    "am": "AM",
+    "pm": "PM",
+    "months": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ]
+  },
+  "nav": {
+    "brand": "Tedis's Tools"
+  },
+  "language": {
+    "label": "Language"
+  },
+  "burgerMenu": {
+    "toggle": "Toggle menu"
+  },
+  "toasts": {
+    "dismiss": "Dismiss"
+  },
+  "errors": {
+    "network": "Could not reach the server. Check your connection.",
+    "requestFailed": "Request failed: {{status}} {{statusText}}",
+    "loadFailed": "Couldn't load {{label}}"
+  }
+}

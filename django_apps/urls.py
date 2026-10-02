@@ -4,11 +4,13 @@ from django.conf import settings
 from django.conf.urls.static import static
 from . import views
 from django_apps.api import api
+from django_apps.me import router as me_router
 from google_tasks.api import router as tasks_router
 from finance.api import router as finance_router
 
 app_name = 'main'
 
+api.add_router('/me/', me_router)
 api.add_router('/tasks/', tasks_router)
 api.add_router('/finance/', finance_router)
 

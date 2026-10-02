@@ -220,6 +220,60 @@ class TasksApiReviewTests(TestCase):
         next_param = parse_qs(urlparse(auth_url).query)['next'][0]
         self.assertEqual(next_param, '/tasks/')
 
+    # --- i18n `code`/`params` contract ---
+    # Mutation failures carry a stable `code` the SPA resolves
+    # through its server catalog, with `detail` as the English
+    # fallback and `params` for interpolation.
+
+    def test_reorder_empty_updates_carries_code(self):
+        resp = self.post_json('/tasks/reorder/', {'updates': []})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'emptyUpdates')
+
+    def test_reorder_duplicate_positions_carries_code(self):
+        self.make_task('a', order=1.0)
+        self.make_task('b', order=2.0)
+        resp = self.post_json(
+            '/tasks/reorder/',
+            {'updates': [
+                {'task_id': 'a', 'position': 1.0},
+                {'task_id': 'b', 'position': 1.0},
+            ]},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'duplicatePositions')
+
+    def test_update_task_empty_title_carries_code(self):
+        task = self.make_task('a')
+        resp = self.post_json(
+            f'/task/{task.task_id}/update/', {'title': '  '}
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'emptyTitle')
+
+    def test_update_task_foreign_labels_carry_code(self):
+        task = self.make_task('a')
+        foreign_label = TaskLabel.objects.create(
+            user=self.other_user, name='BobLabel'
+        )
+        resp = self.post_json(
+            f'/task/{task.task_id}/update/',
+            {'title': 'a', 'label_ids': [foreign_label.id]},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'invalidLabelIds')
+
+    def test_update_task_bad_order_value_carries_params(self):
+        task = self.make_task('a')
+        resp = self.post_json(
+            f'/task/{task.task_id}/update/',
+            {'title': 'a', 'task_order': None},
+        )
+        self.assertEqual(resp.status_code, 400)
+        body = resp.json()
+        self.assertEqual(body['code'], 'invalidOrderValue')
+        self.assertEqual(body['params'], {'field': 'task_order'})
+
     # --- 2xx success:false floor ---
 
     def test_failed_sync_is_500_not_400(self):

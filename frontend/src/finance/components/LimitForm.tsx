@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import type {
   AccountOptionOut,
   CategoryOut,
@@ -35,6 +36,7 @@ export function LimitForm({
   /** The template's "Cancel" link back to the plain limits URL. */
   onCancelEdit: () => void;
 }) {
+  const { t } = useTranslation('finance');
   const saveLimit = useSaveLimit();
   const [account, setAccount] = useState(
     editing ? String(editing.account.id) : '',
@@ -71,20 +73,20 @@ export function LimitForm({
     <>
       {editing && (
         <div className="alert alert-secondary py-2">
-          Editing an existing limit.{' '}
+          {t('limits.form.editingNotice')}{' '}
           <button
             type="button"
             className="btn btn-link btn-sm p-0 align-baseline"
             onClick={onCancelEdit}
           >
-            Cancel
+            {t('common:common.cancel')}
           </button>
         </div>
       )}
       <form onSubmit={submit}>
         <div className="mb-3">
           <label className="form-label" htmlFor="limit-account">
-            Account
+            {t('limits.form.account')}
           </label>
           <select
             id="limit-account"
@@ -94,7 +96,7 @@ export function LimitForm({
             onChange={(event) => setAccount(event.target.value)}
           >
             <option value="" disabled>
-              Select an account
+              {t('limits.form.selectAccount')}
             </option>
             {accounts.map((option) => (
               <option key={option.id} value={option.id}>
@@ -105,7 +107,7 @@ export function LimitForm({
         </div>
         <div className="mb-3">
           <label className="form-label" htmlFor="limit-category">
-            Category
+            {t('limits.form.category')}
           </label>
           <select
             id="limit-category"
@@ -113,7 +115,7 @@ export function LimitForm({
             value={category}
             onChange={(event) => setCategory(event.target.value)}
           >
-            <option value="">All categories</option>
+            <option value="">{t('limits.form.allCategories')}</option>
             {categories.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.name}
@@ -122,15 +124,14 @@ export function LimitForm({
           </select>
         </div>
         <div className="limit-windows mb-3">
-          <p className="fw-semibold mb-1">Time windows</p>
+          <p className="fw-semibold mb-1">{t('limits.form.timeWindows')}</p>
           <p className="text-muted small mb-3">
-            Set any combination — leave a field blank to disable that
-            window.
+            {t('limits.form.timeWindowsHint')}
           </p>
           <div className="row g-3">
             <div className="col-md-4">
               <label className="form-label" htmlFor="limit-7-days">
-                Limit per 7 days
+                {t('limits.form.per7Days')}
               </label>
               <input
                 type="number"
@@ -144,7 +145,7 @@ export function LimitForm({
             </div>
             <div className="col-md-4">
               <label className="form-label" htmlFor="limit-30-days">
-                Limit per 30 days
+                {t('limits.form.per30Days')}
               </label>
               <input
                 type="number"
@@ -158,7 +159,7 @@ export function LimitForm({
             </div>
             <div className="col-md-4">
               <label className="form-label" htmlFor="limit-monthly">
-                Limit per calendar month
+                {t('limits.form.perMonth')}
               </label>
               <input
                 type="number"
@@ -182,7 +183,7 @@ export function LimitForm({
             onChange={(event) => setIsActive(event.target.checked)}
           />
           <label className="form-check-label" htmlFor="limit-is-active">
-            Is active
+            {t('limits.form.isActive')}
           </label>
         </div>
         <button
@@ -198,7 +199,9 @@ export function LimitForm({
               />{' '}
             </>
           )}
-          {editing ? 'Update' : 'Save'}
+          {editing
+            ? t('common:common.update')
+            : t('common:common.save')}
         </button>
       </form>
     </>

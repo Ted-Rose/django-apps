@@ -1,4 +1,5 @@
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 from finance.models import (
     Account,
@@ -48,7 +49,7 @@ class CategoryRuleForm(forms.ModelForm):
             or cleaned.get('description_pattern')
         ):
             raise forms.ValidationError(
-                'Set at least one pattern to match on.'
+                _('Set at least one pattern to match on.')
             )
         return cleaned
 

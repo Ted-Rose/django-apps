@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Trans, useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -29,6 +30,7 @@ import './accounts.css';
  * "Connect Bank" action routes in-SPA to /connect.
  */
 export default function Accounts() {
+  const { t } = useTranslation('finance');
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['finance', 'accounts'],
     queryFn: fetchAccounts,
@@ -38,11 +40,11 @@ export default function Accounts() {
     <>
       <FinanceNavBar />
       <PageShell
-        title="Accounts"
-        subtitle="Linked bank accounts and who can see them"
+        title={t('accounts.title')}
+        subtitle={t('accounts.subtitle')}
         actions={
           <Link to="/connect" className="btn btn-primary">
-            <i className="bi bi-plus-lg" /> Connect Bank
+            <i className="bi bi-plus-lg" /> {t('nav.connectBank')}
           </Link>
         }
       >
@@ -50,14 +52,14 @@ export default function Accounts() {
           <LoadingSkeleton
             rows={3}
             height="5rem"
-            label="Loading accounts"
+            label={t('accounts.loading')}
           />
         )}
         {isError && (
           <ErrorState
             error={error}
             onRetry={() => refetch()}
-            label="accounts"
+            label={t('accounts.loadLabel')}
           />
         )}
         {data &&
@@ -72,13 +74,10 @@ export default function Accounts() {
               ))}
             </div>
           ) : (
-            <EmptyState icon="wallet2" title="No accounts yet">
-              <p className="mb-3">
-                Link a bank account to start tracking balances and
-                transactions.
-              </p>
+            <EmptyState icon="wallet2" title={t('accounts.emptyTitle')}>
+              <p className="mb-3">{t('accounts.emptyBody')}</p>
               <Link to="/connect" className="btn btn-primary">
-                <i className="bi bi-plus-lg" /> Connect a bank
+                <i className="bi bi-plus-lg" /> {t('accounts.connectABank')}
               </Link>
             </EmptyState>
           ))}
@@ -107,6 +106,7 @@ function AccountRow({
   account: AccountOut;
   pushConfig: PushConfigOut;
 }) {
+  const { t } = useTranslation('finance');
   const toggle = useToggleBalanceCheck();
   const share = useShareAccount();
   const saveAlert = useSaveBalanceAlert();
@@ -147,7 +147,9 @@ function AccountRow({
           <p className="mb-1 text-muted small">{details}</p>
           {!account.is_owner && (
             <span className="badge acct-shared-badge">
-              Shared by {account.owner_username}
+              {t('accounts.sharedBy', {
+                username: account.owner_username,
+              })}
             </span>
           )}
         </div>
@@ -158,13 +160,13 @@ function AccountRow({
               type="checkbox"
               role="switch"
               className="form-check-input"
-              title="Include in balance check"
+              title={t('accounts.includeInBalanceCheck')}
               checked={account.included_in_balance_check}
               disabled={toggling}
               onChange={() => toggle.mutate(account.id)}
             />
             <label className="form-check-label" htmlFor={switchId}>
-              Balance check
+              {t('accounts.balanceCheck')}
             </label>
           </div>
           {toggling && (
@@ -181,13 +183,19 @@ function AccountRow({
               }`}
               title={
                 account.balance_alert != null
-                  ? `Balance alert: ${account.balance_alert} ${account.currency}`
-                  : 'Set balance alert'
+                  ? t('accounts.balanceAlert', {
+                      threshold: account.balance_alert,
+                      currency: account.currency,
+                    })
+                  : t('accounts.setBalanceAlert')
               }
               aria-label={
                 account.balance_alert != null
-                  ? `Balance alert: ${account.balance_alert} ${account.currency}`
-                  : 'Set balance alert'
+                  ? t('accounts.balanceAlert', {
+                      threshold: account.balance_alert,
+                      currency: account.currency,
+                    })
+                  : t('accounts.setBalanceAlert')
               }
               onClick={openAlertForm}
             >
@@ -204,8 +212,8 @@ function AccountRow({
             <button
               type="button"
               className="btn btn-sm acct-icon-btn"
-              title="Share account"
-              aria-label="Share account"
+              title={t('accounts.shareAccount')}
+              aria-label={t('accounts.shareAccount')}
               onClick={() => {
                 setAlertOpen(false);
                 setShareOpen(true);
@@ -237,8 +245,8 @@ function AccountRow({
           <input
             type="text"
             className="form-control form-control-sm"
-            placeholder="Username"
-            aria-label="Username to share with"
+            placeholder={t('accounts.username')}
+            aria-label={t('accounts.usernameAria')}
             required
             autoFocus
             value={username}
@@ -257,13 +265,13 @@ function AccountRow({
             ) : (
               <i className="bi bi-share" />
             )}{' '}
-            Share
+            {t('common:common.share')}
           </button>
           <button
             type="button"
             className="btn btn-sm btn-outline-secondary"
-            title="Cancel"
-            aria-label="Cancel sharing"
+            title={t('common:common.cancel')}
+            aria-label={t('accounts.cancelSharing')}
             onClick={() => {
               setShareOpen(false);
               setUsername('');
@@ -289,7 +297,7 @@ function AccountRow({
             className="col-form-label-sm text-muted mb-0"
             htmlFor={`alert-threshold-${account.id}`}
           >
-            Alert me when the balance drops below
+            {t('accounts.alertPrompt')}
           </label>
           <input
             id={`alert-threshold-${account.id}`}
@@ -297,7 +305,9 @@ function AccountRow({
             step="0.01"
             className="form-control form-control-sm acct-alert-input"
             placeholder="0.00"
-            aria-label={`Alert threshold in ${account.currency}`}
+            aria-label={t('accounts.thresholdAria', {
+              currency: account.currency,
+            })}
             required
             autoFocus
             value={threshold}
@@ -319,7 +329,7 @@ function AccountRow({
             ) : (
               <i className="bi bi-bell" />
             )}{' '}
-            Save
+            {t('common:common.save')}
           </button>
           {account.balance_alert != null && (
             <button
@@ -340,14 +350,14 @@ function AccountRow({
               ) : (
                 <i className="bi bi-trash" />
               )}{' '}
-              Remove
+              {t('common:common.remove')}
             </button>
           )}
           <button
             type="button"
             className="btn btn-sm btn-outline-secondary"
-            title="Cancel"
-            aria-label="Cancel balance alert"
+            title={t('common:common.cancel')}
+            aria-label={t('accounts.cancelBalanceAlert')}
             onClick={() => setAlertOpen(false)}
           >
             <i className="bi bi-x-lg" />
@@ -355,20 +365,22 @@ function AccountRow({
           <p className="small text-muted mb-0 w-100">
             {lastAmount?.amount != null && (
               <>
-                Last reported balance: {lastAmount.amount}{' '}
-                {lastAmount.currency ?? account.currency}.{' '}
+                {t('accounts.lastBalance', {
+                  amount: lastAmount.amount,
+                  currency: lastAmount.currency ?? account.currency,
+                })}{' '}
               </>
             )}
             {pushConfig.subscription_count === 0 ? (
-              <>
-                No devices subscribed — enable alerts on the{' '}
-                <Link to="/limits">Limits page</Link>.
-              </>
+              <Trans
+                i18nKey="accounts.noDevices"
+                ns="finance"
+                components={{ link: <Link to="/limits" /> }}
+              />
             ) : (
-              <>
-                Push notifications are enabled on{' '}
-                {pushConfig.subscription_count} device(s).
-              </>
+              t('accounts.pushEnabled', {
+                count: pushConfig.subscription_count,
+              })
             )}
           </p>
         </form>

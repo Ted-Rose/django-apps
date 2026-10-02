@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import PageShell from '../components/PageShell';
 import ErrorState from '../components/ErrorState';
@@ -36,6 +37,7 @@ import './transactions.css';
  * query per state change.
  */
 export default function Transactions() {
+  const { t } = useTranslation('finance');
   const [searchParams, setSearchParams] = useSearchParams();
   const params = {
     account: searchParams.get('account'),
@@ -71,11 +73,13 @@ export default function Transactions() {
   useEffect(() => {
     if (rulesQuery.isError) {
       pushToast(
-        `Couldn't load the rule form: ${errorDetail(rulesQuery.error)}`,
+        t('transactions.ruleFormError', {
+          detail: errorDetail(rulesQuery.error),
+        }),
         'warning',
       );
     }
-  }, [rulesQuery.isError, rulesQuery.error]);
+  }, [rulesQuery.isError, rulesQuery.error, t]);
 
   const openRuleDrawer = (tx: TransactionOut) => {
     setRuleTx(tx);
@@ -120,7 +124,9 @@ export default function Transactions() {
       );
       activeFilters.push({
         key: 'account',
-        label: `Account: ${match?.label ?? data.selected_account}`,
+        label: t('transactions.filterAccount', {
+          label: match?.label ?? data.selected_account,
+        }),
         clear: { account: null },
       });
     }
@@ -130,25 +136,29 @@ export default function Transactions() {
       );
       const name =
         data.selected_category === 'none'
-          ? 'Uncategorized'
+          ? t('transactions.uncategorized')
           : (match?.name ?? data.selected_category);
       activeFilters.push({
         key: 'category',
-        label: `Category: ${name}`,
+        label: t('transactions.filterCategory', { name }),
         clear: { category: null },
       });
     }
     if (data.selected_creditor) {
       activeFilters.push({
         key: 'creditor',
-        label: `Creditor: ${data.selected_creditor}`,
+        label: t('transactions.filterCreditor', {
+          name: data.selected_creditor,
+        }),
         clear: { creditor: null },
       });
     }
     if (data.search_query) {
       activeFilters.push({
         key: 'q',
-        label: `Search: ${data.search_query}`,
+        label: t('transactions.filterSearch', {
+          query: data.search_query,
+        }),
         clear: { q: null },
       });
     }
@@ -158,7 +168,7 @@ export default function Transactions() {
     <>
       <FinanceNavBar />
       <PageShell
-        title="Transactions"
+        title={t('transactions.title')}
         actions={
           <button
             type="button"
@@ -176,11 +186,12 @@ export default function Transactions() {
                   className="spinner-border spinner-border-sm"
                   role="status"
                 />{' '}
-                Syncing...
+                {t('transactions.syncing')}
               </>
             ) : (
               <>
-                <i className="bi bi-arrow-repeat" /> Sync transactions
+                <i className="bi bi-arrow-repeat" />{' '}
+                {t('transactions.syncButton')}
               </>
             )}
           </button>
@@ -190,14 +201,14 @@ export default function Transactions() {
           <LoadingSkeleton
             rows={6}
             height="2.5rem"
-            label="Loading transactions"
+            label={t('transactions.loading')}
           />
         )}
         {isError && (
           <ErrorState
             error={error}
             onRetry={() => refetch()}
-            label="transactions"
+            label={t('transactions.loadLabel')}
           />
         )}
         {data && (
@@ -209,7 +220,9 @@ export default function Transactions() {
                     key={filter.key}
                     type="button"
                     className="fin-chip"
-                    aria-label={`Remove filter: ${filter.label}`}
+                    aria-label={t('transactions.removeFilterAria', {
+                      label: filter.label,
+                    })}
                     onClick={() => updateParams(filter.clear)}
                   >
                     {filter.label}
@@ -221,7 +234,7 @@ export default function Transactions() {
                   className="btn btn-link btn-sm"
                   onClick={clearFilters}
                 >
-                  Clear filters
+                  {t('transactions.clearFilters')}
                 </button>
               </div>
             )}

@@ -403,7 +403,7 @@ describe('Transactions', () => {
       await screen.findByRole('button', { name: /Sync transactions/ }),
     );
     expect(
-      await screen.findByText(/Everyday account: \+1 new, 0 updated/),
+      await screen.findByText(/Everyday account: \+1 new \(0 updated\)/),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Savings: failed — GoCardless API error 429/),

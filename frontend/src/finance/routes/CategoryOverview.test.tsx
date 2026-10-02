@@ -70,11 +70,18 @@ function makeOverview(
     periods: [
       {
         label: 'Last 7 days',
+        key: 'last7Days',
         date_from: '2025-01-09',
         date_to: '2025-01-15',
         active: true,
       },
-      { label: 'All time', date_from: '', date_to: '', active: false },
+      {
+        label: 'All time',
+        key: 'allTime',
+        date_from: '',
+        date_to: '',
+        active: false,
+      },
     ],
     date_from: '2025-01-09',
     date_to: '2025-01-15',

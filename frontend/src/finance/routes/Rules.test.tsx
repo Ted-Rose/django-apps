@@ -192,9 +192,9 @@ describe('Rules', () => {
     expect(document.getElementById('categoriesCollapse')!).toHaveClass(
       'collapse',
     );
-    expect(
-      document.getElementById('categoriesCollapse')!,
-    ).not.toHaveClass('show');
+    expect(document.getElementById('categoriesCollapse')!).not.toHaveClass(
+      'show',
+    );
     expect(categoriesToggle).toHaveAttribute('aria-expanded', 'false');
 
     // Collapsing categories keeps the rules section (and its header
@@ -373,9 +373,7 @@ describe('Rules', () => {
 
     // The summary and the capped diff list render from the preview.
     expect(
-      await screen.findByText(
-        /3 transaction\(s\) match, rule would apply to 2/,
-      ),
+      await screen.findByText(/3 transactions match, rule would apply to 2/),
     ).toBeInTheDocument();
     expect(screen.getByText(/would change category/)).toBeInTheDocument();
     expect(screen.getByText('— → Groceries')).toBeInTheDocument();

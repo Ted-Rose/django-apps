@@ -2,8 +2,11 @@ import logging
 
 from django.core.management.base import BaseCommand
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
+from django.utils.translation import gettext
+from django.utils.translation import gettext_lazy as _
 
+from django_apps.models import user_language
 from finance.models import LimitEvaluation, TransactionLimit
 from finance.services.limits import (
     ALERT_FIELD_BY_THRESHOLD,
@@ -84,7 +87,7 @@ class Command(BaseCommand):
 
             if new_breaches:
                 now = timezone.now()
-                for _, _, alert_field in new_breaches:
+                for _window, _spent, alert_field in new_breaches:
                     setattr(limit, alert_field, now)
                 dirty.update(b[2] for b in new_breaches)
                 self._send_alert(limit, new_breaches)
@@ -138,27 +141,39 @@ class Command(BaseCommand):
             )
 
     def _send_alert(self, limit, breaches):
-        scope = (
-            limit.category.name if limit.category_id
-            else 'All spending'
-        )
+        # Rendered in the recipient's language — gettext_lazy values
+        # resolve to str() inside the translation.override block.
+        period_text = {
+            'days7': _('the last 7 days'),
+            'days30': _('the last 30 days'),
+            'thisMonth': _('this month'),
+        }
         account = (
             limit.account.name or limit.account.iban
             or limit.account.account_id
         )
         currency = limit.account.currency
-        lines = [
-            (
-                f'{scope} on {account}: '
-                f'{fmt_money(spent, currency)} of '
-                f'{fmt_money(window.threshold, currency)} '
-                f'in {window.period_text}'
+        with translation.override(user_language(limit.user)):
+            scope = (
+                limit.category.name if limit.category_id
+                else gettext('All spending')
             )
-            for window, spent, _ in breaches
-        ]
-        send_limit_alert(
-            limit.user,
-            'Spending limit exceeded',
-            '\n'.join(lines),
-            reverse('finance:limits'),
-        )
+            lines = [
+                gettext(
+                    '{scope} on {account}: {spent} of {threshold} '
+                    'in {period}'
+                ).format(
+                    scope=scope,
+                    account=account,
+                    spent=fmt_money(spent, currency),
+                    threshold=fmt_money(window.threshold, currency),
+                    period=period_text[window.key],
+                )
+                for window, spent, _alert_field in breaches
+            ]
+            send_limit_alert(
+                limit.user,
+                gettext('Spending limit exceeded'),
+                '\n'.join(lines),
+                reverse('finance:limits'),
+            )

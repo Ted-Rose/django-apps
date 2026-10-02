@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -11,6 +12,7 @@ import LimitItem from '../components/LimitItem';
 import PushCard from '../components/PushCard';
 import CollapsibleCard from '../../shared/components/CollapsibleCard';
 import Toasts from '../../shared/components/Toasts';
+import { fmtDateLong, fmtMonth } from '../../shared/format';
 import { fetchLimits } from '../api';
 import './limits.css';
 
@@ -28,6 +30,7 @@ import './limits.css';
  * `window_stats` — rendered verbatim, never parsed into floats.
  */
 export default function Limits() {
+  const { t } = useTranslation('finance');
   const [searchParams, setSearchParams] = useSearchParams();
   const month = searchParams.get('month');
   const editParam = searchParams.get('edit');
@@ -92,36 +95,34 @@ export default function Limits() {
       <FinanceNavBar />
       <PageShell
         narrow
-        title="Spending Limits"
-        subtitle={
-          <span className="small">
-            Per-account spending limits over 7-day, 30-day or
-            calendar-month windows, optionally scoped to a single
-            category — you are alerted when spending exceeds the limit.
-          </span>
-        }
+        title={t('limits.title')}
+        subtitle={<span className="small">{t('limits.subtitle')}</span>}
       >
         {isPending && (
-          <LoadingSkeleton rows={3} height="4.5rem" label="Loading limits" />
+          <LoadingSkeleton
+            rows={3}
+            height="4.5rem"
+            label={t('limits.loading')}
+          />
         )}
         {isError && (
           <ErrorState
             error={error}
             onRetry={() => refetch()}
-            label="limits"
+            label={t('limits.loadLabel')}
           />
         )}
         {data && (
           <>
             <div className="limits-section">
               <CollapsibleCard
-                title="Limit overview"
+                title={t('limits.overview')}
                 open={overviewOpen}
                 onToggle={() => setOverviewOpen((open) => !open)}
                 badge={
                   overCount > 0 ? (
                     <span className="badge rounded-pill text-bg-danger">
-                      {overCount} over
+                      {t('limits.overBadge', { count: overCount })}
                     </span>
                   ) : undefined
                 }
@@ -133,7 +134,7 @@ export default function Limits() {
                         className="form-label mb-0 small text-muted"
                         htmlFor="overview-month"
                       >
-                        Overview
+                        {t('limits.overviewLabel')}
                       </label>
                       <select
                         id="overview-month"
@@ -143,8 +144,12 @@ export default function Limits() {
                         onChange={(event) => selectMonth(event.target.value)}
                       >
                         {data.overview_months.map((option) => (
-                          <option key={option.label} value={option.value}>
-                            {option.label}
+                          <option key={option.value} value={option.value}>
+                            {option.value
+                              ? fmtMonth(option.value)
+                              : t('server:periods.thisMonth', {
+                                  defaultValue: option.label,
+                                })}
                           </option>
                         ))}
                       </select>
@@ -154,7 +159,7 @@ export default function Limits() {
                           className="btn btn-link btn-sm"
                           onClick={clearParams}
                         >
-                          Back to this month
+                          {t('limits.backToThisMonth')}
                         </button>
                       )}
                       <span
@@ -173,19 +178,18 @@ export default function Limits() {
                           aria-hidden="true"
                         />
                         {overCount > 0
-                          ? `${overCount} of ${data.limits.length} limits exceeded`
-                          : 'All limits on track'}
+                          ? t('limits.limitsExceeded', {
+                              count: overCount,
+                              total: data.limits.length,
+                            })
+                          : t('limits.allOnTrack')}
                       </span>
                     </div>
                     {data.selected_month && data.as_of && (
                       <p className="text-muted small">
-                        Windows evaluated as of{' '}
-                        {new Date(`${data.as_of}T00:00:00`).toLocaleDateString(
-                          undefined,
-                          { month: 'long', day: 'numeric', year: 'numeric' },
-                        )}{' '}
-                        — the last day of the selected month — using current
-                        limit values.
+                        {t('limits.evaluatedAsOf', {
+                          date: fmtDateLong(`${data.as_of}T00:00:00`),
+                        })}
                       </p>
                     )}
                     {data.limits.map((limit) => (
@@ -199,7 +203,7 @@ export default function Limits() {
                 ) : (
                   <EmptyState
                     icon="speedometer2"
-                    title="No limits set yet."
+                    title={t('limits.emptyTitle')}
                   />
                 )}
               </CollapsibleCard>
@@ -207,7 +211,11 @@ export default function Limits() {
 
             <div ref={formSectionRef} className="limits-section">
               <CollapsibleCard
-                title={editing ? 'Edit limit' : 'Set a limit'}
+                title={
+                  editing
+                    ? t('limits.formTitleEdit')
+                    : t('limits.formTitleNew')
+                }
                 open={formOpen}
                 onToggle={() => setFormOpen((open) => !open)}
               >
@@ -228,7 +236,7 @@ export default function Limits() {
             {data.push_config.vapid_public_key && (
               <div className="limits-section">
                 <CollapsibleCard
-                  title="Spending alerts"
+                  title={t('limits.alertsTitle')}
                   open={alertsOpen}
                   onToggle={() => setAlertsOpen((open) => !open)}
                 >

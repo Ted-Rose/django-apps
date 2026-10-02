@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import { BurgerMenu } from '../../shared/components/BurgerMenu';
+import LanguageSwitcher from '../../shared/components/LanguageSwitcher';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import { fetchArchived, type TaskOut } from '../api';
@@ -27,6 +29,7 @@ import { ErrorState, LoadingSkeleton } from './TaskListPage';
  * selectSecondaryLabel).
  */
 export default function Archived() {
+  const { t } = useTranslation('tasks');
   const [searchParams] = useSearchParams();
   const label = searchParams.get('label');
   const order = searchParams.get('order') ?? 'order_asc';
@@ -78,15 +81,20 @@ export default function Archived() {
   }, [data, secondaryLabel]);
 
   const burgerItems: BurgerMenuItem[] = [
-    { label: 'Home', url: '/', icon: 'house', btn_class: 'btn-light' },
     {
-      label: 'Dashboard',
+      label: t('common:common.home'),
+      url: '/',
+      icon: 'house',
+      btn_class: 'btn-light',
+    },
+    {
+      label: t('common:common.dashboard'),
       icon: 'list-task',
       btn_class: 'btn-primary',
       onClick: () => navigate('/'),
     },
     {
-      label: `Logout (${user})`,
+      label: t('common:common.logout', { user }),
       url: '/admin/logout/',
       icon: 'box-arrow-right',
       btn_class: 'btn-outline-light',
@@ -106,7 +114,7 @@ export default function Archived() {
               to="/archived"
               style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}
             >
-              <i className="bi bi-archive" /> Archived Tasks
+              <i className="bi bi-archive" /> {t('archived.title')}
             </Link>
             {data && (
               <SecondaryLabelDropdown
@@ -116,11 +124,12 @@ export default function Archived() {
             )}
           </div>
           <div className="ms-auto d-flex flex-row align-items-center gap-2">
+            <LanguageSwitcher />
             <Link
               to="/search"
               className="btn btn-outline-light btn-sm"
               style={{ padding: '0.25rem 0.5rem' }}
-              title="Search tasks"
+              title={t('menu.searchTasks')}
             >
               <i className="bi bi-search" />
             </Link>
@@ -147,7 +156,7 @@ export default function Archived() {
             ) : (
               data.completed.length === 0 && (
                 <div className="alert alert-info">
-                  <i className="bi bi-info-circle" /> No archived tasks.
+                  <i className="bi bi-info-circle" /> {t('archived.empty')}
                 </div>
               )
             )}
@@ -169,6 +178,7 @@ export default function Archived() {
 }
 
 function UnarchiveButton({ taskId }: { taskId: string }) {
+  const { t } = useTranslation('tasks');
   const unarchiveTask = useUnarchiveTask();
   return (
     <button
@@ -180,7 +190,8 @@ function UnarchiveButton({ taskId }: { taskId: string }) {
         unarchiveTask.mutate(taskId);
       }}
     >
-      <i className="bi bi-arrow-counterclockwise" /> Unarchive
+      <i className="bi bi-arrow-counterclockwise" />{' '}
+      {t('archived.unarchive')}
     </button>
   );
 }
@@ -192,6 +203,7 @@ function ArchivedTaskCard({
   task: TaskOut;
   labelColors: Map<string, string>;
 }) {
+  const { t } = useTranslation('tasks');
   const toggleStar = useToggleStar();
   const due = formatFullDate(task.due);
 
@@ -205,7 +217,9 @@ function ArchivedTaskCard({
                 <span
                   className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
                   role="button"
-                  title={task.is_starred ? 'Unstar' : 'Star'}
+                  title={
+                    task.is_starred ? t('task.unstar') : t('task.star')
+                  }
                   onClick={(event) => {
                     event.stopPropagation();
                     actionHistory.recordAction({
@@ -247,7 +261,8 @@ function ArchivedTaskCard({
               )}
               {due && (
                 <small className="text-muted">
-                  <i className="bi bi-calendar" /> Due: {due}
+                  <i className="bi bi-calendar" />{' '}
+                  {t('task.due', { date: due })}
                 </small>
               )}
             </div>
@@ -270,6 +285,7 @@ function ArchivedCompletedSection({
   totalCount: number;
   autoOpen: boolean;
 }) {
+  const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -289,7 +305,7 @@ function ArchivedCompletedSection({
           className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-right'}`}
           id="completedChevron"
         />{' '}
-        Completed archived tasks ({totalCount})
+        {t('archived.completedHeader', { count: totalCount })}
       </button>
       <div
         className={`collapse${open ? ' show' : ''}`}

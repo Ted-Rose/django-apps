@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { actionHistory } from '../actionHistory';
 import type { TaskOut } from '../api';
 import { useToggleStar, useUncompleteTask } from '../mutations';
@@ -33,6 +34,7 @@ export function CompletedSection({
   labelColors,
   autoOpen = false,
 }: CompletedSectionProps) {
+  const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
   const count = totalCount ?? tasks.length;
 
@@ -57,7 +59,7 @@ export function CompletedSection({
           className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-right'}`}
           id="completedChevron"
         />{' '}
-        Completed tasks ({count})
+        {t('completed.header', { count })}
       </button>
       <div
         className={`collapse${open ? ' show' : ''}`}
@@ -84,6 +86,7 @@ function CompletedTaskCard({
   task: TaskOut;
   labelColors: Map<string, string>;
 }) {
+  const { t } = useTranslation('tasks');
   const completed = formatShortDate(task.completed);
   const [confirming, setConfirming] = useState(false);
   const toggleStar = useToggleStar();
@@ -122,7 +125,9 @@ function CompletedTaskCard({
             <span
               className={`star-btn${task.is_starred ? ' starred' : ''}`}
               role="button"
-              title={task.is_starred ? 'Unstar' : 'Star'}
+              title={
+                task.is_starred ? t('task.unstar') : t('task.star')
+              }
               onClick={(event) => {
                 event.stopPropagation();
                 actionHistory.recordAction({
@@ -140,7 +145,7 @@ function CompletedTaskCard({
             <span
               className="uncomplete-btn"
               role="button"
-              title="Mark as not completed"
+              title={t('completed.markNotCompleted')}
               onClick={(event) => {
                 event.stopPropagation();
                 setConfirming(true);
@@ -154,8 +159,8 @@ function CompletedTaskCard({
 
       <ConfirmModal
         show={confirming}
-        title="Mark as Not Completed"
-        confirmLabel="Mark as Not Completed"
+        title={t('completed.modalTitle')}
+        confirmLabel={t('completed.modalTitle')}
         confirmIcon="arrow-counterclockwise"
         confirmClassName="btn-primary"
         busy={uncompleteTask.isPending}
@@ -171,7 +176,7 @@ function CompletedTaskCard({
           });
         }}
       >
-        <p>Are you sure you want to mark this task as not completed?</p>
+        <p>{t('completed.confirm')}</p>
         <p className="fw-bold">{task.title}</p>
       </ConfirmModal>
     </div>

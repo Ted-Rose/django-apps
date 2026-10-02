@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 /**
  * Pagination bar for the transactions page — a React port of the
  * `page_items`/`prev_page_url`/`next_page_url` block in
@@ -64,15 +66,19 @@ export function Pagination({
   hasPrevious,
   onPage,
 }: PaginationProps) {
+  const { t } = useTranslation('finance');
   if (numPages <= 1) return null;
   return (
-    <nav className="mt-3 tx-pagination" aria-label="Transaction pages">
+    <nav
+      className="mt-3 tx-pagination"
+      aria-label={t('transactions.pagination.navAria')}
+    >
       <ul className="pagination pagination-sm justify-content-center flex-wrap">
         <li className={`page-item${hasPrevious ? '' : ' disabled'}`}>
           <button
             type="button"
             className="page-link"
-            aria-label="Previous"
+            aria-label={t('transactions.pagination.previous')}
             disabled={!hasPrevious}
             onClick={() => onPage(page - 1)}
           >
@@ -103,7 +109,7 @@ export function Pagination({
           <button
             type="button"
             className="page-link"
-            aria-label="Next"
+            aria-label={t('transactions.pagination.next')}
             disabled={!hasNext}
             onClick={() => onPage(page + 1)}
           >
@@ -112,7 +118,11 @@ export function Pagination({
         </li>
       </ul>
       <p className="text-muted text-center small">
-        Page {page} of {numPages} — {count} transactions
+        {t('transactions.pagination.pageOf', {
+          page,
+          total: numPages,
+        })}{' '}
+        — {t('transactions.pagination.count', { count })}
       </p>
     </nav>
   );

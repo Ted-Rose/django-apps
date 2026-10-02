@@ -35,6 +35,22 @@ class GoogleReauthRequired(Exception):
         super().__init__(authorization_url)
 
 
+class ApiHttpError(HttpError):
+    """HttpError carrying an i18n `code`/`params` pair.
+
+    `code` is a snake_case slug the SPA resolves through its `server`
+    catalog namespace (`t(`server:${code}`)`), interpolated with
+    `params`; the English `detail` stays in the body as the fallback
+    for unmapped codes. When no `code` is supplied the emitted body
+    falls back to the generic `error` status slug.
+    """
+
+    def __init__(self, status_code, message, code=None, params=None):
+        super().__init__(status_code, message)
+        self.code = code
+        self.params = params
+
+
 _ERROR_SLUGS = {
     400: 'bad_request',
     401: 'unauthenticated',
@@ -112,7 +128,17 @@ def _on_validation_error(request, exc):
 
 @api.exception_handler(HttpError)
 def _on_http_error(request, exc):
-    return api.create_response(request, {
+    # `error` is always the machine-readable status slug; `code` adds
+    # a more specific catalog key when the endpoint set one
+    # (ApiHttpError). errorDetail() prefers `code` + `params`.
+    body = {
         'error': error_slug(exc.status_code),
         'detail': str(exc),
-    }, status=exc.status_code)
+        'code': getattr(exc, 'code', None) or error_slug(
+            exc.status_code
+        ),
+    }
+    params = getattr(exc, 'params', None)
+    if params:
+        body['params'] = params
+    return api.create_response(request, body, status=exc.status_code)

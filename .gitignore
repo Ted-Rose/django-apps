@@ -18,8 +18,13 @@ terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 
+# Compiled gettext catalogs are generated at build time (compile_po)
+*.mo
+
 # React frontend (built output is generated at deploy time)
 node_modules/
 frontend_dist/
 frontend/test-results/
 frontend/playwright-report/
+# i18next-parser scratch output — see frontend/i18next-parser.config.js
+frontend/locales-extracted/

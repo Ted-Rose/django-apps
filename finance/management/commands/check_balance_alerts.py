@@ -3,8 +3,10 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.management.base import BaseCommand
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
+from django.utils.translation import gettext
 
+from django_apps.models import user_language
 from finance.models import BalanceAlert, Notification
 from finance.services.gocardless import GoCardlessClient
 from finance.services.money import fmt_money
@@ -164,13 +166,16 @@ class Command(BaseCommand):
             account.name or account.iban or account.account_id
         )
         currency = account.currency
-        title = 'Low balance'
-        body = (
-            f'{name}: {fmt_money(amount, currency)} — '
-            f'below your {fmt_money(alert.threshold, currency)} '
-            'alert'
-        )
         url = reverse('finance:balances')
+        with translation.override(user_language(alert.user)):
+            title = gettext('Low balance')
+            body = gettext(
+                '{account}: {balance} — below your {threshold} alert'
+            ).format(
+                account=name,
+                balance=fmt_money(amount, currency),
+                threshold=fmt_money(alert.threshold, currency),
+            )
         Notification.objects.create(
             user=alert.user, title=title, body=body, url=url
         )

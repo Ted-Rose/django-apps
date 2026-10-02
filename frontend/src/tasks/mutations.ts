@@ -20,6 +20,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { apiPost } from '../shared/api/client';
 import { ApiError, errorDetail } from '../shared/api/errors';
 import type {
@@ -152,6 +153,7 @@ function insertActiveTask(
 
 /** toggleStar — flips is_starred optimistically (task_actions.js). */
 export function useToggleStar() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
@@ -168,7 +170,10 @@ export function useToggleStar() {
     },
     onError: (error, _taskId, context) => {
       restoreDashboards(queryClient, context?.snapshots);
-      pushToast(`Failed to update star: ${errorDetail(error)}`, 'warning');
+      pushToast(
+        t('toasts.starFailed', { detail: errorDetail(error) }),
+        'warning',
+      );
     },
     onSettled: () => invalidateDashboards(queryClient),
   });
@@ -179,6 +184,7 @@ export function useToggleStar() {
  * section (task_actions.js faded the card out before reloading).
  */
 export function useCompleteTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
@@ -205,7 +211,10 @@ export function useCompleteTask() {
     },
     onError: (error, _taskId, context) => {
       restoreDashboards(queryClient, context?.snapshots);
-      pushToast(`Failed to complete task: ${errorDetail(error)}`, 'warning');
+      pushToast(
+        t('toasts.completeFailed', { detail: errorDetail(error) }),
+        'warning',
+      );
     },
     onSettled: () => invalidateDashboards(queryClient),
   });
@@ -218,6 +227,7 @@ export function useCompleteTask() {
  * not cached — and settle-time refetch corrects).
  */
 export function useUncompleteTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
@@ -245,7 +255,10 @@ export function useUncompleteTask() {
     },
     onError: (error, _taskId, context) => {
       restoreDashboards(queryClient, context?.snapshots);
-      pushToast(`Failed to uncomplete task: ${errorDetail(error)}`, 'warning');
+      pushToast(
+        t('toasts.uncompleteFailed', { detail: errorDetail(error) }),
+        'warning',
+      );
     },
     onSettled: () => invalidateDashboards(queryClient),
   });
@@ -253,24 +266,32 @@ export function useUncompleteTask() {
 
 /** archiveTask — local-only flag; refetch removes the row. */
 export function useArchiveTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
       apiPost<MutationResult>(taskUrl(taskId, 'archive')),
     onError: (error) =>
-      pushToast(`Failed to archive task: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.archiveFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
 
 /** deleteTask — soft delete to trash; refetch removes the row. */
 export function useDeleteTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
       apiPost<MutationResult>(taskUrl(taskId, 'delete')),
     onError: (error) =>
-      pushToast(`Failed to delete task: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.deleteFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
@@ -280,12 +301,16 @@ export function useDeleteTask() {
  * Wired by Stage 5's archived page; refetch moves the row.
  */
 export function useUnarchiveTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
       apiPost<MutationResult>(taskUrl(taskId, 'unarchive')),
     onError: (error) =>
-      pushToast(`Failed to unarchive task: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.unarchiveFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
@@ -296,12 +321,16 @@ export function useUnarchiveTask() {
  * trash page; refetch removes the row from the trash list.
  */
 export function useRestoreTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
       apiPost<MutationResult>(taskUrl(taskId, 'restore')),
     onError: (error) =>
-      pushToast(`Failed to restore task: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.restoreFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
@@ -311,13 +340,16 @@ export function useRestoreTask() {
  * Wired by Stage 5; refetch removes the row.
  */
 export function usePermanentDeleteTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
       apiPost<MutationResult>(taskUrl(taskId, 'permanent-delete')),
     onError: (error) =>
       pushToast(
-        `Failed to permanently delete task: ${errorDetail(error)}`,
+        t('toasts.permanentDeleteFailed', {
+          detail: errorDetail(error),
+        }),
         'warning',
       ),
     onSettled: () => invalidateDashboards(queryClient),
@@ -326,12 +358,16 @@ export function usePermanentDeleteTask() {
 
 /** createTask (create_task.js) — title/notes/labels/starred. */
 export function useCreateTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: TaskCreateIn) =>
       apiPost<MutationResult>('/api/tasks/task/create/', payload),
     onError: (error) =>
-      pushToast(`Failed to create task: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.createFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
@@ -342,6 +378,7 @@ export function useCreateTask() {
  * string ('' clears), never null.
  */
 export function useUpdateTask() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (variables: { taskId: string; payload: TaskUpdateIn }) =>
@@ -350,7 +387,10 @@ export function useUpdateTask() {
         variables.payload,
       ),
     onError: (error) =>
-      pushToast(`Failed to update task: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.updateFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
@@ -364,18 +404,23 @@ export function useUpdateTask() {
  * already valid DividerCreateIn.
  */
 export function useCreateDivider() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: DividerCreateIn) =>
       apiPost<MutationResult>('/api/tasks/divider/create/', payload),
     onError: (error) =>
-      pushToast(`Failed to create divider: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.createDividerFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
 
 /** updateDivider — inline rename; optimistic title patch. */
 export function useUpdateDivider() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (variables: { taskId: string; title: string }) =>
@@ -392,7 +437,10 @@ export function useUpdateDivider() {
     },
     onError: (error, _vars, context) => {
       restoreDashboards(queryClient, context?.snapshots);
-      pushToast(`Failed to update divider: ${errorDetail(error)}`, 'warning');
+      pushToast(
+        t('toasts.updateDividerFailed', { detail: errorDetail(error) }),
+        'warning',
+      );
     },
     onSettled: () => invalidateDashboards(queryClient),
   });
@@ -400,6 +448,7 @@ export function useUpdateDivider() {
 
 /** deleteDivider — refetch removes the row. */
 export function useDeleteDivider() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) =>
@@ -407,7 +456,10 @@ export function useDeleteDivider() {
         `/api/tasks/divider/${encodeURIComponent(taskId)}/delete/`,
       ),
     onError: (error) =>
-      pushToast(`Failed to delete divider: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.deleteDividerFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
@@ -441,6 +493,7 @@ export interface ReorderVariables {
  * reloaded the page on position_conflict).
  */
 export function useReorderTasks() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: ReorderVariables) => {
@@ -478,13 +531,10 @@ export function useReorderTasks() {
             error.body !== null &&
             (error.body as { error?: unknown }).error === 'position_conflict'));
       if (conflict) {
-        pushToast(
-          'Order conflicted with another change — refreshing',
-          'warning',
-        );
+        pushToast(t('toasts.orderConflict'), 'warning');
       } else {
         pushToast(
-          `Failed to save task order: ${errorDetail(error)}`,
+          t('toasts.orderFailed', { detail: errorDetail(error) }),
           'warning',
         );
       }
@@ -499,11 +549,15 @@ export function useReorderTasks() {
  * `isPending` for the in-progress state.
  */
 export function useSync() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiPost<MutationResult>('/api/tasks/sync/'),
     onError: (error) =>
-      pushToast(`Sync failed: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.syncFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }
@@ -513,6 +567,7 @@ export function useSync() {
  * alerted the stats, here they become a success toast.
  */
 export function useProcessLabels() {
+  const { t } = useTranslation('tasks');
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiPost<MutationResult>('/api/tasks/process-labels/'),
@@ -520,24 +575,32 @@ export function useProcessLabels() {
       if (data?.stats) {
         const stats = data.stats;
         pushToast(
-          `Label processing complete — processed: ${stats.processed}, ` +
-            `moved: ${stats.moved}, starred: ${stats.starred}, ` +
-            `errors: ${stats.errors ?? 0}`,
+          t('toasts.labelsDone', {
+            processed: stats.processed,
+            moved: stats.moved,
+            starred: stats.starred,
+            errors: stats.errors ?? 0,
+          }),
           'success',
         );
         const unmatched = stats.unmatched ?? [];
         if (unmatched.length) {
           pushToast(
-            `Unmatched hashtags: ${unmatched
-              .map((u) => `#${u.hashtag} (task: "${u.task_title}")`)
-              .join(', ')}`,
+            t('toasts.unmatchedHashtags', {
+              list: unmatched
+                .map((u) => `#${u.hashtag} (task: "${u.task_title}")`)
+                .join(', '),
+            }),
             'warning',
           );
         }
       }
     },
     onError: (error) =>
-      pushToast(`Error processing labels: ${errorDetail(error)}`, 'warning'),
+      pushToast(
+        t('toasts.processFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
     onSettled: () => invalidateDashboards(queryClient),
   });
 }

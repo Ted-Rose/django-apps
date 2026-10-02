@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Modal from '../../shared/components/Modal';
 import type { LabelOut, TaskOut } from '../api';
 import { errorDetail, useCreateTask, useUpdateTask } from '../mutations';
@@ -33,6 +34,7 @@ export function TaskFormModal({
   taskListId,
   onClose,
 }: TaskFormModalProps) {
+  const { t } = useTranslation('tasks');
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
 
@@ -68,7 +70,7 @@ export function TaskFormModal({
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       // create_task.js: alert('Please enter a task title')
-      setValidationError('Please enter a task title');
+      setValidationError(t('form.titleRequired'));
       return;
     }
     setValidationError(null);
@@ -104,7 +106,9 @@ export function TaskFormModal({
   return (
     <Modal
       show={show}
-      title={mode === 'create' ? 'Create New Task' : 'Edit Task'}
+      title={
+        mode === 'create' ? t('form.createTitle') : t('form.editTitle')
+      }
       onClose={onClose}
       footer={
         <>
@@ -114,7 +118,7 @@ export function TaskFormModal({
             onClick={onClose}
             disabled={pending}
           >
-            Cancel
+            {t('common:common.cancel')}
           </button>
           <button
             type="button"
@@ -131,7 +135,9 @@ export function TaskFormModal({
                 }`}
               />
             )}{' '}
-            {mode === 'create' ? 'Create Task' : 'Save Changes'}
+            {mode === 'create'
+              ? t('form.createSubmit')
+              : t('form.saveSubmit')}
           </button>
         </>
       }
@@ -149,13 +155,14 @@ export function TaskFormModal({
         )}
         <div className="mb-3">
           <label htmlFor="taskFormTitle" className="form-label">
-            Title <span className="text-danger">*</span>
+            {t('form.titleLabel')}{' '}
+            <span className="text-danger">*</span>
           </label>
           <input
             type="text"
             className="form-control"
             id="taskFormTitle"
-            placeholder="Enter task title"
+            placeholder={t('form.titlePlaceholder')}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             required
@@ -163,20 +170,20 @@ export function TaskFormModal({
         </div>
         <div className="mb-3">
           <label htmlFor="taskFormNotes" className="form-label">
-            Notes
+            {t('form.notesLabel')}
           </label>
           <textarea
             className="form-control"
             id="taskFormNotes"
             rows={4}
-            placeholder="Enter task notes (optional)"
+            placeholder={t('form.notesPlaceholder')}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
           />
         </div>
         {labels.length > 0 && (
           <div className="mb-3">
-            <label className="form-label">Labels</label>
+            <label className="form-label">{t('form.labelsLabel')}</label>
             <div
               className="border rounded p-2"
               style={{ maxHeight: '150px', overflowY: 'auto' }}
@@ -204,9 +211,7 @@ export function TaskFormModal({
                 </div>
               ))}
             </div>
-            <small className="text-muted">
-              Select labels to organize this task
-            </small>
+            <small className="text-muted">{t('form.labelsHint')}</small>
           </div>
         )}
         {mode === 'create' && (
@@ -219,7 +224,8 @@ export function TaskFormModal({
               onChange={(event) => setStarred(event.target.checked)}
             />
             <label className="form-check-label" htmlFor="taskFormStarred">
-              <i className="bi bi-star-fill text-warning" /> Star this task
+              <i className="bi bi-star-fill text-warning" />{' '}
+              {t('form.starThis')}
             </label>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import usePushSubscription from '../hooks/usePushSubscription';
 import type { PushConfigOut } from '../api';
 
@@ -14,17 +15,17 @@ export function PushCard({ config }: { config: PushConfigOut }) {
 }
 
 function PushCardBody({ config }: { config: PushConfigOut }) {
+  const { t } = useTranslation('finance');
   const { supported, subscribed, status, busy, subscribe, unsubscribe } =
     usePushSubscription(config);
 
   return (
     <>
-      <p className="text-muted mb-2">
-        Get a browser push notification when a spending limit is
-        exceeded — even when this site is closed.
-      </p>
+      <p className="text-muted mb-2">{t('limits.push.description')}</p>
       <p className="small text-muted mb-3">
-        Enabled on {config.subscription_count} device(s){' '}
+        {t('limits.push.enabledOn', {
+          count: config.subscription_count,
+        })}{' '}
         <span data-testid="push-status">{status}</span>
       </p>
       {subscribed ? (
@@ -34,7 +35,7 @@ function PushCardBody({ config }: { config: PushConfigOut }) {
           disabled={busy}
           onClick={() => void unsubscribe()}
         >
-          Disable on this browser
+          {t('limits.push.disable')}
         </button>
       ) : (
         <button
@@ -44,7 +45,7 @@ function PushCardBody({ config }: { config: PushConfigOut }) {
           onClick={() => void subscribe()}
         >
           <i className="bi bi-bell me-1" aria-hidden="true" />
-          Enable spending alerts
+          {t('limits.push.enable')}
         </button>
       )}
     </>

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import { BurgerMenu } from '../../shared/components/BurgerMenu';
+import LanguageSwitcher from '../../shared/components/LanguageSwitcher';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import { fetchSearchTasks, type TaskOut } from '../api';
@@ -27,6 +29,7 @@ import { ErrorState } from './TaskListPage';
 const SEARCH_DEBOUNCE_MS = 500;
 
 export default function Search() {
+  const { t } = useTranslation('tasks');
   const [searchParams, setSearchParams] = useSearchParams();
   const q = searchParams.get('q') ?? '';
   const trimmedQ = q.trim();
@@ -85,21 +88,28 @@ export default function Search() {
     ) ?? '/';
 
   const burgerItems: BurgerMenuItem[] = [
-    { label: 'Home', url: '/', icon: 'house', btn_class: 'btn-light' },
     {
-      label: 'Dashboard',
+      label: t('common:common.home'),
+      url: '/',
+      icon: 'house',
+      btn_class: 'btn-light',
+    },
+    {
+      label: t('common:common.dashboard'),
       icon: 'list-task',
       btn_class: 'btn-light',
       onClick: () => navigate(backTarget),
     },
     {
-      label: syncMutation.isPending ? 'Syncing…' : 'Sync Now',
+      label: syncMutation.isPending
+        ? t('menu.syncing')
+        : t('menu.syncNow'),
       icon: 'arrow-repeat',
       btn_class: 'btn-light',
       onClick: () => syncMutation.mutate(),
     },
     {
-      label: `Logout (${user})`,
+      label: t('common:common.logout', { user }),
       url: '/admin/logout/',
       icon: 'box-arrow-right',
       btn_class: 'btn-outline-light',
@@ -120,10 +130,11 @@ export default function Search() {
               style={{ padding: '0.15rem 0.4rem' }}
               id="back-to-dashboard-btn"
             >
-              <i className="bi bi-arrow-left" /> Back to Dashboard
+              <i className="bi bi-arrow-left" /> {t('search.back')}
             </Link>
           </div>
           <div className="ms-auto d-flex flex-row align-items-center gap-2">
+            <LanguageSwitcher />
             <BurgerMenu items={burgerItems} />
           </div>
         </div>
@@ -132,11 +143,11 @@ export default function Search() {
       <div className="container mt-4">
         <div className="search-form">
           <h4 className="mb-3">
-            <i className="bi bi-search" /> Search Tasks
+            <i className="bi bi-search" /> {t('search.title')}
             {isPending && (
               <small className="text-muted ms-2" id="search-status">
                 <span className="spinner-border spinner-border-sm" />{' '}
-                Searching...
+                {t('search.searching')}
               </small>
             )}
           </h4>
@@ -149,7 +160,7 @@ export default function Search() {
             <div className="row g-3">
               <div className="col-md-8">
                 <label htmlFor="search-q" className="form-label">
-                  Search
+                  {t('search.label')}
                 </label>
                 <input
                   type="text"
@@ -157,16 +168,16 @@ export default function Search() {
                   id="search-q"
                   name="q"
                   value={draft}
-                  placeholder="Search task titles and notes..."
+                  placeholder={t('search.placeholder')}
                   onChange={(event) => onInput(event.target.value)}
                 />
               </div>
               <div className="col-12">
                 <button type="submit" className="btn btn-primary">
-                  <i className="bi bi-search" /> Search
+                  <i className="bi bi-search" /> {t('common:common.search')}
                 </button>{' '}
                 <Link to="/search" className="btn btn-secondary">
-                  <i className="bi bi-x-circle" /> Clear
+                  <i className="bi bi-x-circle" /> {t('search.clear')}
                 </Link>
               </div>
             </div>
@@ -177,17 +188,15 @@ export default function Search() {
         {!trimmedQ ? (
           <div className="alert alert-info text-center py-5">
             <i className="bi bi-info-circle fs-1 d-block mb-3" />
-            <h5>Enter search criteria</h5>
-            <p className="mb-0">
-              Enter a task title and/or notes to search for tasks.
-            </p>
+            <h5>{t('search.enterTitle')}</h5>
+            <p className="mb-0">{t('search.enterHint')}</p>
           </div>
         ) : data ? (
           data.total_results > 0 ? (
             <>
               <div className="alert alert-success">
-                <i className="bi bi-check-circle" /> Found {data.total_results}{' '}
-                task{data.total_results === 1 ? '' : 's'}
+                <i className="bi bi-check-circle" />{' '}
+                {t('search.found', { count: data.total_results })}
               </div>
               {data.tasks.map((task) => (
                 <SearchResultCard key={task.task_id} task={task} />
@@ -196,10 +205,8 @@ export default function Search() {
           ) : (
             <div className="alert alert-warning text-center py-5">
               <i className="bi bi-exclamation-triangle fs-1 d-block mb-3" />
-              <h5>No tasks found</h5>
-              <p className="mb-0">
-                Try different search terms or check your filters.
-              </p>
+              <h5>{t('search.emptyTitle')}</h5>
+              <p className="mb-0">{t('search.emptyHint')}</p>
             </div>
           )
         ) : null}
@@ -210,6 +217,7 @@ export default function Search() {
 }
 
 function SearchResultCard({ task }: { task: TaskOut }) {
+  const { t } = useTranslation('tasks');
   const toggleStar = useToggleStar();
   const queryClient = useQueryClient();
   const due = formatFullDate(task.due);
@@ -224,7 +232,9 @@ function SearchResultCard({ task }: { task: TaskOut }) {
                 <span
                   className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
                   role="button"
-                  title={task.is_starred ? 'Unstar' : 'Star'}
+                  title={
+                    task.is_starred ? t('task.unstar') : t('task.star')
+                  }
                   onClick={(event) => {
                     event.stopPropagation();
                     actionHistory.recordAction({
@@ -252,12 +262,14 @@ function SearchResultCard({ task }: { task: TaskOut }) {
                   {task.title}
                 </Link>
                 {task.is_archived && (
-                  <span className="badge bg-secondary ms-2">Archived</span>
+                  <span className="badge bg-secondary ms-2">
+                    {t('search.archived')}
+                  </span>
                 )}
                 {task.needs_push && (
                   <i
                     className="bi bi-cloud-arrow-up text-warning ms-1"
-                    title="Pending sync to Google"
+                    title={t('task.pendingSync')}
                   />
                 )}
               </h5>
@@ -270,13 +282,14 @@ function SearchResultCard({ task }: { task: TaskOut }) {
                 <small className="text-muted">
                   {due && (
                     <>
-                      <i className="bi bi-calendar" /> Due: {due}
+                      <i className="bi bi-calendar" />{' '}
+                      {t('task.due', { date: due })}
                     </>
                   )}
                   {task.task_list && (
                     <span
                       className="badge bg-light text-dark border ms-2"
-                      title="Google task list"
+                      title={t('task.googleList')}
                     >
                       <i className="bi bi-folder" /> {task.task_list.title}
                     </span>

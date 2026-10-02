@@ -1,5 +1,6 @@
 import eslint from '@eslint/js';
 import globals from 'globals';
+import i18nextPlugin from 'eslint-plugin-i18next';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
@@ -45,13 +46,21 @@ export default tseslint.config(
     },
   },
   {
+    // User-facing JSX goes through t()/<Trans> — warn (not error)
+    // so legitimate leftovers don't block the build.
+    files: ['src/**/*.{tsx,jsx}'],
+    ignores: ['**/*.test.{ts,tsx}', 'src/test/**'],
+    plugins: { i18next: i18nextPlugin },
+    rules: { 'i18next/no-literal-string': 'warn' },
+  },
+  {
     files: ['**/*.test.{ts,tsx}', 'src/test/**'],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
     },
   },
   {
-    files: ['*.config.{js,ts}'],
+    files: ['*.config.{js,ts}', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: { ...globals.node },
     },

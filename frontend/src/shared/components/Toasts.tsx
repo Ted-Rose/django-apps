@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { dismissToast, useToasts, type ToastKind } from '../toasts';
 import './Toasts.css';
 
@@ -14,6 +15,7 @@ const ICONS: Record<ToastKind, string> = {
  * `.action-toast` styles come from the sibling Toasts.css).
  */
 export function Toasts() {
+  const { t } = useTranslation();
   const toasts = useToasts();
   if (toasts.length === 0) return null;
   return (
@@ -29,7 +31,7 @@ export function Toasts() {
           <button
             type="button"
             className="btn-close ms-2"
-            aria-label="Dismiss"
+            aria-label={t('toasts.dismiss')}
             onClick={() => dismissToast(toast.id)}
           />
         </div>
