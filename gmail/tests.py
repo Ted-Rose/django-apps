@@ -1,14 +1,17 @@
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from googleapiclient.errors import HttpError
+from httplib2 import Response as HttpLib2Response
 
 from google_api.models import GoogleOAuthCredentials
 from google_api.utils import AudioGenerationError
+from gmail import services
 from gmail.services import GMAIL_MODIFY_SCOPE, GMAIL_READONLY_SCOPE
 
 API = '/api/gmail'
@@ -24,12 +27,38 @@ def make_creds(scopes=None):
     )
 
 
-def make_auth_dict(url='https://accounts.google.com/o/oauth2/auth?x=1'):
+def make_auth_dict(url='https://accounts.google.com/o/oauth2/auth?x=1',
+                   scopes=None):
     return {
         'authorization_url': url,
         'state': 'state-123',
-        'scopes': [GMAIL_READONLY_SCOPE],
+        'scopes': scopes or [GMAIL_READONLY_SCOPE],
     }
+
+
+def make_http_error(status, message='Gmail API error'):
+    """A googleapiclient HttpError with a real response status, like
+    the errors Gmail's messages().list()/batchModify() raise."""
+    resp = HttpLib2Response({
+        'status': str(status),
+        'content-type': 'application/json; charset=UTF-8',
+    })
+    body = json.dumps({
+        'error': {
+            'code': status,
+            'message': message,
+            'errors': [{'reason': 'insufficientPermissions'}],
+        }
+    })
+    return HttpError(resp, body.encode('utf-8'))
+
+
+def gmail_service_raising(error, method='list'):
+    """A build() stand-in whose Gmail call raises `error`."""
+    service = Mock()
+    api_call = service.users().messages()
+    getattr(api_call, method)().execute.side_effect = error
+    return service
 
 
 class GmailApiTests(TestCase):
@@ -183,6 +212,40 @@ class GmailApiTests(TestCase):
         })
         self.assertEqual(get.call_args.kwargs['query'], 'is:unread')
 
+    def test_messages_gmail_403_maps_to_401_google_reauth(self):
+        # Gmail itself rejects the token (e.g. scopes revoked after
+        # the credential check passed) — the service must turn the
+        # HttpError into the reauth dict, not a 500.
+        auth = make_auth_dict()
+        service = gmail_service_raising(make_http_error(403))
+        with patch('gmail.api.get_user_credentials',
+                   return_value=make_creds()), \
+                patch('gmail.services.google_auth',
+                      side_effect=[make_creds(), auth]), \
+                patch('gmail.services.build', return_value=service):
+            resp = self.client.get(f'{API}/messages/?query=is:unread')
+        self.assertEqual(resp.status_code, 401)
+        body = resp.json()
+        self.assertEqual(body['error'], 'google_reauth')
+        self.assertEqual(
+            body['authorization_url'], auth['authorization_url']
+        )
+        self.assertEqual(self.client.session['state'], 'state-123')
+
+    def test_messages_gmail_500_returns_empty_list(self):
+        # Non-auth upstream failures degrade to an empty list.
+        service = gmail_service_raising(make_http_error(500))
+        with patch('gmail.api.get_user_credentials',
+                   return_value=make_creds()), \
+                patch('gmail.services.google_auth',
+                      return_value=make_creds()), \
+                patch('gmail.services.build', return_value=service):
+            resp = self.client.get(f'{API}/messages/?query=x')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json(), {'messages': [], 'query': 'x'}
+        )
+
     # --- mark-read (delegates to gmail.views.mark_emails_read) ---
 
     def test_mark_read_success(self):
@@ -226,6 +289,33 @@ class GmailApiTests(TestCase):
             body['authorization_url'], auth['authorization_url']
         )
         # _gmail_reauth_response stored OAuth state in the session.
+        self.assertEqual(self.client.session['state'], 'state-123')
+
+    def test_mark_read_gmail_403_maps_to_401_google_reauth(self):
+        # batchModify rejects the token (insufficient scopes) — the
+        # service returns the reauth dict instead of False so the
+        # user is sent into the OAuth flow.
+        auth = make_auth_dict(scopes=[GMAIL_MODIFY_SCOPE])
+        service = gmail_service_raising(
+            make_http_error(403), method='batchModify'
+        )
+        with patch('gmail.views.get_user_credentials',
+                   return_value=make_creds([GMAIL_MODIFY_SCOPE])), \
+                patch('gmail.services.google_auth',
+                      side_effect=[make_creds([GMAIL_MODIFY_SCOPE]),
+                                   auth]), \
+                patch('gmail.services.build', return_value=service):
+            resp = self.client.post(
+                f'{API}/mark-read/',
+                data=json.dumps({'message_ids': ['m1']}),
+                content_type='application/json',
+            )
+        self.assertEqual(resp.status_code, 401)
+        body = resp.json()
+        self.assertEqual(body['error'], 'google_reauth')
+        self.assertEqual(
+            body['authorization_url'], auth['authorization_url']
+        )
         self.assertEqual(self.client.session['state'], 'state-123')
 
     # --- audio ---
@@ -324,3 +414,83 @@ class GmailCutoverRouteTests(TestCase):
         from django.urls import reverse
         self.assertEqual(reverse('gmail:index'), '/gmail/')
         self.assertEqual(reverse('gmail:legacy'), '/gmail-to-audio')
+
+
+class GmailServicesTests(TestCase):
+    """services.get_messages / mark_messages_as_read must survive
+    Gmail API HttpErrors: auth failures (401/403) return the reauth
+    dict, other failures degrade to [] / False — never
+    UnboundLocalError."""
+
+    CREDS = {
+        'token': 'tok',
+        'refresh_token': 'ref',
+        'expiry': '2030-01-01T00:00:00',
+        'scopes': [GMAIL_READONLY_SCOPE],
+    }
+
+    def test_get_messages_403_returns_reauth_dict(self):
+        auth = make_auth_dict()
+        service = gmail_service_raising(make_http_error(403))
+        with patch('gmail.services.google_auth',
+                   side_effect=[make_creds(), auth]) as auth_mock, \
+                patch('gmail.services.build', return_value=service):
+            result = services.get_messages(
+                query='is:unread', creds=self.CREDS
+            )
+        self.assertEqual(result, auth)
+        # The follow-up google_auth call asks for the readonly scope.
+        self.assertEqual(auth_mock.call_count, 2)
+        self.assertEqual(
+            auth_mock.call_args.kwargs['scopes'],
+            [GMAIL_READONLY_SCOPE],
+        )
+
+    def test_get_messages_401_returns_reauth_dict(self):
+        auth = make_auth_dict()
+        service = gmail_service_raising(make_http_error(401))
+        with patch('gmail.services.google_auth',
+                   side_effect=[make_creds(), auth]), \
+                patch('gmail.services.build', return_value=service):
+            result = services.get_messages(query='x', creds=self.CREDS)
+        self.assertEqual(result, auth)
+
+    def test_get_messages_500_returns_empty_list(self):
+        service = gmail_service_raising(make_http_error(500))
+        with patch('gmail.services.google_auth',
+                   return_value=make_creds()), \
+                patch('gmail.services.build', return_value=service):
+            result = services.get_messages(query='x', creds=self.CREDS)
+        self.assertEqual(result, [])
+
+    def test_mark_read_403_returns_reauth_dict(self):
+        auth = make_auth_dict(scopes=[GMAIL_MODIFY_SCOPE])
+        service = gmail_service_raising(
+            make_http_error(403), method='batchModify'
+        )
+        with patch('gmail.services.google_auth',
+                   side_effect=[
+                       make_creds([GMAIL_MODIFY_SCOPE]), auth
+                   ]) as auth_mock, \
+                patch('gmail.services.build', return_value=service):
+            result = services.mark_messages_as_read(
+                self.CREDS, ['m1', 'm2']
+            )
+        self.assertEqual(result, auth)
+        self.assertEqual(auth_mock.call_count, 2)
+        self.assertEqual(
+            auth_mock.call_args.kwargs['scopes'],
+            [GMAIL_MODIFY_SCOPE],
+        )
+
+    def test_mark_read_500_returns_false(self):
+        service = gmail_service_raising(
+            make_http_error(500), method='batchModify'
+        )
+        with patch('gmail.services.google_auth',
+                   return_value=make_creds([GMAIL_MODIFY_SCOPE])), \
+                patch('gmail.services.build', return_value=service):
+            result = services.mark_messages_as_read(
+                self.CREDS, ['m1']
+            )
+        self.assertFalse(result)

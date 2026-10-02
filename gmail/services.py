@@ -28,6 +28,13 @@ GMAIL_MODIFY_SCOPE = (
 )
 
 
+def _needs_reauth(error):
+    """Whether an HttpError means the stored Google credentials need
+    reauthorization: 401/403 (revoked token or missing scopes such
+    as insufficientPermissions), not transient API failures."""
+    return getattr(error.resp, 'status', None) in (401, 403)
+
+
 def extract_text_from_html(html_content):
     # Remove HTML comments
     html_content = re.sub(r'<!--(.*?)-->', '', html_content, flags=re.DOTALL)
@@ -43,8 +50,10 @@ def extract_text_from_html(html_content):
 
 def get_messages(query, creds):
     """
-    Returns a list of Gmail messages / emails that match the query.
+    Returns a list of Gmail messages / emails that match the query,
+    or an auth dict if reauthorization is needed.
     """
+    message_details = []
     try:
         credentials = google_auth(creds)
         if (isinstance(credentials, dict) and
@@ -58,8 +67,6 @@ def get_messages(query, creds):
             .execute()
         )
         messages = results.get("messages", [])
-
-        message_details = []
 
         if not messages:
             logger.info('No messages found.')
@@ -150,6 +157,12 @@ def get_messages(query, creds):
     except HttpError as error:
         # Handle errors from Gmail API.
         logger.error(f'Gmail API error: {error}')
+        if _needs_reauth(error):
+            # Revoked token or missing scopes — bounce the user into
+            # the OAuth flow the same way unusable credentials do.
+            return google_auth(
+                None, scopes=[GMAIL_READONLY_SCOPE]
+            )
     return message_details
 
 
@@ -183,4 +196,6 @@ def mark_messages_as_read(creds, message_ids):
         return True
     except HttpError as error:
         logger.error(f'Gmail API error marking messages read: {error}')
+        if _needs_reauth(error):
+            return google_auth(None, scopes=[GMAIL_MODIFY_SCOPE])
         return False

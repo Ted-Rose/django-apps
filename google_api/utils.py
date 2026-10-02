@@ -10,7 +10,11 @@ from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse
 from urllib.parse import quote
 from google.auth.exceptions import RefreshError
-from oauthlib.oauth2.rfc6749.errors import InvalidGrantError
+from oauthlib.oauth2.rfc6749.errors import (
+    AccessDeniedError,
+    InvalidGrantError,
+    MissingCodeError,
+)
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -527,11 +531,17 @@ def callback(request, scopes=None):
         flow.fetch_token(
             authorization_response=request.build_absolute_uri()
         )
-    except InvalidGrantError:
-        # Auth code already consumed or expired (e.g. the callback URL
-        # was reloaded) — restart the OAuth flow instead of a 500.
+    except (
+        AccessDeniedError,
+        InvalidGrantError,
+        MissingCodeError,
+    ) as e:
+        # Auth code already consumed or expired (e.g. the callback
+        # URL was reloaded), consent denied (?error=access_denied),
+        # or no code at all (back button / direct hit) — restart the
+        # OAuth flow instead of a 500.
         logger.warning(
-            'OAuth callback failed with invalid_grant; '
+            f'OAuth callback failed ({e.error}); '
             'redirecting to login'
         )
         login_url = reverse('google_api:login')
