@@ -527,7 +527,7 @@ export function RuleDrawer({
                 <tbody>
                   {(preview.data?.changes ?? []).map((change) => (
                     <tr key={change.id}>
-                      <td>{change.booking_date}</td>
+                      <td>{change.occurrence_date}</td>
                       <td>{change.counterparty || '-'}</td>
                       <td>{change.description || '-'}</td>
                       <td className="text-end fin-money">

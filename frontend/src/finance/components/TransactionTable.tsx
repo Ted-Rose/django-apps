@@ -28,7 +28,7 @@ interface TransactionTableProps {
  * whose menu carries the column's sort options plus its filter
  * controls — the account/category option lists, the creditor
  * typeahead and the description search box all come from the single
- * TransactionsOut payload. Rows render `booking_date` via
+ * TransactionsOut payload. Rows render `occurrence_date` via
  * toLocaleDateString (the local-datetime port) and the raw amount
  * string + currency (money stays a string; only the sign is read
  * for coloring).
@@ -463,17 +463,17 @@ function TransactionRow({
   const { t } = useTranslation('finance');
   const assign = useAssignCategory();
   const clearManual = useClearManualCategory();
-  // booking_date is a date-only string; appending T00:00:00 parses it
-  // as local midnight (the template's local-datetime behavior)
+  // occurrence_date is a date-only string; appending T00:00:00 parses
+  // it as local midnight (the template's local-datetime behavior)
   // instead of UTC midnight, which toLocaleDateString would roll
   // back a day behind UTC.
-  const bookingDate = `${tx.booking_date}T00:00:00`;
+  const occurredAt = `${tx.occurrence_date}T00:00:00`;
   // Money stays a string — read only the sign for coloring.
   const negative = tx.amount.startsWith('-');
   const currentId = tx.effective_category?.id ?? null;
   return (
     <tr>
-      <td className="tx-cell-date">{fmtDate(bookingDate)}</td>
+      <td className="tx-cell-date">{fmtDate(occurredAt)}</td>
       <td className="tx-cell-account">
         {tx.account.name || tx.account.iban || ''}
       </td>

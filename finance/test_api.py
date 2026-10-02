@@ -4,6 +4,7 @@ mapping and the JSON mutation contracts — complements the service-
 and command-level coverage in tests.py (its HTTP-layer tests were
 repointed at this API in Stage 6)."""
 import json
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -501,7 +502,7 @@ class TransactionsApiTests(ApiTestCase):
         )
         self.assertEqual(resp.json()['count'], 2)
 
-    def test_date_window_filters_by_booking_date(self):
+    def test_date_window_filters_by_occurrence_date(self):
         make_transaction(self.account, 't-old', '-1.00', days_ago=40)
         make_transaction(self.account, 't-mid', '-2.00', days_ago=10)
         make_transaction(self.account, 't-new', '-3.00', days_ago=1)
@@ -530,6 +531,30 @@ class TransactionsApiTests(ApiTestCase):
         )
         self.assertEqual(resp.json()['count'], 3)
 
+    def test_occurrence_date_prefers_earlier_value_date(self):
+        """A card purchase valued Sep 30 but booked Oct 1 belongs to
+        September — Swedbank posts days after the valueDate."""
+        make_transaction(
+            self.account, 't-1', '-3.76',
+            booking_date=date(2026, 10, 1),
+            value_date=date(2026, 9, 30),
+        )
+        make_transaction(
+            self.account, 't-2', '-1.00',
+            booking_date=date(2026, 10, 2),
+        )
+        resp = self.client.get(
+            f'{self.API}/transactions/?from=2026-10-01'
+        )
+        body = resp.json()
+        self.assertEqual(
+            [t['transaction_id'] for t in body['transactions']],
+            ['t-2'],
+        )
+        self.assertEqual(
+            body['transactions'][0]['occurrence_date'], '2026-10-02'
+        )
+
     def test_foreign_transactions_hidden(self):
         other = get_user_model().objects.create_user(
             username='bob', password='pw'
@@ -539,6 +564,37 @@ class TransactionsApiTests(ApiTestCase):
         make_transaction(foreign, 't-x', '-9.00')
         resp = self.client.get(f'{self.API}/transactions/')
         self.assertEqual(resp.json()['count'], 0)
+
+    def test_account_filter_accepts_comma_list(self):
+        """?account=1,2 scopes to several accounts — the limits
+        drill-down passes the whole account set of a limit."""
+        second = make_account(self.user, self.req, 'acc-2')
+        third = make_account(self.user, self.req, 'acc-3')
+        make_transaction(self.account, 't-1', '-1.00')
+        make_transaction(second, 't-2', '-2.00')
+        make_transaction(third, 't-3', '-3.00')
+
+        resp = self.client.get(
+            f'{self.API}/transactions/'
+            f'?account={self.account.pk},{second.pk}'
+        )
+        body = resp.json()
+        self.assertEqual(
+            sorted(
+                t['transaction_id'] for t in body['transactions']
+            ),
+            ['t-1', 't-2'],
+        )
+        # A multi-account selection can't map to one dropdown value.
+        self.assertIsNone(body['selected_account'])
+        self.assertTrue(body['filters_active'])
+
+        # Blank segments are skipped; an all-invalid list leaves
+        # the queryset unfiltered like a bad single value did.
+        resp = self.client.get(
+            f'{self.API}/transactions/?account=x,,'
+        )
+        self.assertEqual(resp.json()['count'], 3)
 
 
 class ManualCategoryApiTests(ApiTestCase):
@@ -697,6 +753,16 @@ class LimitsApiTests(ApiTestCase):
             limit['window_stats'][0]['label'], '7 days'
         )
         self.assertIn('history', limit['window_stats'][0] or {})
+        # Each window stat carries its booking-date range — the
+        # SPA drill-down feeds it back as ?from=/&to=.
+        today = timezone.now().date()
+        self.assertEqual(
+            limit['window_stats'][0]['date_from'],
+            (today - timezone.timedelta(days=7)).isoformat(),
+        )
+        self.assertEqual(
+            limit['window_stats'][0]['date_to'], today.isoformat()
+        )
         push_config = body['push_config']
         self.assertEqual(push_config['subscription_count'], 0)
         self.assertEqual(

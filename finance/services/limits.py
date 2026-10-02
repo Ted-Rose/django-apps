@@ -78,7 +78,7 @@ def limit_windows(limit, today=None):
 
 
 def _spend_queryset(limit):
-    transactions = Transaction.objects.filter(
+    transactions = Transaction.objects.with_occurrence_date().filter(
         account__in=limit.accounts.all(),
         amount__lt=0,
     )
@@ -91,12 +91,18 @@ def _spend_queryset(limit):
 
 
 def spent_in_window(limit, start, end=None):
-    """Total outgoing spend (positive) in ``[start, end)``."""
+    """Total outgoing spend (positive) in ``[start, end)``.
+
+    Windows bound ``occurrence_date`` — the day the user spent the
+    money (earlier of booking/value date), not the bank's posting
+    date, so a Sep-30 card purchase booked on Oct 1 counts toward
+    September.
+    """
     transactions = _spend_queryset(limit).filter(
-        booking_date__gte=start
+        occurrence_date__gte=start
     )
     if end is not None:
-        transactions = transactions.filter(booking_date__lt=end)
+        transactions = transactions.filter(occurrence_date__lt=end)
     spent = transactions.aggregate(
         total=Sum('amount')
     )['total'] or Decimal(0)
@@ -166,6 +172,8 @@ def monthly_stat(limit, period_start, today=None):
         # selects the catalog window label for the current month.
         'key': 'thisMonth' if is_current else None,
         'value': period_start.strftime('%Y-%m'),
+        'date_from': period_start,
+        'date_to': _next_month(period_start) - timedelta(days=1),
         **_stat(spent, threshold),
     }
 
@@ -183,8 +191,8 @@ def monthly_history(limit, before=None, today=None):
     boundary = before or monthly_period_start(today)
     rows = (
         _spend_queryset(limit)
-        .filter(booking_date__lt=boundary)
-        .annotate(month=TruncMonth('booking_date'))
+        .filter(occurrence_date__lt=boundary)
+        .annotate(month=TruncMonth('occurrence_date'))
         .values('month')
         .annotate(total=Sum('amount'))
         .order_by('month')
@@ -218,6 +226,8 @@ def monthly_history(limit, before=None, today=None):
         history.append({
             'label': month.strftime('%b %Y'),
             'value': month.strftime('%Y-%m'),
+            'date_from': month,
+            'date_to': _next_month(month) - timedelta(days=1),
             **_stat(spent, threshold),
         })
         month = _next_month(month)
@@ -251,6 +261,8 @@ def limit_window_stats(limit, today=None, as_of=None):
             stat = {
                 'label': window.label,
                 'key': window.key,
+                'date_from': as_of - timedelta(days=window.days),
+                'date_to': as_of,
                 **_stat(spent, window.threshold),
             }
         stats.append(stat)

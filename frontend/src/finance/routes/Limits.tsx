@@ -8,13 +8,21 @@ import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import ErrorState from '../components/ErrorState';
 import LimitForm from '../components/LimitForm';
-import LimitItem from '../components/LimitItem';
+import LimitItem, {
+  useStatLabel,
+  type StatBase,
+} from '../components/LimitItem';
+import TransactionDrilldown from '../components/TransactionDrilldown';
+import type { ParamUpdates } from '../components/TransactionTable';
 import PushCard from '../components/PushCard';
 import CollapsibleCard from '../../shared/components/CollapsibleCard';
 import Toasts from '../../shared/components/Toasts';
 import { fmtDateLong, fmtMonth } from '../../shared/format';
-import { fetchLimits } from '../api';
+import { fetchLimits, type LimitOut } from '../api';
 import './limits.css';
+// .tx-panel/.tx-table styles — the drill-down reuses the
+// transactions page's table chrome.
+import './transactions.css';
 
 /**
  * React port of limits.html as a mobile-first column of
@@ -34,6 +42,25 @@ export default function Limits() {
   const [searchParams, setSearchParams] = useSearchParams();
   const month = searchParams.get('month');
   const editParam = searchParams.get('edit');
+  // Drill-down selection: `limit`/`window` identify the clicked
+  // stat for highlighting and the heading; `category`/`account`/
+  // `from`/`to` are the filters the transaction fetch runs with
+  // (written together so the drilled-down URL is shareable).
+  const params = {
+    limit: searchParams.get('limit'),
+    window: searchParams.get('window'),
+    category: searchParams.get('category'),
+    account: searchParams.get('account'),
+    from: searchParams.get('from'),
+    to: searchParams.get('to'),
+    creditor: searchParams.get('creditor'),
+    q: searchParams.get('q'),
+    source: searchParams.get('source'),
+    sort: searchParams.get('sort'),
+    direction: searchParams.get('direction'),
+    page: searchParams.get('page'),
+  };
+  const statLabel = useStatLabel();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['finance', 'limits', month ?? ''],
@@ -85,6 +112,66 @@ export default function Limits() {
     clearParams();
     setFormOpen(false);
   };
+
+  /** Merge updates into the URL; `null`/'' removes the key. Any
+      change other than explicit pagination lands back on page 1. */
+  const updateParams = (updates: ParamUpdates) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === '') next.delete(key);
+      else next.set(key, value);
+    }
+    if (!('page' in updates)) next.delete('page');
+    setSearchParams(next);
+  };
+
+  // The params a stat click writes — cleared together when the
+  // drill-down closes (the table's own sort/filter params persist,
+  // like on the category overview).
+  const DRILL_KEYS = ['limit', 'window', 'category', 'account', 'from', 'to'];
+  const clearDrill = () =>
+    updateParams(Object.fromEntries(DRILL_KEYS.map((key) => [key, null])));
+
+  /** Window stat click — opens/closes the transaction drill-down
+      with the limit's category, accounts and that window's exact
+      date range. */
+  const selectWindow = (limit: LimitOut, stat: StatBase) => {
+    const windowKey = stat.key ?? stat.value ?? stat.label;
+    const alreadyOpen =
+      params.limit === String(limit.id) && params.window === windowKey;
+    if (alreadyOpen) {
+      clearDrill();
+      return;
+    }
+    updateParams({
+      limit: String(limit.id),
+      window: windowKey,
+      category: limit.category ? String(limit.category.id) : null,
+      account: limit.accounts.map((a) => a.id).join(','),
+      from: stat.date_from ?? null,
+      to: stat.date_to ?? null,
+    });
+  };
+
+  // Drill-down heading: "Groceries · This month" — resolved from
+  // the payload, with the categories list as fallback for a
+  // deep-linked selection whose limit id is stale.
+  const drillLimit = data?.limits.find(
+    (limit) => String(limit.id) === params.limit,
+  );
+  const drillStat = drillLimit?.window_stats
+    .flatMap((stat) => [stat, ...stat.history])
+    .find((stat) => (stat.key ?? stat.value) === params.window);
+  const drillLabel = [
+    drillLimit?.category?.name ??
+      data?.categories.find(
+        (category) => String(category.id) === params.category,
+      )?.name ??
+      '',
+    drillStat ? statLabel(drillStat) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   const overCount =
     data?.limits.filter((limit) => limit.window_stats.some((stat) => stat.over))
@@ -195,6 +282,16 @@ export default function Limits() {
                         key={limit.id}
                         limit={limit}
                         onEdit={() => startEdit(limit.id)}
+                        selectedWindow={
+                          params.limit === String(limit.id)
+                            ? params.window
+                            : null
+                        }
+                        onSelectWindow={
+                          limit.category
+                            ? (stat) => selectWindow(limit, stat)
+                            : undefined
+                        }
                       />
                     ))}
                   </>
@@ -206,6 +303,29 @@ export default function Limits() {
                 )}
               </CollapsibleCard>
             </div>
+
+            {params.category && (
+              <TransactionDrilldown
+                // Remount per selection so the panel scrolls into
+                // view on every stat click.
+                key={`${params.limit}:${params.window}`}
+                label={drillLabel}
+                params={{
+                  category: params.category,
+                  account: params.account,
+                  from: params.from,
+                  to: params.to,
+                  creditor: params.creditor,
+                  q: params.q,
+                  source: params.source,
+                  sort: params.sort,
+                  direction: params.direction,
+                  page: params.page,
+                }}
+                onUpdate={updateParams}
+                onClose={clearDrill}
+              />
+            )}
 
             <div ref={formSectionRef} className="limits-section">
               <CollapsibleCard

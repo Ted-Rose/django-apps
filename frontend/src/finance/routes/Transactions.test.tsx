@@ -29,6 +29,7 @@ function makeTransaction(
   return {
     id: 1,
     transaction_id: 'tx-1',
+    occurrence_date: '2025-01-15',
     booking_date: '2025-01-15',
     account: { id: 5, name: 'Everyday account', currency: 'EUR' },
     remittance_information: 'Rent January',
@@ -104,6 +105,7 @@ describe('Transactions', () => {
           makeTransaction(),
           makeTransaction({
             id: 2,
+            occurrence_date: '2025-01-10',
             booking_date: '2025-01-10',
             account: { id: 6, name: 'Savings', currency: 'EUR' },
             remittance_information: null,
@@ -118,7 +120,8 @@ describe('Transactions', () => {
     expect(
       await screen.findByRole('cell', { name: 'Rent January' }),
     ).toBeInTheDocument();
-    // booking_date renders via toLocaleDateString (local-datetime port).
+    // occurrence_date renders via toLocaleDateString (local-datetime
+    // port).
     expect(
       screen.getByRole('cell', {
         name: new Date('2025-01-15T00:00:00').toLocaleDateString(),

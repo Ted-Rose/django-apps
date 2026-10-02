@@ -113,6 +113,7 @@ function makeTransactions(
       {
         id: 11,
         transaction_id: 'tx-11',
+        occurrence_date: '2025-01-10',
         booking_date: '2025-01-10',
         account: {
           id: 5,

@@ -214,6 +214,35 @@ class TransactionManagerTests(TestCase):
             list(Transaction.objects.for_user(self.user)), []
         )
 
+    def test_with_occurrence_date_picks_earliest(self):
+        """Banks disagree which field carries the event date:
+        Swedbank posts card purchases days after valueDate, other
+        banks put the event in bookingDate and settle later — the
+        earlier date is always when the user spent the money."""
+        account = make_account(self.user, self.req)
+        make_transaction(
+            account, 't-1', '-5.00',
+            booking_date=date(2026, 10, 2),
+            value_date=date(2026, 9, 30),
+        )
+        make_transaction(
+            account, 't-2', '-5.00',
+            booking_date=date(2026, 9, 30),
+            value_date=date(2026, 10, 2),
+        )
+        make_transaction(
+            account, 't-3', '-5.00',
+            booking_date=date(2026, 10, 1),
+        )
+
+        rows = {
+            t.transaction_id: t.occurrence_date
+            for t in Transaction.objects.with_occurrence_date()
+        }
+        self.assertEqual(rows['t-1'], date(2026, 9, 30))
+        self.assertEqual(rows['t-2'], date(2026, 9, 30))
+        self.assertEqual(rows['t-3'], date(2026, 10, 1))
+
 
 class EvaluateSpendingLimitsTests(TestCase):
     def setUp(self):
@@ -646,6 +675,38 @@ class LimitWindowStatsTests(TestCase):
         )
         self.assertEqual(history[1]['spent'], Decimal('150.00'))
         self.assertEqual(history[1]['over'], Decimal('50.00'))
+
+    def test_monthly_spend_uses_occurrence_date(self):
+        """A purchase made on the last day of a month but booked
+        the next month counts toward the month it happened in —
+        the month boundary must not shift with posting delay."""
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        this_month = timezone.now().date().replace(day=1)
+        last_month_end = this_month - timezone.timedelta(days=1)
+        # Swedbank convention: valueDate holds the purchase date.
+        make_transaction(
+            self.account, 't-1', '-60.00',
+            booking_date=this_month,
+            value_date=last_month_end,
+        )
+        # Reverse convention: bookingDate is the event, valueDate
+        # the settlement — still lands in last month.
+        make_transaction(
+            self.account, 't-2', '-10.00',
+            booking_date=last_month_end,
+            value_date=this_month,
+        )
+
+        history = monthly_history(limit)
+        self.assertEqual(history[0]['spent'], Decimal('70.00'))
+
+        stats = limit_window_stats(limit)
+        self.assertEqual(stats[0]['label'], 'This month')
+        self.assertEqual(stats[0]['spent'], Decimal('0.00'))
 
     def test_monthly_history_prefers_recorded_values(self):
         limit = make_limit(
@@ -2157,7 +2218,7 @@ class LimitPushAlertCommandTests(TestCase):
         self.assertIn('7 days', body)
         self.assertIn('30 days', body)
         limit = TransactionLimit.objects.get(
-            user=self.user, account=self.account
+            user=self.user, accounts=self.account
         )
         self.assertIsNotNone(limit.alerted_7d_at)
         self.assertIsNotNone(limit.alerted_30d_at)

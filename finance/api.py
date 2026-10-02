@@ -75,9 +75,11 @@ router = Router()
 PUSH_SUBSCRIBE_URL = '/api/finance/push/subscribe/'
 PUSH_UNSUBSCRIBE_URL = '/api/finance/push/unsubscribe/'
 
-# Sortable transaction columns → ORM field (mirrors views.py).
+# Sortable transaction columns → ORM field. 'date' orders by the
+# occurrence-date annotation (with_occurrence_date) — the day the
+# money moved for the user, not the bank's posting date.
 TRANSACTION_SORTS = {
-    'date': 'booking_date',
+    'date': 'occurrence_date',
     'account': 'account__name',
     'description': 'remittance_information',
     'creditor': 'counterparty',
@@ -229,6 +231,10 @@ class CategoryOut(Schema):
 class TransactionOut(Schema):
     id: int
     transaction_id: str
+    # The user's "when it happened" date — the earlier of
+    # booking_date/value_date (banks disagree on which carries the
+    # event; Swedbank books card purchases days after valueDate).
+    occurrence_date: date
     booking_date: date
     account: AccountRef
     remittance_information: Optional[str] = None
@@ -325,6 +331,10 @@ class WindowStatBase(Schema):
     # months the SPA formats via fmtMonth. `label` stays English.
     key: Optional[str] = None
     value: Optional[str] = None
+    # The inclusive occurrence-date window the spend figure covers —
+    # the SPA drill-down feeds these back as ?from=/&to=.
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
     spent: Decimal
     threshold: Optional[Decimal] = None
     pct: Decimal
@@ -514,7 +524,7 @@ class RulePreviewIn(Schema):
 
 class RulePreviewChangeOut(Schema):
     id: int
-    booking_date: str
+    occurrence_date: str
     account: str
     counterparty: str
     description: str
@@ -634,23 +644,35 @@ def transaction_list(request, account: str = '', category: str = '',
                      page: Optional[str] = None):
     user = request.user
     transactions = annotate_effective_category(
-        Transaction.objects.for_user(user).select_related('account'),
+        Transaction.objects.for_user(user)
+        .select_related('account')
+        .with_occurrence_date(),
         user,
     )
 
-    account_id = _int_or_none(account)
-    if account_id is not None:
-        transactions = transactions.filter(account_id=account_id)
+    # `account` accepts a comma-separated pk list — the limits
+    # drill-down scopes to a limit's (possibly several) accounts.
+    account_ids = [
+        parsed
+        for parsed in map(_int_or_none, account.split(','))
+        if parsed is not None
+    ]
+    if account_ids:
+        transactions = transactions.filter(account_id__in=account_ids)
 
-    # ?from=/&to= bound booking_date — used by the category
+    # ?from=/&to= bound occurrence_date — used by the category
     # overview's drill-down so the embedded list shares the
     # overview's time window.
     date_from = _parse_date(from_)
     date_to = _parse_date(to)
     if date_from:
-        transactions = transactions.filter(booking_date__gte=date_from)
+        transactions = transactions.filter(
+            occurrence_date__gte=date_from
+        )
     if date_to:
-        transactions = transactions.filter(booking_date__lte=date_to)
+        transactions = transactions.filter(
+            occurrence_date__lte=date_to
+        )
 
     category_id = category or ''
     if category_id != 'none' and _int_or_none(category_id) is None:
@@ -728,7 +750,9 @@ def transaction_list(request, account: str = '', category: str = '',
         'accounts': _account_options(user),
         'categories': categories,
         'counterparties': list(counterparties),
-        'selected_account': account_id,
+        'selected_account': (
+            account_ids[0] if len(account_ids) == 1 else None
+        ),
         'selected_category': category_id,
         'selected_creditor': creditor,
         'selected_source': source,
@@ -736,7 +760,7 @@ def transaction_list(request, account: str = '', category: str = '',
         'sort': sort,
         'direction': direction,
         'filters_active': bool(
-            account_id is not None
+            account_ids
             or category_id
             or creditor
             or source
@@ -753,7 +777,9 @@ def category_overview(request,
                       to: str = '', account: str = ''):
     """Per-category spending totals over a selectable time window."""
     transactions = annotate_effective_category(
-        Transaction.objects.for_user(request.user), request.user
+        Transaction.objects.for_user(request.user)
+        .with_occurrence_date(),
+        request.user,
     )
 
     today = timezone.localdate()
@@ -761,10 +787,12 @@ def category_overview(request,
     date_to = _parse_date(to)
     if date_from:
         transactions = transactions.filter(
-            booking_date__gte=date_from
+            occurrence_date__gte=date_from
         )
     if date_to:
-        transactions = transactions.filter(booking_date__lte=date_to)
+        transactions = transactions.filter(
+            occurrence_date__lte=date_to
+        )
     if account:
         transactions = transactions.filter(account_id=account)
 
@@ -877,7 +905,8 @@ def limits(request, month: str = ''):
 
     month_rows = (
         Transaction.objects.for_user(user)
-        .annotate(period=TruncMonth('booking_date'))
+        .with_occurrence_date()
+        .annotate(period=TruncMonth('occurrence_date'))
         .values_list('period', flat=True)
         .distinct()
         .order_by('-period')

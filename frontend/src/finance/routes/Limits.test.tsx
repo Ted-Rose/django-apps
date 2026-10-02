@@ -12,7 +12,12 @@ import Limits from './Limits';
 import { apiGet, apiPost } from '../../shared/api/client';
 import { ApiError } from '../../shared/api/errors';
 import { clearToasts } from '../../shared/toasts';
-import type { LimitOut, LimitsOut, WindowStatOut } from '../api';
+import type {
+  LimitOut,
+  LimitsOut,
+  TransactionsOut,
+  WindowStatOut,
+} from '../api';
 
 vi.mock('../../shared/api/client', () => ({
   apiGet: vi.fn(),
@@ -80,6 +85,50 @@ function makeLimits(overrides: Partial<LimitsOut> = {}): LimitsOut {
     accounts: ACCOUNTS,
     categories: CATEGORIES,
     push_config: PUSH_CONFIG,
+    ...overrides,
+  };
+}
+
+function makeTransactions(
+  overrides: Partial<TransactionsOut> = {},
+): TransactionsOut {
+  return {
+    transactions: [
+      {
+        id: 11,
+        transaction_id: 'tx-11',
+        occurrence_date: '2025-01-10',
+        booking_date: '2025-01-10',
+        account: {
+          id: 5,
+          name: 'Everyday',
+          iban: 'LV…',
+          currency: 'EUR',
+        },
+        remittance_information: 'Coffee',
+        counterparty: 'Cafe',
+        effective_category: { id: 3, name: 'Groceries', color: '#00aa00' },
+        category_is_manual: false,
+        amount: '-4.50',
+        currency: 'EUR',
+      },
+    ],
+    page: 1,
+    num_pages: 1,
+    count: 1,
+    has_next: false,
+    has_previous: false,
+    accounts: ACCOUNTS,
+    categories: CATEGORIES,
+    counterparties: ['Cafe'],
+    selected_account: null,
+    selected_category: '3',
+    selected_creditor: '',
+    selected_source: '',
+    search_query: '',
+    sort: 'date',
+    direction: 'desc',
+    filters_active: true,
     ...overrides,
   };
 }
@@ -403,6 +452,139 @@ describe('Limits', () => {
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith('/api/finance/limits/'),
     );
+  });
+
+  it('drills into a window stat: transactions load below scoped to the limit', async () => {
+    const limits = makeLimits({
+      limits: [
+        makeLimit({
+          accounts: [
+            { id: 5, name: 'Everyday account', iban: null, currency: 'EUR' },
+            { id: 6, name: 'Savings', iban: null, currency: 'EUR' },
+          ],
+          window_stats: [
+            makeWindowStat({
+              key: 'days7',
+              date_from: '2025-01-09',
+              date_to: '2025-01-15',
+            }),
+          ],
+        }),
+      ],
+    });
+    mockedApiGet.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/finance/transactions/')
+          ? makeTransactions()
+          : limits,
+      ),
+    );
+    renderLimits();
+
+    const stat = await screen.findByRole('button', { name: /7 days/ });
+    fireEvent.click(stat);
+
+    // Category + every limit account + the stat's exact date range.
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenCalledWith(
+        '/api/finance/transactions/?account=5%2C6&category=3&from=2025-01-09&to=2025-01-15',
+      ),
+    );
+    expect(
+      await screen.findByText('Transactions — Groceries · 7 days'),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Coffee')).toBeInTheDocument();
+
+    // The stat click only ran the transaction query — the limits
+    // payload wasn't refetched and no navigation happened.
+    expect(
+      mockedApiGet.mock.calls.filter(([url]) =>
+        String(url).startsWith('/api/finance/limits'),
+      ),
+    ).toHaveLength(1);
+
+    // Clicking the open stat again closes the drill-down.
+    fireEvent.click(stat);
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Transactions — Groceries · 7 days'),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("drills into a past-month history row with that month's range", async () => {
+    const limits = makeLimits({
+      limits: [
+        makeLimit({
+          window_stats: [
+            makeWindowStat({
+              label: 'This month',
+              key: 'thisMonth',
+              value: '2025-01',
+              date_from: '2025-01-01',
+              date_to: '2025-01-31',
+              history: [
+                {
+                  label: 'Nov 2024',
+                  value: '2024-11',
+                  date_from: '2024-11-01',
+                  date_to: '2024-11-30',
+                  spent: '390.00',
+                  threshold: '400.00',
+                  pct: '97.5',
+                  bar_pct: '97.5',
+                  bar_class: 'bg-warning',
+                  remaining: '10.00',
+                  over: null,
+                },
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+    mockedApiGet.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/finance/transactions/')
+          ? makeTransactions()
+          : limits,
+      ),
+    );
+    renderLimits();
+    // `value` is formatted via fmtMonth — 'November 2024'.
+    await screen.findByText('November 2024');
+    // Expand the history <details> — its rows are only clickable
+    // once open (and only enter the a11y tree then).
+    const details = document.querySelector('details')!;
+    details.open = true;
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /November 2024/ }),
+    );
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenCalledWith(
+        '/api/finance/transactions/?account=5&category=3&from=2024-11-01&to=2024-11-30',
+      ),
+    );
+  });
+
+  it('keeps all-category limit stats non-clickable', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeLimits({
+        limits: [
+          makeLimit({
+            category: null,
+            window_stats: [makeWindowStat({ key: 'days7' })],
+          }),
+        ],
+      }),
+    );
+    renderLimits();
+    await screen.findByTestId('limit-7');
+    expect(
+      screen.queryByRole('button', { name: /7 days/ }),
+    ).not.toBeInTheDocument();
+    expect(mockedApiGet).toHaveBeenCalledTimes(1);
   });
 
   it('hides the push card when no VAPID key is configured', async () => {

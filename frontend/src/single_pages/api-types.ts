@@ -1490,6 +1490,11 @@ export interface components {
             /** Transaction Id */
             transaction_id: string;
             /**
+             * Occurrence Date
+             * Format: date
+             */
+            occurrence_date: string;
+            /**
              * Booking Date
              * Format: date
              */
@@ -1681,6 +1686,10 @@ export interface components {
             key?: string | null;
             /** Value */
             value?: string | null;
+            /** Date From */
+            date_from?: string | null;
+            /** Date To */
+            date_to?: string | null;
             /** Spent */
             spent: string;
             /** Threshold */
@@ -1704,6 +1713,10 @@ export interface components {
             key?: string | null;
             /** Value */
             value?: string | null;
+            /** Date From */
+            date_from?: string | null;
+            /** Date To */
+            date_to?: string | null;
             /** Spent */
             spent: string;
             /** Threshold */
@@ -2052,8 +2065,8 @@ export interface components {
         RulePreviewChangeOut: {
             /** Id */
             id: number;
-            /** Booking Date */
-            booking_date: string;
+            /** Occurrence Date */
+            occurrence_date: string;
             /** Account */
             account: string;
             /** Counterparty */

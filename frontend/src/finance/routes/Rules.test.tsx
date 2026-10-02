@@ -82,7 +82,7 @@ function makePreview(overrides: Partial<RulePreviewOut> = {}): RulePreviewOut {
     changes: [
       {
         id: 11,
-        booking_date: '2025-01-10',
+        occurrence_date: '2025-01-10',
         account: 'Everyday account',
         counterparty: 'Rimi',
         description: 'card payment',

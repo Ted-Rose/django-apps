@@ -250,7 +250,9 @@ def preview_rule(user, data):
         rules.append(candidate)
     rules.sort(key=lambda rule: (rule.priority, rule.pk))
 
-    transactions = categorizable_transactions(user)
+    transactions = categorizable_transactions(
+        user
+    ).with_occurrence_date()
     assignments = {
         row.transaction_id: row
         for row in UserTransactionCategory.objects.filter(
@@ -289,7 +291,7 @@ def preview_rule(user, data):
         if len(changes) < MAX_PREVIEW_CHANGES:
             changes.append({
                 'id': tx.pk,
-                'booking_date': tx.booking_date.isoformat(),
+                'occurrence_date': tx.occurrence_date.isoformat(),
                 'account': str(tx.account),
                 'counterparty': (
                     tx.creditor_name or tx.debtor_name or ''

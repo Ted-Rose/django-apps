@@ -46,7 +46,15 @@ transactions, and get spending-limit alerts.
   (created automatically on link/share).
 - `Transaction` — booked transactions; `amount < 0` = outgoing.
   Unique per `(account, transaction_id)`. Raw bank data only —
-  categorization is per-user (below).
+  categorization is per-user (below). Banks disagree on date
+  semantics: Swedbank puts the card-purchase date in `value_date`
+  and the posting date in `booking_date`, other banks reverse it —
+  so user-facing dates/filters/spend sums go through
+  `TransactionQuerySet.with_occurrence_date()` which annotates the
+  earlier of the two as `occurrence_date` (transaction list, date
+  filters, category overview, limit windows, monthly history,
+  rule-preview diffs). `booking_date` stays the sync cursor since
+  GoCardless' `date_from` filters `bookingDate` server-side.
 - `UserTransactionCategory` — one user's category assignment for a
   transaction, unique per `(user, transaction)`. Owner and sharers
   each have their own rows; `is_manual` is a per-user override rules
@@ -70,7 +78,11 @@ transactions, and get spending-limit alerts.
   per-past-month breakdown (`monthly_history`) live in
   `services/limits.py`, shared by the limits endpoint and
   `evaluate_spending_limits`. The SPA limits page shows progress
-  bars per window plus expandable past-month history, and an
+  bars per window plus expandable past-month history — clicking a
+  categorized limit's window stat or history month drills into the
+  matching transactions below (`?limit=&window=` plus
+  `category`/`account=<csv>`/`from`/`to` filters in the URL) via
+  the shared `TransactionDrilldown` panel — and an
   "Overview" month dropdown (`?month=YYYY-MM` on
   `GET /api/finance/limits/`) re-evaluates every window as of the
   selected month's last day (`as_of` in `limit_window_stats`); rows

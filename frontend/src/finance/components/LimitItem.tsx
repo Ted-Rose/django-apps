@@ -7,7 +7,7 @@ import { useDeleteLimit } from '../mutations';
 /** Past-month history rows share the window-stat shape minus
  *  `history` (api.py's WindowStatBase). */
 type HistoryMonthOut = WindowStatOut['history'][number];
-type StatBase = Omit<WindowStatOut, 'history'>;
+export type StatBase = Omit<WindowStatOut, 'history'>;
 
 /**
  * One limit in the overview list — a compact card meant to stack
@@ -21,13 +21,23 @@ type StatBase = Omit<WindowStatOut, 'history'>;
  * `spent`/`threshold`/`remaining`/`over`/`pct`/`bar_pct` arrive
  * precomputed as Decimal strings from `limit_window_stats` —
  * rendered verbatim, never parsed into floats.
+ *
+ * For categorized limits each window stat (and history month) is
+ * a drill-down target — `onSelectWindow` opens the transaction
+ * list for exactly the range the spend figure covers.
  */
 export function LimitItem({
   limit,
   onEdit,
+  selectedWindow = null,
+  onSelectWindow,
 }: {
   limit: LimitOut;
   onEdit: () => void;
+  /** The open drill-down's window key/value, else null. */
+  selectedWindow?: string | null;
+  /** Set only for categorized limits — stats become clickable. */
+  onSelectWindow?: (stat: StatBase) => void;
 }) {
   const { t } = useTranslation('finance');
   const deleteLimit = useDeleteLimit();
@@ -80,6 +90,8 @@ export function LimitItem({
             key={window.key ?? window.value ?? index}
             stat={window}
             currency={currency}
+            selectedWindow={selectedWindow}
+            onSelectStat={onSelectWindow}
           />
         ))
       ) : (
@@ -96,7 +108,7 @@ export function LimitItem({
  * catalog translation (server:windows.*), `value` (YYYY-MM) goes
  * through fmtMonth, and `label` is the English fallback.
  */
-function useStatLabel() {
+export function useStatLabel() {
   const { t } = useTranslation('finance');
   return (stat: StatBase): string => {
     if (stat.key) {
@@ -119,73 +131,133 @@ function useStatLabel() {
 function WindowStat({
   stat,
   currency,
+  selectedWindow,
+  onSelectStat,
 }: {
   stat: WindowStatOut;
   currency: string;
+  /** The open drill-down's window key/value, else null. */
+  selectedWindow: string | null;
+  onSelectStat?: (stat: StatBase) => void;
 }) {
   const { t } = useTranslation('finance');
   const statLabel = useStatLabel();
+  const clickable = Boolean(onSelectStat);
+  const windowKey = stat.key ?? stat.value ?? stat.label;
+  const selected = selectedWindow === windowKey;
+  const select = () => onSelectStat?.(stat);
   return (
     <div className="mt-3">
-      <div className="d-flex justify-content-between align-items-baseline gap-2 flex-wrap small">
-        <span className="text-muted">{statLabel(stat)}</span>
-        <span className="ms-auto text-nowrap">
-          <span className="fin-money">
-            {stat.spent} / {stat.threshold} {currency}
-          </span>{' '}
-          <span
-            className={`fin-money ${
-              stat.over ? 'text-danger fw-semibold' : 'text-muted'
-            }`}
-          >
-            {stat.over
-              ? t('limits.item.over', {
-                  amount: stat.over,
-                  currency,
-                })
-              : t('limits.item.left', {
-                  amount: stat.remaining,
-                  currency,
-                })}
+      <div
+        className={
+          clickable
+            ? `limit-stat-target${selected ? ' selected' : ''}`
+            : undefined
+        }
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        aria-pressed={clickable ? selected : undefined}
+        onClick={clickable ? select : undefined}
+        onKeyDown={
+          clickable
+            ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  select();
+                }
+              }
+            : undefined
+        }
+      >
+        <div className="d-flex justify-content-between align-items-baseline gap-2 flex-wrap small">
+          <span className="text-muted">{statLabel(stat)}</span>
+          <span className="ms-auto text-nowrap">
+            <span className="fin-money">
+              {stat.spent} / {stat.threshold} {currency}
+            </span>{' '}
+            <span
+              className={`fin-money ${
+                stat.over ? 'text-danger fw-semibold' : 'text-muted'
+              }`}
+            >
+              {stat.over
+                ? t('limits.item.over', {
+                    amount: stat.over,
+                    currency,
+                  })
+                : t('limits.item.left', {
+                    amount: stat.remaining,
+                    currency,
+                  })}
+            </span>
           </span>
-        </span>
-      </div>
-      <div className="progress mt-1" style={{ height: '8px' }}>
-        <div
-          className={`progress-bar ${stat.bar_class}`}
-          role="progressbar"
-          style={{ width: `${stat.bar_pct}%` }}
-        />
+        </div>
+        <div className="progress mt-1" style={{ height: '8px' }}>
+          <div
+            className={`progress-bar ${stat.bar_class}`}
+            role="progressbar"
+            style={{ width: `${stat.bar_pct}%` }}
+          />
+        </div>
       </div>
       {stat.history.length > 0 && (
         <details className="mt-1">
           <summary className="small text-muted">
             {t('limits.item.pastMonths')}
           </summary>
-          {stat.history.map((month) => (
-            <HistoryMonth
-              key={month.value ?? month.label}
-              month={month}
-              currency={currency}
-            />
-          ))}
+          {stat.history.map((month) => {
+            const monthKey = month.key ?? month.value ?? month.label;
+            return (
+              <HistoryMonth
+                key={monthKey}
+                month={month}
+                currency={currency}
+                selected={selectedWindow === monthKey}
+                onSelect={onSelectStat ? () => onSelectStat(month) : undefined}
+              />
+            );
+          })}
         </details>
       )}
     </div>
   );
 }
 
-/** One past-month row inside the <details> block. */
+/** One past-month row inside the <details> block — a drill-down
+ *  target like its parent window stat. */
 function HistoryMonth({
   month,
   currency,
+  selected = false,
+  onSelect,
 }: {
   month: HistoryMonthOut;
   currency: string;
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   const statLabel = useStatLabel();
+  const clickable = Boolean(onSelect);
   return (
-    <div className="mt-2">
+    <div
+      className={`mt-2${
+        clickable ? ` limit-stat-target${selected ? ' selected' : ''}` : ''
+      }`}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-pressed={clickable ? selected : undefined}
+      onClick={onSelect}
+      onKeyDown={
+        clickable
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onSelect?.();
+              }
+            }
+          : undefined
+      }
+    >
       <div className="d-flex justify-content-between small">
         <span>{statLabel(month)}</span>
         <span className="fin-money">

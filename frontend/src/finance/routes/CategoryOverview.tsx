@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  lazy,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from 'react';
+import { Suspense, lazy, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -21,16 +14,9 @@ import CategoriesCard from '../components/CategoriesCard';
 const CategoryChart = lazy(() => import('../components/CategoryChart'));
 import MoneyText from '../components/MoneyText';
 import Toasts from '../../shared/components/Toasts';
-import TransactionTable, {
-  type ParamUpdates,
-} from '../components/TransactionTable';
-import Pagination from '../components/Pagination';
-import useRuleDrawer from '../hooks/useRuleDrawer';
-import {
-  fetchCategoryOverview,
-  fetchTransactions,
-  type CategoryRowOut,
-} from '../api';
+import TransactionDrilldown from '../components/TransactionDrilldown';
+import type { ParamUpdates } from '../components/TransactionTable';
+import { fetchCategoryOverview, type CategoryRowOut } from '../api';
 import './categories.css';
 // .tx-panel/.tx-table styles — the drill-down reuses the
 // transactions page's table chrome.
@@ -401,21 +387,12 @@ export default function CategoryOverview() {
           </>
         )}
         {params.category && (
-          <CategoryTransactions
+          <TransactionDrilldown
             // Remount per category so the panel scrolls into view
             // on every selection change.
             key={params.category}
             label={selectedLabel}
-            category={params.category}
-            account={params.account}
-            from={params.from}
-            to={params.to}
-            creditor={params.creditor}
-            q={params.q}
-            source={params.source}
-            sort={params.sort}
-            direction={params.direction}
-            page={params.page}
+            params={params}
             onUpdate={updateParams}
             onClose={() => updateParams({ category: null })}
           />
@@ -516,123 +493,5 @@ function OverviewRow({
         )}
       </td>
     </tr>
-  );
-}
-
-/**
- * The drill-down panel below the breakdown table: the transactions
- * route's own TransactionTable + Pagination fed by the same
- * endpoint, pre-filtered to the clicked category and the
- * overview's time window (`from`/`to`) and account. Column-header
- * sort/filter writes go through `onUpdate` so the whole state
- * stays in the URL — including `account`, which the two views
- * deliberately share (narrowing the table narrows the totals too).
- */
-function CategoryTransactions({
-  label,
-  category,
-  account,
-  from,
-  to,
-  creditor,
-  q,
-  source,
-  sort,
-  direction,
-  page,
-  onUpdate,
-  onClose,
-}: {
-  label: string;
-  category: string;
-  account: string;
-  from: string;
-  to: string;
-  creditor: string | null;
-  q: string | null;
-  source: string | null;
-  sort: string | null;
-  direction: string | null;
-  page: string | null;
-  onUpdate: (updates: ParamUpdates) => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation('finance');
-  const { openRuleDrawer, ruleLoadingId, drawer } = useRuleDrawer();
-  const panelRef = useRef<HTMLElement>(null);
-  // jsdom doesn't implement scrollIntoView — the optional call
-  // keeps the Vitest suite stub-free.
-  useEffect(() => {
-    panelRef.current?.scrollIntoView?.({
-      behavior: 'smooth',
-      block: 'start',
-    });
-  }, []);
-
-  const txParams = {
-    account,
-    category,
-    creditor,
-    q,
-    source,
-    from,
-    to,
-    sort,
-    direction,
-    page,
-  };
-  const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: ['finance', 'transactions', txParams],
-    queryFn: () => fetchTransactions(txParams),
-  });
-
-  return (
-    <section className="tx-panel mt-4" ref={panelRef}>
-      <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
-        <h2 className="h6 text-muted mb-0">
-          {t('categories.transactionsFor', { name: label })}
-        </h2>
-        <button
-          type="button"
-          className="btn btn-link btn-sm p-0 text-decoration-none"
-          onClick={onClose}
-        >
-          {t('common:common.close')}
-        </button>
-      </div>
-      {isPending && (
-        <LoadingSkeleton
-          rows={4}
-          height="2.5rem"
-          label={t('transactions.loading')}
-        />
-      )}
-      {isError && (
-        <ErrorState
-          error={error}
-          onRetry={() => refetch()}
-          label={t('transactions.loadLabel')}
-        />
-      )}
-      {data && (
-        <>
-          <TransactionTable
-            data={data}
-            onUpdate={onUpdate}
-            onAddRule={openRuleDrawer}
-            ruleLoadingId={ruleLoadingId}
-          />
-          <Pagination
-            page={data.page}
-            numPages={data.num_pages}
-            count={data.count}
-            hasNext={data.has_next}
-            hasPrevious={data.has_previous}
-            onPage={(next) => onUpdate({ page: String(next) })}
-          />
-        </>
-      )}
-      {drawer}
-    </section>
   );
 }
