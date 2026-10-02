@@ -63,7 +63,9 @@
     "chartTitle": "Tēriņi pa kategorijām",
     "chartAria": "Tēriņu sadalījums pa kategorijām",
     "share": "Daļa",
-    "net": "Neto",
+    "spentCol": "Izdevumi",
+    "receivedCol": "Ienākumi",
+    "filters": "Filtri",
     "total": "Kopā ({{currency}})",
     "txCount_zero": "{{count}} transakciju",
     "txCount_one": "{{count}} transakcija",
@@ -406,10 +408,6 @@
       "or": "VAI"
     },
     "periods": {
-      "last7Days": "Pēdējās 7 dienas",
-      "last30Days": "Pēdējās 30 dienas",
-      "last90Days": "Pēdējās 90 dienas",
-      "last365Days": "Pēdējās 365 dienas",
       "thisMonth": "Šis mēnesis",
       "lastMonth": "Pagājušais mēnesis",
       "allTime": "Viss laiks"

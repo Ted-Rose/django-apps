@@ -802,14 +802,6 @@ def category_overview(request,
     prev_month_end = month_start - timedelta(days=1)
     prev_month_start = prev_month_end.replace(day=1)
     presets = [
-        ('Last 7 days', 'last7Days',
-         today - timedelta(days=6), today),
-        ('Last 30 days', 'last30Days',
-         today - timedelta(days=29), today),
-        ('Last 90 days', 'last90Days',
-         today - timedelta(days=89), today),
-        ('Last 365 days', 'last365Days',
-         today - timedelta(days=364), today),
         ('This month', 'thisMonth', month_start, today),
         ('Last month', 'lastMonth', prev_month_start, prev_month_end),
         ('All time', 'allTime', None, None),

@@ -69,9 +69,9 @@ function makeOverview(
     },
     periods: [
       {
-        label: 'Last 7 days',
-        key: 'last7Days',
-        date_from: '2025-01-09',
+        label: 'This month',
+        key: 'thisMonth',
+        date_from: '2025-01-01',
         date_to: '2025-01-15',
         active: true,
       },
@@ -118,15 +118,20 @@ describe('CategoryOverview', () => {
 
     expect(await screen.findByText('Groceries')).toBeInTheDocument();
     expect(screen.getByText('Salary')).toBeInTheDocument();
-    // A single signed net column — negative danger, positive with
-    // an explicit '+' and success-styled.
-    expect(screen.getByRole('cell', { name: '-120.50 EUR' })).toHaveClass(
+    // Spent and received render as separate columns per category —
+    // a mixed-direction row shows both sides instead of a net sum.
+    const groceriesRow = screen.getByText('Groceries').closest('tr')!;
+    expect(within(groceriesRow).getByText('-120.50 EUR')).toHaveClass(
       'text-danger',
     );
-    expect(screen.getByRole('cell', { name: '+2000.00 EUR' })).toHaveClass(
+    const salaryRow = screen.getByText('Salary').closest('tr')!;
+    expect(within(salaryRow).getByText('+2000.00 EUR')).toHaveClass(
       'text-success',
     );
-    expect(screen.getByRole('cell', { name: '-39.00 USD' })).toHaveClass(
+    // Zero-amount cells render a muted dash.
+    expect(within(salaryRow).getByText('—')).toHaveClass('text-muted');
+    const uncategorizedRow = screen.getByText('Uncategorized').closest('tr')!;
+    expect(within(uncategorizedRow).getByText('-39.00 USD')).toHaveClass(
       'text-danger',
     );
     // Share column and the secondary tx-count subtext.
@@ -151,7 +156,7 @@ describe('CategoryOverview', () => {
       'text-success',
     );
     // The active preset is rendered as the pressed chip.
-    const active = screen.getByRole('button', { name: 'Last 7 days' });
+    const active = screen.getByRole('button', { name: 'This month' });
     expect(active).toHaveClass('fin-chip', 'active');
     expect(active).toHaveAttribute('aria-pressed', 'true');
     const inactive = screen.getByRole('button', { name: 'All time' });
@@ -165,10 +170,10 @@ describe('CategoryOverview', () => {
   it('writes from/to params when a preset is clicked', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview();
-    fireEvent.click(await screen.findByRole('button', { name: 'Last 7 days' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'This month' }));
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith(
-        '/api/finance/categories/overview/?from=2025-01-09&to=2025-01-15',
+        '/api/finance/categories/overview/?from=2025-01-01&to=2025-01-15',
       ),
     );
   });
@@ -187,6 +192,8 @@ describe('CategoryOverview', () => {
   it('applies the account filter via the form', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview();
+    // The filter card is collapsed by default — expand it first.
+    fireEvent.click(await screen.findByRole('button', { name: /Filters/ }));
     // The account options render once the overview has loaded.
     await screen.findByRole('option', { name: 'Everyday account' });
     fireEvent.change(screen.getByLabelText('Account'), {
@@ -208,10 +215,10 @@ describe('CategoryOverview', () => {
         '/api/finance/categories/overview/?account=5',
       ),
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Last 7 days' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'This month' }));
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith(
-        '/api/finance/categories/overview/?from=2025-01-09&to=2025-01-15&account=5',
+        '/api/finance/categories/overview/?from=2025-01-01&to=2025-01-15&account=5',
       ),
     );
   });
@@ -219,6 +226,7 @@ describe('CategoryOverview', () => {
   it('applies the date range via the form', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview();
+    fireEvent.click(await screen.findByRole('button', { name: /Filters/ }));
     fireEvent.change(await screen.findByLabelText('From'), {
       target: { value: '2025-02-01' },
     });
@@ -231,6 +239,22 @@ describe('CategoryOverview', () => {
         '/api/finance/categories/overview/?from=2025-02-01&to=2025-02-28',
       ),
     );
+  });
+
+  it('keeps the filter card collapsed with a summary of active filters', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview('/categories?from=2025-01-01&to=2025-01-15&account=5');
+    const toggle = await screen.findByRole('button', { name: /Filters/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Account')).not.toBeInTheDocument();
+    // Wait for the overview so the account label joins the summary.
+    await screen.findByText('Groceries');
+    expect(
+      screen.getByText('2025-01-01 → 2025-01-15 · Everyday account'),
+    ).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByLabelText('Account')).toBeInTheDocument();
   });
 
   it('shows the empty state when there are no rows', async () => {

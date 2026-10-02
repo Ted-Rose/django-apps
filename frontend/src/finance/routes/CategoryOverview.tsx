@@ -1,4 +1,4 @@
-import { Suspense, lazy, type FormEvent } from 'react';
+import { Suspense, lazy, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -25,8 +25,9 @@ import './categories.css';
  * totals by currency exactly like the template's `totals` dict.
  *
  * Money arrives as Decimal-serialized strings and renders as-is;
- * `net`'s sign picks the text-danger/success class and the '+'
- * prefix. Headline StatCards surface spent/received per currency,
+ * each row shows spent and received as separate columns so income
+ * can't hide inside a category's net figure. Headline StatCards
+ * surface spent/received per currency,
  * a recharts donut (CategoryChart) shows the spending share, and
  * the breakdown table stays three slim columns so it fits narrow
  * screens — the tx count is secondary text under the badge.
@@ -44,6 +45,7 @@ export default function CategoryOverview() {
   const accountId = /^\d+$/.test(params.account)
     ? Number(params.account)
     : null;
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['finance', 'category-overview', params],
@@ -64,6 +66,7 @@ export default function CategoryOverview() {
       if (value) next.set(key, value);
     }
     setSearchParams(next);
+    setFiltersOpen(false);
   };
 
   /** Preset period click — the template's `?from=&to=` hrefs. */
@@ -75,6 +78,18 @@ export default function CategoryOverview() {
     setSearchParams(next);
   };
 
+  // One-line recap of the active filters, shown while the filter
+  // card is collapsed so a deep-linked range stays visible.
+  const accountLabel = data?.accounts.find(
+    (account) => String(account.id) === params.account,
+  )?.label;
+  const filterSummary = [
+    [params.from, params.to].filter(Boolean).join(' → '),
+    accountLabel ?? '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <>
       <FinanceNavBar />
@@ -82,62 +97,81 @@ export default function CategoryOverview() {
         title={t('categories.title')}
         subtitle={t('categories.subtitle')}
       >
-        <form className="fin-card p-3 mb-3" onSubmit={applyFilters}>
-          <div className="row g-2 align-items-end mb-0">
-            <div className="col-6 col-sm-auto">
-              <label htmlFor="date-from" className="form-label">
-                {t('categories.dateFrom')}
-              </label>
-              <input
-                type="date"
-                name="from"
-                id="date-from"
-                className="form-control"
-                key={`from-${params.from}`}
-                defaultValue={params.from}
-              />
-            </div>
-            <div className="col-6 col-sm-auto">
-              <label htmlFor="date-to" className="form-label">
-                {t('categories.dateTo')}
-              </label>
-              <input
-                type="date"
-                name="to"
-                id="date-to"
-                className="form-control"
-                key={`to-${params.to}`}
-                defaultValue={params.to}
-              />
-            </div>
-            <div className="col-12 col-sm-auto">
-              <label htmlFor="account-filter" className="form-label">
-                {t('categories.account')}
-              </label>
-              <select
-                name="account"
-                id="account-filter"
-                className="form-select"
-                // Remount once the options load (and on param change)
-                // so defaultValue picks up a deep-linked account.
-                key={`account-${params.account}-${data ? 'ready' : 'loading'}`}
-                defaultValue={params.account}
-              >
-                <option value="">{t('categories.allAccounts')}</option>
-                {(data?.accounts ?? []).map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-12 col-sm-auto">
-              <button type="submit" className="btn btn-primary w-100">
-                {t('common:common.apply')}
-              </button>
-            </div>
-          </div>
-        </form>
+        <div className="fin-card p-3 mb-3">
+          <button
+            type="button"
+            className="btn btn-link p-0 text-body text-decoration-none d-flex align-items-center gap-2"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            <i
+              className={`bi bi-chevron-${filtersOpen ? 'up' : 'down'}`}
+              aria-hidden="true"
+            />
+            {t('categories.filters')}
+            {!filtersOpen && filterSummary && (
+              <span className="text-muted small">{filterSummary}</span>
+            )}
+          </button>
+          {filtersOpen && (
+            <form className="mt-3" onSubmit={applyFilters}>
+              <div className="row g-2 align-items-end mb-0">
+                <div className="col-6 col-sm-auto">
+                  <label htmlFor="date-from" className="form-label">
+                    {t('categories.dateFrom')}
+                  </label>
+                  <input
+                    type="date"
+                    name="from"
+                    id="date-from"
+                    className="form-control"
+                    key={`from-${params.from}`}
+                    defaultValue={params.from}
+                  />
+                </div>
+                <div className="col-6 col-sm-auto">
+                  <label htmlFor="date-to" className="form-label">
+                    {t('categories.dateTo')}
+                  </label>
+                  <input
+                    type="date"
+                    name="to"
+                    id="date-to"
+                    className="form-control"
+                    key={`to-${params.to}`}
+                    defaultValue={params.to}
+                  />
+                </div>
+                <div className="col-12 col-sm-auto">
+                  <label htmlFor="account-filter" className="form-label">
+                    {t('categories.account')}
+                  </label>
+                  <select
+                    name="account"
+                    id="account-filter"
+                    className="form-select"
+                    // Remount once the options load (and on param change)
+                    // so defaultValue picks up a deep-linked account.
+                    key={`account-${params.account}-${data ? 'ready' : 'loading'}`}
+                    defaultValue={params.account}
+                  >
+                    <option value="">{t('categories.allAccounts')}</option>
+                    {(data?.accounts ?? []).map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-sm-auto">
+                  <button type="submit" className="btn btn-primary w-100">
+                    {t('common:common.apply')}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+        </div>
 
         {data && (
           <div className="d-flex flex-wrap gap-2 mb-4">
@@ -233,7 +267,12 @@ export default function CategoryOverview() {
                         <tr>
                           <th>{t('transactions.columns.category')}</th>
                           <th className="w-25">{t('categories.share')}</th>
-                          <th className="text-end">{t('categories.net')}</th>
+                          <th className="text-end">
+                            {t('categories.spentCol')}
+                          </th>
+                          <th className="text-end">
+                            {t('categories.receivedCol')}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -251,13 +290,11 @@ export default function CategoryOverview() {
                             <tr className="fw-bold" key={currency}>
                               <td>{t('categories.total', { currency })}</td>
                               <td />
-                              <td className="text-end text-nowrap">
-                                <div className="text-danger fin-money">
-                                  -{total.spent} {currency}
-                                </div>
-                                <div className="text-success fin-money">
-                                  +{total.received} {currency}
-                                </div>
+                              <td className="text-end text-nowrap text-danger fin-money">
+                                -{total.spent} {currency}
+                              </td>
+                              <td className="text-end text-nowrap text-success fin-money">
+                                +{total.received} {currency}
                               </td>
                             </tr>
                           ),
@@ -268,10 +305,7 @@ export default function CategoryOverview() {
                 </div>
               </div>
             ) : (
-              <EmptyState
-                icon="pie-chart"
-                title={t('categories.emptyTitle')}
-              />
+              <EmptyState icon="pie-chart" title={t('categories.emptyTitle')} />
             )}
           </>
         )}
@@ -283,16 +317,14 @@ export default function CategoryOverview() {
 
 /**
  * One breakdown row: category badge + tx count, a share bar tinted
- * with the category color, and the signed net amount.
+ * with the category color, and the spent/received amounts as
+ * separate columns — a category with both directions shows both.
  */
 function OverviewRow({ row, index }: { row: CategoryRowOut; index: number }) {
   const { t } = useTranslation('finance');
-  const net = Number(row.net);
   const color = /^#[0-9a-f]{6}$/i.test(row.category_color)
     ? row.category_color
     : '#6c757d';
-  const tone =
-    net < 0 ? 'text-danger' : net > 0 ? 'text-success' : 'text-muted';
   return (
     <tr>
       <td>
@@ -331,8 +363,23 @@ function OverviewRow({ row, index }: { row: CategoryRowOut; index: number }) {
           <small className="text-nowrap">{row.share.toFixed(1)}%</small>
         </div>
       </td>
-      <td className={`text-end text-nowrap fin-money ${tone}`}>
-        {net > 0 ? `+${row.net}` : row.net} {row.currency}
+      <td className="text-end text-nowrap fin-money">
+        {Number(row.spent) > 0 ? (
+          <span className="text-danger">
+            -{row.spent} {row.currency}
+          </span>
+        ) : (
+          <span className="text-muted">—</span>
+        )}
+      </td>
+      <td className="text-end text-nowrap fin-money">
+        {Number(row.received) > 0 ? (
+          <span className="text-success">
+            +{row.received} {row.currency}
+          </span>
+        ) : (
+          <span className="text-muted">—</span>
+        )}
       </td>
     </tr>
   );
