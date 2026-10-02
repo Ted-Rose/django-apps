@@ -4,11 +4,14 @@ set -e
 # ============================================================
 # FILL IN THESE VALUES BEFORE RUNNING
 # ============================================================
+# NOTE: this migration already ran (gmail-vercel → django-apps-7345,
+# since the bare 'django-apps' ID was globally taken). Values below
+# are the real ones — kept as the record of what was applied.
 OLD_PROJECT_ID="gmail-vercel"
-NEW_PROJECT_ID="django-apps"
-NEW_PROJECT_NUMBER=""          # gcloud projects describe django-apps --format='value(projectNumber)'
+NEW_PROJECT_ID="django-apps-7345"
+NEW_PROJECT_NUMBER="356166814755"
 OLD_STATE_BUCKET="gmail-vercel-tf-state"
-NEW_STATE_BUCKET="django-apps-tf-state"
+NEW_STATE_BUCKET="django-apps-7345-tf-state"
 REGION="europe-west3"
 GITHUB_REPO="Ted-Rose/django-apps"
 # ============================================================

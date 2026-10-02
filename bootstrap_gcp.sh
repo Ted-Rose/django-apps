@@ -8,9 +8,9 @@ set -e
 # - gcloud CLI installed and authenticated (gcloud auth login)
 # - terraform CLI installed
 # - gh CLI installed and authenticated (gh auth login)
-# - You must have Owner/Editor permissions on gmail-vercel project
+# - You must have Owner/Editor permissions on django-apps-7345 project
 
-PROJECT_ID="gmail-vercel"
+PROJECT_ID="django-apps-7345"
 REGION="europe-west3"
 
 echo "=== GCP Deployment Bootstrap for django-apps ==="
