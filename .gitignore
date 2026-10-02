@@ -2,7 +2,6 @@ __pycache__
 db.sqlite3
 logs/*
 media/recordings/*
-media/bible_research/*
 !media/recordings/.gitkeep
 venv
 google_api/app_secrets.json

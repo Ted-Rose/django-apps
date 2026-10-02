@@ -35,7 +35,6 @@ terraform/
 !requirements.txt
 staticfiles/
 media/recordings/*
-media/bible_research/*
 !media/recordings/.gitkeep
 
 # React frontend — always built fresh in the Dockerfile node stage

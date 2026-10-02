@@ -48,16 +48,6 @@ resource "google_cloud_run_v2_service" "django_app" {
       }
 
       env {
-        name = "ESV_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.app["ESV_KEY"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
         name = "GOOGLE_OAUTH_CLIENT_JSON"
         value_source {
           secret_key_ref {

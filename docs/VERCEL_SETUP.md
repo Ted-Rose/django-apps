@@ -18,7 +18,6 @@ Django's `<path:subpath>` catch-all already serves the shell on every
 | `APP_BASE_URL` | `https://<your-vercel-domain>` (e.g. `https://tedisrozenfelds.vercel.app`) | **Must match the host serving the traffic.** GoCardless bakes `{BASE_URL}/finance/callback/` into the requisition; if a user starts Connect Bank on Vercel but `APP_BASE_URL` points at Cloud Run, the callback lands there and the session cookie is gone → "No pending bank connection found." |
 | `DATABASE_URL` | Aiven Postgres URL, e.g. `postgres://user:pass@host:port/db?sslmode=verify-full&sslrootcert=<path-to-ca.pem>` | Same DB as Cloud Run. `sslmode` defaults to `require` if unset; `verify-full` needs the `ca.pem` generated at build time from `capem` (written to the repo root, i.e. `/var/task/ca.pem` in the lambda). `CONN_MAX_AGE=0` is automatic on Vercel — keep it that way to protect Aiven's `max_connections`. |
 | `GOOGLE_OAUTH_CLIENT_JSON` | full contents of `google_api/app_secrets.json` | written to `/tmp/app_secrets.json` at settings import |
-| `ESV_KEY` | your esv.org API key | bible_research |
 | `GOCARDLESS_SECRET_ID` | GoCardless Bank Account Data secret id | finance — same value as Cloud Run |
 | `GOCARDLESS_SECRET_KEY` | GoCardless Bank Account Data secret key | finance — same value as Cloud Run |
 | `VAPID_PUBLIC_KEY` | same as Cloud Run | **Must be identical on both deploys** — `PushSubscription` rows are shared via the DB; mismatched keys break pushes for browsers that subscribed on the other deploy |

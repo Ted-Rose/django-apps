@@ -156,6 +156,8 @@ and the **regression risks** to watch for when applying it.
 
 ## F8 — `bible_research` endpoints unauthenticated (quota abuse)
 
+- **Status:** Resolved by removal — the `bible_research` app was
+  deleted (see `DEPRECATE_TV_ARCHIVE_BIBLE_RESEARCH.md`).
 - **Severity:** Low
 - **Location:** `bible_research/views.py:8-42`
 - **Issue:** `/bible/verses` and `/bible/` proxy `api.esv.org` with
@@ -173,6 +175,8 @@ and the **regression risks** to watch for when applying it.
 
 ## F9 — `tv_archive` list endpoint: unauthenticated, unvalidated input
 
+- **Status:** Resolved by removal — the `tv_archive` app was deleted
+  (see `DEPRECATE_TV_ARCHIVE_BIBLE_RESEARCH.md`).
 - **Severity:** Low
 - **Location:** `tv_archive/views.py:23-51`
 - **Issue:** No `@login_required` (public listing — possibly

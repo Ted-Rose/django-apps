@@ -68,15 +68,6 @@ printf '%s' "$DJANGO_SECRET_KEY" | gcloud secrets create DJANGO_SECRET_KEY \
     --replication-policy=automatic \
     2>/dev/null && echo "✓ Created DJANGO_SECRET_KEY" || echo "⚠️  DJANGO_SECRET_KEY already exists"
 
-# ESV_KEY
-read -rsp "Enter ESV_KEY value: " ESV_KEY_VALUE
-echo
-printf '%s' "$ESV_KEY_VALUE" | gcloud secrets create ESV_KEY \
-    --project="$PROJECT_ID" \
-    --data-file=- \
-    --replication-policy=automatic \
-    2>/dev/null && echo "✓ Created ESV_KEY" || echo "⚠️  ESV_KEY already exists"
-
 # DATABASE_URL
 read -rsp "Enter DATABASE_URL (postgresql://user:pass@host:port/db): " DATABASE_URL_VALUE
 echo

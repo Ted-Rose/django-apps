@@ -53,7 +53,6 @@ if IS_CLOUD_ENVIRONMENT:
     SECRET_KEY = get_env_str('DJANGO_SECRET_KEY')
     DEBUG = False
     BASE_URL = get_env_str('APP_BASE_URL')
-    ESV_KEY = get_env_str('ESV_KEY')
 
     db_config = dj_database_url.parse(get_env_str('DATABASE_URL'))
     db_config.setdefault('OPTIONS', {})
@@ -86,7 +85,6 @@ elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
         DEBUG = private_settings.get('DEBUG')
         BASE_URL = private_settings.get('BASE_URL')
         DATABASES = private_settings.get('DATABASES')
-        ESV_KEY = private_settings.get('ESV_KEY')
         GOCARDLESS_SECRET_ID = private_settings.get(
             'GOCARDLESS_SECRET_ID'
         )
@@ -129,7 +127,6 @@ else:
                 'NAME': BASE_DIR / 'db.sqlite3',
             }
         }
-    ESV_KEY = os.environ.get('ESV_KEY', '')
     GOCARDLESS_SECRET_ID = os.environ.get('GOCARDLESS_SECRET_ID', '')
     GOCARDLESS_SECRET_KEY = os.environ.get('GOCARDLESS_SECRET_KEY', '')
     VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
@@ -174,8 +171,6 @@ INSTALLED_APPS = [
     'google_tasks',
     'finance',
     'single_pages',
-    'tv_archive',
-    'bible_research',
 ]
 
 MIDDLEWARE = [
@@ -371,10 +366,5 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
-        'tv_archive': {
-            'handlers': ['console', 'file_debug'],
-            'level': 'DEBUG',
-            'propagate': True,
-        }
     },
 }

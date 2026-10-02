@@ -26,8 +26,6 @@ urlpatterns = [
     path('tasks/', include('google_tasks.urls', namespace='google_tasks')),
     path('finance/', include('finance.urls', namespace='finance')),
     path('', include('single_pages.urls', namespace='single_pages')),
-    path('', include('tv_archive.urls', namespace='tv_archive')),
-    path('', include('bible_research.urls', namespace='bible_research')),
     path('', views.home),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

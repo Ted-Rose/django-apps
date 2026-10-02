@@ -49,7 +49,6 @@ Run the updated `bootstrap_gcp.sh`. It will:
 2. Enable Secret Manager API
 3. Re-create all secrets in `django-apps` Secret Manager:
    - `DJANGO_SECRET_KEY`
-   - `ESV_KEY`
    - `DATABASE_URL`
    - `DB_SSL_CERT`
    - `GOOGLE_OAUTH_CLIENT_JSON`

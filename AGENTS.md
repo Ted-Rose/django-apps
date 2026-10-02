@@ -15,21 +15,19 @@ same database. PythonAnywhere
 
 | Path | Purpose |
 |------|---------|
-| `django_apps/` | Project settings, root urls, home page, PWA endpoints (`sw.js`, `manifest.webmanifest`, `offline/`), `utils.py` (LV→EN translation via googletrans), `gcp.py` (Secret Manager helper), `console_tasks/build.py` (Vercel build-time file generators) |
+| `django_apps/` | Project settings, root urls, home page, PWA endpoints (`sw.js`, `manifest.webmanifest`, `offline/`), `gcp.py` (Secret Manager helper), `console_tasks/build.py` (Vercel build-time file generators) |
 | `google_api/` | Shared Google OAuth2 layer + Gmail reader + text-to-audio (gTTS → GCS signed URLs). See `google_api/AGENTS.md` and `google_api/README.md` |
 | `google_tasks/` | Largest app. Google Tasks bidirectional sync with local-only features (stars, labels, dividers, archive/trash, manual ordering). See `google_tasks/AGENTS.md` and `google_tasks/README.md` |
 | `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits, low-balance alerts, rule-based auto-categorization (`services/rules.py`). React SPA at `/finance/` (`frontend/src/finance/`), API at `/api/finance/`; `views.py` keeps only `requisition_callback`. See `finance/AGENTS.md` |
-| `bible_research/` | ESV API wrapper (`api.esv.org`): verse lookup as JSON and passage audio. No models |
-| `tv_archive/` | Latvian TV schedule scraper (tet.lv) enriched with IMDb ratings. `fetch_tv_program_details()` is **not** wired to a URL — run it manually via shell |
 | `single_pages/` | One-off pages that don't merit their own app (twister, spoki.lv proxy) |
 | `terraform/` | All GCP infra: Cloud Run service + jobs, Cloud Scheduler triggers, secrets refs, Artifact Registry, GCS audio bucket, WIF |
 | `frontend/` | React rewrite workspace: Vite 5 + React 19 + TS, one entry per app (`src/tasks/`); builds to gitignored `frontend_dist/` (Vite manifest + hashed assets) |
 | `docs/` | `QUICKSTART.md` (GCP deploy runbook), `changelog.md`, `coding_diary.md` (dev log), `plans/` (design docs) |
 
-URL routing (`django_apps/urls.py`): `google_api` and `single_pages`,
-`tv_archive`, `bible_research` mount at root; `google_tasks` under
-`/tasks/`; `finance` under `/finance/`; `admin/` is Django admin (also
-used for logout via `/admin/logout/`).
+URL routing (`django_apps/urls.py`): `google_api` and `single_pages`
+mount at root; `google_tasks` under `/tasks/`; `finance` under
+`/finance/`; `admin/` is Django admin (also used for logout via
+`/admin/logout/`).
 
 ## Environment & settings
 
@@ -39,7 +37,7 @@ used for logout via `/admin/logout/`).
     `_is_vercel_environment()` (`VERCEL` env var, set by Vercel at
     build and runtime); combined as `IS_CLOUD_ENVIRONMENT`. Secrets
     come from env vars (`DJANGO_SECRET_KEY`, `DATABASE_URL`,
-    `APP_BASE_URL`, `ESV_KEY`, `GOOGLE_OAUTH_CLIENT_JSON`,
+    `APP_BASE_URL`, `GOOGLE_OAUTH_CLIENT_JSON`,
     `GOCARDLESS_SECRET_ID`, `GOCARDLESS_SECRET_KEY`,
     `GCS_AUDIO_BUCKET`). `GOOGLE_OAUTH_CLIENT_JSON` is written to
     `/tmp/app_secrets.json` at settings import (writable on both
@@ -142,13 +140,12 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   for new pages.
 - **Templates/static**: Bootstrap 5 + Bootstrap Icons via CDN; app
   templates under `<app>/templates/` (finance namespaces into a
-  subdir; google_api/tv_archive/single_pages are flat). google_tasks
+  subdir; google_api/single_pages are flat). google_tasks
   has no templates — its UI is the React SPA (below).
 - **Sync pattern**: external objects are mirrored locally via
   `update_or_create` keyed on the remote ID (`task_id`, `list_id`,
   `transaction_id`, `account_id`, `requisition_id` are unique-ish keys).
-- **Logging**: `logging.getLogger('django')` in most apps (`tv_archive`
-  uses `__name__` with its own logger config in settings).
+- **Logging**: `logging.getLogger('django')` in all apps.
 - **Tests**: Django `TestCase` in each app's `tests.py`; factory helper
   functions (`make_*`) instead of fixtures; mock external APIs with
   `unittest.mock.patch`.
@@ -230,9 +227,6 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   don't build `Credentials` objects manually.
 - Google Tasks API limitations: no reminders, `due` is date-only, no
   move-between-lists op (code does get+insert+delete), limited batching.
-- `googletrans==4.0.0-rc1` is an unofficial free API — `tv_archive` and
-  `django_apps.utils.translate_lv_to_eng` may break without code
-  changes being at fault.
 - `OAUTHLIB_INSECURE_TRANSPORT=1` and `OAUTHLIB_RELAX_TOKEN_SCOPE=1`
   are set at `google_api.utils` import time (needed for local dev and
   incremental scopes).

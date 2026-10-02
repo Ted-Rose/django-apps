@@ -37,7 +37,7 @@ RUN python django_apps/console_tasks/build.py
 # private_settings.json (dockerignored). Create a build-time dummy,
 # collect, then remove it — the GCP runtime uses env vars instead.
 # Keep this strict: a silent failure here ships a site with no JS/CSS.
-RUN python -c "import json; json.dump({'SECRET_KEY': 'build-time-dummy', 'DEBUG': False, 'BASE_URL': '', 'DATABASES': {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}, 'ESV_KEY': ''}, open('private_settings.json', 'w'))" \
+RUN python -c "import json; json.dump({'SECRET_KEY': 'build-time-dummy', 'DEBUG': False, 'BASE_URL': '', 'DATABASES': {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}}, open('private_settings.json', 'w'))" \
     && python manage.py collectstatic --noinput \
     && rm private_settings.json
 
