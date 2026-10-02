@@ -46,10 +46,12 @@ utilities; `google_api` must never import them. Full docs:
   kept as platform API for future template-rendered pages.
 - `views.py` — `login_view` (unified auth entry — every feature's
   reauth bounce points at `google_api:login`, and it's the site's
-  `LOGIN_URL`) and `audio` (`/text-to-audio` GET endpoint — shared
-  TTS service, also fetched by `single_pages/twister.html`; stays
-  unauthenticated until the single_pages rewrite removes that
-  caller). `urls.py` routes `login/`, `google/callback` (the
+  `LOGIN_URL`) and `audio` (`/text-to-audio` GET endpoint — legacy
+  **unauthenticated** TTS service; the single_pages rewrite removed
+  its last in-repo caller (twister.html) and the SPAs use the
+  session-authed `/api/gmail/audio/` + `/api/single_pages/tts/` ops,
+  so gating or deleting it is now a free decision — security finding
+  F3). `urls.py` routes `login/`, `google/callback` (the
   `redirect_uri` registered in Google Cloud Console) and
   `text-to-audio` — all plain Django views, never ninja ops, and
   never behind a root-level catch-all.

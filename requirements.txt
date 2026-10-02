@@ -19,5 +19,6 @@ django-sslserver
 django-vite==3.2.0
 django-ninja==1.7.1
 pydantic==2.13.5
+nh3==0.3.7
 pywebpush==2.5.0
 polib==1.2.0

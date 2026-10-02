@@ -76,8 +76,10 @@ def error_slug(status_code):
 # page meaning for them (one page serves all state), so it collapses
 # to the SPA base and only the query string survives —
 # /api/gmail/messages/?query=x → /gmail/?query=x. Unmapped apps keep
-# the /<app>/<sub> rewrite.
-SPA_BASES = {'gmail': '/gmail'}
+# the /<app>/<sub> rewrite. The value is the exact SPA page path —
+# keep or omit the trailing slash to match that app's URLconf
+# (single_pages mounts at root: /twister has no slash).
+SPA_BASES = {'gmail': '/gmail/', 'single_pages': '/twister'}
 
 
 def spa_url_for(request):
@@ -90,7 +92,7 @@ def spa_url_for(request):
     if path.startswith(prefix):
         app, _, sub = path[len(prefix):].partition('/')
         if app in SPA_BASES:
-            path = f'{SPA_BASES[app]}/'
+            path = SPA_BASES[app]
         else:
             if sub.startswith('dashboard'):
                 # The SPA mounts its dashboard at the app root.

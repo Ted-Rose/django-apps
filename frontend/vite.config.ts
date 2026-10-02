@@ -16,6 +16,7 @@ export default defineConfig({
         tasks: 'src/tasks/main.tsx',
         finance: 'src/finance/main.tsx',
         gmail: 'src/gmail/main.tsx',
+        single_pages: 'src/single_pages/main.tsx',
       },
       output: {
         entryFileNames: '[name]/[name].[hash].js',

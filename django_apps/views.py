@@ -19,7 +19,7 @@ def home(request):
 # --- Progressive Web App (PWA) endpoints ---
 
 # Bump this to force clients to refresh the service worker cache.
-PWA_CACHE_VERSION = '16'
+PWA_CACHE_VERSION = '17'
 
 
 def manifest(request):
@@ -156,7 +156,7 @@ def app_redirect(request, base, subpath=''):
     login_required: anonymous users are bounced to login by the
     destination page after the redirect, avoiding a double hop.
     """
-    prefix = f"/{base.strip('/')}/"
+    prefix = f"/{base.strip('/')}/" if base.strip('/') else '/'
     target = f'{prefix}{subpath}'
     if request.GET:
         target = f'{target}?{request.GET.urlencode()}'

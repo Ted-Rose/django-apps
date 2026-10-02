@@ -1,6 +1,7 @@
 # single_pages React Rewrite — third app on the shared platform
 
-> **Status**: 📋 Plan. The platform built for google_tasks
+> **Status**: ✅ Implemented (all stages merged at once — landed
+> straight at the post-cutover state). The platform built for google_tasks
 > (`frontend/` workspace, `django_apps/api.py` NinjaAPI,
 > `spa_shell`/`react_app`/`app_redirect` in `django_apps/views.py`,
 > django-vite, generated types, TanStack Query,

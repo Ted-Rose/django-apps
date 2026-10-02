@@ -20,16 +20,18 @@ same database. PythonAnywhere
 | `gmail/` | Gmail reader ("Gmail to audio") — feature app split out of `google_api`. React SPA at `/gmail/` (`frontend/src/gmail/`), API at `/api/gmail/`; no models. See `gmail/AGENTS.md` |
 | `google_tasks/` | Largest app. Google Tasks bidirectional sync with local-only features (stars, labels, dividers, archive/trash, manual ordering). See `google_tasks/AGENTS.md` and `google_tasks/README.md` |
 | `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits, low-balance alerts, rule-based auto-categorization (`services/rules.py`). React SPA at `/finance/` (`frontend/src/finance/`), API at `/api/finance/`; `views.py` keeps only `requisition_callback`. See `finance/AGENTS.md` |
-| `single_pages/` | One-off pages that don't merit their own app (twister, spoki.lv proxy) |
+| `single_pages/` | One-off pages that don't merit their own app: twister (Latvian TTS game) + spoki.lv proxy. React SPA mounted at root paths `/twister` + `/spoki/` (`frontend/src/single_pages/`), API at `/api/single_pages/`; no models/templates/views. See `single_pages/AGENTS.md` |
 | `terraform/` | All GCP infra: Cloud Run service + jobs, Cloud Scheduler triggers, secrets refs, Artifact Registry, GCS audio bucket, WIF |
 | `frontend/` | React rewrite workspace: Vite 5 + React 19 + TS, one entry per app (`src/tasks/`); builds to gitignored `frontend_dist/` (Vite manifest + hashed assets) |
 | `docs/` | `QUICKSTART.md` (GCP deploy runbook), `changelog.md`, `coding_diary.md` (dev log), `plans/` (design docs) |
 
 URL routing (`django_apps/urls.py`): `google_api`, `gmail` (legacy
 `/gmail-to-audio` 301s to `/gmail/`) and `single_pages` mount at
-root; `google_tasks` under `/tasks/`; `finance` under `/finance/`;
-`admin/` is Django admin (also used for logout via
-`/admin/logout/`).
+root — single_pages owns `/twister`, `/spoki/` and the `/app/*`
+301s, and must never add a root-level `<path:subpath>` catch-all
+(it would shadow every later include); `google_tasks` under
+`/tasks/`; `finance` under `/finance/`; `admin/` is Django admin
+(also used for logout via `/admin/logout/`).
 
 ## Environment & settings
 
@@ -140,10 +142,9 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   (`label`, `url`, `icon`, `btn_class`) rendered by
   `django_apps/templates/components/burger_menu.html`. Copy this pattern
   for new pages.
-- **Templates/static**: Bootstrap 5 + Bootstrap Icons via CDN; app
-  templates under `<app>/templates/` (finance namespaces into a
-  subdir; google_api/single_pages are flat). google_tasks
-  has no templates — its UI is the React SPA (below).
+- **Templates/static**: Bootstrap 5 + Bootstrap Icons via CDN;
+  templates live only in `django_apps/templates/` (home.html,
+  spa_shell.html, pwa/) — every app UI is the React SPA (below).
 - **Sync pattern**: external objects are mirrored locally via
   `update_or_create` keyed on the remote ID (`task_id`, `list_id`,
   `transaction_id`, `account_id`, `requisition_id` are unique-ish keys).
@@ -154,13 +155,16 @@ Never log tokens/credentials; Terraform state lives in GCS backend
 - **React SPA mounts**: `django_apps.views.spa_shell(request, entry,
   title)` renders `spa_shell.html` (login + CSRF + `json_script`
   bootstrap) for a `frontend/src/<entry>/main.tsx` Vite entry. The
-  google_tasks, finance and gmail cutovers are complete: `/tasks/`,
-  `/finance/` and `/gmail/` ARE the SPAs (`BrowserRouter
-  basename='/<app>'`), `<path:subpath>` catch-alls serve deep links,
-  non-GET/HEAD requests to the old mutation URLs 404, and
-  `/<app>/app/*` 301-redirects to `/<app>/*` (gmail's legacy
-  `/gmail-to-audio` 301s to `/gmail/` instead — it never had a
-  staging mount).
+  google_tasks, finance, gmail and single_pages cutovers are
+  complete: `/tasks/`, `/finance/` and `/gmail/` ARE the SPAs
+  (`BrowserRouter basename='/<app>'`), `<path:subpath>` catch-alls
+  serve deep links, non-GET/HEAD requests to the old mutation URLs
+  404, and `/<app>/app/*` 301-redirects to `/<app>/*` (gmail's
+  legacy `/gmail-to-audio` 301s to `/gmail/` instead — it never had
+  a staging mount). single_pages is the root-mounted exception: the
+  shell serves only the explicit `/twister` + `/spoki/` routes (no
+  basename, no root catch-all) and `/app/*` 301s to `/*`; a 401 from
+  `/api/single_pages/*` collapses to `/twister` via `SPA_BASES`.
   New apps should mount the shell at `/<app>/` the same way —
   mutations live in the ninja API (`<app>/api.py` →
   `/api/<app>/…`); see `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`.

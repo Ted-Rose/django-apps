@@ -8,6 +8,7 @@ from django_apps.me import router as me_router
 from gmail.api import router as gmail_router
 from google_tasks.api import router as tasks_router
 from finance.api import router as finance_router
+from single_pages.api import router as sp_router
 
 app_name = 'main'
 
@@ -15,6 +16,7 @@ api.add_router('/me/', me_router)
 api.add_router('/gmail/', gmail_router)
 api.add_router('/tasks/', tasks_router)
 api.add_router('/finance/', finance_router)
+api.add_router('/single_pages/', sp_router)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
