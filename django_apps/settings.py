@@ -60,11 +60,13 @@ if IS_CLOUD_ENVIRONMENT:
     # 'require' is only the default (Vercel needs e.g. verify-full
     # with the build-generated ca.pem).
     db_config['OPTIONS'].setdefault('sslmode', 'require')
-    # Reuse DB connections where the process is long-lived. On Vercel
-    # (serverless) each instance is a separate process, so persistent
-    # connections hold Postgres slots open long after requests finish
-    # and can exhaust Aiven's max_connections.
-    db_config['CONN_MAX_AGE'] = 0 if IS_VERCEL_ENVIRONMENT else 600
+    # Never hold persistent DB connections: Cloud Run (2 gunicorn
+    # workers x 4 threads) kept up to 8 idle connections open per
+    # instance for 10 min, which together with Vercel lambdas and the
+    # Cloud Run jobs exhausted Aiven's max_connections. If DATABASE_URL
+    # is ever pointed at Aiven's PgBouncer pool, holding connections
+    # becomes cheap and this can be raised again.
+    db_config['CONN_MAX_AGE'] = 0
     DATABASES = {'default': db_config}
 
     GOCARDLESS_SECRET_ID = get_env_str('GOCARDLESS_SECRET_ID')
