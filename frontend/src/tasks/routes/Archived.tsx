@@ -4,7 +4,6 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import { BurgerMenu } from '../../shared/components/BurgerMenu';
-import LanguageSwitcher from '../../shared/components/LanguageSwitcher';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import { fetchArchived, type TaskOut } from '../api';
@@ -124,7 +123,6 @@ export default function Archived() {
             )}
           </div>
           <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <LanguageSwitcher />
             <Link
               to="/search"
               className="btn btn-outline-light btn-sm"

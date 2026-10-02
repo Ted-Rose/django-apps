@@ -20,6 +20,12 @@
   gap: 0.5rem;
 }
 
+/* Desktop shows items inline — no divider between them and the
+   language switcher. */
+.burger-menu-divider {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .burger-icon {
     display: block;
@@ -49,5 +55,30 @@
     width: 100%;
     text-align: left;
     justify-content: flex-start;
+  }
+
+  .burger-menu-divider {
+    display: block;
+    width: 100%;
+    margin: 0.25rem 0;
+  }
+
+  /* Language switcher: one full-width row of centered toggles. */
+  .burger-menu-items .btn-group {
+    display: flex;
+    width: 100%;
+  }
+
+  .burger-menu-items .btn-group .btn {
+    width: auto;
+    flex: 1;
+    text-align: center;
+  }
+
+  /* The dropdown is white — btn-outline-light would be invisible, so
+     the inactive language button gets a dark outline instead. */
+  .burger-menu-items .btn-group .btn-outline-light {
+    color: #212529;
+    border-color: #6c757d;
   }
 }

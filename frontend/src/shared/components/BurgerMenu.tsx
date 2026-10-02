@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from './LanguageSwitcher';
 import './BurgerMenu.css';
 
 /**
@@ -15,6 +16,10 @@ import './BurgerMenu.css';
  * `url` renders a plain <a> (full-page navigation out of the SPA —
  * e.g. Home or /admin/logout/); `to` renders a react-router <Link>
  * for in-SPA navigation (added in finance Stage 1).
+ *
+ * The language switcher lives inside the items container: on desktop
+ * it renders inline with the menu items, on mobile it collapses into
+ * the burger dropdown instead of taking up permanent navbar space.
  */
 export interface BurgerMenuItem {
   label: string;
@@ -127,6 +132,8 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
             </button>
           ),
         )}
+        {visibleItems.length > 0 && <hr className="burger-menu-divider" />}
+        <LanguageSwitcher />
       </div>
     </div>
   );

@@ -11,7 +11,8 @@ import queryClient from '../queryClient';
 import { pushToast } from '../toasts';
 
 /**
- * EN/LV toggle rendered in the navbars. Switching applies instantly
+ * EN/LV toggle rendered inside the burger menu (inline on desktop,
+ * in the dropdown on mobile). Switching applies instantly
  * (i18n.changeLanguage + a lang_override localStorage key so a
  * reload keeps it) and PATCHes /api/me/ so the stored per-user pref
  * — and job-rendered notifications — follow. All queries are

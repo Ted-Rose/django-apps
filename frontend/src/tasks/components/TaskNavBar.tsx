@@ -6,7 +6,6 @@ import {
   type BurgerMenuItem,
 } from '../../shared/components/BurgerMenu';
 import Dropdown from '../../shared/components/Dropdown';
-import LanguageSwitcher from '../../shared/components/LanguageSwitcher';
 import type { DashboardOut } from '../api';
 import SecondaryLabelDropdown from './SecondaryLabelDropdown';
 
@@ -327,7 +326,6 @@ export function TaskNavBar({
           </div>
         )}
         <div className="ms-auto d-flex flex-row align-items-center gap-2">
-          <LanguageSwitcher />
           <Link
             to="/search"
             className="btn btn-outline-light btn-sm"

@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import { BurgerMenu } from '../../shared/components/BurgerMenu';
-import LanguageSwitcher from '../../shared/components/LanguageSwitcher';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import { fetchSearchTasks, type TaskOut } from '../api';
@@ -134,7 +133,6 @@ export default function Search() {
             </Link>
           </div>
           <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <LanguageSwitcher />
             <BurgerMenu items={burgerItems} />
           </div>
         </div>

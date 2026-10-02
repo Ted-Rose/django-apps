@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import i18n from 'i18next';
 import { BurgerMenu, type BurgerMenuItem } from './BurgerMenu';
 import NavBar from './NavBar';
@@ -43,6 +43,17 @@ describe('BurgerMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: /Do thing/ }));
     expect(onClick).toHaveBeenCalledOnce();
     expect(menu).not.toHaveClass('show');
+  });
+
+  it('renders the language switcher inside the menu items', () => {
+    const { container } = render(<BurgerMenu items={items} />);
+    const menu = container.querySelector('.burger-menu-items')!;
+    expect(
+      within(menu as HTMLElement).getByRole('button', { name: 'EN' }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu as HTMLElement).getByRole('button', { name: 'LV' }),
+    ).toBeInTheDocument();
   });
 });
 

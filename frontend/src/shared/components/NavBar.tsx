@@ -1,13 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import { BurgerMenu, type BurgerMenuItem } from './BurgerMenu';
-import LanguageSwitcher from './LanguageSwitcher';
 
 /**
  * Shared Bootstrap navbar matching the site look
  * (`navbar-dark bg-primary`, "Tedis's Tools" brand — see
  * django_apps/templates/home.html). Burger menu items are passed via
  * props, mirroring the `burger_menu_items` context that template
- * views build.
+ * views build. The burger menu itself holds the language switcher,
+ * so it renders even when there are no items.
  */
 interface NavBarProps {
   /** App/page title shown next to the brand, e.g. "Tasks". */
@@ -28,9 +28,8 @@ export function NavBar({ title, user, items = [] }: NavBarProps) {
         </a>
         {title && <span className="navbar-text">{title}</span>}
         <div className="ms-auto d-flex align-items-center gap-2">
-          <LanguageSwitcher />
           {user && <span className="navbar-text">{user}</span>}
-          {items.length > 0 && <BurgerMenu items={items} />}
+          <BurgerMenu items={items} />
         </div>
       </div>
     </nav>
