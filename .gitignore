@@ -14,8 +14,7 @@ private_settings.json
 terraform/.terraform/
 terraform/tfplan
 terraform/.terraform.lock.hcl
-terraform/terraform.tfstate
-terraform/terraform.tfstate.backup
+terraform/terraform.tfstate*
 
 # Compiled gettext catalogs are generated at build time (compile_po)
 *.mo

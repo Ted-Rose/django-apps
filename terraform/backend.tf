@@ -1,6 +1,6 @@
 terraform {
   backend "gcs" {
-    bucket = "gmail-vercel-tf-state"
+    bucket = "django-apps-7345-tf-state"
     prefix = "terraform/state"
   }
 }

@@ -5,7 +5,7 @@
 Personal Django 4.2 monolith ("collection of random Django apps") —
 several small apps sharing one project and one (Aiven) Postgres
 database. GitHub: `Ted-Rose/django-apps`. Deployed to two live targets:
-GCP Cloud Run (project `gmail-vercel`, region `europe-west3`) and
+GCP Cloud Run (project `django-apps-7345`, region `europe-west3`) and
 Vercel (`vercel.json`, `build_files.sh`), where the same Django app
 serves front-end traffic to reduce Cloud Run costs — both hit the
 same database. PythonAnywhere
@@ -120,7 +120,7 @@ Gitignored and must stay that way: `private_settings.json`,
 `google_api/app_secrets.json`, `ca.pem`, `terraform/terraform.tfstate*`,
 `terraform/tfplan`, `terraform/.terraform/`, `settings.json`, `data/`.
 Never log tokens/credentials; Terraform state lives in GCS backend
-(`gmail-vercel-tf-state`).
+(`django-apps-7345-tf-state`).
 
 ## Conventions
 

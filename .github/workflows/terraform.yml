@@ -23,10 +23,10 @@ permissions:
 concurrency: gcp-main
 
 env:
-  GCP_PROJECT_ID: gmail-vercel
+  GCP_PROJECT_ID: django-apps-7345
   TF_VAR_region: europe-west3
-  WIF_PROVIDER: projects/383533976302/locations/global/workloadIdentityPools/github-actions/providers/github
-  DEPLOY_SA: github-deployer@gmail-vercel.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/356166814755/locations/global/workloadIdentityPools/github-actions/providers/github
+  DEPLOY_SA: github-deployer@django-apps-7345.iam.gserviceaccount.com
 
 jobs:
   terraform:

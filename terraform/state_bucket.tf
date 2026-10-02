@@ -1,5 +1,5 @@
 resource "google_storage_bucket" "terraform_state" {
-  name                        = "gmail-vercel-tf-state"
+  name                        = "django-apps-7345-tf-state"
   location                    = "US-CENTRAL1"
   project                     = var.project_id
   force_destroy               = false

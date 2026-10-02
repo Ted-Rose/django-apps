@@ -23,7 +23,7 @@ Django's `<path:subpath>` catch-all already serves the shell on every
 | `VAPID_PUBLIC_KEY` | same as Cloud Run | **Must be identical on both deploys** — `PushSubscription` rows are shared via the DB; mismatched keys break pushes for browsers that subscribed on the other deploy |
 | `VAPID_PRIVATE_KEY` | same as Cloud Run | |
 | `VAPID_SUBJECT` | `mailto:<your-email>` | required by Web Push (contact URI) |
-| `GCS_AUDIO_BUCKET` | `gmail-vercel`-project audio bucket name | optional — only needed if `text_to_audio` is exercised via Vercel; the code logs an error if unset |
+| `GCS_AUDIO_BUCKET` | `django-apps-7345-audio-recordings` | optional — only needed if `text_to_audio` is exercised via Vercel; the code logs an error if unset |
 
 `VERCEL=1` is injected by Vercel automatically (build + runtime) — do
 not set it manually; it's what puts `settings.py` into cloud mode.

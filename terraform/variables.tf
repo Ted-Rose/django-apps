@@ -1,6 +1,6 @@
 variable "project_id" {
   type    = string
-  default = "gmail-vercel"
+  default = "django-apps-7345"
 }
 
 variable "region" {
@@ -11,5 +11,5 @@ variable "region" {
 
 variable "github_repo" {
   type    = string
-  default = "Ted-Rose/gmail-to-audio"
+  default = "Ted-Rose/django-apps"
 }

@@ -8,10 +8,10 @@ brew install --cask google-cloud-sdk  # macOS
 
 # Authenticate
 gcloud auth login
-gcloud config set project gmail-vercel
+gcloud config set project django-apps-7345
 
 # Verify permissions
-gcloud projects get-iam-policy gmail-vercel | grep $(gcloud config get-value account)
+gcloud projects get-iam-policy django-apps-7345 | grep $(gcloud config get-value account)
 ```
 
 ## Deploy in 3 Steps
@@ -48,10 +48,10 @@ git push origin main
 Get your Cloud Run URL:
 
 ```bash
-gcloud run services describe django-apps --region=europe-west3 --project=gmail-vercel --format='value(status.url)'
+gcloud run services describe django-apps --region=europe-west3 --project=django-apps-7345 --format='value(status.url)'
 ```
 
-Then go to: https://console.cloud.google.com/apis/credentials?project=gmail-vercel
+Then go to: https://console.cloud.google.com/apis/credentials?project=django-apps-7345
 
 Edit OAuth 2.0 Client ID → Add redirect URI:
 ```
@@ -82,13 +82,13 @@ the secrets like the bootstrap script:
 
 ```bash
 printf '%s' 'YOUR_VAPID_PUBLIC_KEY' | gcloud secrets create VAPID_PUBLIC_KEY \
-    --project=gmail-vercel --data-file=- --replication-policy=automatic
+    --project=django-apps-7345 --data-file=- --replication-policy=automatic
 
 printf '%s' 'YOUR_VAPID_PRIVATE_KEY' | gcloud secrets create VAPID_PRIVATE_KEY \
-    --project=gmail-vercel --data-file=- --replication-policy=automatic
+    --project=django-apps-7345 --data-file=- --replication-policy=automatic
 
 printf '%s' 'mailto:you@example.com' | gcloud secrets create VAPID_SUBJECT \
-    --project=gmail-vercel --data-file=- --replication-policy=automatic
+    --project=django-apps-7345 --data-file=- --replication-policy=automatic
 ```
 
 If they don't exist yet, `terraform plan` fails on the missing
@@ -98,13 +98,13 @@ data sources — create the three secrets, then re-run.
 
 ```bash
 # Watch GitHub Actions
-open https://github.com/Ted-Rose/gmail-to-audio/actions
+open https://github.com/Ted-Rose/django-apps/actions
 
 # Watch Cloud Run logs
-gcloud run services logs tail django-apps --region=europe-west3 --project=gmail-vercel
+gcloud run services logs tail django-apps --region=europe-west3 --project=django-apps-7345
 
 # Check service status
-gcloud run services describe django-apps --region=europe-west3 --project=gmail-vercel
+gcloud run services describe django-apps --region=europe-west3 --project=django-apps-7345
 ```
 
 ## Troubleshooting
@@ -113,12 +113,12 @@ gcloud run services describe django-apps --region=europe-west3 --project=gmail-v
 Install gcloud CLI (see Prerequisites above).
 
 ### "Permission denied" errors
-Ensure you have Owner/Editor role on gmail-vercel project.
+Ensure you have Owner/Editor role on django-apps-7345 project.
 
 ### Workflow files still show "PROJECT_NUMBER_PLACEHOLDER"
 The bootstrap script should update these automatically. If not, get project number:
 ```bash
-gcloud projects describe gmail-vercel --format='value(projectNumber)'
+gcloud projects describe django-apps-7345 --format='value(projectNumber)'
 ```
 
 Then manually update `.github/workflows/terraform.yml` and `.github/workflows/deploy.yml`.
