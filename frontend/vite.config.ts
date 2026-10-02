@@ -24,6 +24,13 @@ export default defineConfig({
     },
   },
   server: {
+    // Non-default port so another project's vite on :5173 can't
+    // shadow the dev-asset URLs django-vite emits — it must match
+    // dev_server_port in django_apps/settings.py (both honor the
+    // VITE_PORT env var). strictPort: fail loudly instead of picking
+    // a random port Django knows nothing about.
+    port: Number(process.env.VITE_PORT) || 5273,
+    strictPort: true,
     // Proxy everything to Django EXCEPT Vite-internal paths — both at
     // root (/@react-refresh, /@id/*, /@fs/*, /src/*, /node_modules/*)
     // and under the /static/ base (dev asset URLs are

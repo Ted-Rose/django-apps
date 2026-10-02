@@ -282,7 +282,10 @@ WHITENOISE_IMMUTABLE_FILE_TEST = r'\.[0-9A-Za-z_-]{8}\.'
 DJANGO_VITE = {
     'default': {
         'dev_mode': DEBUG and os.environ.get('VITE_DEV') == '1',
-        'dev_server_port': 5173,
+        # Non-default port so another project's vite on :5173 can't
+        # shadow these dev-asset URLs — must match server.port in
+        # frontend/vite.config.ts (both honor VITE_PORT).
+        'dev_server_port': int(os.environ.get('VITE_PORT', '5273')),
         'static_url_prefix': '',
         'manifest_path': os.path.join(
             BASE_DIR, 'frontend_dist', 'manifest.json'

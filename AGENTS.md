@@ -74,8 +74,11 @@ React dev loop (HMR, no rebuilds) — two terminals, browse `:8000`:
 
 ```bash
 VITE_DEV=1 python manage.py runserver   # django-vite dev_mode:
-                                        # vite_asset emits :5173 URLs
-npm run dev --prefix frontend           # vite dev server on :5173
+                                        # vite_asset emits :5273 URLs
+npm run dev --prefix frontend           # vite dev server on :5273
+                                        # (VITE_PORT overrides; not
+                                        # 5173 — avoids collisions
+                                        # with other projects' vite)
 ```
 
 Or `npx vite build --watch` (cwd `frontend/`) + a normal `runserver`

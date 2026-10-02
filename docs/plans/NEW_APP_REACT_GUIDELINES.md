@@ -347,7 +347,7 @@ npm run build --prefix frontend   # manifest gains the new key
 
 Manual: `VITE_DEV=1 python manage.py runserver` +
 `npm run dev --prefix frontend`, open
-`http://localhost:5173/<entry>/` — page renders, a mutation toasts,
+`http://localhost:5273/<entry>/` — page renders, a mutation toasts,
 a deep link `/<entry>/<page>/` loads directly.
 
 ## Out of scope for new apps

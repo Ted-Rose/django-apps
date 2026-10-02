@@ -6,8 +6,12 @@
     "configurations": [
         {
             // Same as above but with django-vite dev_mode on:
-            // {% vite_asset %} emits :5173 URLs, so run this together
+            // {% vite_asset %} emits :5273 URLs (dev_server_port in
+            // settings.py reads VITE_PORT), so run this together
             // with "Vite dev server" (or just use the compound).
+            // Port 5273 instead of vite's default 5173: another
+            // project's dev server on :5173 used to shadow these
+            // URLs and the page sat on "Loading React app…".
             "name": "Python Debugger: Django (VITE_DEV)",
             "type": "debugpy",
             "request": "launch",
@@ -18,13 +22,16 @@
             "autoStartBrowser": false,
             "program": "${workspaceFolder}/manage.py",
             "env": {
-                "VITE_DEV": "1"
+                "VITE_DEV": "1",
+                "VITE_PORT": "5273"
             }
         },
         {
-            // Runs `npm run dev` in frontend/ on :5173. Not itself
-            // debugged — vite is a long-running dev server, so it
-            // uses the integrated terminal.
+            // Runs `npm run dev` in frontend/ on :5273 (server.port in
+            // vite.config.ts reads VITE_PORT; strictPort makes it fail
+            // loudly rather than silently take another port). Not
+            // itself debugged — vite is a long-running dev server,
+            // so it uses the integrated terminal.
             "name": "Vite dev server",
             "type": "node",
             "request": "launch",
@@ -38,7 +45,8 @@
                 "dev"
             ],
             "env": {
-                "PATH": "${env:HOME}/.nvm/versions/node/v22.2.0/bin:${env:PATH}"
+                "PATH": "${env:HOME}/.nvm/versions/node/v22.2.0/bin:${env:PATH}",
+                "VITE_PORT": "5273"
             },
             "console": "integratedTerminal"
         }
@@ -46,7 +54,7 @@
     "compounds": [
         {
             // Full React dev loop: Django on :8000 with VITE_DEV=1
-            // plus vite on :5173. Browse http://localhost:8000/.
+            // plus vite on :5273. Browse http://localhost:8000/.
             "name": "Django + Vite",
             "configurations": [
                 "Python Debugger: Django (VITE_DEV)",
