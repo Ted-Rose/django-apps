@@ -28,8 +28,8 @@ body {
   --fin-surface: #ffffff;
   --fin-border: #e5e9ef;
   --fin-radius: 0.875rem;
-  --fin-shadow: 0 1px 2px rgba(16, 24, 40, 0.04),
-    0 1px 3px rgba(16, 24, 40, 0.07);
+  --fin-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.07);
   --fin-accent: #0d6efd;
   background-color: var(--fin-bg);
   min-height: calc(100vh - 160px);
@@ -75,7 +75,10 @@ body {
   border: 1px solid var(--fin-border);
   border-radius: 2rem;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background-color 0.15s;
 }
 .fin-chip:hover {
   border-color: var(--fin-accent);
@@ -120,12 +123,7 @@ body {
 /* Shimmer loading blocks — replaces bare spinners. */
 .fin-skeleton {
   border-radius: 0.5rem;
-  background: linear-gradient(
-    90deg,
-    #eceff3 25%,
-    #f7f9fb 50%,
-    #eceff3 75%
-  );
+  background: linear-gradient(90deg, #eceff3 25%, #f7f9fb 50%, #eceff3 75%);
   background-size: 200% 100%;
   animation: fin-shimmer 1.4s ease-in-out infinite;
 }
@@ -182,8 +180,7 @@ body {
   max-width: 18rem;
 }
 .tx-table .tx-cell-date,
-.tx-table .tx-cell-amount,
-.tx-table .tx-cell-actions {
+.tx-table .tx-cell-amount {
   white-space: nowrap;
 }
 
@@ -280,10 +277,6 @@ body {
   .tx-table .tx-cell-category {
     order: 6;
     margin-left: auto;
-  }
-  /* Line 3 right end: the row's create-rule action button. */
-  .tx-table .tx-cell-actions {
-    order: 7;
   }
   /* The empty-state cell spans the card's full width. */
   .tx-table > tbody > tr > td[colspan] {

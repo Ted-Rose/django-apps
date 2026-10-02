@@ -4,7 +4,8 @@ import Dropdown from '../../shared/components/Dropdown';
 import CategoryBadge from './CategoryBadge';
 import MoneyText from './MoneyText';
 import { fmtDate } from '../../shared/format';
-import type { TransactionOut, TransactionsOut } from '../api';
+import { useAssignCategory, useClearManualCategory } from '../mutations';
+import type { CategoryOut, TransactionOut, TransactionsOut } from '../api';
 
 /**
  * Search-param overrides the route merges via `useSearchParams` —
@@ -210,7 +211,9 @@ export function TransactionTable({
               column="category"
               sort={sort}
               direction={direction}
-              filtered={Boolean(data.selected_category)}
+              filtered={
+                Boolean(data.selected_category) || Boolean(data.selected_source)
+              }
               menuStyle={scrollableMenu}
             >
               <SortItem
@@ -249,6 +252,24 @@ export function TransactionTable({
                   onClick={() => onUpdate({ category: String(category.id) })}
                 />
               ))}
+              <li>
+                <hr className="dropdown-divider" />
+              </li>
+              <li>
+                <h6 className="dropdown-header">
+                  {t('transactions.sourceHeader')}
+                </h6>
+              </li>
+              <FilterItem
+                label={t('transactions.allSources')}
+                active={!data.selected_source}
+                onClick={() => onUpdate({ source: null })}
+              />
+              <FilterItem
+                label={t('transactions.manualOnly')}
+                active={data.selected_source === 'manual'}
+                onClick={() => onUpdate({ source: 'manual' })}
+              />
             </ColumnHeader>
             <ColumnHeader
               label={t('transactions.columns.amount')}
@@ -268,13 +289,6 @@ export function TransactionTable({
                 onClick={() => setSort('amount', 'asc')}
               />
             </ColumnHeader>
-            {/* No header chip on mobile — the action lives in the
-                row card itself. */}
-            <th className="d-none d-lg-table-cell text-end">
-              <span className="visually-hidden">
-                {t('transactions.columns.actions')}
-              </span>
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -283,6 +297,7 @@ export function TransactionTable({
               <TransactionRow
                 key={tx.id}
                 tx={tx}
+                categories={data.categories}
                 canAddRule={hasCategories}
                 ruleLoading={ruleLoadingId === tx.id}
                 onAddRule={onAddRule}
@@ -290,7 +305,7 @@ export function TransactionTable({
             ))
           ) : (
             <tr>
-              <td colSpan={7} className="text-center text-muted py-4">
+              <td colSpan={6} className="text-center text-muted py-4">
                 {data.filters_active
                   ? t('transactions.emptyFiltered')
                   : t('transactions.emptyDefault')}
@@ -360,7 +375,7 @@ function SortItem({
   active,
   onClick,
 }: {
-  label: string;
+  label: ReactNode;
   active: boolean;
   onClick: () => void;
 }) {
@@ -403,9 +418,7 @@ function CreditorMenuItems({
   return (
     <>
       <li>
-        <h6 className="dropdown-header">
-          {t('transactions.filterHeader')}
-        </h6>
+        <h6 className="dropdown-header">{t('transactions.filterHeader')}</h6>
       </li>
       <li className="px-3 pb-1">
         <input
@@ -436,16 +449,20 @@ function CreditorMenuItems({
 
 function TransactionRow({
   tx,
+  categories,
   canAddRule,
   ruleLoading,
   onAddRule,
 }: {
   tx: TransactionOut;
+  categories: CategoryOut[];
   canAddRule: boolean;
   ruleLoading: boolean;
   onAddRule: (tx: TransactionOut) => void;
 }) {
   const { t } = useTranslation('finance');
+  const assign = useAssignCategory();
+  const clearManual = useClearManualCategory();
   // booking_date is a date-only string; appending T00:00:00 parses it
   // as local midnight (the template's local-datetime behavior)
   // instead of UTC midnight, which toLocaleDateString would roll
@@ -453,6 +470,7 @@ function TransactionRow({
   const bookingDate = `${tx.booking_date}T00:00:00`;
   // Money stays a string — read only the sign for coloring.
   const negative = tx.amount.startsWith('-');
+  const currentId = tx.effective_category?.id ?? null;
   return (
     <tr>
       <td className="tx-cell-date">{fmtDate(bookingDate)}</td>
@@ -461,12 +479,105 @@ function TransactionRow({
       </td>
       <td className="tx-cell-desc">{tx.remittance_information || '-'}</td>
       <td className="tx-cell-counterparty">{tx.counterparty || '-'}</td>
+      {/* The badge itself is the assign-category dropdown toggle —
+          Monarch/YNAB-style: click the pill, pick a category. The
+          menu also carries the per-row rule action and, for manual
+          overrides, the revert item. */}
       <td className="tx-cell-category">
-        {tx.effective_category ? (
-          <CategoryBadge category={tx.effective_category} />
-        ) : (
-          <span className="text-muted">-</span>
-        )}
+        <Dropdown
+          buttonClassName="tx-cat-toggle"
+          menuStyle={{ maxHeight: '300px', overflowY: 'auto' }}
+          ariaLabel={t('transactions.categoryMenuAria', { id: tx.id })}
+          label={
+            tx.effective_category ? (
+              <>
+                <CategoryBadge category={tx.effective_category} />
+                {tx.category_is_manual ? (
+                  <i
+                    className="bi bi-pencil-fill tx-manual-mark"
+                    title={t('transactions.manualMark')}
+                    aria-hidden="true"
+                  />
+                ) : null}
+              </>
+            ) : (
+              <span className="tx-cat-empty">
+                {t('transactions.setCategory')}
+              </span>
+            )
+          }
+        >
+          <li>
+            <h6 className="dropdown-header">
+              {t('transactions.assignCategory')}
+            </h6>
+          </li>
+          {categories.map((category) => (
+            <FilterItem
+              key={category.id}
+              label={
+                <>
+                  {currentId === category.id && (
+                    <i className="bi bi-check me-1" aria-hidden="true" />
+                  )}
+                  {category.name}
+                </>
+              }
+              active={currentId === category.id}
+              onClick={() =>
+                assign.mutate({ txId: tx.id, categoryId: category.id })
+              }
+            />
+          ))}
+          <FilterItem
+            label={t('transactions.noCategory')}
+            active={currentId === null}
+            onClick={() => assign.mutate({ txId: tx.id, categoryId: null })}
+          />
+          <li>
+            <hr className="dropdown-divider" />
+          </li>
+          <li>
+            <button
+              type="button"
+              className="dropdown-item"
+              title={canAddRule ? undefined : t('transactions.addRuleDisabled')}
+              aria-label={t('transactions.addRuleAria', { id: tx.id })}
+              disabled={!canAddRule || ruleLoading}
+              onClick={() => onAddRule(tx)}
+            >
+              {ruleLoading ? (
+                <span
+                  className="spinner-border spinner-border-sm me-1"
+                  role="status"
+                />
+              ) : (
+                <i className="bi bi-tag me-1" aria-hidden="true" />
+              )}
+              {t('transactions.createRuleFromTx')}
+            </button>
+          </li>
+          {tx.category_is_manual && (
+            <>
+              <li>
+                <hr className="dropdown-divider" />
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className="dropdown-item"
+                  onClick={() => clearManual.mutate(tx.id)}
+                >
+                  <i
+                    className="bi bi-arrow-counterclockwise me-1"
+                    aria-hidden="true"
+                  />
+                  {t('transactions.revertToAutomatic')}
+                </button>
+              </li>
+            </>
+          )}
+        </Dropdown>
       </td>
       <td
         className={`tx-cell-amount text-end ${
@@ -474,26 +585,6 @@ function TransactionRow({
         }`}
       >
         <MoneyText amount={tx.amount} currency={tx.currency} />
-      </td>
-      <td className="tx-cell-actions text-end">
-        <button
-          type="button"
-          className="btn btn-sm tx-rule-btn"
-          title={
-            canAddRule
-              ? t('transactions.addRule')
-              : t('transactions.addRuleDisabled')
-          }
-          aria-label={t('transactions.addRuleAria', { id: tx.id })}
-          disabled={!canAddRule || ruleLoading}
-          onClick={() => onAddRule(tx)}
-        >
-          {ruleLoading ? (
-            <span className="spinner-border spinner-border-sm" role="status" />
-          ) : (
-            <i className="bi bi-tag" aria-hidden="true" />
-          )}
-        </button>
       </td>
     </tr>
   );

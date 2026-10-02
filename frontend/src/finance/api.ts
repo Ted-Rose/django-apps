@@ -44,10 +44,9 @@ export type CategorySaveIn = components['schemas']['CategorySaveIn'];
 export type PushConfigOut = components['schemas']['PushConfigOut'];
 export type PushSubscribeIn = components['schemas']['PushSubscribeIn'];
 export type PushUnsubscribeIn = components['schemas']['PushUnsubscribeIn'];
-export type BalanceAlertSaveIn =
-  components['schemas']['BalanceAlertSaveIn'];
-export type NotificationsReadIn =
-  components['schemas']['NotificationsReadIn'];
+export type BalanceAlertSaveIn = components['schemas']['BalanceAlertSaveIn'];
+export type NotificationsReadIn = components['schemas']['NotificationsReadIn'];
+export type AssignCategoryIn = components['schemas']['AssignCategoryIn'];
 export type MessageOut = components['schemas']['MessageOut'];
 export type SuccessOut = components['schemas']['SuccessOut'];
 export type ToggleBalanceCheckOut =
@@ -73,6 +72,8 @@ export interface TransactionParams {
   category?: string | null;
   creditor?: string | null;
   q?: string | null;
+  /** 'manual' = audit view of manual category overrides. */
+  source?: string | null;
   sort?: string | null;
   direction?: string | null;
   page?: number | string | null;
@@ -91,6 +92,7 @@ export function fetchTransactions(
   if (params.category) qs.set('category', params.category);
   if (params.creditor) qs.set('creditor', params.creditor);
   if (params.q) qs.set('q', params.q);
+  if (params.source) qs.set('source', params.source);
   if (params.sort) qs.set('sort', params.sort);
   if (params.direction) qs.set('direction', params.direction);
   if (params.page != null) qs.set('page', String(params.page));

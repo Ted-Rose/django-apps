@@ -24,6 +24,7 @@ import { ApiError, errorDetail } from '../shared/api/errors';
 import { serverText } from '../shared/i18n';
 import { pushToast } from '../shared/toasts';
 import type {
+  AssignCategoryIn,
   BalanceAlertSaveIn,
   CategorySaveIn,
   ConnectIn,
@@ -506,6 +507,62 @@ export function useSaveLimit() {
         error instanceof ApiError && error.status === 409
           ? errorDetail(error)
           : t('mutations.limitSaveFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/transactions/{id}/category/ — writes the
+ * caller's manual `UserTransactionCategory` row (`is_manual`,
+ * rules never touch it). `categoryId: null` locks the transaction
+ * as uncategorized instead.
+ */
+export function useAssignCategory() {
+  const { t } = useTranslation('finance');
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: { txId: number; categoryId: number | null }) =>
+      apiPost<MessageOut>(
+        `/api/finance/transactions/${variables.txId}/category/`,
+        { category: variables.categoryId } satisfies AssignCategoryIn,
+      ),
+    onSuccess: (data) => {
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        t('mutations.categoryAssignFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/transactions/{id}/category/clear/ — unsets
+ * `is_manual` and re-runs the caller's rules on that one
+ * transaction, so the badge shows the rules' result immediately.
+ */
+export function useClearManualCategory() {
+  const { t } = useTranslation('finance');
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (txId: number) =>
+      apiPost<MessageOut>(`/api/finance/transactions/${txId}/category/clear/`),
+    onSuccess: (data) => {
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        t('mutations.categoryRevertFailed', { detail: errorDetail(error) }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),

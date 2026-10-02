@@ -59,6 +59,7 @@ function makeTransactions(
     selected_account: null,
     selected_category: '',
     selected_creditor: '',
+    selected_source: '',
     search_query: '',
     sort: 'date',
     direction: 'desc',
@@ -126,8 +127,20 @@ describe('Transactions', () => {
     expect(
       screen.getByRole('cell', { name: 'Everyday account' }),
     ).toBeInTheDocument();
-    // Category badge (name) and the uncategorized dash.
-    expect(screen.getByRole('cell', { name: 'Housing' })).toBeInTheDocument();
+    // Category badge (name) and the uncategorized placeholder — the
+    // badge is the assign-category dropdown toggle. (The name also
+    // appears in closed dropdown menus, so assert on the badge
+    // element itself.)
+    const firstRow = screen
+      .getByRole('cell', { name: 'Rent January' })
+      .closest('tr') as HTMLElement;
+    const secondRow = screen
+      .getByRole('cell', { name: '-' })
+      .closest('tr') as HTMLElement;
+    expect(firstRow.querySelector('.fin-cat-badge')).toHaveTextContent(
+      'Housing',
+    );
+    expect(within(secondRow).getByText('Set category')).toBeInTheDocument();
     // Amount keeps the raw string + currency, signed colored cell.
     const amountCell = screen.getByRole('cell', { name: '-500.00 EUR' });
     expect(amountCell).toHaveClass('text-danger');
@@ -153,7 +166,6 @@ describe('Transactions', () => {
       'tx-cell-counterparty',
       'tx-cell-category',
       'tx-cell-amount',
-      'tx-cell-actions',
     ]) {
       expect(row.querySelector(`.${cls}`)).not.toBeNull();
     }
@@ -446,8 +458,15 @@ describe('Transactions', () => {
       changes: [],
     });
     renderTransactions();
+    // The category badge opens the per-row menu; the rule action is
+    // a menu item at its bottom.
     fireEvent.click(
       await screen.findByRole('button', {
+        name: 'Change category for transaction 1',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
         name: 'Create categorization rule for transaction 1',
       }),
     );
@@ -477,7 +496,7 @@ describe('Transactions', () => {
     );
   });
 
-  it('disables the row rule button when no categories exist', async () => {
+  it('disables the rule menu item when no categories exist', async () => {
     mockedApiGet.mockResolvedValue(
       makeTransactions({
         count: 1,
@@ -486,11 +505,103 @@ describe('Transactions', () => {
       }),
     );
     renderTransactions();
-    expect(
+    fireEvent.click(
       await screen.findByRole('button', {
+        name: 'Change category for transaction 1',
+      }),
+    );
+    expect(
+      screen.getByRole('button', {
         name: 'Create categorization rule for transaction 1',
       }),
     ).toBeDisabled();
+  });
+
+  it('assigns a category from the badge dropdown menu', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeTransactions({
+        count: 1,
+        transactions: [makeTransaction({ effective_category: null })],
+      }),
+    );
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Category "Housing" assigned.',
+    });
+    renderTransactions();
+    // Uncategorized rows show a "Set category" placeholder toggle.
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Change category for transaction 1',
+      }),
+    );
+    const menu = document.querySelector('.dropdown-menu.show');
+    expect(menu).not.toBeNull();
+    fireEvent.click(
+      within(menu as HTMLElement).getByRole('button', {
+        name: 'Housing',
+      }),
+    );
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/transactions/1/category/',
+        { category: 3 },
+      ),
+    );
+    expect(
+      await screen.findByText('Category "Housing" assigned.'),
+    ).toBeInTheDocument();
+  });
+
+  it('marks manual overrides and offers revert in the menu', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeTransactions({
+        count: 1,
+        transactions: [makeTransaction({ category_is_manual: true })],
+      }),
+    );
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Reverted to automatic categorization.',
+    });
+    renderTransactions();
+    const toggle = await screen.findByRole('button', {
+      name: 'Change category for transaction 1',
+    });
+    expect(toggle.querySelector('.bi-pencil-fill')).not.toBeNull();
+    fireEvent.click(toggle);
+    fireEvent.click(
+      screen.getByRole('button', { name: /Revert to automatic/ }),
+    );
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/transactions/1/category/clear/',
+      ),
+    );
+  });
+
+  it('filters to manual overrides via the source menu item', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeTransactions({
+        selected_source: 'manual',
+        filters_active: true,
+      }),
+    );
+    renderTransactions();
+    await screen.findByRole('button', { name: 'Category' });
+    const menu = openHeaderMenu('Category');
+    fireEvent.click(menu.getByRole('button', { name: 'Manual only' }));
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenLastCalledWith(
+        '/api/finance/transactions/?source=manual',
+      ),
+    );
+    // The audit view renders a removable filter chip.
+    expect(
+      await screen.findByRole('button', {
+        name: 'Remove filter: Source: manual',
+      }),
+    ).toBeInTheDocument();
   });
 
   it('shows an error alert with a working retry', async () => {

@@ -219,7 +219,13 @@ class UserTransactionCategory(models.Model):
     category = models.ForeignKey(
         Category,
         on_delete=models.CASCADE,
-        related_name='transaction_assignments'
+        related_name='transaction_assignments',
+        null=True,
+        blank=True,
+        help_text=(
+            'NULL only on manual rows that lock the transaction '
+            'as uncategorized'
+        ),
     )
     is_manual = models.BooleanField(
         default=False,
@@ -232,8 +238,9 @@ class UserTransactionCategory(models.Model):
         unique_together = ('user', 'transaction')
 
     def __str__(self):
+        category = self.category.name if self.category else 'None'
         return (
-            f'{self.user.username}: {self.category.name} '
+            f'{self.user.username}: {category} '
             f'on {self.transaction}'
         )
 

@@ -22,6 +22,7 @@ from finance.models import (
     Requisition,
     TransactionLimit,
     UserAccountPreference,
+    UserTransactionCategory,
 )
 from finance.services.categories import effective_category_for
 from finance.services.gocardless import GoCardlessError
@@ -508,6 +509,137 @@ class TransactionsApiTests(ApiTestCase):
         make_transaction(foreign, 't-x', '-9.00')
         resp = self.client.get(f'{self.API}/transactions/')
         self.assertEqual(resp.json()['count'], 0)
+
+
+class ManualCategoryApiTests(ApiTestCase):
+    """The assign/clear endpoints write per-user is_manual rows and
+    `?source=manual` filters the list to overridden transactions."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.category = make_category(self.user)
+        self.tx = make_transaction(self.account, 't-1', '-10.00')
+        self.client.force_login(self.user)
+
+    def test_assign_contract_and_flag_in_payload(self):
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/',
+            {'category': self.category.pk},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        self.assertEqual(
+            resp.json()['message'], 'Category "Groceries" assigned.'
+        )
+        self.assertEqual(resp.json()['code'], 'categoryAssigned')
+        self.assertEqual(
+            resp.json()['params'], {'name': 'Groceries'}
+        )
+
+        resp = self.client.get(f'{self.API}/transactions/')
+        row = resp.json()['transactions'][0]
+        self.assertEqual(row['category_is_manual'], True)
+        self.assertEqual(
+            row['effective_category']['name'], 'Groceries'
+        )
+
+    def test_clear_contract(self):
+        make_assignment(
+            self.user, self.tx, self.category, is_manual=True
+        )
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/clear/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        self.assertEqual(
+            resp.json()['message'],
+            'Reverted to automatic categorization.',
+        )
+        self.assertEqual(resp.json()['code'], 'categoryReverted')
+
+        resp = self.client.get(f'{self.API}/transactions/')
+        row = resp.json()['transactions'][0]
+        self.assertFalse(row['category_is_manual'] or False)
+
+    def test_assign_404_on_foreign_transaction(self):
+        req = make_requisition(self.other, 'req-b')
+        foreign = make_account(self.other, req, 'acc-b')
+        tx = make_transaction(foreign, 't-x', '-9.00')
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/category/',
+            {'category': self.category.pk},
+        )
+        self.assertEqual(resp.status_code, 404)
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/category/clear/'
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_assign_404_on_foreign_category(self):
+        foreign_cat = make_category(self.other, 'Foreign')
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/',
+            {'category': foreign_cat.pk},
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertFalse(
+            UserTransactionCategory.objects.exists()
+        )
+
+    def test_sharer_overrides_without_touching_owners_row(self):
+        AccountShare.objects.create(
+            account=self.account, shared_with=self.other
+        )
+        make_assignment(
+            self.user, self.tx, self.category, is_manual=True
+        )
+        sharer_cat = make_category(self.other, 'SharerCat')
+        self.client.force_login(self.other)
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/',
+            {'category': sharer_cat.pk},
+        )
+        self.assertEqual(resp.status_code, 200)
+        owner_row = UserTransactionCategory.objects.get(
+            user=self.user, transaction=self.tx
+        )
+        self.assertEqual(owner_row.category, self.category)
+
+    def test_source_manual_filter(self):
+        make_assignment(
+            self.user, self.tx, self.category, is_manual=True
+        )
+        auto_tx = make_transaction(self.account, 't-2', '-5.00')
+        make_assignment(self.user, auto_tx, self.category)
+        make_transaction(self.account, 't-3', '-1.00')
+
+        resp = self.client.get(
+            f'{self.API}/transactions/?source=manual'
+        )
+        body = resp.json()
+        self.assertEqual(
+            [t['transaction_id'] for t in body['transactions']],
+            ['t-1'],
+        )
+        self.assertEqual(body['selected_source'], 'manual')
+        self.assertTrue(body['filters_active'])
+
+        # Unknown source values are ignored, not 400s.
+        resp = self.client.get(
+            f'{self.API}/transactions/?source=bogus'
+        )
+        body = resp.json()
+        self.assertEqual(body['count'], 3)
+        self.assertEqual(body['selected_source'], '')
 
 
 class LimitsApiTests(ApiTestCase):

@@ -51,6 +51,7 @@ from finance.models import (
     Transaction,
     TransactionLimit,
     UserAccountPreference,
+    UserTransactionCategory,
 )
 from finance.services.categories import (
     annotate_effective_category,
@@ -58,7 +59,12 @@ from finance.services.categories import (
 )
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
 from finance.services.limits import limit_window_stats
-from finance.services.rules import apply_rules, preview_rule
+from finance.services.rules import (
+    active_rules_for,
+    apply_rules,
+    categorize_transaction,
+    preview_rule,
+)
 from finance.services.sync import sync_account_transactions
 
 logger = logging.getLogger('django')
@@ -230,6 +236,9 @@ class TransactionOut(Schema):
     # creditor_name for outgoing payments, debtor_name for incoming.
     counterparty: Optional[str] = None
     effective_category: Optional[CategoryOut] = None
+    # True when the caller's own assignment row is a manual
+    # override (rules leave it alone); NULL/falsey otherwise.
+    category_is_manual: Optional[bool] = None
     amount: Decimal
     currency: str
 
@@ -258,6 +267,7 @@ class TransactionsOut(Schema):
     selected_account: Optional[int] = None
     selected_category: str = ''
     selected_creditor: str = ''
+    selected_source: str = ''
     search_query: str = ''
     sort: str
     direction: str
@@ -527,6 +537,12 @@ class CategorySaveIn(Schema):
     color: str = ''
 
 
+class AssignCategoryIn(Schema):
+    # null locks the transaction as uncategorized (is_manual row
+    # with a NULL category — rules still leave it alone).
+    category: Optional[int] = None
+
+
 class PushKeysIn(Schema):
     p256dh: str = ''
     auth: str = ''
@@ -607,6 +623,7 @@ def institutions(request, country: str = ''):
 @router.get('/transactions/', response=TransactionsOut)
 def transaction_list(request, account: str = '', category: str = '',
                      creditor: str = '', q: str = '',
+                     source: str = '',
                      sort: str = 'date', direction: str = 'desc',
                      page: Optional[str] = None):
     user = request.user
@@ -630,6 +647,14 @@ def transaction_list(request, account: str = '', category: str = '',
         transactions = transactions.filter(
             effective_category_id=category_id
         )
+
+    # ?source=manual is the audit view for manual overrides; it
+    # composes with the category filter (category=none + manual
+    # shows manually-locked-uncategorized rows).
+    if source == 'manual':
+        transactions = transactions.filter(category_is_manual=True)
+    else:
+        source = ''
 
     creditor = creditor.strip()
     search_query = q.strip()
@@ -690,6 +715,7 @@ def transaction_list(request, account: str = '', category: str = '',
         'selected_account': account_id,
         'selected_category': category_id,
         'selected_creditor': creditor,
+        'selected_source': source,
         'search_query': search_query,
         'sort': sort,
         'direction': direction,
@@ -697,6 +723,7 @@ def transaction_list(request, account: str = '', category: str = '',
             account_id is not None
             or category_id
             or creditor
+            or source
             or search_query
         ),
     }
@@ -1170,6 +1197,66 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
         'updated': updated,
         'failed': failed,
         'accounts': results + skipped,
+    }
+
+
+@router.post(
+    '/transactions/{tx_id}/category/', response=MessageOut
+)
+def assign_category(request, tx_id: int, payload: AssignCategoryIn):
+    """Manually assign (or lock off) the caller's category for one
+    transaction — writes an ``is_manual`` row rules never touch."""
+    tx = get_object_or_404(
+        Transaction.objects.for_user(request.user), pk=tx_id
+    )
+    category = None
+    if payload.category is not None:
+        category = get_object_or_404(
+            Category, pk=payload.category, user=request.user
+        )
+    UserTransactionCategory.objects.update_or_create(
+        user=request.user,
+        transaction=tx,
+        defaults={'category': category, 'is_manual': True},
+    )
+    if category is None:
+        return {
+            'success': True,
+            'message': 'Marked as uncategorized.',
+            'code': 'markedUncategorized',
+        }
+    return {
+        'success': True,
+        'message': f'Category "{category.name}" assigned.',
+        'code': 'categoryAssigned',
+        'params': {'name': category.name},
+    }
+
+
+@router.post(
+    '/transactions/{tx_id}/category/clear/', response=MessageOut
+)
+def clear_category(request, tx_id: int):
+    """Drop the manual flag and re-run the caller's rules on this
+    one transaction, so the badge immediately shows what rules
+    produce (``categorize_transaction`` keeps the row when a rule
+    still matches, deletes it when none does)."""
+    tx = get_object_or_404(
+        Transaction.objects.for_user(request.user), pk=tx_id
+    )
+    assignment = UserTransactionCategory.objects.filter(
+        user=request.user, transaction=tx
+    ).first()
+    if assignment is not None:
+        assignment.is_manual = False
+        assignment.save(update_fields=['is_manual', 'updated_at'])
+    categorize_transaction(
+        tx, active_rules_for(request.user), request.user, assignment
+    )
+    return {
+        'success': True,
+        'message': 'Reverted to automatic categorization.',
+        'code': 'categoryReverted',
     }
 
 

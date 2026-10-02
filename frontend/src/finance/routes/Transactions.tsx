@@ -12,11 +12,7 @@ import TransactionTable, {
   type ParamUpdates,
 } from '../components/TransactionTable';
 import Pagination from '../components/Pagination';
-import {
-  fetchRules,
-  fetchTransactions,
-  type TransactionOut,
-} from '../api';
+import { fetchRules, fetchTransactions, type TransactionOut } from '../api';
 import { useSyncTransactions } from '../mutations';
 import { errorDetail } from '../../shared/api/errors';
 import { pushToast } from '../../shared/toasts';
@@ -44,6 +40,7 @@ export default function Transactions() {
     category: searchParams.get('category'),
     creditor: searchParams.get('creditor'),
     q: searchParams.get('q'),
+    source: searchParams.get('source'),
     sort: searchParams.get('sort'),
     direction: searchParams.get('direction'),
     page: searchParams.get('page'),
@@ -101,7 +98,13 @@ export default function Transactions() {
   };
 
   const clearFilters = () =>
-    updateParams({ account: null, category: null, creditor: null, q: null });
+    updateParams({
+      account: null,
+      category: null,
+      creditor: null,
+      q: null,
+      source: null,
+    });
 
   // Mirror the template's sync form: the current account filter is
   // posted along ({account?} per the SyncIn contract).
@@ -142,6 +145,13 @@ export default function Transactions() {
         key: 'category',
         label: t('transactions.filterCategory', { name }),
         clear: { category: null },
+      });
+    }
+    if (data.selected_source === 'manual') {
+      activeFilters.push({
+        key: 'source',
+        label: t('transactions.filterSourceManual'),
+        clear: { source: null },
       });
     }
     if (data.selected_creditor) {

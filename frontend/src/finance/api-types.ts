@@ -75,9 +75,10 @@ export interface paths {
         };
         /**
          * Audio
-         * @description Session-authenticated sibling of /text-to-audio (which stays
-         *     public for twister.html). Same {audio_url} shape; the legacy 500
-         *     maps to the API's 502 upstream_error taxonomy.
+         * @description Session-authenticated sibling of /text-to-audio (the legacy
+         *     endpoint is public but has no callers left). Same {audio_url}
+         *     shape; the legacy 500 maps to the API's 502 upstream_error
+         *     taxonomy.
          */
         get: operations["gmail_api_audio"];
         put?: never;
@@ -817,6 +818,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/finance/transactions/{tx_id}/category/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign Category
+         * @description Manually assign (or lock off) the caller's category for one
+         *     transaction — writes an ``is_manual`` row rules never touch.
+         */
+        post: operations["finance_api_assign_category"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/transactions/{tx_id}/category/clear/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Category
+         * @description Drop the manual flag and re-run the caller's rules on this
+         *     one transaction, so the badge immediately shows what rules
+         *     produce (``categorize_transaction`` keeps the row when a rule
+         *     still matches, deletes it when none does).
+         */
+        post: operations["finance_api_clear_category"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/finance/balances/refresh/": {
         parameters: {
             query?: never;
@@ -1455,6 +1500,8 @@ export interface components {
             /** Counterparty */
             counterparty?: string | null;
             effective_category?: components["schemas"]["CategoryOut"] | null;
+            /** Category Is Manual */
+            category_is_manual?: boolean | null;
             /** Amount */
             amount: string;
             /** Currency */
@@ -1496,6 +1543,11 @@ export interface components {
              * @default
              */
             selected_creditor: string;
+            /**
+             * Selected Source
+             * @default
+             */
+            selected_source: string;
             /**
              * Search Query
              * @default
@@ -1864,6 +1916,11 @@ export interface components {
         SyncIn: {
             /** Account */
             account?: number | null;
+        };
+        /** AssignCategoryIn */
+        AssignCategoryIn: {
+            /** Category */
+            category?: number | null;
         };
         /** RefreshOut */
         RefreshOut: {
@@ -2853,6 +2910,7 @@ export interface operations {
                 category?: string;
                 creditor?: string;
                 q?: string;
+                source?: string;
                 sort?: string;
                 direction?: string;
                 page?: string | null;
@@ -3144,6 +3202,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncOut"];
+                };
+            };
+        };
+    };
+    finance_api_assign_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tx_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignCategoryIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_clear_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tx_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
                 };
             };
         };

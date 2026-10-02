@@ -53,20 +53,36 @@
   margin-left: 0.125rem;
 }
 
-/* Borderless icon button for the per-row create-rule action —
-   same ghost look as .rules-ghost-btn in rules.css. */
-.tx-rule-btn {
-  color: var(--bs-secondary-color);
-  background: transparent;
+/* The category cell's dropdown toggle is the badge itself — strip
+   default button chrome so only the badge/placeholder shows. */
+.tx-cat-toggle {
   border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
 }
-.tx-rule-btn:hover:not(:disabled),
-.tx-rule-btn:focus-visible {
-  color: var(--fin-accent);
-  background: var(--fin-bg);
+.tx-cat-toggle:hover .fin-cat-badge,
+.tx-cat-toggle:hover .tx-cat-empty {
+  border-color: var(--fin-accent);
 }
-.tx-rule-btn:disabled {
-  opacity: 0.4;
+/* Placeholder pill for uncategorized rows — dashed to read as
+   "empty slot" rather than a real category badge. */
+.tx-cat-empty {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  border: 1px dashed var(--fin-border);
+  border-radius: 2rem;
+  white-space: nowrap;
+}
+/* Small pencil suffix marking a manual override on the badge. */
+.tx-manual-mark {
+  font-size: 0.6rem;
+  color: var(--bs-secondary-color);
+  margin-left: 0.25rem;
 }
 
 /* Pill page links matching the chip aesthetic. */

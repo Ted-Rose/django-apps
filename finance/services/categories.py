@@ -22,11 +22,14 @@ def annotate_effective_category(qs, user):
 
     ``effective_category_id`` is the category of the user's own
     ``UserTransactionCategory`` row, or None when uncategorized.
+    ``category_is_manual`` marks that row as a manual override
+    (NULL when the user has no row — read it as falsy).
     """
     return qs.annotate(
         effective_category_id=_user_category_subquery(
             user, 'category_id'
-        )
+        ),
+        category_is_manual=_user_category_subquery(user, 'is_manual'),
     )
 
 

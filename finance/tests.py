@@ -1327,6 +1327,131 @@ class ApplyRulesTests(TestCase):
         )
 
 
+class ManualCategoryTests(TestCase):
+    """Manual assign/clear endpoints —
+    POST /api/finance/transactions/<id>/category[/clear]/."""
+
+    API = '/api/finance'
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.groceries = make_category(self.user)
+        self.other_cat = make_category(self.user, 'Other')
+        self.tx = make_transaction(
+            self.account, 't-1', '-10.00',
+            remittance_information='shop',
+        )
+        self.client.force_login(self.user)
+
+    def post_json(self, path, payload=None):
+        return self.client.post(
+            f'{self.API}{path}',
+            data=json.dumps(payload or {}),
+            content_type='application/json',
+        )
+
+    def assignment(self):
+        return UserTransactionCategory.objects.filter(
+            user=self.user, transaction=self.tx
+        ).first()
+
+    def test_assign_writes_manual_row(self):
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/',
+            {'category': self.groceries.pk},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()['message'], 'Category "Groceries" assigned.'
+        )
+        row = self.assignment()
+        self.assertEqual(row.category, self.groceries)
+        self.assertTrue(row.is_manual)
+
+    def test_reassign_updates_the_same_row(self):
+        self.post_json(
+            f'/transactions/{self.tx.pk}/category/',
+            {'category': self.groceries.pk},
+        )
+        self.post_json(
+            f'/transactions/{self.tx.pk}/category/',
+            {'category': self.other_cat.pk},
+        )
+        # Unique (user, transaction): the second assign updates in
+        # place instead of creating a second row.
+        self.assertEqual(
+            UserTransactionCategory.objects.filter(
+                user=self.user, transaction=self.tx
+            ).count(),
+            1,
+        )
+        row = self.assignment()
+        self.assertEqual(row.category, self.other_cat)
+        self.assertTrue(row.is_manual)
+
+    def test_assign_null_locks_uncategorized(self):
+        make_rule(self.user, self.groceries, description='shop')
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/', {}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()['message'], 'Marked as uncategorized.'
+        )
+        row = self.assignment()
+        self.assertIsNone(row.category)
+        self.assertTrue(row.is_manual)
+        # The manual NULL survives a rules re-run — the row is
+        # skipped wholesale, not re-categorized.
+        apply_rules(self.user)
+        row = self.assignment()
+        self.assertIsNone(row.category)
+        self.assertTrue(row.is_manual)
+
+    def test_manual_row_survives_apply_rules_uncategorized(self):
+        """A category-less manual row reads as uncategorized."""
+        UserTransactionCategory.objects.create(
+            user=self.user, transaction=self.tx, is_manual=True
+        )
+        self.assertIsNone(
+            effective_category_for(self.tx, self.user)
+        )
+
+    def test_clear_reruns_rules_and_keeps_matching_row(self):
+        make_rule(self.user, self.other_cat, description='shop')
+        make_assignment(
+            self.user, self.tx, self.groceries, is_manual=True
+        )
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/clear/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()['message'],
+            'Reverted to automatic categorization.',
+        )
+        # A rule still matches: the row stays, unflagged and
+        # recategorized by the ruleset.
+        row = self.assignment()
+        self.assertFalse(row.is_manual)
+        self.assertEqual(row.category, self.other_cat)
+
+    def test_clear_without_matching_rule_deletes_row(self):
+        make_assignment(
+            self.user, self.tx, self.groceries, is_manual=True
+        )
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/clear/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(self.assignment())
+
+
 class EffectiveCategoryTests(TestCase):
     def setUp(self):
         User = get_user_model()

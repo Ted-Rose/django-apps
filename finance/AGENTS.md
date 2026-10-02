@@ -169,10 +169,22 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   *previewing user's* assignments. Used by the SPA's rule drawer
   (`frontend/src/finance/components/RuleDrawer.tsx`), which posts
   debounced previews to `POST /api/finance/rules/preview/`. The
-  drawer also opens from the transactions page — each table row has
-  a "create rule" button that prefills the form with that
-  transaction's counterparty + description (the route lazy-fetches
+  drawer also opens from the transactions page — the row's category
+  badge is a dropdown whose menu carries "Create rule from this
+  transaction", prefilling the form with that transaction's
+  counterparty + description (the route lazy-fetches
   `GET /api/finance/rules/` for the form's choice lists).
+- Manual category assignment: the same badge menu posts
+  `POST /api/finance/transactions/<id>/category/` (`{category}`,
+  null = locked-uncategorized — the `UserTransactionCategory.category`
+  FK is nullable) to write an `is_manual` row, and
+  `…/category/clear/` unsets the flag and re-runs
+  `categorize_transaction` for that one transaction so the badge
+  immediately shows the rules' result. `TransactionOut` carries
+  `category_is_manual` (the pencil marker); `GET
+  /api/finance/transactions/?source=manual` is the audit filter
+  ("Manual only" in the Category column header menu + a removable
+  chip).
 
 ## Effective-category reads (`services/categories.py`)
 
