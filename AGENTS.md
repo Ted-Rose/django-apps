@@ -18,7 +18,7 @@ same database. PythonAnywhere
 | `django_apps/` | Project settings, root urls, home page, PWA endpoints (`sw.js`, `manifest.webmanifest`, `offline/`), `utils.py` (LV→EN translation via googletrans), `gcp.py` (Secret Manager helper), `console_tasks/build.py` (Vercel build-time file generators) |
 | `google_api/` | Shared Google OAuth2 layer + Gmail reader + text-to-audio (gTTS → GCS signed URLs). See `google_api/AGENTS.md` and `google_api/README.md` |
 | `google_tasks/` | Largest app. Google Tasks bidirectional sync with local-only features (stars, labels, dividers, archive/trash, manual ordering). See `google_tasks/AGENTS.md` and `google_tasks/README.md` |
-| `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits, rule-based auto-categorization (`services/rules.py`). React SPA at `/finance/` (`frontend/src/finance/`), API at `/api/finance/`; `views.py` keeps only `requisition_callback`. See `finance/AGENTS.md` |
+| `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits, low-balance alerts, rule-based auto-categorization (`services/rules.py`). React SPA at `/finance/` (`frontend/src/finance/`), API at `/api/finance/`; `views.py` keeps only `requisition_callback`. See `finance/AGENTS.md` |
 | `bible_research/` | ESV API wrapper (`api.esv.org`): verse lookup as JSON and passage audio. No models |
 | `tv_archive/` | Latvian TV schedule scraper (tet.lv) enriched with IMDb ratings. `fetch_tv_program_details()` is **not** wired to a URL — run it manually via shell |
 | `single_pages/` | One-off pages that don't merit their own app (twister, spoki.lv proxy) |
@@ -64,6 +64,8 @@ python manage.py check            # sanity check settings/imports
 python manage.py runserver        # dev server (sslserver also installed:
                                   # runsslserver for HTTPS, needed for OAuth)
 python manage.py test <app>       # e.g. python manage.py test finance google_tasks
+python manage.py makemigrations   # allowed: generate files after model
+                                  # changes — but NEVER `migrate` (see below)
 python manage.py sync_bank_transactions --dry-run
 python manage.py evaluate_spending_limits
 ```
@@ -90,12 +92,14 @@ quotes vs single quotes are mixed — match the surrounding file.
 ## Hard rules
 
 ### Database migrations
-Always generate migration files for model changes
-(`python manage.py makemigrations`) — the user commits them. Never
-run `python manage.py migrate` (or any equivalent command that
-applies migrations to a real database) — that is managed outside of
-agent sessions. (Note: CI deploy runs `migrate` on the GitHub
-Actions runner — that's fine, it happens in the workflow, not here.)
+Creating migration files is allowed and expected — after any model
+change, run `python manage.py makemigrations` (the user commits the
+generated files). Applying migrations is forbidden: never run
+`python manage.py migrate` or any equivalent command that applies
+migrations to a real database — that is managed outside of agent
+sessions. (Django's test runner applying migrations to its
+throwaway test DB is fine. CI deploy also runs `migrate` on the
+GitHub Actions runner — that happens in the workflow, not here.)
 
 ### Documentation and planning
 When the user requests writing a plan to a markdown file, always save it

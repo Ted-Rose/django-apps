@@ -1,9 +1,10 @@
-"""Web Push delivery for spending-limit alerts.
+"""Web Push delivery for finance alerts.
 
 Each user's browsers register a ``PushSubscription`` row; alerts are
 fanned out to all of them via ``pywebpush`` using the VAPID keys from
 settings. Empty ``VAPID_PRIVATE_KEY`` disables the feature entirely —
-the sender is then a no-op.
+the sender is then a no-op. ``send_limit_alert`` is generic
+(title/body/url) — the name predates balance alerts.
 """
 import json
 import logging

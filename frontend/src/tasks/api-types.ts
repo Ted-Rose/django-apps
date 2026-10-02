@@ -558,6 +558,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/finance/notifications/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Notifications
+         * @description Unread in-app alerts — the SPA drains these into toasts.
+         */
+        get: operations["finance_api_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/finance/connect/": {
         parameters: {
             query?: never;
@@ -610,6 +630,66 @@ export interface paths {
          * @description Owner-only: share an owned account with another user.
          */
         post: operations["finance_api_share_account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/accounts/{account_id}/balance-alert/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Balance Alert
+         * @description Create/update the caller's low-balance alert on an account
+         *     (owned or shared — each viewer keeps their own threshold).
+         *     Saving resets the episode flag so the next breach alerts.
+         */
+        post: operations["finance_api_save_balance_alert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/accounts/{account_id}/balance-alert/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete Balance Alert */
+        post: operations["finance_api_delete_balance_alert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/notifications/read/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Notifications Read
+         * @description Stamp the caller's notifications as read (rows stay — they
+         *     double as the breach audit trail).
+         */
+        post: operations["finance_api_mark_notifications_read"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1097,6 +1177,8 @@ export interface components {
             owner_username: string;
             /** Included In Balance Check */
             included_in_balance_check: boolean;
+            /** Balance Alert */
+            balance_alert?: string | null;
             /** Last Balance */
             last_balance?: {
                 [key: string]: unknown;
@@ -1108,6 +1190,18 @@ export interface components {
         AccountsOut: {
             /** Accounts */
             accounts: components["schemas"]["AccountOut"][];
+            push_config: components["schemas"]["PushConfigOut"];
+        };
+        /** PushConfigOut */
+        PushConfigOut: {
+            /** Vapid Public Key */
+            vapid_public_key: string;
+            /** Subscription Count */
+            subscription_count: number;
+            /** Subscribe Url */
+            subscribe_url: string;
+            /** Unsubscribe Url */
+            unsubscribe_url: string;
         };
         /** InstitutionOut */
         InstitutionOut: {
@@ -1326,17 +1420,6 @@ export interface components {
             /** Active */
             active: boolean;
         };
-        /** PushConfigOut */
-        PushConfigOut: {
-            /** Vapid Public Key */
-            vapid_public_key: string;
-            /** Subscription Count */
-            subscription_count: number;
-            /** Subscribe Url */
-            subscribe_url: string;
-            /** Unsubscribe Url */
-            unsubscribe_url: string;
-        };
         /** WindowStatBase */
         WindowStatBase: {
             /** Label */
@@ -1430,6 +1513,27 @@ export interface components {
             /** Operators */
             operators: components["schemas"]["ChoiceOut"][];
         };
+        /** NotificationOut */
+        NotificationOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Url */
+            url: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** NotificationsOut */
+        NotificationsOut: {
+            /** Notifications */
+            notifications: components["schemas"]["NotificationOut"][];
+        };
         /** ConnectOut */
         ConnectOut: {
             /** Link */
@@ -1465,6 +1569,21 @@ export interface components {
              * @default
              */
             username: string;
+        };
+        /** BalanceAlertSaveIn */
+        BalanceAlertSaveIn: {
+            /** Threshold */
+            threshold: number | string;
+        };
+        /** SuccessOut */
+        SuccessOut: {
+            /** Success */
+            success: boolean;
+        };
+        /** NotificationsReadIn */
+        NotificationsReadIn: {
+            /** Ids */
+            ids: number[];
         };
         /**
          * SyncAccountOut
@@ -1732,11 +1851,6 @@ export interface components {
              * @default
              */
             color: string;
-        };
-        /** SuccessOut */
-        SuccessOut: {
-            /** Success */
-            success: boolean;
         };
         /** PushKeysIn */
         PushKeysIn: {
@@ -2465,6 +2579,26 @@ export interface operations {
             };
         };
     };
+    finance_api_notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsOut"];
+                };
+            };
+        };
+    };
     finance_api_connect: {
         parameters: {
             query?: never;
@@ -2537,7 +2671,55 @@ export interface operations {
             };
         };
     };
-    finance_api_sync_transactions: {
+    finance_api_save_balance_alert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BalanceAlertSaveIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_delete_balance_alert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_mark_notifications_read: {
         parameters: {
             query?: never;
             header?: never;
@@ -2546,7 +2728,31 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SyncIn"];
+                "application/json": components["schemas"]["NotificationsReadIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessOut"];
+                };
+            };
+        };
+    };
+    finance_api_sync_transactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SyncIn"] | null;
             };
         };
         responses: {

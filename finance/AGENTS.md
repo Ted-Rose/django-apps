@@ -79,6 +79,22 @@ transactions, and get spending-limit alerts.
   total while keeping its recorded threshold. `monthly_history`
   prefers recorded rows and falls back to recomputed spend for
   months that predate the first evaluation.
+- `BalanceAlert` — per `(user, account)` low-balance threshold
+  (`threshold` may be negative for overdraft alerts). Sharers set
+  their own. `alerted_at` is the episode flag: stamped when the
+  breach notification goes out, cleared once the balance is back
+  at/above the threshold so the next drop alerts again. Managed via
+  `POST /api/finance/accounts/<id>/balance-alert/` (+ `/delete/`)
+  from the Accounts page bell; `AccountOut.balance_alert` carries
+  the caller's threshold and the Balances cards show a read-only
+  badge.
+- `Notification` — in-app alert row (title/body/url/read_at),
+  finance-scoped for now. `check_balance_alerts` writes one per
+  breach so users with zero push subscriptions still see the alert:
+  `GET /api/finance/notifications/` returns unread rows which
+  `App.tsx` drains into toasts on SPA load, then marks them read
+  via `POST /api/finance/notifications/read/`. Rows are kept
+  (audit trail).
 - `PushSubscription` — one row per subscribed browser (`endpoint`
   unique); feeds Web Push spending alerts via `services/push.py`
   (`send_limit_alert`, uses `VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`
@@ -121,9 +137,20 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   notification per limit per breach episode (both windows naming in
   a single notification when breached together) to the user's
   `PushSubscription`s.
+- `check_balance_alerts` (`--dry-run`): fetches each alerted
+  account's balance once (`fetch_balances_parallel`, deduped across
+  users of shared accounts), writes `Account.last_balance`/
+  `balance_updated_at` like `POST /api/finance/balances/refresh/`,
+  then evaluates each `BalanceAlert` — below threshold with no
+  `alerted_at` creates the in-app `Notification` row AND pushes via
+  `send_limit_alert`, then stamps `alerted_at` unconditionally (the
+  Notification row is the record of delivery). Accounts whose fetch
+  failed/429'd or whose currency mismatches are skipped — never
+  alert on a stale stored balance. Logs `BALANCE_ALERT_TRIGGERED`.
 - Terraform (`terraform/cloud_run_jobs.tf`) maps these to Cloud Run
   jobs with Cloud Scheduler triggers running daily (`paused = false`:
-  sync at 02:00 UTC, evaluate at 02:30 UTC) — set `paused = true` to
+  sync at 02:00 UTC, evaluate at 02:30 UTC, balance alerts at
+  03:00 UTC) — set `paused = true` to
   stop the schedules and save costs.
 
 ## Rules engine (`services/rules.py`)

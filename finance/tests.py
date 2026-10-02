@@ -13,9 +13,11 @@ from django.utils import timezone
 from finance.models import (
     Account,
     AccountShare,
+    BalanceAlert,
     Category,
     CategoryRule,
     LimitEvaluation,
+    Notification,
     PushSubscription,
     Requisition,
     Transaction,
@@ -2076,6 +2078,215 @@ class LimitPushAlertCommandTests(TestCase):
         mock_send.assert_not_called()
         limit.refresh_from_db()
         self.assertIsNone(limit.alerted_monthly_at)
+
+
+class CheckBalanceAlertsTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+
+    @staticmethod
+    def fetch_result(amount='20.00', currency='EUR'):
+        return {
+            'acc-1': {
+                'ok': True,
+                'rate_limited': False,
+                'balance': {
+                    'balanceAmount': {
+                        'amount': amount, 'currency': currency,
+                    },
+                    'balanceType': 'interimAvailable',
+                },
+                'error': None,
+            },
+        }
+
+    def run_command(self, results=None, **kwargs):
+        client = MagicMock()
+        client.fetch_balances_parallel.return_value = (
+            self.fetch_result() if results is None else results
+        )
+        with patch(
+            'finance.management.commands'
+            '.check_balance_alerts.GoCardlessClient',
+            return_value=client,
+        ), patch(
+            'finance.management.commands'
+            '.check_balance_alerts.send_limit_alert'
+        ) as mock_send:
+            call_command('check_balance_alerts', **kwargs)
+        return mock_send, client
+
+    def test_breach_notifies_and_sets_flag(self):
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, _ = self.run_command()
+
+        mock_send.assert_called_once()
+        self.assertEqual(
+            mock_send.call_args[0][0].pk, self.user.pk
+        )
+        self.assertEqual(mock_send.call_args[0][1], 'Low balance')
+        self.assertIn('€20.00', mock_send.call_args[0][2])
+        self.assertIn('€50.00', mock_send.call_args[0][2])
+        self.assertEqual(
+            mock_send.call_args[0][3], '/finance/balances/'
+        )
+        alert.refresh_from_db()
+        self.assertIsNotNone(alert.alerted_at)
+        notification = Notification.objects.get(user=self.user)
+        self.assertEqual(notification.title, 'Low balance')
+        self.assertIn('€20.00', notification.body)
+        self.assertEqual(notification.url, '/finance/balances/')
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.last_balance['balanceAmount']['amount'],
+            '20.00',
+        )
+        self.assertIsNotNone(self.account.balance_updated_at)
+
+    def test_above_threshold_stays_silent(self):
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('10.00'),
+        )
+        mock_send, _ = self.run_command()
+        mock_send.assert_not_called()
+        alert.refresh_from_db()
+        self.assertIsNone(alert.alerted_at)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_second_run_while_below_sends_nothing(self):
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        self.run_command()
+        mock_send, _ = self.run_command()
+        mock_send.assert_not_called()
+        self.assertEqual(Notification.objects.count(), 1)
+
+    def test_recovery_clears_flag_then_realerts(self):
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        self.run_command()
+        self.run_command(results=self.fetch_result('80.00'))
+        alert.refresh_from_db()
+        self.assertIsNone(alert.alerted_at)
+
+        self.run_command()
+        alert.refresh_from_db()
+        self.assertIsNotNone(alert.alerted_at)
+        self.assertEqual(Notification.objects.count(), 2)
+
+    def test_fetch_failure_skips_alerts(self):
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, _ = self.run_command(results={
+            'acc-1': {
+                'ok': False,
+                'rate_limited': True,
+                'balance': None,
+                'error': '429 daily limit',
+            },
+        })
+        mock_send.assert_not_called()
+        alert.refresh_from_db()
+        self.assertIsNone(alert.alerted_at)
+        self.assertFalse(Notification.objects.exists())
+        self.account.refresh_from_db()
+        self.assertIsNone(self.account.last_balance)
+
+    def test_currency_mismatch_skips_alerts(self):
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, _ = self.run_command(
+            results=self.fetch_result('20.00', currency='USD')
+        )
+        mock_send.assert_not_called()
+        alert.refresh_from_db()
+        self.assertIsNone(alert.alerted_at)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_dry_run_writes_and_pushes_nothing(self):
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, _ = self.run_command(dry_run=True)
+        mock_send.assert_not_called()
+        alert.refresh_from_db()
+        self.assertIsNone(alert.alerted_at)
+        self.assertFalse(Notification.objects.exists())
+        self.account.refresh_from_db()
+        self.assertIsNone(self.account.last_balance)
+
+    def test_shared_account_fetched_once_for_two_users(self):
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        AccountShare.objects.create(
+            account=self.account, shared_with=other
+        )
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        BalanceAlert.objects.create(
+            user=other,
+            account=self.account,
+            threshold=Decimal('30.00'),
+        )
+        mock_send, client = self.run_command()
+        client.fetch_balances_parallel.assert_called_once_with(
+            ['acc-1']
+        )
+        self.assertEqual(mock_send.call_count, 2)
+        self.assertEqual(Notification.objects.count(), 2)
+        self.assertTrue(
+            Notification.objects.filter(user=other).exists()
+        )
+
+    def test_no_alerts_never_calls_api(self):
+        _, client = self.run_command()
+        client.fetch_balances_parallel.assert_not_called()
+
+    def test_balance_without_amount_skips_alerts(self):
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, _ = self.run_command(results={
+            'acc-1': {
+                'ok': True,
+                'rate_limited': False,
+                'balance': {'balanceType': 'interimAvailable'},
+                'error': None,
+            },
+        })
+        mock_send.assert_not_called()
+        self.assertFalse(Notification.objects.exists())
 
 
 class PushSubscriptionEndpointTests(TestCase):

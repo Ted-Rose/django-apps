@@ -41,8 +41,10 @@ from finance.forms import (
 from finance.models import (
     Account,
     AccountShare,
+    BalanceAlert,
     Category,
     CategoryRule,
+    Notification,
     PushSubscription,
     Requisition,
     Transaction,
@@ -107,9 +109,9 @@ def _balance_check_accounts(user):
     )
 
 
-def _account_payload(request, account, pref):
-    """Dict matching AccountOut — adds is_owner/pref fields the
-    model doesn't carry."""
+def _account_payload(request, account, pref, alert=None):
+    """Dict matching AccountOut — adds is_owner/pref/alert fields
+    the model doesn't carry."""
     return {
         'id': account.pk,
         'account_id': account.account_id,
@@ -123,8 +125,30 @@ def _account_payload(request, account, pref):
         'included_in_balance_check': (
             pref.included_in_balance_check if pref else False
         ),
+        'balance_alert': alert.threshold if alert else None,
         'last_balance': account.last_balance,
         'balance_updated_at': account.balance_updated_at,
+    }
+
+
+def _balance_alert_map(user, accounts):
+    """The caller's BalanceAlert per account, keyed by account pk."""
+    return {
+        alert.account_id: alert
+        for alert in BalanceAlert.objects.filter(
+            user=user, account__in=accounts
+        )
+    }
+
+
+def _push_config(user):
+    return {
+        'vapid_public_key': getattr(
+            settings, 'VAPID_PUBLIC_KEY', ''
+        ),
+        'subscription_count': user.push_subscriptions.count(),
+        'subscribe_url': PUSH_SUBSCRIBE_URL,
+        'unsubscribe_url': PUSH_UNSUBSCRIBE_URL,
     }
 
 
@@ -161,12 +185,22 @@ class AccountOut(Schema):
     is_owner: bool
     owner_username: str
     included_in_balance_check: bool
+    # The caller's low-balance alert threshold, null when unset.
+    balance_alert: Optional[Decimal] = None
     last_balance: Optional[dict] = None
     balance_updated_at: Optional[datetime] = None
 
 
+class PushConfigOut(Schema):
+    vapid_public_key: str
+    subscription_count: int
+    subscribe_url: str
+    unsubscribe_url: str
+
+
 class AccountsOut(Schema):
     accounts: List[AccountOut]
+    push_config: PushConfigOut
 
 
 class InstitutionOut(Schema):
@@ -292,13 +326,6 @@ class MonthOptionOut(Schema):
     value: str
     label: str
     active: bool
-
-
-class PushConfigOut(Schema):
-    vapid_public_key: str
-    subscription_count: int
-    subscribe_url: str
-    unsubscribe_url: str
 
 
 class LimitsOut(Schema):
@@ -492,6 +519,27 @@ class PushUnsubscribeIn(Schema):
     endpoint: str = ''
 
 
+class BalanceAlertSaveIn(Schema):
+    # Negatives are legal (overdraft alerts).
+    threshold: Decimal
+
+
+class NotificationOut(Schema):
+    id: int
+    title: str
+    body: str
+    url: str
+    created_at: datetime
+
+
+class NotificationsOut(Schema):
+    notifications: List[NotificationOut]
+
+
+class NotificationsReadIn(Schema):
+    ids: List[int]
+
+
 # --- Read endpoints ---
 
 @router.get('/accounts/', response=AccountsOut)
@@ -503,13 +551,16 @@ def account_list(request):
             user=request.user, account__in=accounts
         )
     }
+    alerts = _balance_alert_map(request.user, accounts)
     return {
         'accounts': [
             _account_payload(
-                request, account, prefs.get(account.pk)
+                request, account, prefs.get(account.pk),
+                alerts.get(account.pk),
             )
             for account in accounts.select_related('owner')
-        ]
+        ],
+        'push_config': _push_config(request.user),
     }
 
 
@@ -788,14 +839,7 @@ def limits(request, month: str = ''):
         'as_of': as_of,
         'accounts': _account_options(user),
         'categories': Category.objects.filter(user=user),
-        'push_config': {
-            'vapid_public_key': getattr(
-                settings, 'VAPID_PUBLIC_KEY', ''
-            ),
-            'subscription_count': user.push_subscriptions.count(),
-            'subscribe_url': PUSH_SUBSCRIBE_URL,
-            'unsubscribe_url': PUSH_UNSUBSCRIBE_URL,
-        },
+        'push_config': _push_config(user),
     }
 
 
@@ -809,10 +853,12 @@ def balances(request):
             user=request.user, account__in=accounts
         )
     }
+    alerts = _balance_alert_map(request.user, accounts)
     return {
         'accounts': [
             _account_payload(
-                request, account, prefs.get(account.pk)
+                request, account, prefs.get(account.pk),
+                alerts.get(account.pk),
             )
             for account in accounts.select_related('owner')
         ]
@@ -835,6 +881,15 @@ def rules(request):
         ),
         'operators': _choices(CategoryRule.OPERATORS),
     }
+
+
+@router.get('/notifications/', response=NotificationsOut)
+def notifications(request):
+    """Unread in-app alerts — the SPA drains these into toasts."""
+    unread = request.user.finance_notifications.filter(
+        read_at__isnull=True
+    )[:20]
+    return {'notifications': unread}
 
 
 # --- Mutation endpoints ---
@@ -916,6 +971,50 @@ def share_account(request, account_id: int, payload: ShareIn):
         'success': True,
         'message': f'Account shared with {target.username}.',
     }
+
+
+@router.post('/accounts/{account_id}/balance-alert/',
+             response=MessageOut)
+def save_balance_alert(request, account_id: int,
+                       payload: BalanceAlertSaveIn):
+    """Create/update the caller's low-balance alert on an account
+    (owned or shared — each viewer keeps their own threshold).
+    Saving resets the episode flag so the next breach alerts."""
+    account = get_object_or_404(
+        Account.objects.for_user(request.user), pk=account_id
+    )
+    BalanceAlert.objects.update_or_create(
+        user=request.user,
+        account=account,
+        defaults={
+            'threshold': payload.threshold,
+            'is_active': True,
+            'alerted_at': None,
+        },
+    )
+    return {'success': True, 'message': 'Balance alert saved.'}
+
+
+@router.post('/accounts/{account_id}/balance-alert/delete/',
+             response=MessageOut)
+def delete_balance_alert(request, account_id: int):
+    account = get_object_or_404(
+        Account.objects.for_user(request.user), pk=account_id
+    )
+    BalanceAlert.objects.filter(
+        user=request.user, account=account
+    ).delete()
+    return {'success': True, 'message': 'Balance alert removed.'}
+
+
+@router.post('/notifications/read/', response=SuccessOut)
+def mark_notifications_read(request, payload: NotificationsReadIn):
+    """Stamp the caller's notifications as read (rows stay — they
+    double as the breach audit trail)."""
+    request.user.finance_notifications.filter(
+        pk__in=payload.ids, read_at__isnull=True
+    ).update(read_at=timezone.now())
+    return {'success': True}
 
 
 @router.post('/transactions/sync/', response=SyncOut)

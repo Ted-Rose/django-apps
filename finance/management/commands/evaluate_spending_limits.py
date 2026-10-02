@@ -10,18 +10,10 @@ from finance.services.limits import (
     limit_windows,
     spent_in_window,
 )
+from finance.services.money import fmt_money
 from finance.services.push import send_limit_alert
 
 logger = logging.getLogger(__name__)
-
-CURRENCY_SYMBOLS = {'EUR': '€', 'USD': '$', 'GBP': '£'}
-
-
-def _fmt_money(amount, currency):
-    symbol = CURRENCY_SYMBOLS.get(currency)
-    if symbol:
-        return f'{symbol}{amount:.2f}'
-    return f'{amount:.2f} {currency}'
 
 
 class Command(BaseCommand):
@@ -158,8 +150,8 @@ class Command(BaseCommand):
         lines = [
             (
                 f'{scope} on {account}: '
-                f'{_fmt_money(spent, currency)} of '
-                f'{_fmt_money(window.threshold, currency)} '
+                f'{fmt_money(spent, currency)} of '
+                f'{fmt_money(window.threshold, currency)} '
                 f'in {window.period_text}'
             )
             for window, spent, _ in breaches

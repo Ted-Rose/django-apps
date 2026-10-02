@@ -1,6 +1,6 @@
 # Finance Balance Alerts
 
-Status: proposed. Scope: `finance/` (model, API, management command),
+Status: implemented. Scope: `finance/` (model, API, management command),
 `frontend/src/finance/` (Accounts bell), `terraform/cloud_run_jobs.tf`.
 
 ## Problem / goal
@@ -17,7 +17,7 @@ daily Cloud Scheduler trigger.
 
 | Piece | Where | Reused for |
 |---|---|---|
-| `PushSubscription` + `send_limit_alert(user, title, body, url)` | `finance/models.py`, `finance/services/push.py` | Delivery — already generic despite the name; no-op when `VAPID_PRIVATE_KEY` is empty or the user has no subscriptions. Consider renaming to `send_push_alert` (small refactor) since it now serves two alert kinds. |
+| `PushSubscription` + `send_limit_alert(user, title, body, url)` | `finance/models.py`, `finance/services/push.py` | Push delivery — the only way the headless daily job can reach a user (no session exists server-side). Already generic despite the name (title/body/url payload); no-op when `VAPID_PRIVATE_KEY` is empty or the user has no subscriptions — the in-app `Notification` fallback (below) covers that case. Renaming to `send_push_alert` is optional cosmetic cleanup. |
 | Episode-flag alerting | `alerted_7d_at`/`alerted_30d_at`/`alerted_monthly_at` on `TransactionLimit`, evaluated in `finance/management/commands/evaluate_spending_limits.py` | Same one-notification-per-breach-episode semantics: set on first breach, cleared when back above threshold so the next drop alerts again. |
 | `GoCardlessClient.fetch_balances_parallel` | `finance/services/gocardless.py` | One balance fetch per distinct account (max 8 workers); per-account failures/429s captured in the result dict, never raised. |
 | `Account.last_balance` / `balance_updated_at` | `finance/models.py`, `POST /api/finance/balances/refresh/` | The job refreshes the same fields `balances/refresh/` writes — the Balances page gets daily-fresh data as a side effect. |
@@ -82,6 +82,34 @@ Notes:
 - Run `python manage.py makemigrations` — commit the migration, never
   `migrate` (repo hard rule; CI applies it).
 
+Also a small in-app `Notification` model — the non-push fallback
+(**decided: in scope**). Push is best-effort (needs VAPID + a
+subscribed browser); a durable row guarantees the user sees the
+alert on their next visit even with zero subscriptions. Keep it
+finance-scoped for now — a cross-app notification center can come
+later if another app wants it:
+
+```python
+class Notification(models.Model):
+    """In-app alert surfaced to the user on their next SPA visit."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='finance_notifications',
+    )
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    url = models.CharField(
+        max_length=500,
+        help_text='SPA path the notification opens, e.g. /finance/balances/'
+    )
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+```
+
 ### API — `finance/api.py`
 
 - `AccountOut` gains `balance_alert: Optional[Decimal]` (the caller's
@@ -129,6 +157,25 @@ Notes:
   `account.balance_alerts.filter(user=…)` — keep per-user scoping
   either way.) No Django form needed — one decimal field, ninja
   validates it; a `ModelForm` would be ceremony for a single field.
+- Notification endpoints (the next-login fallback):
+
+  ```python
+  @router.get('/notifications/', response=NotificationsOut)
+  def notifications(request):
+      """Unread in-app alerts — the SPA drains these into toasts."""
+      return {'notifications': request.user.finance_notifications
+              .filter(read_at__isnull=True)[:20]}
+
+  @router.post('/notifications/read/', response=SuccessOut)
+  def mark_notifications_read(request, payload: NotificationsReadIn):
+      request.user.finance_notifications.filter(
+          pk__in=payload.ids, read_at__isnull=True
+      ).update(read_at=timezone.now())
+      return {'success': True}
+  ```
+
+  `NotificationsReadIn {ids: List[int]}`; rows stay in the table
+  (audit trail) — a periodic prune is optional, volumes are tiny.
 
 ### Management command — `check_balance_alerts`
 
@@ -149,9 +196,12 @@ New `finance/management/commands/check_balance_alerts.py`, modeled on
    `amount = Decimal(balance['balanceAmount']['amount'])`
    (guard: missing/`None` → skip; currency != `account.currency` →
    log + skip).
-   - `amount < threshold` and `alerted_at is None` → push
-     `send_limit_alert(alert.user, 'Low balance', body,
-     reverse('finance:balances'))`, stamp `alerted_at`. Body like
+   - `amount < threshold` and `alerted_at is None` → create the
+     in-app `Notification` row (guaranteed delivery on next login)
+     **and** push `send_limit_alert(alert.user, 'Low balance', body,
+     reverse('finance:balances'))` — then stamp `alerted_at`
+     unconditionally: the Notification row is the record of delivery,
+     push is opportunistic on top. Body like
      `"Revolut main: €38.20 — below your €50.00 alert"` (reuse the
      `_fmt_money` helper — lift it and `CURRENCY_SYMBOLS` from the
      evaluate command into `services/` or duplicate; they're 10 lines).
@@ -223,10 +273,19 @@ now `fin-card` account cards — post-redesign structure, see
 - `frontend/src/finance/mutations.ts`: `useSaveBalanceAlert` /
   `useDeleteBalanceAlert` — copy `useToggleBalanceCheck` shape
   (toast `data.message`, invalidate `['finance']`).
-- `frontend/src/finance/api.ts`: `BalanceAlertSaveIn` alias after
+- `frontend/src/finance/api.ts`: `BalanceAlertSaveIn`,
+  `NotificationOut`, `NotificationsReadIn` aliases after
   `npm run gen:types --prefix frontend` regenerates `api-types.ts`
   (requires `manage.py openapi` or the running server producing
   `frontend/openapi.json` — check how the last regen was driven).
+- Unread notifications → toasts: a small `useQuery` in `App.tsx` (or
+  `FinanceNavBar`, which every route mounts) on
+  `['finance', 'notifications']` → `fetchNotifications`; `onSuccess`
+  (or `useEffect` on `data`) pushes each as a toast via `pushToast`
+  and then `apiPost('/api/finance/notifications/read/', {ids})`.
+  This is the "message on next login" fallback — no service worker
+  or push subscription needed, and it also records breaches for
+  push-subscribed users who missed the notification.
 
 ### Frontend — Balances.tsx badge (read-only)
 
@@ -250,20 +309,24 @@ assert the badge renders only when `balance_alert` is set.
 
 ## Sequence / task list
 
-1. `BalanceAlert` model + `makemigrations` (commit migration).
+1. `BalanceAlert` + `Notification` models + `makemigrations`
+   (commit the migration).
 2. `finance/api.py`: schema fields, `push_config` on `AccountsOut`,
-   the two endpoints.
+   the two alert endpoints + the two notification endpoints.
 3. `check_balance_alerts` command (+ `--dry-run`).
 4. Frontend: `mutations.ts` hooks, `api.ts` types, `Accounts.tsx`
-   bell + inline form.
+   bell + `.acct-alert-form`, `Balances.tsx` read-only badge,
+   unread-notifications → toasts drain in `App.tsx`/`FinanceNavBar`.
 5. Terraform: job + IAM + schedule (applies via `terraform.yml` on
    merge to main).
 6. Tests — `finance/test_api.py` (endpoint contract: save/delete,
-   404 on foreign account, `AccountOut.balance_alert` field),
-   `finance/tests.py` (command: mock `GoCardlessClient`/
-   `fetch_balances_parallel`; breach → one push + `alerted_at` set;
-   second run no dup; recovery clears flag; fetch failure skips),
-   `Accounts.test.tsx` (bell render, open form, save/remove calls).
+   404 on foreign account, `AccountOut.balance_alert` field,
+   notifications list + mark-read), `finance/tests.py` (command:
+   mock `GoCardlessClient`/`fetch_balances_parallel`; breach → one
+   Notification row + one push + `alerted_at` set; second run no
+   dup; recovery clears flag; fetch failure skips),
+   `Accounts.test.tsx` (bell render, open form, save/remove calls),
+   `Balances.test.tsx` (badge shown iff `balance_alert` set).
 7. Docs: `finance/AGENTS.md` (model bullet + command bullet),
    root `AGENTS.md` repo-map line if desired.
 
@@ -282,11 +345,11 @@ assert the badge renders only when `balance_alert` is set.
 - **Threshold changes reset `alerted_at`** — raising the threshold
   above the current balance should alert on next run, not stay
   suppressed by an old episode.
-- **Unsubscribed users**: `send_limit_alert` is a no-op — alerts still
-  record `alerted_at`? Recommended: **don't** stamp `alerted_at` when
-  the user has zero `push_subscriptions`, so subscribing later
-  triggers the alert on the next run. (Cheap check:
-  `alert.user.push_subscriptions.exists()`.)
+- **Unsubscribed users**: covered by the `Notification` fallback —
+  the breach always writes a row, so `alerted_at` is stamped
+  unconditionally (push failure/zero subscriptions no longer
+  suppresses future episodes; subscribing later isn't required for
+  the alert to be seen).
 - **Requisition expiry**: `fetch_balances_parallel` captures per-
   account failures (EX'd requisition → error result → skipped), no
   special handling needed.
@@ -298,12 +361,16 @@ assert the badge renders only when `balance_alert` is set.
 
 ## Open questions
 
-- Bell on Accounts vs. on the Balances cards? Accounts is where
-  per-account toggles already live (`included_in_balance_check`,
-  share) and the balance-check opt-in is a soft prerequisite; putting
-  it there keeps one row = all per-account actions. Balances could
-  show a read-only "alert set" badge later.
-- Should non-push fallback exist (email/`messages` on next login)?
-  Out of scope — Web Push is the established channel.
+- ~~Bell on Accounts vs. on the Balances cards?~~ **Decided**:
+  editing lives on Accounts (bell + inline form, alongside the other
+  per-account actions); Balances cards get a read-only
+  `bi-bell-fill` badge showing the threshold — see the Balances.tsx
+  section above.
+- ~~Should non-push fallback exist?~~ **Decided — yes**: an in-app
+  `Notification` row per breach, drained into toasts on the next SPA
+  visit. Django `messages` can't reach the SPA and there's no mail
+  backend configured, so a DB row + unread endpoint is the simplest
+  reliable fallback (and doubles as a breach audit trail for
+  push-subscribed users).
 - `send_limit_alert` rename to a neutral `send_push_alert` — do it in
   the same PR or leave the name? Low risk either way.

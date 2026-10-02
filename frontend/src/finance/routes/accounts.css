@@ -39,9 +39,21 @@
   background: var(--fin-bg);
 }
 
-/* The share form expands as a full-width row below the header. */
-.acct-share-form {
+/* The share and balance-alert forms expand as a full-width row
+   below the header. */
+.acct-share-form,
+.acct-alert-form {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--fin-border);
+}
+
+/* Bell once an alert is armed — the accent marks it as active. */
+.acct-alert-on {
+  color: var(--fin-accent);
+}
+
+/* Threshold field stays compact next to its label/suffix. */
+.acct-alert-input {
+  max-width: 9rem;
 }

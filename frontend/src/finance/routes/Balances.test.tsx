@@ -144,6 +144,33 @@ describe('Balances', () => {
     expect(screen.getByText('50.00 USD')).toBeInTheDocument();
   });
 
+  it('shows the alert badge only when balance_alert is set', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeBalances([
+        makeAccount({ balance_alert: '50.00' }),
+        makeAccount({
+          id: 6,
+          name: 'Shared savings',
+          account_id: 'remote-acct-6',
+          balance_alert: null,
+        }),
+      ]),
+    );
+    renderBalances();
+    const card = (
+      await screen.findByText('Everyday account')
+    ).closest('.fin-card') as HTMLElement;
+    expect(
+      within(card).getByText(/Alert below 50\.00 EUR/),
+    ).toBeInTheDocument();
+    const other = screen
+      .getByText('Shared savings')
+      .closest('.fin-card') as HTMLElement;
+    expect(
+      within(other).queryByText(/Alert below/),
+    ).not.toBeInTheDocument();
+  });
+
   it('hides the total when no account has a balance yet', async () => {
     mockedApiGet.mockResolvedValue(
       makeBalances([

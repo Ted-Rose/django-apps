@@ -21,6 +21,8 @@ export type RuleOut = components['schemas']['RuleOut'];
 export type CategoryOut = components['schemas']['CategoryOut'];
 export type AccountOptionOut = components['schemas']['AccountOptionOut'];
 export type ChoiceOut = components['schemas']['ChoiceOut'];
+export type NotificationOut = components['schemas']['NotificationOut'];
+export type NotificationsOut = components['schemas']['NotificationsOut'];
 
 /** Mutation request/response bodies (POST /api/finance/…). */
 export type ConnectIn = components['schemas']['ConnectIn'];
@@ -42,6 +44,10 @@ export type CategorySaveIn = components['schemas']['CategorySaveIn'];
 export type PushConfigOut = components['schemas']['PushConfigOut'];
 export type PushSubscribeIn = components['schemas']['PushSubscribeIn'];
 export type PushUnsubscribeIn = components['schemas']['PushUnsubscribeIn'];
+export type BalanceAlertSaveIn =
+  components['schemas']['BalanceAlertSaveIn'];
+export type NotificationsReadIn =
+  components['schemas']['NotificationsReadIn'];
 export type MessageOut = components['schemas']['MessageOut'];
 export type SuccessOut = components['schemas']['SuccessOut'];
 export type ToggleBalanceCheckOut =
@@ -135,4 +141,12 @@ export function fetchBalances(): Promise<BalancesOut> {
 /** GET /api/finance/rules/ → RulesOut (rules + form choices). */
 export function fetchRules(): Promise<RulesOut> {
   return apiGet<RulesOut>('/api/finance/rules/');
+}
+
+/**
+ * GET /api/finance/notifications/ — unread in-app alerts; the SPA
+ * drains them into toasts then marks them read.
+ */
+export function fetchNotifications(): Promise<NotificationsOut> {
+  return apiGet<NotificationsOut>('/api/finance/notifications/');
 }

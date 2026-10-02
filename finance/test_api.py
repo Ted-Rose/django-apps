@@ -10,11 +10,14 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from finance.models import (
     AccountShare,
+    BalanceAlert,
     Category,
     CategoryRule,
+    Notification,
     PushSubscription,
     Requisition,
     TransactionLimit,
@@ -199,6 +202,224 @@ class AccountsApiTests(ApiTestCase):
         self.assertFalse(resp.json()['included_in_balance_check'])
         pref.refresh_from_db()
         self.assertFalse(pref.included_in_balance_check)
+
+
+class BalanceAlertApiTests(ApiTestCase):
+    """Per-user low-balance alerts: any viewer (owner or sharer)
+    keeps their own threshold on an account they can see."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.owner = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.sharer = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.third = User.objects.create_user(
+            username='carol', password='pw'
+        )
+        self.req = make_requisition(self.owner)
+        self.account = make_account(self.owner, self.req)
+        AccountShare.objects.create(
+            account=self.account, shared_with=self.sharer
+        )
+
+    def test_save_creates_alert_row(self):
+        self.client.force_login(self.owner)
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/',
+            {'threshold': '50.00'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()['message'], 'Balance alert saved.'
+        )
+        alert = BalanceAlert.objects.get(
+            user=self.owner, account=self.account
+        )
+        self.assertEqual(alert.threshold, Decimal('50.00'))
+        self.assertTrue(alert.is_active)
+
+    def test_save_negative_threshold_allowed(self):
+        self.client.force_login(self.owner)
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/',
+            {'threshold': '-50.00'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            BalanceAlert.objects.get(user=self.owner).threshold,
+            Decimal('-50.00'),
+        )
+
+    def test_save_resets_episode_flag(self):
+        alert = BalanceAlert.objects.create(
+            user=self.owner,
+            account=self.account,
+            threshold=Decimal('10.00'),
+            alerted_at=timezone.now(),
+        )
+        self.client.force_login(self.owner)
+        self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/',
+            {'threshold': '20.00'},
+        )
+        alert.refresh_from_db()
+        self.assertEqual(alert.threshold, Decimal('20.00'))
+        self.assertIsNone(alert.alerted_at)
+
+    def test_sharer_saves_own_alert(self):
+        self.client.force_login(self.sharer)
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/',
+            {'threshold': '25.00'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        # Owner and sharer keep independent rows.
+        self.assertEqual(
+            BalanceAlert.objects.filter(
+                account=self.account
+            ).count(),
+            1,
+        )
+        self.assertTrue(
+            BalanceAlert.objects.filter(
+                user=self.sharer, account=self.account
+            ).exists()
+        )
+
+    def test_save_404_on_foreign_account(self):
+        self.client.force_login(self.third)
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/',
+            {'threshold': '50.00'},
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertFalse(BalanceAlert.objects.exists())
+
+    def test_delete_removes_only_callers_alert(self):
+        own = BalanceAlert.objects.create(
+            user=self.owner,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        other = BalanceAlert.objects.create(
+            user=self.sharer,
+            account=self.account,
+            threshold=Decimal('10.00'),
+        )
+        self.client.force_login(self.owner)
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/delete/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(
+            BalanceAlert.objects.filter(pk=own.pk).exists()
+        )
+        self.assertTrue(
+            BalanceAlert.objects.filter(pk=other.pk).exists()
+        )
+
+    def test_delete_404_on_foreign_account(self):
+        self.client.force_login(self.third)
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/balance-alert/delete/'
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accounts_payload_carries_alert_and_push_config(self):
+        BalanceAlert.objects.create(
+            user=self.sharer,
+            account=self.account,
+            threshold=Decimal('75.50'),
+        )
+        self.client.force_login(self.sharer)
+        resp = self.client.get(f'{self.API}/accounts/')
+        body = resp.json()
+        self.assertEqual(
+            body['accounts'][0]['balance_alert'], '75.50'
+        )
+        push_config = body['push_config']
+        self.assertEqual(push_config['subscription_count'], 0)
+        self.assertEqual(
+            push_config['subscribe_url'],
+            '/api/finance/push/subscribe/',
+        )
+        # The owner's view of the same account shows no alert —
+        # thresholds are per-user.
+        self.client.force_login(self.owner)
+        resp = self.client.get(f'{self.API}/accounts/')
+        self.assertIsNone(
+            resp.json()['accounts'][0]['balance_alert']
+        )
+
+    def test_balances_payload_carries_alert(self):
+        UserAccountPreference.objects.create(
+            user=self.owner,
+            account=self.account,
+            included_in_balance_check=True,
+        )
+        BalanceAlert.objects.create(
+            user=self.owner,
+            account=self.account,
+            threshold=Decimal('10.00'),
+        )
+        self.client.force_login(self.owner)
+        resp = self.client.get(f'{self.API}/balances/')
+        self.assertEqual(
+            resp.json()['accounts'][0]['balance_alert'], '10.00'
+        )
+
+
+class NotificationsApiTests(ApiTestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.client.force_login(self.user)
+
+    def make_notification(self, user=None):
+        return Notification.objects.create(
+            user=user or self.user,
+            title='Low balance',
+            body='acc: €1.00',
+            url='/finance/balances/',
+        )
+
+    def test_lists_only_own_unread(self):
+        self.make_notification()
+        self.make_notification(user=self.other)
+        read = self.make_notification()
+        Notification.objects.filter(pk=read.pk).update(
+            read_at=timezone.now()
+        )
+        resp = self.client.get(f'{self.API}/notifications/')
+        self.assertEqual(resp.status_code, 200)
+        notifications = resp.json()['notifications']
+        self.assertEqual(len(notifications), 1)
+        self.assertEqual(notifications[0]['title'], 'Low balance')
+        self.assertEqual(
+            notifications[0]['url'], '/finance/balances/'
+        )
+
+    def test_mark_read_stamps_only_own_rows(self):
+        own = self.make_notification()
+        foreign = self.make_notification(user=self.other)
+        resp = self.post_json(
+            '/notifications/read/', {'ids': [own.pk, foreign.pk]}
+        )
+        self.assertEqual(resp.status_code, 200)
+        own.refresh_from_db()
+        foreign.refresh_from_db()
+        self.assertIsNotNone(own.read_at)
+        self.assertIsNone(foreign.read_at)
+        resp = self.client.get(f'{self.API}/notifications/')
+        self.assertEqual(resp.json()['notifications'], [])
 
 
 class TransactionsApiTests(ApiTestCase):
@@ -846,9 +1067,9 @@ class SyncAndBalancesApiTests(ApiTestCase):
         by_status = {
             a['status']: a['account'] for a in body['accounts']
         }
-        self.assertEqual(by_status['synced'], 'acc-1')
-        self.assertEqual(by_status['failed'], 'acc-2')
-        self.assertEqual(by_status['skipped'], 'acc-3')
+        self.assertEqual(by_status['synced'], 'acc-1', body)
+        self.assertEqual(by_status['failed'], 'acc-2', body)
+        self.assertEqual(by_status['skipped'], 'acc-3', body)
         detail = {
             a['account']: a['detail'] for a in body['accounts']
         }

@@ -3,9 +3,11 @@ from django.contrib import admin
 from finance.models import (
     Account,
     AccountShare,
+    BalanceAlert,
     Category,
     CategoryRule,
     LimitEvaluation,
+    Notification,
     PushSubscription,
     Requisition,
     Transaction,
@@ -104,6 +106,24 @@ class LimitEvaluationAdmin(admin.ModelAdmin):
         'limit', 'period_start', 'spent', 'threshold', 'evaluated_at',
     ]
     list_filter = ['period_start', 'limit__user']
+
+
+@admin.register(BalanceAlert)
+class BalanceAlertAdmin(admin.ModelAdmin):
+    list_display = [
+        'user', 'account', 'threshold', 'is_active', 'alerted_at',
+    ]
+    list_filter = ['is_active', 'user']
+    readonly_fields = ['alerted_at']
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = [
+        'user', 'title', 'url', 'read_at', 'created_at',
+    ]
+    list_filter = ['user']
+    search_fields = ['title', 'body', 'user__username']
 
 
 @admin.register(PushSubscription)

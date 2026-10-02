@@ -21,6 +21,7 @@ import { apiPost } from '../shared/api/client';
 import { ApiError, errorDetail } from '../shared/api/errors';
 import { pushToast } from '../shared/toasts';
 import type {
+  BalanceAlertSaveIn,
   CategorySaveIn,
   ConnectIn,
   ConnectOut,
@@ -167,6 +168,58 @@ export function useShareAccount() {
     },
     onError: (error) =>
       pushToast(`Failed to share account: ${errorDetail(error)}`, 'warning'),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/accounts/{id}/balance-alert/ — saves the
+ * caller's low-balance threshold (owned or shared account). A save
+ * resets the episode flag server-side so the next breach alerts.
+ */
+export function useSaveBalanceAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: { accountId: number; threshold: string }) =>
+      apiPost<MessageOut>(
+        `/api/finance/accounts/${variables.accountId}/balance-alert/`,
+        { threshold: variables.threshold } satisfies BalanceAlertSaveIn,
+      ),
+    onSuccess: (data) => {
+      if (data?.message) {
+        pushToast(data.message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        `Failed to save balance alert: ${errorDetail(error)}`,
+        'warning',
+      ),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/accounts/{id}/balance-alert/delete/ — removes
+ * the caller's alert; the row is per-user so sharers keep theirs.
+ */
+export function useDeleteBalanceAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (accountId: number) =>
+      apiPost<MessageOut>(
+        `/api/finance/accounts/${accountId}/balance-alert/delete/`,
+      ),
+    onSuccess: (data) => {
+      if (data?.message) {
+        pushToast(data.message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        `Failed to remove balance alert: ${errorDetail(error)}`,
+        'warning',
+      ),
     onSettled: () => invalidateFinance(queryClient),
   });
 }

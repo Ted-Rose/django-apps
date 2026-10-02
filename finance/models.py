@@ -427,6 +427,73 @@ class LimitEvaluation(models.Model):
         return f'{self.limit} — {self.period_start:%b %Y}'
 
 
+class BalanceAlert(models.Model):
+    """Per user+account low-balance push alert.
+
+    Fires once per breach episode: ``alerted_at`` is stamped when the
+    notification goes out and cleared once the balance is back at or
+    above ``threshold``, so a later drop alerts again.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='balance_alerts',
+    )
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name='balance_alerts',
+    )
+    threshold = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text=(
+            'Alert when the account balance drops below this amount '
+            '(in the account currency; may be negative)'
+        ),
+    )
+    is_active = models.BooleanField(default=True)
+    alerted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the low-balance push was last sent',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'account')
+
+    def __str__(self):
+        return (
+            f'{self.user.username}: {self.account} '
+            f'below {self.threshold} {self.account.currency}'
+        )
+
+
+class Notification(models.Model):
+    """In-app alert surfaced to the user on their next SPA visit."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='finance_notifications',
+    )
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    url = models.CharField(
+        max_length=500,
+        help_text='SPA path the notification opens, e.g. /finance/balances/'
+    )
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.user.username}: {self.title}'
+
+
 class PushSubscription(models.Model):
     """A Web Push subscription for one of the user's browsers."""
     user = models.ForeignKey(

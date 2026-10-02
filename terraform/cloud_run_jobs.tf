@@ -222,6 +222,121 @@ resource "google_cloud_run_v2_job" "evaluate_limits_job" {
   ]
 }
 
+resource "google_cloud_run_v2_job" "check_balance_alerts_job" {
+  name     = "check-balance-alerts"
+  location = var.region
+  project  = var.project_id
+
+  template {
+    template {
+      service_account = google_service_account.cloudrun.email
+      containers {
+        image   = local.django_image
+        command = ["python", "manage.py", "check_balance_alerts"]
+
+        env {
+          name  = "USE_GCP_SECRETS"
+          value = "true"
+        }
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project_id
+        }
+        env {
+          name = "DJANGO_SECRET_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["DJANGO_SECRET_KEY"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["DATABASE_URL"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "APP_BASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["APP_BASE_URL"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "GOOGLE_OAUTH_CLIENT_JSON"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["GOOGLE_OAUTH_CLIENT_JSON"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "GOCARDLESS_SECRET_ID"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["GOCARDLESS_SECRET_ID"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "GOCARDLESS_SECRET_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["GOCARDLESS_SECRET_KEY"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "VAPID_PRIVATE_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["VAPID_PRIVATE_KEY"].secret_id
+              version = "latest"
+            }
+          }
+        }
+        env {
+          name = "VAPID_SUBJECT"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.app["VAPID_SUBJECT"].secret_id
+              version = "latest"
+            }
+          }
+        }
+
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "512Mi"
+          }
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].template[0].containers[0].image,
+    ]
+  }
+
+  depends_on = [
+    google_project_service.enabled,
+    google_artifact_registry_repository.gae_standard,
+  ]
+}
+
 resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_sync" {
   location = google_cloud_run_v2_job.sync_transactions_job.location
   project  = var.project_id
@@ -238,7 +353,16 @@ resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_evaluate" {
   member   = "serviceAccount:${google_service_account.scheduler.email}"
 }
 
-# Cloud Scheduler triggers run the jobs daily at 02:00/02:30 UTC.
+resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_balance_alerts" {
+  location = google_cloud_run_v2_job.check_balance_alerts_job.location
+  project  = var.project_id
+  name     = google_cloud_run_v2_job.check_balance_alerts_job.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+# Cloud Scheduler triggers run the jobs daily at
+# 02:00/02:30/03:00 UTC.
 # To pause a schedule without destroying infra, set paused = true.
 # DB migrations are unaffected — deploy.yml runs them via a one-off
 # django-migrate-<sha> Cloud Run job on each deploy.
@@ -274,6 +398,26 @@ resource "google_cloud_scheduler_job" "evaluate_limits_schedule" {
   http_target {
     http_method = "POST"
     uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.evaluate_limits_job.name}:run"
+
+    oauth_token {
+      service_account_email = google_service_account.scheduler.email
+    }
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_cloud_scheduler_job" "check_balance_alerts_schedule" {
+  name      = "check-balance-alerts-schedule"
+  region    = var.region
+  project   = var.project_id
+  schedule  = "0 3 * * *"
+  time_zone = "UTC"
+  paused    = false
+
+  http_target {
+    http_method = "POST"
+    uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.check_balance_alerts_job.name}:run"
 
     oauth_token {
       service_account_email = google_service_account.scheduler.email

@@ -184,6 +184,15 @@ function BalanceCard({ account }: { account: AccountOut }) {
             balance&quot; to fetch it.
           </p>
         )}
+        {account.balance_alert != null && (
+          <p className="balances-card-footer mb-0 mt-2">
+            <span className="badge text-bg-secondary">
+              <i className="bi bi-bell-fill" /> Alert below{' '}
+              {account.balance_alert}{' '}
+              {amount?.currency ?? account.currency}
+            </span>
+          </p>
+        )}
       </div>
     </div>
   );

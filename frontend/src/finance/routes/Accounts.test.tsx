@@ -6,7 +6,11 @@ import Accounts from './Accounts';
 import { apiGet, apiPost } from '../../shared/api/client';
 import { ApiError } from '../../shared/api/errors';
 import { clearToasts } from '../../shared/toasts';
-import type { AccountOut, AccountsOut } from '../api';
+import type {
+  AccountOut,
+  AccountsOut,
+  PushConfigOut,
+} from '../api';
 
 vi.mock('../../shared/api/client', () => ({
   apiGet: vi.fn(),
@@ -35,8 +39,23 @@ function makeAccount(overrides: Partial<AccountOut> = {}): AccountOut {
   };
 }
 
-function makeAccounts(accounts: AccountOut[] = []): AccountsOut {
-  return { accounts };
+function makePushConfig(
+  overrides: Partial<PushConfigOut> = {},
+): PushConfigOut {
+  return {
+    vapid_public_key: 'pub-key',
+    subscription_count: 1,
+    subscribe_url: '/api/finance/push/subscribe/',
+    unsubscribe_url: '/api/finance/push/unsubscribe/',
+    ...overrides,
+  };
+}
+
+function makeAccounts(
+  accounts: AccountOut[] = [],
+  pushConfig: PushConfigOut = makePushConfig(),
+): AccountsOut {
+  return { accounts, push_config: pushConfig };
 }
 
 function renderAccounts() {
@@ -142,6 +161,101 @@ describe('Accounts', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Share account' }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens the alert form and saves the threshold', async () => {
+    mockedApiGet.mockResolvedValue(makeAccounts([makeAccount()]));
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Balance alert saved.',
+    });
+    renderAccounts();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set balance alert' }),
+    );
+    const input = await screen.findByLabelText(
+      'Alert threshold in EUR',
+    );
+    fireEvent.change(input, { target: { value: '50.00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/accounts/5/balance-alert/',
+        { threshold: '50.00' },
+      ),
+    );
+    expect(
+      await screen.findByText('Balance alert saved.'),
+    ).toBeInTheDocument();
+    // The form collapses after a successful save.
+    expect(
+      screen.queryByLabelText('Alert threshold in EUR'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('prefills the threshold and offers Remove when an alert exists', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeAccounts([makeAccount({ balance_alert: '50.00' })]),
+    );
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Balance alert removed.',
+    });
+    renderAccounts();
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Balance alert: 50.00 EUR',
+      }),
+    );
+    const input = await screen.findByLabelText(
+      'Alert threshold in EUR',
+    );
+    expect(input).toHaveValue(50);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/accounts/5/balance-alert/delete/',
+      ),
+    );
+    expect(
+      await screen.findByText('Balance alert removed.'),
+    ).toBeInTheDocument();
+  });
+
+  it('warns when no devices are subscribed to push', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeAccounts(
+        [makeAccount()],
+        makePushConfig({ subscription_count: 0 }),
+      ),
+    );
+    renderAccounts();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set balance alert' }),
+    );
+    expect(
+      await screen.findByText(/No devices subscribed/),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the last balance inside the alert form', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeAccounts([
+        makeAccount({
+          last_balance: {
+            balanceAmount: { amount: '123.45', currency: 'EUR' },
+          },
+          balance_updated_at: '2025-01-15T10:30:00Z',
+        }),
+      ]),
+    );
+    renderAccounts();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set balance alert' }),
+    );
+    expect(
+      await screen.findByText(/Last reported balance: 123\.45 EUR/),
     ).toBeInTheDocument();
   });
 
