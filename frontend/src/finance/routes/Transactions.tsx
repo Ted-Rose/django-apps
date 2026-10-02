@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -6,16 +5,14 @@ import FinanceNavBar from '../components/FinanceNavBar';
 import PageShell from '../components/PageShell';
 import ErrorState from '../components/ErrorState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import RuleDrawer from '../components/RuleDrawer';
 import Toasts from '../../shared/components/Toasts';
 import TransactionTable, {
   type ParamUpdates,
 } from '../components/TransactionTable';
 import Pagination from '../components/Pagination';
-import { fetchRules, fetchTransactions, type TransactionOut } from '../api';
+import { fetchTransactions } from '../api';
 import { useSyncTransactions } from '../mutations';
-import { errorDetail } from '../../shared/api/errors';
-import { pushToast } from '../../shared/toasts';
+import useRuleDrawer from '../hooks/useRuleDrawer';
 import './transactions.css';
 
 /**
@@ -51,39 +48,7 @@ export default function Transactions() {
     queryFn: () => fetchTransactions(params),
   });
   const sync = useSyncTransactions();
-
-  // Per-row "create rule": non-null while a rule is being drafted
-  // from that transaction. The drawer's form metadata (categories,
-  // match types, scopes, operators, existing rules for the priority
-  // seed) comes from the shared rules query — fetched lazily on the
-  // first click, cached for the rules page and later clicks.
-  const [ruleTx, setRuleTx] = useState<TransactionOut | null>(null);
-  const rulesQuery = useQuery({
-    queryKey: ['finance', 'rules'],
-    queryFn: fetchRules,
-    enabled: ruleTx !== null,
-  });
-  const maxPriority = (rulesQuery.data?.rules ?? []).reduce(
-    (max, rule) => Math.max(max, rule.priority),
-    0,
-  );
-  useEffect(() => {
-    if (rulesQuery.isError) {
-      pushToast(
-        t('transactions.ruleFormError', {
-          detail: errorDetail(rulesQuery.error),
-        }),
-        'warning',
-      );
-    }
-  }, [rulesQuery.isError, rulesQuery.error, t]);
-
-  const openRuleDrawer = (tx: TransactionOut) => {
-    setRuleTx(tx);
-    // A failed fetch leaves the query in its error state — an
-    // explicit refetch lets the next click retry it.
-    if (rulesQuery.isError) rulesQuery.refetch();
-  };
+  const { openRuleDrawer, ruleLoadingId, drawer } = useRuleDrawer();
 
   const updateParams = (updates: ParamUpdates) => {
     const next = new URLSearchParams(searchParams);
@@ -253,9 +218,7 @@ export default function Transactions() {
                 data={data}
                 onUpdate={updateParams}
                 onAddRule={openRuleDrawer}
-                ruleLoadingId={
-                  rulesQuery.isPending && ruleTx ? ruleTx.id : null
-                }
+                ruleLoadingId={ruleLoadingId}
               />
               <Pagination
                 page={data.page}
@@ -269,18 +232,7 @@ export default function Transactions() {
           </>
         )}
       </PageShell>
-      {ruleTx && rulesQuery.data && (
-        <RuleDrawer
-          rule={null}
-          data={rulesQuery.data}
-          maxPriority={maxPriority}
-          prefill={{
-            counterparty_pattern: ruleTx.counterparty ?? '',
-            description_pattern: ruleTx.remittance_information ?? '',
-          }}
-          onClose={() => setRuleTx(null)}
-        />
-      )}
+      {drawer}
       <Toasts />
     </>
   );

@@ -71,6 +71,7 @@
     "txCount_one": "{{count}} transaction",
     "txCount_other": "{{count}} transactions",
     "emptyTitle": "No transactions in this period.",
+    "transactionsFor": "Transactions — {{name}}",
     "manageTitle": "Categories",
     "nameLabel": "Name",
     "colorLabel": "Color",

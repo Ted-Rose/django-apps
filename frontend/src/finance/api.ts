@@ -74,6 +74,10 @@ export interface TransactionParams {
   q?: string | null;
   /** 'manual' = audit view of manual category overrides. */
   source?: string | null;
+  /** ISO booking-date bounds — the category overview drill-down
+      passes its time window through so both views agree. */
+  from?: string | null;
+  to?: string | null;
   sort?: string | null;
   direction?: string | null;
   page?: number | string | null;
@@ -88,11 +92,13 @@ export function fetchTransactions(
   params: TransactionParams = {},
 ): Promise<TransactionsOut> {
   const qs = new URLSearchParams();
-  if (params.account != null) qs.set('account', String(params.account));
+  if (params.account) qs.set('account', String(params.account));
   if (params.category) qs.set('category', params.category);
   if (params.creditor) qs.set('creditor', params.creditor);
   if (params.q) qs.set('q', params.q);
   if (params.source) qs.set('source', params.source);
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
   if (params.sort) qs.set('sort', params.sort);
   if (params.direction) qs.set('direction', params.direction);
   if (params.page != null) qs.set('page', String(params.page));

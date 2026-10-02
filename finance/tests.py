@@ -1834,6 +1834,15 @@ class CategoryOverviewViewTests(TestCase):
         # Money serializes as a JSON string (DjangoJSONEncoder).
         self.assertEqual(groceries['spent'], '10.00')
         self.assertEqual(groceries['category_color'], '#00ff00')
+        # The SPA's drill-down sends category_id back as ?category=;
+        # the uncategorized bucket is NULL (→ 'none' client-side).
+        self.assertEqual(groceries['category_id'], cat.pk)
+        uncategorized = next(
+            row
+            for row in rows
+            if row['category_name'] == 'Uncategorized'
+        )
+        self.assertIsNone(uncategorized['category_id'])
 
 
 class RuleViewTests(TestCase):

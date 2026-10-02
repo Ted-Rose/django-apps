@@ -501,6 +501,35 @@ class TransactionsApiTests(ApiTestCase):
         )
         self.assertEqual(resp.json()['count'], 2)
 
+    def test_date_window_filters_by_booking_date(self):
+        make_transaction(self.account, 't-old', '-1.00', days_ago=40)
+        make_transaction(self.account, 't-mid', '-2.00', days_ago=10)
+        make_transaction(self.account, 't-new', '-3.00', days_ago=1)
+        today = timezone.now().date()
+        date_from = (today - timezone.timedelta(days=15)).isoformat()
+        date_to = (today - timezone.timedelta(days=5)).isoformat()
+
+        resp = self.client.get(
+            f'{self.API}/transactions/?from={date_from}&to={date_to}'
+        )
+        body = resp.json()
+        self.assertEqual(
+            [t['transaction_id'] for t in body['transactions']],
+            ['t-mid'],
+        )
+        self.assertTrue(body['filters_active'])
+
+        # A single bound still filters; unparseable dates are
+        # ignored like the other invalid params.
+        resp = self.client.get(
+            f'{self.API}/transactions/?from={date_from}'
+        )
+        self.assertEqual(resp.json()['count'], 2)
+        resp = self.client.get(
+            f'{self.API}/transactions/?from=not-a-date'
+        )
+        self.assertEqual(resp.json()['count'], 3)
+
     def test_foreign_transactions_hidden(self):
         other = get_user_model().objects.create_user(
             username='bob', password='pw'

@@ -12,7 +12,7 @@ import CategoryOverview from './CategoryOverview';
 import { apiGet, apiPost } from '../../shared/api/client';
 import { ApiError } from '../../shared/api/errors';
 import { clearToasts } from '../../shared/toasts';
-import type { CategoryOut, CategoryOverviewOut } from '../api';
+import type { CategoryOut, CategoryOverviewOut, TransactionsOut } from '../api';
 
 vi.mock('../../shared/api/client', () => ({
   apiGet: vi.fn(),
@@ -42,6 +42,7 @@ function makeOverview(
   return {
     rows: [
       {
+        category_id: 1,
         category_name: 'Groceries',
         category_color: '#00aa00',
         spent: '120.50',
@@ -52,6 +53,7 @@ function makeOverview(
         tx_count: 12,
       },
       {
+        category_id: 2,
         category_name: 'Salary',
         category_color: '#0000ff',
         spent: '0.00',
@@ -62,7 +64,9 @@ function makeOverview(
         tx_count: 1,
       },
       {
+        category_id: null,
         category_name: 'Uncategorized',
+        category_key: 'uncategorized',
         category_color: '#6c757d',
         spent: '39.00',
         received: '0.00',
@@ -97,6 +101,49 @@ function makeOverview(
     accounts: [{ id: 5, label: 'Everyday account' }],
     selected_account: '',
     categories: CATEGORIES,
+    ...overrides,
+  };
+}
+
+function makeTransactions(
+  overrides: Partial<TransactionsOut> = {},
+): TransactionsOut {
+  return {
+    transactions: [
+      {
+        id: 11,
+        transaction_id: 'tx-11',
+        booking_date: '2025-01-10',
+        account: {
+          id: 5,
+          name: 'Everyday',
+          iban: 'LV…',
+          currency: 'EUR',
+        },
+        remittance_information: 'Coffee',
+        counterparty: 'Cafe',
+        effective_category: { id: 1, name: 'Groceries', color: '#00aa00' },
+        category_is_manual: false,
+        amount: '-4.50',
+        currency: 'EUR',
+      },
+    ],
+    page: 1,
+    num_pages: 1,
+    count: 1,
+    has_next: false,
+    has_previous: false,
+    accounts: [{ id: 5, label: 'Everyday account' }],
+    categories: CATEGORIES,
+    counterparties: ['Cafe'],
+    selected_account: null,
+    selected_category: '1',
+    selected_creditor: '',
+    selected_source: '',
+    search_query: '',
+    sort: 'date',
+    direction: 'desc',
+    filters_active: true,
     ...overrides,
   };
 }
@@ -249,6 +296,58 @@ describe('CategoryOverview', () => {
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith(
         '/api/finance/categories/overview/?from=2025-02-01&to=2025-02-28',
+      ),
+    );
+  });
+
+  it('drills into a category: the transaction table loads below with the same window', async () => {
+    mockedApiGet.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/finance/transactions/')
+          ? makeTransactions()
+          : makeOverview(),
+      ),
+    );
+    renderOverview('/categories?from=2025-01-09&to=2025-01-15');
+
+    const row = (await screen.findByText('Groceries')).closest('tr')!;
+    fireEvent.click(row);
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenCalledWith(
+        '/api/finance/transactions/?category=1&from=2025-01-09&to=2025-01-15',
+      ),
+    );
+    expect(
+      await screen.findByText('Transactions — Groceries'),
+    ).toBeInTheDocument();
+    // The embedded table renders the fetched transaction rows.
+    expect(await screen.findByText('Coffee')).toBeInTheDocument();
+    // The selected row is highlighted.
+    expect(row).toHaveClass('table-active');
+
+    // Clicking the same row again collapses the drill-down.
+    fireEvent.click(row);
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Transactions — Groceries'),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('maps the uncategorized bucket to category=none', async () => {
+    mockedApiGet.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/finance/transactions/')
+          ? makeTransactions({ selected_category: 'none' })
+          : makeOverview(),
+      ),
+    );
+    renderOverview();
+
+    fireEvent.click((await screen.findByText('Uncategorized')).closest('tr')!);
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenCalledWith(
+        '/api/finance/transactions/?category=none',
       ),
     );
   });

@@ -71,6 +71,7 @@
     "txCount_one": "{{count}} transakcija",
     "txCount_other": "{{count}} transakcijas",
     "emptyTitle": "Šajā periodā nav transakciju.",
+    "transactionsFor": "Transakcijas — {{name}}",
     "manageTitle": "Kategorijas",
     "nameLabel": "Nosaukums",
     "colorLabel": "Krāsa",

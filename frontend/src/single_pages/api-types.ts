@@ -1586,6 +1586,8 @@ export interface components {
         };
         /** CategoryRowOut */
         CategoryRowOut: {
+            /** Category Id */
+            category_id?: number | null;
             /** Category Name */
             category_name: string;
             /** Category Key */
@@ -2917,6 +2919,8 @@ export interface operations {
                 creditor?: string;
                 q?: string;
                 source?: string;
+                from?: string;
+                to?: string;
                 sort?: string;
                 direction?: string;
                 page?: string | null;

@@ -1,4 +1,11 @@
-import { Suspense, lazy, useState, type FormEvent } from 'react';
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -14,8 +21,20 @@ import CategoriesCard from '../components/CategoriesCard';
 const CategoryChart = lazy(() => import('../components/CategoryChart'));
 import MoneyText from '../components/MoneyText';
 import Toasts from '../../shared/components/Toasts';
-import { fetchCategoryOverview, type CategoryRowOut } from '../api';
+import TransactionTable, {
+  type ParamUpdates,
+} from '../components/TransactionTable';
+import Pagination from '../components/Pagination';
+import useRuleDrawer from '../hooks/useRuleDrawer';
+import {
+  fetchCategoryOverview,
+  fetchTransactions,
+  type CategoryRowOut,
+} from '../api';
 import './categories.css';
+// .tx-panel/.tx-table styles — the drill-down reuses the
+// transactions page's table chrome.
+import './transactions.css';
 
 /**
  * React port of category_overview.html — per-category spending
@@ -42,6 +61,16 @@ export default function CategoryOverview() {
     from: searchParams.get('from') ?? '',
     to: searchParams.get('to') ?? '',
     account: searchParams.get('account') ?? '',
+    // The category drill-down and everything the embedded
+    // transaction table can write (sort/filter/page) share the
+    // same URL so drilled-down views stay deep-linkable.
+    category: searchParams.get('category') ?? '',
+    creditor: searchParams.get('creditor'),
+    q: searchParams.get('q'),
+    source: searchParams.get('source'),
+    sort: searchParams.get('sort'),
+    direction: searchParams.get('direction'),
+    page: searchParams.get('page'),
   };
   // The account filter is a PK — ignore non-numeric garbage the
   // same way the ORM-side int lookup would.
@@ -50,8 +79,37 @@ export default function CategoryOverview() {
     : null;
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // The overview query keys on its own window params only — the
+  // drill-down params (category/sort/page/…) must not refetch it.
+  const overviewParams = {
+    from: params.from,
+    to: params.to,
+    account: params.account,
+  };
+
+  /** Merge updates into the URL; `null`/'' removes the key. Any
+      change other than explicit pagination lands back on page 1. */
+  const updateParams = (updates: ParamUpdates) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === '') next.delete(key);
+      else next.set(key, value);
+    }
+    if (!('page' in updates)) next.delete('page');
+    setSearchParams(next);
+  };
+
+  /** Row click — the drill-down's `?category=` value ('none' for
+      the uncategorized bucket, like the transactions filter). */
+  const selectCategory = (row: CategoryRowOut) => {
+    const value = row.category_id != null ? String(row.category_id) : 'none';
+    updateParams({
+      category: value === params.category ? null : value,
+    });
+  };
+
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: ['finance', 'category-overview', params],
+    queryKey: ['finance', 'category-overview', overviewParams],
     queryFn: () =>
       fetchCategoryOverview({
         from: params.from,
@@ -63,21 +121,25 @@ export default function CategoryOverview() {
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const next = new URLSearchParams();
+    const next = new URLSearchParams(searchParams);
     for (const key of ['from', 'to', 'account'] as const) {
       const value = String(form.get(key) ?? '').trim();
       if (value) next.set(key, value);
+      else next.delete(key);
     }
+    next.delete('page');
     setSearchParams(next);
     setFiltersOpen(false);
   };
 
   /** Preset period click — the template's `?from=&to=` hrefs. */
   const selectPeriod = (dateFrom: string, dateTo: string) => {
-    const next = new URLSearchParams();
+    const next = new URLSearchParams(searchParams);
     if (dateFrom) next.set('from', dateFrom);
+    else next.delete('from');
     if (dateTo) next.set('to', dateTo);
-    if (params.account) next.set('account', params.account);
+    else next.delete('to');
+    next.delete('page');
     setSearchParams(next);
   };
 
@@ -92,6 +154,20 @@ export default function CategoryOverview() {
   ]
     .filter(Boolean)
     .join(' · ');
+
+  // Display name for the drill-down heading — resolved from the
+  // breakdown rows (covers the translated 'uncategorized' bucket);
+  // a deep-linked category with no rows in this window falls back
+  // to the categories list.
+  const selectedLabel =
+    params.category === 'none'
+      ? t('transactions.uncategorized')
+      : (data?.rows.find((row) => String(row.category_id) === params.category)
+          ?.category_name ??
+        data?.categories.find(
+          (category) => String(category.id) === params.category,
+        )?.name ??
+        '');
 
   return (
     <>
@@ -290,6 +366,12 @@ export default function CategoryOverview() {
                             key={`${row.category_name}-${index}`}
                             row={row}
                             index={index}
+                            selected={
+                              (row.category_id != null
+                                ? String(row.category_id)
+                                : 'none') === params.category
+                            }
+                            onSelect={() => selectCategory(row)}
                           />
                         ))}
                       </tbody>
@@ -318,6 +400,26 @@ export default function CategoryOverview() {
             )}
           </>
         )}
+        {params.category && (
+          <CategoryTransactions
+            // Remount per category so the panel scrolls into view
+            // on every selection change.
+            key={params.category}
+            label={selectedLabel}
+            category={params.category}
+            account={params.account}
+            from={params.from}
+            to={params.to}
+            creditor={params.creditor}
+            q={params.q}
+            source={params.source}
+            sort={params.sort}
+            direction={params.direction}
+            page={params.page}
+            onUpdate={updateParams}
+            onClose={() => updateParams({ category: null })}
+          />
+        )}
       </PageShell>
       <Toasts />
     </>
@@ -328,14 +430,37 @@ export default function CategoryOverview() {
  * One breakdown row: category badge + tx count, a share bar tinted
  * with the category color, and the spent/received amounts as
  * separate columns — a category with both directions shows both.
+ * The row is a click target: selecting it opens the transaction
+ * drill-down below the table (`?category=` in the URL).
  */
-function OverviewRow({ row, index }: { row: CategoryRowOut; index: number }) {
+function OverviewRow({
+  row,
+  index,
+  selected,
+  onSelect,
+}: {
+  row: CategoryRowOut;
+  index: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const { t } = useTranslation('finance');
   const color = /^#[0-9a-f]{6}$/i.test(row.category_color)
     ? row.category_color
     : '#6c757d';
   return (
-    <tr>
+    <tr
+      className={selected ? 'table-active' : undefined}
+      style={{ cursor: 'pointer' }}
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
       <td>
         <CategoryBadge
           category={{
@@ -391,5 +516,123 @@ function OverviewRow({ row, index }: { row: CategoryRowOut; index: number }) {
         )}
       </td>
     </tr>
+  );
+}
+
+/**
+ * The drill-down panel below the breakdown table: the transactions
+ * route's own TransactionTable + Pagination fed by the same
+ * endpoint, pre-filtered to the clicked category and the
+ * overview's time window (`from`/`to`) and account. Column-header
+ * sort/filter writes go through `onUpdate` so the whole state
+ * stays in the URL — including `account`, which the two views
+ * deliberately share (narrowing the table narrows the totals too).
+ */
+function CategoryTransactions({
+  label,
+  category,
+  account,
+  from,
+  to,
+  creditor,
+  q,
+  source,
+  sort,
+  direction,
+  page,
+  onUpdate,
+  onClose,
+}: {
+  label: string;
+  category: string;
+  account: string;
+  from: string;
+  to: string;
+  creditor: string | null;
+  q: string | null;
+  source: string | null;
+  sort: string | null;
+  direction: string | null;
+  page: string | null;
+  onUpdate: (updates: ParamUpdates) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation('finance');
+  const { openRuleDrawer, ruleLoadingId, drawer } = useRuleDrawer();
+  const panelRef = useRef<HTMLElement>(null);
+  // jsdom doesn't implement scrollIntoView — the optional call
+  // keeps the Vitest suite stub-free.
+  useEffect(() => {
+    panelRef.current?.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }, []);
+
+  const txParams = {
+    account,
+    category,
+    creditor,
+    q,
+    source,
+    from,
+    to,
+    sort,
+    direction,
+    page,
+  };
+  const { data, isPending, isError, error, refetch } = useQuery({
+    queryKey: ['finance', 'transactions', txParams],
+    queryFn: () => fetchTransactions(txParams),
+  });
+
+  return (
+    <section className="tx-panel mt-4" ref={panelRef}>
+      <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+        <h2 className="h6 text-muted mb-0">
+          {t('categories.transactionsFor', { name: label })}
+        </h2>
+        <button
+          type="button"
+          className="btn btn-link btn-sm p-0 text-decoration-none"
+          onClick={onClose}
+        >
+          {t('common:common.close')}
+        </button>
+      </div>
+      {isPending && (
+        <LoadingSkeleton
+          rows={4}
+          height="2.5rem"
+          label={t('transactions.loading')}
+        />
+      )}
+      {isError && (
+        <ErrorState
+          error={error}
+          onRetry={() => refetch()}
+          label={t('transactions.loadLabel')}
+        />
+      )}
+      {data && (
+        <>
+          <TransactionTable
+            data={data}
+            onUpdate={onUpdate}
+            onAddRule={openRuleDrawer}
+            ruleLoadingId={ruleLoadingId}
+          />
+          <Pagination
+            page={data.page}
+            numPages={data.num_pages}
+            count={data.count}
+            hasNext={data.has_next}
+            hasPrevious={data.has_previous}
+            onPage={(next) => onUpdate({ page: String(next) })}
+          />
+        </>
+      )}
+      {drawer}
+    </section>
   );
 }

@@ -274,6 +274,9 @@ class TransactionsOut(Schema):
 
 
 class CategoryRowOut(Schema):
+    # Category pk for the drill-down transaction filter; None for
+    # the uncategorized bucket (the SPA sends 'none').
+    category_id: Optional[int] = None
     category_name: str
     # 'uncategorized' for the no-category bucket — the SPA maps it
     # to the catalog string; `category_name` stays the EN fallback.
@@ -626,6 +629,7 @@ def institutions(request, country: str = ''):
 def transaction_list(request, account: str = '', category: str = '',
                      creditor: str = '', q: str = '',
                      source: str = '',
+                     from_: str = Query('', alias='from'), to: str = '',
                      sort: str = 'date', direction: str = 'desc',
                      page: Optional[str] = None):
     user = request.user
@@ -637,6 +641,16 @@ def transaction_list(request, account: str = '', category: str = '',
     account_id = _int_or_none(account)
     if account_id is not None:
         transactions = transactions.filter(account_id=account_id)
+
+    # ?from=/&to= bound booking_date — used by the category
+    # overview's drill-down so the embedded list shares the
+    # overview's time window.
+    date_from = _parse_date(from_)
+    date_to = _parse_date(to)
+    if date_from:
+        transactions = transactions.filter(booking_date__gte=date_from)
+    if date_to:
+        transactions = transactions.filter(booking_date__lte=date_to)
 
     category_id = category or ''
     if category_id != 'none' and _int_or_none(category_id) is None:
@@ -727,6 +741,8 @@ def transaction_list(request, account: str = '', category: str = '',
             or creditor
             or source
             or search_query
+            or date_from
+            or date_to
         ),
     }
 
@@ -776,9 +792,8 @@ def category_overview(request,
         row['spent'] = -(row['spent'] or 0)
         row['received'] = row['received'] or 0
         row['net'] = row['received'] - row['spent']
-        category = category_by_id.get(
-            row.pop('effective_category_id')
-        )
+        row['category_id'] = row.pop('effective_category_id')
+        category = category_by_id.get(row['category_id'])
         row['category_name'] = (
             category.name if category else 'Uncategorized'
         )
