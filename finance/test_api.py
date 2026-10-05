@@ -461,8 +461,11 @@ class TransactionsApiTests(ApiTestCase):
             body['accounts'][0]['id'], self.account.pk
         )
         self.assertEqual(body['counterparties'], ['Rimi'])
+        # 'Excluded' is auto-provisioned for every user — look the
+        # created category up by name rather than position.
+        categories = {c['name']: c for c in body['categories']}
         self.assertEqual(
-            body['categories'][0]['name'], 'Groceries'
+            categories['Groceries']['id'], category.pk
         )
 
     def test_filters_sort_and_search(self):
@@ -894,7 +897,10 @@ class RulesApiTests(ApiTestCase):
         self.assertEqual(
             body['rules'][0]['description_pattern'], 'shop'
         )
-        self.assertEqual(body['categories'][0]['name'], 'Groceries')
+        self.assertIn(
+            'Groceries',
+            [c['name'] for c in body['categories']],
+        )
         self.assertEqual(
             body['match_types'][0],
             {'value': 'contains', 'label': 'Contains'},
@@ -1620,3 +1626,162 @@ class CodeContractTests(ApiTestCase):
         })
         self.assertEqual(resp.status_code, 404)
         self.assertEqual(resp.json()['code'], 'subscriptionNotFound')
+
+
+class ExclusionApiTests(ApiTestCase):
+    """POST /transactions/<id>/exclusion/ — the caller's per-
+    transaction excluded amount (the part that doesn't count)."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.category = make_category(self.user)
+        self.tx = make_transaction(self.account, 't-1', '-100.00')
+        self.client.force_login(self.user)
+
+    def assignment(self):
+        return UserTransactionCategory.objects.filter(
+            user=self.user, transaction=self.tx
+        ).first()
+
+    def test_set_exclusion_marks_manual_keeps_category(self):
+        make_assignment(self.user, self.tx, self.category)
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/exclusion/',
+            {'excluded_amount': '40.00'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body['success'])
+        self.assertEqual(body['code'], 'exclusionSaved')
+        self.assertEqual(
+            body['params'],
+            {'amount': '40.00', 'currency': 'EUR'},
+        )
+        row = self.assignment()
+        self.assertTrue(row.is_manual)
+        self.assertEqual(row.excluded_amount, Decimal('40.00'))
+        self.assertEqual(row.category, self.category)
+
+    def test_exclusion_creates_manual_row_on_fresh_tx(self):
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/exclusion/',
+            {'excluded_amount': '25.00'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        row = self.assignment()
+        self.assertTrue(row.is_manual)
+        self.assertIsNone(row.category)
+        self.assertEqual(row.excluded_amount, Decimal('25.00'))
+
+    def test_zero_clears_the_exclusion(self):
+        self.post_json(
+            f'/transactions/{self.tx.pk}/exclusion/',
+            {'excluded_amount': '40.00'},
+        )
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/exclusion/',
+            {'excluded_amount': '0'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['code'], 'exclusionCleared')
+        self.assertEqual(
+            self.assignment().excluded_amount, Decimal('0')
+        )
+
+    def test_out_of_range_amounts_are_400(self):
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/exclusion/',
+            {'excluded_amount': '-1'},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(
+            resp.json()['code'], 'invalidExcludedAmount'
+        )
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/exclusion/',
+            {'excluded_amount': '100.01'},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(
+            UserTransactionCategory.objects.exists()
+        )
+
+    def test_exclusion_404_on_foreign_transaction(self):
+        req = make_requisition(self.other, 'req-b')
+        foreign = make_account(self.other, req, 'acc-b')
+        tx = make_transaction(foreign, 't-x', '-9.00')
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/exclusion/',
+            {'excluded_amount': '5'},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_sharers_exclusion_invisible_to_owner(self):
+        AccountShare.objects.create(
+            account=self.account, shared_with=self.other
+        )
+        self.client.force_login(self.other)
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/exclusion/',
+            {'excluded_amount': '60.00'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = self.client.get(
+            f'{self.API}/transactions/'
+        ).json()
+        self.assertEqual(
+            body['transactions'][0]['excluded_amount'], '60.00'
+        )
+        self.assertEqual(
+            body['transactions'][0]['counted_amount'], '-40.00'
+        )
+        # The owner's view of the same transaction is unaffected.
+        self.client.force_login(self.user)
+        row = self.client.get(
+            f'{self.API}/transactions/'
+        ).json()['transactions'][0]
+        self.assertEqual(row['excluded_amount'], '0.00')
+        self.assertEqual(row['counted_amount'], '-100.00')
+
+    def test_clear_category_resets_exclusion_via_rules(self):
+        make_rule(
+            self.user, self.category, description='shop',
+            excluded_amount=Decimal('25.00'),
+        )
+        self.tx.remittance_information = 'shop'
+        self.tx.save(update_fields=['remittance_information'])
+        make_assignment(
+            self.user, self.tx, self.category, is_manual=True,
+            excluded_amount=Decimal('40.00'),
+        )
+        resp = self.post_json(
+            f'/transactions/{self.tx.pk}/category/clear/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        row = self.assignment()
+        self.assertFalse(row.is_manual)
+        self.assertEqual(row.excluded_amount, Decimal('25.00'))
+
+    def test_rule_save_roundtrips_excluded_amount(self):
+        resp = self.post_json('/rules/save/', {
+            'category': self.category.pk,
+            'priority': 1,
+            'description_pattern': 'shop',
+            'is_active': True,
+            'excluded_amount': '12.50',
+        })
+        self.assertEqual(resp.status_code, 200)
+        rule = CategoryRule.objects.get(user=self.user)
+        self.assertEqual(rule.excluded_amount, Decimal('12.50'))
+        body = self.client.get(f'{self.API}/rules/').json()
+        self.assertEqual(
+            body['rules'][0]['excluded_amount'], '12.50'
+        )

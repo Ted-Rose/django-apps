@@ -120,6 +120,13 @@ class Category(models.Model):
         default='',
         help_text='Optional hex color, e.g. #0d6efd'
     )
+    is_excluded = models.BooleanField(
+        default=False,
+        help_text=(
+            'Transactions in this category are excluded from '
+            'statistics (totals, chart, limits)'
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -231,6 +238,12 @@ class UserTransactionCategory(models.Model):
         default=False,
         help_text='Manual override; rules never change this row'
     )
+    excluded_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Part of the amount this user does not count',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -319,6 +332,16 @@ class CategoryRule(models.Model):
         help_text='How the counterparty and description patterns combine'
     )
     is_active = models.BooleanField(default=True)
+    excluded_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            'When set, this much of each matched transaction is '
+            'excluded from statistics'
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

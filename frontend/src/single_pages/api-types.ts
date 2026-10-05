@@ -862,6 +862,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/finance/transactions/{tx_id}/exclusion/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Exclusion
+         * @description Set the caller's per-transaction excluded amount — the part
+         *     of ``amount`` that doesn't count in statistics. Writing it
+         *     flags the assignment row ``is_manual`` (rules never touch it);
+         *     the current category is preserved. ``0`` clears the exclusion.
+         */
+        post: operations["finance_api_set_exclusion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/finance/balances/refresh/": {
         parameters: {
             query?: never;
@@ -1482,6 +1505,11 @@ export interface components {
             name: string;
             /** Color */
             color: string;
+            /**
+             * Is Excluded
+             * @default false
+             */
+            is_excluded: boolean;
         };
         /** TransactionOut */
         TransactionOut: {
@@ -1511,6 +1539,10 @@ export interface components {
             amount: string;
             /** Currency */
             currency: string;
+            /** Excluded Amount */
+            excluded_amount: string;
+            /** Counted Amount */
+            counted_amount: string;
         };
         /**
          * TransactionsOut
@@ -1599,6 +1631,11 @@ export interface components {
             category_key?: string | null;
             /** Category Color */
             category_color: string;
+            /**
+             * Is Excluded
+             * @default false
+             */
+            is_excluded: boolean;
             /** Spent */
             spent: string;
             /** Received */
@@ -1773,6 +1810,8 @@ export interface components {
             operator: string;
             /** Is Active */
             is_active: boolean;
+            /** Excluded Amount */
+            excluded_amount?: string | null;
         };
         /** RulesOut */
         RulesOut: {
@@ -1940,6 +1979,11 @@ export interface components {
             /** Category */
             category?: number | null;
         };
+        /** ExclusionIn */
+        ExclusionIn: {
+            /** Excluded Amount */
+            excluded_amount: number | string;
+        };
         /** RefreshOut */
         RefreshOut: {
             /** Success */
@@ -2052,6 +2096,8 @@ export interface components {
              * @default false
              */
             is_active: boolean;
+            /** Excluded Amount */
+            excluded_amount?: number | string | null;
         };
         /** MoveRuleIn */
         MoveRuleIn: {
@@ -2156,6 +2202,8 @@ export interface components {
              * @default false
              */
             is_active: boolean;
+            /** Excluded Amount */
+            excluded_amount?: number | string | null;
         };
         /** CategorySaveIn */
         CategorySaveIn: {
@@ -2169,6 +2217,11 @@ export interface components {
              * @default
              */
             color: string;
+            /**
+             * Is Excluded
+             * @default false
+             */
+            is_excluded: boolean;
         };
         /** PushKeysIn */
         PushKeysIn: {
@@ -3265,6 +3318,32 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_set_exclusion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tx_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExclusionIn"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

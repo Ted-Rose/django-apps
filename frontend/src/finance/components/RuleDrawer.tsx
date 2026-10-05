@@ -50,6 +50,7 @@ export interface RuleFields {
   description_exclusion: string;
   operator: string;
   is_active: boolean;
+  excluded_amount: string;
 }
 
 function defaults(data: RulesOut, maxPriority: number): RuleFields {
@@ -65,6 +66,7 @@ function defaults(data: RulesOut, maxPriority: number): RuleFields {
     description_exclusion: '',
     operator: 'AND',
     is_active: true,
+    excluded_amount: '',
   };
 }
 
@@ -80,6 +82,7 @@ function fieldsFromRule(rule: RuleOut): RuleFields {
     description_exclusion: rule.description_exclusion,
     operator: rule.operator,
     is_active: rule.is_active,
+    excluded_amount: rule.excluded_amount ?? '',
   };
 }
 
@@ -103,6 +106,7 @@ function previewPayload(fields: RuleFields, ruleId?: number): RulePreviewIn {
     description_exclusion: fields.description_exclusion,
     operator: fields.operator,
     is_active: fields.is_active,
+    excluded_amount: fields.excluded_amount.trim() || null,
   };
 }
 
@@ -119,6 +123,7 @@ function savePayload(fields: RuleFields, ruleId?: number): RuleSaveIn {
     description_exclusion: fields.description_exclusion,
     operator: fields.operator,
     is_active: fields.is_active,
+    excluded_amount: fields.excluded_amount.trim() || null,
   };
 }
 
@@ -473,6 +478,24 @@ export function RuleDrawer({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label" htmlFor="rule-excluded-amount">
+                  {t('rules.drawer.excludedAmount')}
+                </label>
+                <input
+                  type="number"
+                  id="rule-excluded-amount"
+                  min={0}
+                  step="0.01"
+                  className="form-control"
+                  title={t('rules.drawer.excludedAmountTitle')}
+                  placeholder="0.00"
+                  value={fields.excluded_amount}
+                  onChange={(event) =>
+                    set('excluded_amount', event.target.value)
+                  }
+                />
               </div>
               <div className="col-12 col-md-4 d-flex align-items-end">
                 <div className="form-check form-switch mb-2">

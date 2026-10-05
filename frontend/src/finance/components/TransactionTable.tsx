@@ -1,10 +1,15 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import Dropdown from '../../shared/components/Dropdown';
+import Modal from '../../shared/components/Modal';
 import CategoryBadge from './CategoryBadge';
 import MoneyText from './MoneyText';
 import { fmtDate } from '../../shared/format';
-import { useAssignCategory, useClearManualCategory } from '../mutations';
+import {
+  useAssignCategory,
+  useClearManualCategory,
+  useSetExclusion,
+} from '../mutations';
 import type { CategoryOut, TransactionOut, TransactionsOut } from '../api';
 
 /**
@@ -463,6 +468,8 @@ function TransactionRow({
   const { t } = useTranslation('finance');
   const assign = useAssignCategory();
   const clearManual = useClearManualCategory();
+  const setExclusion = useSetExclusion();
+  const [exclusionOpen, setExclusionOpen] = useState(false);
   // occurrence_date is a date-only string; appending T00:00:00 parses
   // it as local midnight (the template's local-datetime behavior)
   // instead of UTC midnight, which toLocaleDateString would roll
@@ -471,6 +478,11 @@ function TransactionRow({
   // Money stays a string — read only the sign for coloring.
   const negative = tx.amount.startsWith('-');
   const currentId = tx.effective_category?.id ?? null;
+  // Partial exclusion: part of `amount` doesn't count — show the raw
+  // amount struck through next to the counted ("real") amount.
+  const hasExclusion = Number(tx.excluded_amount) > 0;
+  // Whole-category exclusion ("Excluded" & friends) mutes the cell.
+  const muted = tx.effective_category?.is_excluded === true;
   return (
     <tr>
       <td className="tx-cell-date">{fmtDate(occurredAt)}</td>
@@ -557,6 +569,16 @@ function TransactionRow({
               {t('transactions.createRuleFromTx')}
             </button>
           </li>
+          <li>
+            <button
+              type="button"
+              className="dropdown-item"
+              onClick={() => setExclusionOpen(true)}
+            >
+              <i className="bi bi-eye-slash me-1" aria-hidden="true" />
+              {t('transactions.excludeAmount')}
+            </button>
+          </li>
           {tx.category_is_manual && (
             <>
               <li>
@@ -581,10 +603,101 @@ function TransactionRow({
       </td>
       <td
         className={`tx-cell-amount text-end ${
-          negative ? 'text-danger' : 'text-success'
+          muted ? 'text-muted' : negative ? 'text-danger' : 'text-success'
         }`}
       >
-        <MoneyText amount={tx.amount} currency={tx.currency} />
+        {hasExclusion ? (
+          <>
+            <s className="text-muted me-1">
+              {tx.amount} {tx.currency}
+            </s>
+            <MoneyText
+              amount={tx.counted_amount}
+              currency={tx.currency}
+              colored={!muted}
+            />
+            <i
+              className="bi bi-eye-slash ms-1 text-muted"
+              title={t('transactions.amountExcluded', {
+                amount: tx.excluded_amount,
+                currency: tx.currency,
+              })}
+              aria-label={t('transactions.amountExcluded', {
+                amount: tx.excluded_amount,
+                currency: tx.currency,
+              })}
+            />
+          </>
+        ) : (
+          <MoneyText
+            amount={tx.amount}
+            currency={tx.currency}
+            colored={!muted}
+          />
+        )}
+        <Modal
+          show={exclusionOpen}
+          title={t('transactions.excludeAmountTitle')}
+          onClose={() => setExclusionOpen(false)}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = String(
+                new FormData(event.currentTarget).get('excluded_amount') ?? '',
+              ).trim();
+              if (!value) return;
+              setExclusion.mutate(
+                { txId: tx.id, excludedAmount: value },
+                {
+                  onSuccess: (result) =>
+                    result?.success && setExclusionOpen(false),
+                },
+              );
+            }}
+          >
+            <label className="form-label" htmlFor={`exclusion-amount-${tx.id}`}>
+              {t('transactions.excludedAmountLabel')}
+            </label>
+            <div className="input-group">
+              <input
+                type="number"
+                id={`exclusion-amount-${tx.id}`}
+                name="excluded_amount"
+                className="form-control"
+                min="0"
+                max={Math.abs(Number(tx.amount))}
+                step="0.01"
+                required
+                defaultValue={hasExclusion ? tx.excluded_amount : ''}
+                aria-label={t('transactions.excludedAmountLabel')}
+              />
+              <span className="input-group-text">{tx.currency}</span>
+            </div>
+            <div className="form-text">
+              {t('transactions.excludedAmountHint', {
+                amount: tx.amount,
+                currency: tx.currency,
+              })}
+            </div>
+            <div className="d-flex justify-content-end gap-2 mt-3">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setExclusionOpen(false)}
+              >
+                {t('common:common.cancel')}
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={setExclusion.isPending}
+              >
+                {t('common:common.save')}
+              </button>
+            </div>
+          </form>
+        </Modal>
       </td>
     </tr>
   );

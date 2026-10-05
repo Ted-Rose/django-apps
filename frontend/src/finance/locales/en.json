@@ -79,7 +79,10 @@
     "editCategoryAria": "Edit {{name}}",
     "deleteCategory": "Delete category",
     "deleteCategoryAria": "Delete {{name}}",
-    "emptyCategories": "No categories yet — create one, then add rules that assign it."
+    "emptyCategories": "No categories yet — create one, then add rules that assign it.",
+    "excludeFromStats": "Exclude from statistics",
+    "excludedFromStats": "Excluded from statistics",
+    "excludedSection": "Excluded categories — not counted in totals"
   },
   "connect": {
     "title": "Connect a Bank",
@@ -117,6 +120,11 @@
     "setCategory": "Set category",
     "noCategory": "No category",
     "createRuleFromTx": "Create rule",
+    "excludeAmount": "Exclude amount…",
+    "excludeAmountTitle": "Exclude amount",
+    "excludedAmountLabel": "Amount not counted",
+    "excludedAmountHint": "Of the {{amount}} {{currency}} total, this much won't count in statistics. Enter 0 to count the full amount.",
+    "amountExcluded": "{{amount}} {{currency}} excluded",
     "revertToAutomatic": "Revert to automatic",
     "manualMark": "Manual override",
     "sourceHeader": "Source",
@@ -260,6 +268,8 @@
       "excludePlaceholder": "e.g. refund — rule never applies",
       "options": "Options",
       "combine": "Patterns combine",
+      "excludedAmount": "Excluded amount",
+      "excludedAmountTitle": "This much of each matched transaction won't count in statistics",
       "active": "Active",
       "save": "Save rule",
       "impactPreview": "Impact preview",
@@ -312,7 +322,8 @@
     "categoryAssignFailed": "Failed to assign category: {{detail}}",
     "categoryRevertFailed": "Failed to revert to automatic: {{detail}}",
     "limitSaveFailed": "Failed to save limit: {{detail}}",
-    "limitDeleteFailed": "Failed to delete limit: {{detail}}"
+    "limitDeleteFailed": "Failed to delete limit: {{detail}}",
+    "exclusionSaveFailed": "Failed to save exclusion: {{detail}}"
   },
   "server": {
     "couldNotLoadInstitutions": "Could not load institutions: {{detail}}",
@@ -376,6 +387,9 @@
     "categoryAssigned": "Category \"{{name}}\" assigned.",
     "markedUncategorized": "Marked as uncategorized.",
     "categoryReverted": "Reverted to automatic categorization.",
+    "exclusionSaved": "Excluding {{amount}} {{currency}}.",
+    "exclusionCleared": "Exclusion removed.",
+    "invalidExcludedAmount": "Excluded amount must be between 0 and the transaction amount.",
     "categoryDeleted_zero": "Category deleted; {{count}} transactions recategorized.",
     "categoryDeleted_one": "Category deleted; {{count}} transaction recategorized.",
     "categoryDeleted_other": "Category deleted; {{count}} transactions recategorized.",

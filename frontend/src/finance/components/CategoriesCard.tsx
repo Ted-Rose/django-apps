@@ -23,11 +23,13 @@ export function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
   const deleteCategory = useDeleteCategory();
   const [name, setName] = useState('');
   const [color, setColor] = useState('#6c757d');
+  const [isExcluded, setIsExcluded] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const reset = () => {
     setName('');
     setColor('#6c757d');
+    setIsExcluded(false);
     setEditingId(null);
   };
 
@@ -45,7 +47,7 @@ export function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
           const trimmed = name.trim();
           if (!trimmed) return;
           saveCategory.mutate(
-            { name: trimmed, color },
+            { name: trimmed, color, is_excluded: isExcluded },
             { onSuccess: (result) => result?.success && reset() },
           );
         }}
@@ -76,6 +78,20 @@ export function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
             onChange={(event) => setColor(event.target.value)}
           />
         </div>
+        <div className="col-12">
+          <div className="form-check">
+            <input
+              type="checkbox"
+              id="cat-is-excluded"
+              className="form-check-input"
+              checked={isExcluded}
+              onChange={(event) => setIsExcluded(event.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="cat-is-excluded">
+              {t('categories.excludeFromStats')}
+            </label>
+          </div>
+        </div>
         <div className="col-3 d-flex gap-1">
           <button
             type="submit"
@@ -104,7 +120,15 @@ export function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
               key={category.id}
               className="cat-row d-flex justify-content-between align-items-center py-2"
             >
-              <CategoryBadge category={category} />
+              <span className="d-flex align-items-center gap-1">
+                <CategoryBadge category={category} />
+                {category.is_excluded && (
+                  <i
+                    className="bi bi-eye-slash text-muted"
+                    title={t('categories.excludedFromStats')}
+                  />
+                )}
+              </span>
               <span className="d-flex gap-1">
                 <button
                   type="button"
@@ -116,6 +140,7 @@ export function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
                   onClick={() => {
                     setName(category.name);
                     setColor(category.color || '#6c757d');
+                    setIsExcluded(category.is_excluded);
                     setEditingId(category.id);
                   }}
                 >

@@ -32,8 +32,8 @@ const mockedApiPost = vi.mocked(apiPost);
 // Deliberately different names from the breakdown rows so queries
 // can tell the management card and the spending table apart.
 const CATEGORIES: CategoryOut[] = [
-  { id: 3, name: 'Dining', color: '#00aa00' },
-  { id: 4, name: 'Housing', color: '#0000ff' },
+  { id: 3, name: 'Dining', color: '#00aa00', is_excluded: false },
+  { id: 4, name: 'Housing', color: '#0000ff', is_excluded: false },
 ];
 
 function makeOverview(
@@ -44,6 +44,7 @@ function makeOverview(
       {
         category_id: 1,
         category_name: 'Groceries',
+        is_excluded: false,
         category_color: '#00aa00',
         spent: '120.50',
         received: '0.00',
@@ -55,6 +56,7 @@ function makeOverview(
       {
         category_id: 2,
         category_name: 'Salary',
+        is_excluded: false,
         category_color: '#0000ff',
         spent: '0.00',
         received: '2000.00',
@@ -66,6 +68,7 @@ function makeOverview(
       {
         category_id: null,
         category_name: 'Uncategorized',
+        is_excluded: false,
         category_key: 'uncategorized',
         category_color: '#6c757d',
         spent: '39.00',
@@ -123,9 +126,16 @@ function makeTransactions(
         },
         remittance_information: 'Coffee',
         counterparty: 'Cafe',
-        effective_category: { id: 1, name: 'Groceries', color: '#00aa00' },
+        effective_category: {
+          id: 1,
+          name: 'Groceries',
+          color: '#00aa00',
+          is_excluded: false,
+        },
         category_is_manual: false,
         amount: '-4.50',
+        excluded_amount: '0.00',
+        counted_amount: '-4.50',
         currency: 'EUR',
       },
     ],
@@ -425,12 +435,106 @@ describe('CategoryOverview', () => {
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/categories/save/',
-        { name: 'Travel', color: '#6c757d' },
+        { name: 'Travel', color: '#6c757d', is_excluded: false },
       ),
     );
     expect(
       await screen.findByText('Category "Travel" saved.'),
     ).toBeInTheDocument();
+  });
+
+  it('saves the exclude-from-statistics flag and marks excluded rows', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Category "Travel" saved.',
+    });
+    renderOverview();
+    fireEvent.change(await screen.findByLabelText('Name'), {
+      target: { value: 'Travel' },
+    });
+    fireEvent.click(screen.getByLabelText('Exclude from statistics'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/categories/save/',
+        { name: 'Travel', color: '#6c757d', is_excluded: true },
+      ),
+    );
+  });
+
+  it('marks an excluded category in the list and refills the checkbox on edit', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeOverview({
+        categories: [
+          {
+            id: 9,
+            name: 'Excluded',
+            color: '#6c757d',
+            is_excluded: true,
+          },
+        ],
+      }),
+    );
+    renderOverview();
+    const list = await screen.findByRole('list');
+    const row = within(list).getByText('Excluded').closest('li')!;
+    expect(row.querySelector('.bi-eye-slash')).not.toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit Excluded' }),
+    );
+    expect(
+      screen.getByLabelText('Exclude from statistics'),
+    ).toBeChecked();
+  });
+
+  it('renders excluded rows in a muted section without a share bar', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeOverview({
+        rows: [
+          {
+            category_id: 1,
+            category_name: 'Groceries',
+            category_color: '#00aa00',
+            is_excluded: false,
+            spent: '120.50',
+            received: '0.00',
+            net: '-120.50',
+            share: 100,
+            currency: 'EUR',
+            tx_count: 12,
+          },
+          {
+            category_id: 9,
+            category_name: 'Excluded',
+            category_color: '#6c757d',
+            is_excluded: true,
+            spent: '200.00',
+            received: '0.00',
+            net: '-200.00',
+            share: 0,
+            currency: 'EUR',
+            tx_count: 3,
+          },
+        ],
+      }),
+    );
+    renderOverview();
+    // A muted section header separates excluded rows; the row shows
+    // a marker instead of a share bar but keeps its own sums.
+    expect(
+      await screen.findByText(
+        'Excluded categories — not counted in totals',
+      ),
+    ).toBeInTheDocument();
+    const row = screen.getByText('Excluded').closest('tr')!;
+    expect(row).toHaveClass('text-muted');
+    expect(
+      within(row).getByText('Excluded from statistics'),
+    ).toBeInTheDocument();
+    expect(row.querySelector('.progress')).toBeNull();
+    expect(within(row).getByText('-200.00 EUR')).toBeInTheDocument();
+    expect(within(row).getByText('3 transactions')).toBeInTheDocument();
   });
 
   it('loads a category into the form for editing', async () => {

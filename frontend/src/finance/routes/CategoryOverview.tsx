@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, type FormEvent } from 'react';
+import { Fragment, Suspense, lazy, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -347,19 +347,37 @@ export default function CategoryOverview() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.rows.map((row, index) => (
-                          <OverviewRow
-                            key={`${row.category_name}-${index}`}
-                            row={row}
-                            index={index}
-                            selected={
-                              (row.category_id != null
-                                ? String(row.category_id)
-                                : 'none') === params.category
-                            }
-                            onSelect={() => selectCategory(row)}
-                          />
-                        ))}
+                        {(() => {
+                          // Excluded rows sort last server-side; a
+                          // muted section header splits them off.
+                          const firstExcluded = data.rows.findIndex(
+                            (row) => row.is_excluded,
+                          );
+                          return data.rows.map((row, index) => (
+                            <Fragment key={`${row.category_name}-${index}`}>
+                              {index === firstExcluded && (
+                                <tr>
+                                  <td
+                                    colSpan={4}
+                                    className="text-muted small border-0 pt-3"
+                                  >
+                                    {t('categories.excludedSection')}
+                                  </td>
+                                </tr>
+                              )}
+                              <OverviewRow
+                                row={row}
+                                index={index}
+                                selected={
+                                  (row.category_id != null
+                                    ? String(row.category_id)
+                                    : 'none') === params.category
+                                }
+                                onSelect={() => selectCategory(row)}
+                              />
+                            </Fragment>
+                          ));
+                        })()}
                       </tbody>
                       <tfoot>
                         {Object.entries(data.totals).map(
@@ -427,7 +445,11 @@ function OverviewRow({
     : '#6c757d';
   return (
     <tr
-      className={selected ? 'table-active' : undefined}
+      className={
+        `${selected ? 'table-active' : ''}${
+          row.is_excluded ? ' text-muted' : ''
+        }`.trim() || undefined
+      }
       style={{ cursor: 'pointer' }}
       tabIndex={0}
       onClick={onSelect}
@@ -447,6 +469,7 @@ function OverviewRow({
                 ? t('transactions.uncategorized')
                 : row.category_name,
             color: row.category_color,
+            is_excluded: row.is_excluded,
           }}
         />
         <div className="small text-muted">
@@ -454,25 +477,32 @@ function OverviewRow({
         </div>
       </td>
       <td className="align-middle">
-        <div className="d-flex align-items-center gap-2">
-          <div
-            className="progress flex-grow-1"
-            role="progressbar"
-            aria-valuenow={row.share}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            style={{ height: '0.5rem', minWidth: '1.5rem' }}
-          >
+        {row.is_excluded ? (
+          <small className="text-nowrap">
+            <i className="bi bi-eye-slash me-1" aria-hidden="true" />
+            {t('categories.excludedFromStats')}
+          </small>
+        ) : (
+          <div className="d-flex align-items-center gap-2">
             <div
-              className="progress-bar"
-              style={{
-                width: `${row.share.toFixed(0)}%`,
-                backgroundColor: color,
-              }}
-            />
+              className="progress flex-grow-1"
+              role="progressbar"
+              aria-valuenow={row.share}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              style={{ height: '0.5rem', minWidth: '1.5rem' }}
+            >
+              <div
+                className="progress-bar"
+                style={{
+                  width: `${row.share.toFixed(0)}%`,
+                  backgroundColor: color,
+                }}
+              />
+            </div>
+            <small className="text-nowrap">{row.share.toFixed(1)}%</small>
           </div>
-          <small className="text-nowrap">{row.share.toFixed(1)}%</small>
-        </div>
+        )}
       </td>
       <td className="text-end text-nowrap fin-money">
         {Number(row.spent) > 0 ? (

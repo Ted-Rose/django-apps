@@ -58,7 +58,10 @@ transactions, and get spending-limit alerts.
 - `UserTransactionCategory` — one user's category assignment for a
   transaction, unique per `(user, transaction)`. Owner and sharers
   each have their own rows; `is_manual` is a per-user override rules
-  never touch. A `post_delete` receiver on `AccountShare`
+  never touch. `excluded_amount` is the per-user "not counted" part
+  of the amount — the counted remainder (sign preserved, clamped at
+  zero) is exposed via `annotate_counted_amount`. A `post_delete`
+  receiver on `AccountShare`
   (`signals.py`, wired via `FinanceConfig.ready`) deletes the
   ex-viewer's rows when a share is revoked. No row = uncategorized
   for that user — sharers never see the owner's categories.
@@ -118,7 +121,12 @@ transactions, and get spending-limit alerts.
   `unsubscribe/`) from the SPA's limits page
   (`usePushSubscription` hook); no-op when `VAPID_*` settings are
   empty.
-- `Category` — per-user, unique on `(user, name)`, optional hex color.
+- `Category` — per-user, unique on `(user, name)`, optional hex
+  color, `is_excluded` flag (transactions contribute nothing to
+  totals/share/limits but stay visible and keep their own overview
+  row). Every user gets a seeded "Excluded" category: the
+  `post_save` receiver calls `ensure_excluded_category` (which
+  re-flags an existing same-named row rather than duplicating it).
 - `CategoryRule` — per-user auto-categorization rule. Counterparty
   condition: `counterparty_pattern` + `counterparty_match_type`
   against the name field picked by `counterparty_scope`
@@ -128,8 +136,9 @@ transactions, and get spending-limit alerts.
   contains/equals/starts_with/ends_with, case-insensitive; the two
   conditions combine via `operator` (AND/OR).
   `description_exclusion` vetoes the match when its text appears in
-  remittance info. Evaluated in `(priority, pk)` order —
-  **first match wins**.
+  remittance info. `excluded_amount` (nullable) is copied onto each
+  matched transaction's assignment row. Evaluated in
+  `(priority, pk)` order — **first match wins**.
 
 **Always** query accounts/transactions through
 `Account.objects.for_user(user)` / `Transaction.objects.for_user(user)`
@@ -200,6 +209,13 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   /api/finance/transactions/?source=manual` is the audit filter
   ("Manual only" in the Category column header menu + a removable
   chip).
+- Partial exclusion: `POST /api/finance/transactions/<id>/exclusion/`
+  (`{excluded_amount}`, validated `0 ≤ v ≤ |amount|`, 0 clears)
+  writes `is_manual` while preserving the category — "revert to
+  automatic" resets both. `TransactionOut` carries
+  `excluded_amount`/`counted_amount`; the SPA renders partial
+  exclusions as struck-through raw amount + counted amount and
+  mutes rows in `is_excluded` categories.
 
 ## Effective-category reads (`services/categories.py`)
 

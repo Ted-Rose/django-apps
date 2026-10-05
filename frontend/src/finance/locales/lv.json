@@ -79,7 +79,10 @@
     "editCategoryAria": "Rediģēt {{name}}",
     "deleteCategory": "Dzēst kategoriju",
     "deleteCategoryAria": "Dzēst {{name}}",
-    "emptyCategories": "Kategoriju vēl nav — izveido vienu, tad pievieno noteikumus, kas to piešķir."
+    "emptyCategories": "Kategoriju vēl nav — izveido vienu, tad pievieno noteikumus, kas to piešķir.",
+    "excludeFromStats": "Izslēgt no statistikas",
+    "excludedFromStats": "Izslēgta no statistikas",
+    "excludedSection": "Izslēgtas kategorijas — netiek skaitītas kopsummās"
   },
   "connect": {
     "title": "Pievienot banku",
@@ -117,6 +120,11 @@
     "setCategory": "Iestatīt kategoriju",
     "noCategory": "Bez kategorijas",
     "createRuleFromTx": "Izveidot noteikumu",
+    "excludeAmount": "Izslēgt summu…",
+    "excludeAmountTitle": "Izslēgt summu",
+    "excludedAmountLabel": "Neskaitāmā summa",
+    "excludedAmountHint": "No {{amount}} {{currency}} kopsummas tik daudz netiks skaitīts statistikā. Ievadi 0, lai skaitītu pilnu summu.",
+    "amountExcluded": "{{amount}} {{currency}} izslēgta",
     "revertToAutomatic": "Atjaunot automātisko",
     "manualMark": "Manuāli piešķirta",
     "sourceHeader": "Avots",
@@ -260,6 +268,8 @@
       "excludePlaceholder": "piem., atmaksa — noteikums netiek lietots",
       "options": "Opcijas",
       "combine": "Paraugu apvienošana",
+      "excludedAmount": "Izslēgtā summa",
+      "excludedAmountTitle": "Šī summa no katras atbilstošas transakcijas netiks skaitīta statistikā",
       "active": "Aktīvs",
       "save": "Saglabāt noteikumu",
       "impactPreview": "Ietekmes priekšskatījums",
@@ -312,7 +322,8 @@
     "categoryAssignFailed": "Neizdevās piešķirt kategoriju: {{detail}}",
     "categoryRevertFailed": "Neizdevās atjaunot automātisko kategoriju: {{detail}}",
     "limitSaveFailed": "Neizdevās saglabāt limitu: {{detail}}",
-    "limitDeleteFailed": "Neizdevās dzēst limitu: {{detail}}"
+    "limitDeleteFailed": "Neizdevās dzēst limitu: {{detail}}",
+    "exclusionSaveFailed": "Neizdevās saglabāt izslēgšanu: {{detail}}"
   },
   "server": {
     "couldNotLoadInstitutions": "Neizdevās ielādēt banku sarakstu: {{detail}}",
@@ -376,6 +387,9 @@
     "categoryAssigned": "Kategorija \"{{name}}\" piešķirta.",
     "markedUncategorized": "Atzīmēts kā bez kategorijas.",
     "categoryReverted": "Atjaunota automātiskā kategorizācija.",
+    "exclusionSaved": "Izslēgti {{amount}} {{currency}}.",
+    "exclusionCleared": "Izslēgšana noņemta.",
+    "invalidExcludedAmount": "Izslēgtajai summai jābūt starp 0 un transakcijas summu.",
     "categoryDeleted_zero": "Kategorija dzēsta; pārkategorizētas {{count}} transakciju.",
     "categoryDeleted_one": "Kategorija dzēsta; pārkategorizēta {{count}} transakcija.",
     "categoryDeleted_other": "Kategorija dzēsta; pārkategorizētas {{count}} transakcijas.",

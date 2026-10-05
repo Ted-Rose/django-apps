@@ -47,6 +47,7 @@ export type PushUnsubscribeIn = components['schemas']['PushUnsubscribeIn'];
 export type BalanceAlertSaveIn = components['schemas']['BalanceAlertSaveIn'];
 export type NotificationsReadIn = components['schemas']['NotificationsReadIn'];
 export type AssignCategoryIn = components['schemas']['AssignCategoryIn'];
+export type ExclusionIn = components['schemas']['ExclusionIn'];
 export type MessageOut = components['schemas']['MessageOut'];
 export type SuccessOut = components['schemas']['SuccessOut'];
 export type ToggleBalanceCheckOut =

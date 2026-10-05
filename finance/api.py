@@ -53,6 +53,7 @@ from finance.models import (
     UserTransactionCategory,
 )
 from finance.services.categories import (
+    annotate_counted_amount,
     annotate_effective_category,
     annotate_effective_category_name,
 )
@@ -226,6 +227,10 @@ class CategoryOut(Schema):
     id: int
     name: str
     color: str
+    # True on the auto-provisioned 'Excluded' category (or any
+    # category the user flags) — its transactions don't count in
+    # statistics.
+    is_excluded: bool = False
 
 
 class TransactionOut(Schema):
@@ -246,6 +251,11 @@ class TransactionOut(Schema):
     category_is_manual: Optional[bool] = None
     amount: Decimal
     currency: str
+    # Per-user partial exclusion: `excluded_amount` of `amount`
+    # doesn't count in statistics; `counted_amount` is the remainder
+    # (sign preserved, clamped at zero).
+    excluded_amount: Decimal
+    counted_amount: Decimal
 
     @staticmethod
     def resolve_counterparty(obj):
@@ -288,6 +298,10 @@ class CategoryRowOut(Schema):
     # to the catalog string; `category_name` stays the EN fallback.
     category_key: Optional[str] = None
     category_color: str
+    # Excluded-category rows still list their own sums but hold
+    # share 0 and don't feed `totals` — the SPA renders them in a
+    # separated muted section.
+    is_excluded: bool = False
     spent: Decimal
     received: Decimal
     net: Decimal
@@ -393,6 +407,9 @@ class RuleOut(Schema):
     description_exclusion: str
     operator: str
     is_active: bool
+    # Per matched transaction, this much is excluded from
+    # statistics; null = count the whole amount.
+    excluded_amount: Optional[Decimal] = None
 
 
 class ChoiceOut(Schema):
@@ -502,6 +519,7 @@ class RuleSaveIn(Schema):
     description_exclusion: str = ''
     operator: str = 'AND'
     is_active: bool = False
+    excluded_amount: Optional[Decimal] = None
 
 
 class MoveRuleIn(Schema):
@@ -520,6 +538,7 @@ class RulePreviewIn(Schema):
     description_exclusion: str = ''
     operator: str = 'AND'
     is_active: bool = False
+    excluded_amount: Optional[Decimal] = None
 
 
 class RulePreviewChangeOut(Schema):
@@ -550,12 +569,18 @@ class RulePreviewOut(Schema):
 class CategorySaveIn(Schema):
     name: str = ''
     color: str = ''
+    is_excluded: bool = False
 
 
 class AssignCategoryIn(Schema):
     # null locks the transaction as uncategorized (is_manual row
     # with a NULL category — rules still leave it alone).
     category: Optional[int] = None
+
+
+class ExclusionIn(Schema):
+    # Part of the amount the caller doesn't count; 0 clears.
+    excluded_amount: Decimal
 
 
 class PushKeysIn(Schema):
@@ -643,10 +668,13 @@ def transaction_list(request, account: str = '', category: str = '',
                      sort: str = 'date', direction: str = 'desc',
                      page: Optional[str] = None):
     user = request.user
-    transactions = annotate_effective_category(
-        Transaction.objects.for_user(user)
-        .select_related('account')
-        .with_occurrence_date(),
+    transactions = annotate_counted_amount(
+        annotate_effective_category(
+            Transaction.objects.for_user(user)
+            .select_related('account')
+            .with_occurrence_date(),
+            user,
+        ),
         user,
     )
 
@@ -776,9 +804,12 @@ def category_overview(request,
                       from_: str = Query('', alias='from'),
                       to: str = '', account: str = ''):
     """Per-category spending totals over a selectable time window."""
-    transactions = annotate_effective_category(
-        Transaction.objects.for_user(request.user)
-        .with_occurrence_date(),
+    transactions = annotate_counted_amount(
+        annotate_effective_category(
+            Transaction.objects.for_user(request.user)
+            .with_occurrence_date(),
+            request.user,
+        ),
         request.user,
     )
 
@@ -800,8 +831,14 @@ def category_overview(request,
         transactions
         .values('effective_category_id', 'currency')
         .annotate(
-            spent=Sum('amount', filter=Q(amount__lt=0)),
-            received=Sum('amount', filter=Q(amount__gt=0)),
+            spent=Sum(
+                'counted_amount',
+                filter=Q(counted_amount__lt=0),
+            ),
+            received=Sum(
+                'counted_amount',
+                filter=Q(counted_amount__gt=0),
+            ),
             tx_count=Count('pk'),
         )
         # Clear Meta.ordering — otherwise 'booking_date' leaks into
@@ -832,14 +869,28 @@ def category_overview(request,
             category.color if category and category.color
             else '#6c757d'
         )
+        row['is_excluded'] = bool(
+            category and category.is_excluded
+        )
         rows.append(row)
+        # Excluded categories keep their own row (the drill-down
+        # still works) but contribute nothing to the totals that
+        # feed the StatCards and the share chart.
+        if row['is_excluded']:
+            continue
         total = totals.setdefault(
             currency, {'spent': 0, 'received': 0}
         )
         total['spent'] += row['spent']
         total['received'] += row['received']
-    rows.sort(key=lambda row: row['spent'], reverse=True)
+    # Excluded rows sort last regardless of their sums.
+    rows.sort(
+        key=lambda row: (row['is_excluded'], -row['spent'])
+    )
     for row in rows:
+        if row['is_excluded']:
+            row['share'] = 0
+            continue
         total = totals[row['currency']]['spent']
         row['share'] = row['spent'] / total * 100 if total else 0
 
@@ -939,7 +990,12 @@ def limits(request, month: str = ''):
         ),
         'as_of': as_of,
         'accounts': _account_options(user),
-        'categories': Category.objects.filter(user=user),
+        # Excluded categories are filtered out of the limit form's
+        # choices (a limit on one would permanently read 0); the
+        # TransactionLimitForm queryset enforces the same on save.
+        'categories': Category.objects.filter(
+            user=user, is_excluded=False
+        ),
         'push_config': _push_config(user),
     }
 
@@ -1299,6 +1355,51 @@ def clear_category(request, tx_id: int):
     }
 
 
+@router.post(
+    '/transactions/{tx_id}/exclusion/', response=MessageOut
+)
+def set_exclusion(request, tx_id: int, payload: ExclusionIn):
+    """Set the caller's per-transaction excluded amount — the part
+    of ``amount`` that doesn't count in statistics. Writing it
+    flags the assignment row ``is_manual`` (rules never touch it);
+    the current category is preserved. ``0`` clears the exclusion.
+    """
+    tx = get_object_or_404(
+        Transaction.objects.for_user(request.user), pk=tx_id
+    )
+    excluded = payload.excluded_amount
+    if excluded < 0 or excluded > abs(tx.amount):
+        raise ApiHttpError(
+            400,
+            'Excluded amount must be between 0 and the '
+            'transaction amount.',
+            code='invalidExcludedAmount',
+        )
+    UserTransactionCategory.objects.update_or_create(
+        user=request.user,
+        transaction=tx,
+        defaults={
+            'is_manual': True,
+            'excluded_amount': excluded,
+        },
+    )
+    if excluded == 0:
+        return {
+            'success': True,
+            'message': 'Exclusion removed.',
+            'code': 'exclusionCleared',
+        }
+    return {
+        'success': True,
+        'message': f'Excluding {excluded} {tx.currency}.',
+        'code': 'exclusionSaved',
+        'params': {
+            'amount': str(excluded),
+            'currency': tx.currency,
+        },
+    }
+
+
 @router.post('/balances/refresh/', response=RefreshOut)
 def refresh_balances(request):
     """Fetch the latest balances from GoCardless on demand."""
@@ -1557,7 +1658,10 @@ def save_category(request, payload: CategorySaveIn):
     Category.objects.update_or_create(
         user=request.user,
         name=name,
-        defaults={'color': payload.color.strip()},
+        defaults={
+            'color': payload.color.strip(),
+            'is_excluded': payload.is_excluded,
+        },
     )
     return {
         'success': True,

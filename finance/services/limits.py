@@ -13,6 +13,7 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
 from finance.models import Transaction
+from finance.services.categories import annotate_counted_amount
 
 # (threshold field, alert-episode flag field, window length, label,
 #  i18n key — the SPA translates `key`, `label` stays the English
@@ -78,16 +79,30 @@ def limit_windows(limit, today=None):
 
 
 def _spend_queryset(limit):
-    transactions = Transaction.objects.with_occurrence_date().filter(
-        account__in=limit.accounts.all(),
-        amount__lt=0,
+    """Outgoing transactions counting toward ``limit``.
+
+    Transactions in the limit user's ``is_excluded`` categories are
+    dropped entirely; ``counted_amount`` then applies each row's
+    per-user partial exclusion (never flips sign, so the amount<0
+    pre-filter still selects exactly the outgoing set).
+    """
+    transactions = (
+        Transaction.objects.with_occurrence_date()
+        .filter(
+            account__in=limit.accounts.all(),
+            amount__lt=0,
+        )
+        .exclude(
+            category_assignments__user=limit.user,
+            category_assignments__category__is_excluded=True,
+        )
     )
     if limit.category_id:
         transactions = transactions.filter(
             category_assignments__user=limit.user,
             category_assignments__category=limit.category,
         )
-    return transactions
+    return annotate_counted_amount(transactions, limit.user)
 
 
 def spent_in_window(limit, start, end=None):
@@ -104,7 +119,7 @@ def spent_in_window(limit, start, end=None):
     if end is not None:
         transactions = transactions.filter(occurrence_date__lt=end)
     spent = transactions.aggregate(
-        total=Sum('amount')
+        total=Sum('counted_amount')
     )['total'] or Decimal(0)
     return abs(spent)
 
@@ -194,7 +209,7 @@ def monthly_history(limit, before=None, today=None):
         .filter(occurrence_date__lt=boundary)
         .annotate(month=TruncMonth('occurrence_date'))
         .values('month')
-        .annotate(total=Sum('amount'))
+        .annotate(total=Sum('counted_amount'))
         .order_by('month')
     )
     totals = {}

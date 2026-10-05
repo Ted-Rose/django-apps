@@ -33,6 +33,7 @@ class CategoryRuleForm(forms.ModelForm):
             'counterparty_pattern', 'counterparty_match_type',
             'description_pattern', 'description_match_type',
             'description_exclusion', 'operator', 'is_active',
+            'excluded_amount',
         ]
 
     def __init__(self, *args, user=None, **kwargs):
@@ -75,7 +76,7 @@ class TransactionLimitForm(forms.ModelForm):
                 Account.objects.for_user(user)
             )
             self.fields['category'].queryset = Category.objects.filter(
-                user=user
+                user=user, is_excluded=False
             )
         for name, field in self.fields.items():
             if isinstance(field.widget, forms.CheckboxInput):

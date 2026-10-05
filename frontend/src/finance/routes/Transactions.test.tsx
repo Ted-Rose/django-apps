@@ -34,8 +34,15 @@ function makeTransaction(
     account: { id: 5, name: 'Everyday account', currency: 'EUR' },
     remittance_information: 'Rent January',
     counterparty: 'Landlord Ltd',
-    effective_category: { id: 3, name: 'Housing', color: '#ff0000' },
+    effective_category: {
+      id: 3,
+      name: 'Housing',
+      color: '#ff0000',
+      is_excluded: false,
+    },
     amount: '-500.00',
+    excluded_amount: '0.00',
+    counted_amount: '-500.00',
     currency: 'EUR',
     ...overrides,
   };
@@ -55,7 +62,9 @@ function makeTransactions(
       { id: 5, label: 'Everyday account' },
       { id: 6, label: 'Savings' },
     ],
-    categories: [{ id: 3, name: 'Housing', color: '#ff0000' }],
+    categories: [
+      { id: 3, name: 'Housing', color: '#ff0000', is_excluded: false },
+    ],
     counterparties: ['Employer Inc', 'Landlord Ltd'],
     selected_account: null,
     selected_category: '',
@@ -433,7 +442,9 @@ describe('Transactions', () => {
     // scopes, operators) — fetched lazily on the first click.
     const rulesPayload = {
       rules: [],
-      categories: [{ id: 3, name: 'Housing', color: '#ff0000' }],
+      categories: [
+        { id: 3, name: 'Housing', color: '#ff0000', is_excluded: false },
+      ],
       match_types: [{ value: 'contains', label: 'Contains' }],
       counterparty_scopes: [{ value: 'any', label: 'Debtor or creditor' }],
       operators: [{ value: 'AND', label: 'AND' }],
@@ -581,6 +592,92 @@ describe('Transactions', () => {
         '/api/finance/transactions/1/category/clear/',
       ),
     );
+  });
+
+  it('shows the counted amount with the raw amount struck through', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeTransactions({
+        count: 1,
+        transactions: [
+          makeTransaction({
+            amount: '-100.00',
+            excluded_amount: '40.00',
+            counted_amount: '-60.00',
+          }),
+        ],
+      }),
+    );
+    renderTransactions();
+    const cell = await screen.findByRole('cell', { name: /-60.00 EUR/ });
+    const struck = cell.querySelector('s');
+    expect(struck).toHaveTextContent('-100.00 EUR');
+    expect(struck).toHaveClass('text-muted');
+    expect(
+      cell.querySelector('.bi-eye-slash'),
+    ).not.toBeNull();
+  });
+
+  it('mutes the amount cell for an excluded category', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeTransactions({
+        count: 1,
+        transactions: [
+          makeTransaction({
+            effective_category: {
+              id: 9,
+              name: 'Excluded',
+              color: '#6c757d',
+              is_excluded: true,
+            },
+          }),
+        ],
+      }),
+    );
+    renderTransactions();
+    const cell = await screen.findByRole('cell', {
+      name: '-500.00 EUR',
+    });
+    expect(cell).toHaveClass('text-muted');
+    expect(cell).not.toHaveClass('text-danger');
+  });
+
+  it('posts a partial exclusion from the row menu modal', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeTransactions({
+        count: 1,
+        transactions: [makeTransaction()],
+      }),
+    );
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Excluding 40.00 EUR.',
+    });
+    renderTransactions();
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Change category for transaction 1',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /Exclude amount/ }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(
+      within(dialog).getByLabelText('Amount not counted'),
+      { target: { value: '40' } },
+    );
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save' }),
+    );
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/transactions/1/exclusion/',
+        { excluded_amount: '40' },
+      ),
+    );
+    expect(
+      await screen.findByText('Excluding 40.00 EUR.'),
+    ).toBeInTheDocument();
   });
 
   it('filters to manual overrides via the source menu item', async () => {

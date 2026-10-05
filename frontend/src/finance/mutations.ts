@@ -29,6 +29,7 @@ import type {
   CategorySaveIn,
   ConnectIn,
   ConnectOut,
+  ExclusionIn,
   LimitSaveIn,
   MessageOut,
   MoveRuleIn,
@@ -563,6 +564,39 @@ export function useClearManualCategory() {
     onError: (error) =>
       pushToast(
         t('mutations.categoryRevertFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/transactions/{id}/exclusion/ — writes the
+ * caller's per-transaction excluded amount (the part that doesn't
+ * count in statistics) and flags the row `is_manual`. `0` clears
+ * the exclusion; "revert to automatic" resets both category and
+ * exclusion server-side.
+ */
+export function useSetExclusion() {
+  const { t } = useTranslation('finance');
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: { txId: number; excludedAmount: string }) =>
+      apiPost<MessageOut>(
+        `/api/finance/transactions/${variables.txId}/exclusion/`,
+        {
+          excluded_amount: variables.excludedAmount,
+        } satisfies ExclusionIn,
+      ),
+    onSuccess: (data) => {
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        t('mutations.exclusionSaveFailed', { detail: errorDetail(error) }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),

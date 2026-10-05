@@ -31,14 +31,18 @@ from finance.services.gocardless import (
     GoCardlessError,
 )
 from finance.services.push import send_limit_alert
+from finance.forms import TransactionLimitForm
 from finance.services.categories import (
+    annotate_counted_amount,
     annotate_effective_category,
     effective_category_for,
+    ensure_excluded_category,
 )
 from finance.services.limits import (
     limit_window_stats,
     monthly_history,
     monthly_period_start,
+    spent_in_window,
 )
 from finance.services.rules import (
     apply_rules,
@@ -84,12 +88,14 @@ def make_category(user, name='Groceries', color=''):
     return Category.objects.create(user=user, name=name, color=color)
 
 
-def make_assignment(user, transaction, category, is_manual=False):
+def make_assignment(user, transaction, category, is_manual=False,
+                    excluded_amount=0):
     return UserTransactionCategory.objects.create(
         user=user,
         transaction=transaction,
         category=category,
         is_manual=is_manual,
+        excluded_amount=excluded_amount,
     )
 
 
@@ -104,7 +110,7 @@ def make_subscription(user, endpoint='https://push.example.com/s/1'):
 
 def make_rule(user, category, priority=1, sender='', description='',
               match_type='contains', operator='AND', is_active=True,
-              scope='any', exclusion=''):
+              scope='any', exclusion='', excluded_amount=None):
     return CategoryRule.objects.create(
         user=user,
         category=category,
@@ -117,6 +123,7 @@ def make_rule(user, category, priority=1, sender='', description='',
         description_exclusion=exclusion,
         operator=operator,
         is_active=is_active,
+        excluded_amount=excluded_amount,
     )
 
 
@@ -2886,3 +2893,382 @@ class RequisitionCallbackCurrencyTests(TestCase):
     def test_real_currency_is_kept(self):
         account = self.link_account({'currency': 'USD'})
         self.assertEqual(account.currency, 'USD')
+
+
+class EnsureExcludedCategoryTests(TestCase):
+    """The auto-provisioned 'Excluded' category — post_save signal
+    on user creation plus the ensure_excluded_category helper
+    (migration 0017 applies the same logic to existing users)."""
+
+    def test_new_user_gets_flagged_excluded_category(self):
+        user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        category = Category.objects.get(user=user, name='Excluded')
+        self.assertTrue(category.is_excluded)
+        self.assertEqual(category.color, '#6c757d')
+
+    def test_existing_name_gets_flagged_not_duplicated(self):
+        user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        # The signal already created it — unflag, then re-run the
+        # helper to exercise the flag-instead-of-duplicate branch.
+        existing = Category.objects.get(user=user, name='Excluded')
+        existing.is_excluded = False
+        existing.save(update_fields=['is_excluded'])
+        returned = ensure_excluded_category(user)
+        self.assertEqual(returned.pk, existing.pk)
+        self.assertTrue(returned.is_excluded)
+        self.assertEqual(
+            Category.objects.filter(
+                user=user, name='Excluded'
+            ).count(),
+            1,
+        )
+
+    def test_user_with_plain_excluded_category_gets_flagged(self):
+        """A user-created 'Excluded' category gains the flag."""
+        user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        # Same (user, name) — the provisioned row is the one a user
+        # would have made; simulate the pre-migration state by
+        # unflagging, then ensure() flags it back.
+        category = Category.objects.get(user=user, name='Excluded')
+        category.is_excluded = False
+        category.save(update_fields=['is_excluded'])
+        ensure_excluded_category(user)
+        category.refresh_from_db()
+        self.assertTrue(category.is_excluded)
+
+
+class CountedAmountTests(TestCase):
+    """annotate_counted_amount — per-user partial exclusion math.
+
+    counted = sign(amount) * max(0, |amount| - excluded_amount).
+    """
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+
+    def counted(self, tx, user=None):
+        user = user or self.user
+        return annotate_counted_amount(
+            Transaction.objects.for_user(user), user
+        ).get(pk=tx.pk)
+
+    def test_no_assignment_counts_raw_amount(self):
+        tx = make_transaction(self.account, 't-1', '-100.00')
+        row = self.counted(tx)
+        self.assertEqual(row.excluded_amount, Decimal('0'))
+        self.assertEqual(row.counted_amount, Decimal('-100.00'))
+
+    def test_partial_exclusion_reduces_spend(self):
+        tx = make_transaction(self.account, 't-1', '-100.00')
+        make_assignment(
+            self.user, tx, None, excluded_amount=Decimal('50.00')
+        )
+        self.assertEqual(
+            self.counted(tx).counted_amount, Decimal('-50.00')
+        )
+
+    def test_full_exclusion_clamps_at_zero(self):
+        tx = make_transaction(self.account, 't-1', '-100.00')
+        make_assignment(
+            self.user, tx, None, excluded_amount=Decimal('100.00')
+        )
+        self.assertEqual(
+            self.counted(tx).counted_amount, Decimal('0')
+        )
+
+    def test_over_amount_clamps_without_flipping_sign(self):
+        tx = make_transaction(self.account, 't-1', '-100.00')
+        make_assignment(
+            self.user, tx, None, excluded_amount=Decimal('150.00')
+        )
+        self.assertEqual(
+            self.counted(tx).counted_amount, Decimal('0')
+        )
+
+    def test_income_partial_exclusion_keeps_sign(self):
+        tx = make_transaction(self.account, 't-1', '100.00')
+        make_assignment(
+            self.user, tx, None, excluded_amount=Decimal('50.00')
+        )
+        self.assertEqual(
+            self.counted(tx).counted_amount, Decimal('50.00')
+        )
+
+    def test_exclusion_is_per_user(self):
+        AccountShare.objects.create(
+            account=self.account, shared_with=self.other
+        )
+        tx = make_transaction(self.account, 't-1', '-100.00')
+        make_assignment(
+            self.user, tx, None, excluded_amount=Decimal('60.00')
+        )
+        self.assertEqual(
+            self.counted(tx).counted_amount, Decimal('-40.00')
+        )
+        sharer_row = self.counted(tx, user=self.other)
+        self.assertEqual(sharer_row.excluded_amount, Decimal('0'))
+        self.assertEqual(
+            sharer_row.counted_amount, Decimal('-100.00')
+        )
+
+
+class RuleExclusionTests(TestCase):
+    """A rule's excluded_amount lands on the assignment row; manual
+    exclusions survive apply_rules until 'revert to automatic'."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.groceries = make_category(self.user)
+
+    def assignment_for(self, tx):
+        return UserTransactionCategory.objects.filter(
+            user=self.user, transaction=tx
+        ).first()
+
+    def test_apply_rules_writes_rule_excluded_amount(self):
+        make_rule(
+            self.user, self.groceries, description='shop',
+            excluded_amount=Decimal('25.00'),
+        )
+        tx = make_transaction(
+            self.account, 't-1', '-100.00',
+            remittance_information='shop',
+        )
+        apply_rules(self.user)
+        self.assertEqual(
+            self.assignment_for(tx).excluded_amount,
+            Decimal('25.00'),
+        )
+
+    def test_rule_without_exclusion_writes_zero(self):
+        make_rule(self.user, self.groceries, description='shop')
+        tx = make_transaction(
+            self.account, 't-1', '-100.00',
+            remittance_information='shop',
+        )
+        apply_rules(self.user)
+        self.assertEqual(
+            self.assignment_for(tx).excluded_amount, Decimal('0')
+        )
+
+    def test_rule_edit_rewrites_existing_assignment(self):
+        rule = make_rule(
+            self.user, self.groceries, description='shop'
+        )
+        tx = make_transaction(
+            self.account, 't-1', '-100.00',
+            remittance_information='shop',
+        )
+        apply_rules(self.user)
+        rule.excluded_amount = Decimal('30.00')
+        rule.save(update_fields=['excluded_amount'])
+        apply_rules(self.user)
+        self.assertEqual(
+            self.assignment_for(tx).excluded_amount,
+            Decimal('30.00'),
+        )
+
+    def test_manual_row_is_never_touched(self):
+        tx = make_transaction(
+            self.account, 't-1', '-100.00',
+            remittance_information='shop',
+        )
+        make_assignment(
+            self.user, tx, self.groceries, is_manual=True,
+            excluded_amount=Decimal('10.00'),
+        )
+        make_rule(
+            self.user, self.groceries, description='shop',
+            excluded_amount=Decimal('25.00'),
+        )
+        apply_rules(self.user)
+        self.assertEqual(
+            self.assignment_for(tx).excluded_amount,
+            Decimal('10.00'),
+        )
+
+
+class ExcludedSpendTests(TestCase):
+    """_spend_queryset: is_excluded categories drop out of limit
+    sums entirely; partial exclusions reduce the counted spend."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.excluded = Category.objects.get(
+            user=self.user, name='Excluded'
+        )
+
+    def test_excluded_category_ignored_by_limit(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_assignment(
+            self.user,
+            make_transaction(
+                self.account, 't-1', '-150.00', days_ago=1
+            ),
+            self.excluded,
+        )
+        make_transaction(self.account, 't-2', '-60.00', days_ago=1)
+        start = timezone.now().date() - timezone.timedelta(days=7)
+        self.assertEqual(
+            spent_in_window(limit, start), Decimal('60.00')
+        )
+
+    def test_partial_exclusion_reduces_limit_spend(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_assignment(
+            self.user,
+            make_transaction(
+                self.account, 't-1', '-100.00', days_ago=1
+            ),
+            None,
+            excluded_amount=Decimal('60.00'),
+        )
+        start = timezone.now().date() - timezone.timedelta(days=7)
+        self.assertEqual(
+            spent_in_window(limit, start), Decimal('40.00')
+        )
+
+    def test_monthly_history_uses_counted_amounts(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        last_month = (
+            monthly_period_start(timezone.now().date())
+            - timezone.timedelta(days=1)
+        )
+        make_assignment(
+            self.user,
+            make_transaction(
+                self.account, 't-1', '-200.00',
+                booking_date=last_month,
+            ),
+            self.excluded,
+        )
+        make_assignment(
+            self.user,
+            make_transaction(
+                self.account, 't-2', '-80.00',
+                booking_date=last_month,
+            ),
+            None,
+            excluded_amount=Decimal('30.00'),
+        )
+        history = monthly_history(limit)
+        self.assertEqual(len(history), 1)
+        # −200 fully excluded (category) + −80 with 30 excluded
+        # → counted 50.
+        self.assertEqual(history[0]['spent'], Decimal('50.00'))
+
+    def test_limit_form_omits_excluded_categories(self):
+        normal = make_category(self.user, 'Food')
+        form = TransactionLimitForm(user=self.user)
+        self.assertIn(normal, form.fields['category'].queryset)
+        self.assertNotIn(
+            self.excluded, form.fields['category'].queryset
+        )
+
+
+class ExcludedCategoryOverviewTests(TestCase):
+    """is_excluded rows still appear in the overview (drill-down
+    works) but stay out of totals/share."""
+
+    API = '/api/finance'
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.client.force_login(self.user)
+
+    def test_excluded_row_present_but_outside_totals(self):
+        excluded = Category.objects.get(
+            user=self.user, name='Excluded'
+        )
+        groceries = make_category(self.user, 'Groceries')
+        make_assignment(
+            self.user,
+            make_transaction(self.account, 't-1', '-200.00'),
+            excluded,
+        )
+        make_assignment(
+            self.user,
+            make_transaction(self.account, 't-2', '-80.00'),
+            groceries,
+        )
+        response = self.client.get(
+            f'{self.API}/categories/overview/'
+        )
+        self.assertEqual(response.status_code, 200)
+        rows = {
+            row['category_name']: row
+            for row in response.json()['rows']
+        }
+        self.assertTrue(rows['Excluded']['is_excluded'])
+        self.assertFalse(rows['Groceries']['is_excluded'])
+        # The row keeps its own sums + tx count for drill-down…
+        self.assertEqual(rows['Excluded']['spent'], '200.00')
+        self.assertEqual(rows['Excluded']['tx_count'], 1)
+        self.assertEqual(rows['Excluded']['share'], 0)
+        # …but the totals (StatCards) and share math skip it.
+        self.assertEqual(
+            response.json()['totals'],
+            {'EUR': {'spent': '80.00', 'received': '0'}},
+        )
+        self.assertEqual(rows['Groceries']['share'], 100)
+        # Excluded rows sort last.
+        names = [
+            row['category_name']
+            for row in response.json()['rows']
+        ]
+        self.assertEqual(names[-1], 'Excluded')
+
+    def test_partial_exclusion_reduces_row_sums(self):
+        groceries = make_category(self.user, 'Groceries')
+        make_assignment(
+            self.user,
+            make_transaction(self.account, 't-1', '-100.00'),
+            groceries,
+            excluded_amount=Decimal('40.00'),
+        )
+        response = self.client.get(
+            f'{self.API}/categories/overview/'
+        )
+        row = response.json()['rows'][0]
+        self.assertEqual(row['spent'], '60.00')

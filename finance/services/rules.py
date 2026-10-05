@@ -10,6 +10,7 @@ Rules apply to every transaction the user can see — owned and
 shared accounts alike.
 """
 import logging
+from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 
 from finance.models import (
@@ -136,9 +137,11 @@ def categorize_transaction(transaction, rules, user, assignment=_UNSET):
             return False
         assignment.delete()
         return True
+    rule_excluded = rule.excluded_amount or Decimal(0)
     if (
         assignment is not None
         and assignment.category_id == rule.category_id
+        and assignment.excluded_amount == rule_excluded
     ):
         return False
     if assignment is None:
@@ -146,10 +149,16 @@ def categorize_transaction(transaction, rules, user, assignment=_UNSET):
             user=user,
             transaction=transaction,
             category=rule.category,
+            excluded_amount=rule_excluded,
         )
     else:
         assignment.category = rule.category
-        assignment.save(update_fields=['category', 'updated_at'])
+        assignment.excluded_amount = rule_excluded
+        assignment.save(
+            update_fields=[
+                'category', 'excluded_amount', 'updated_at'
+            ]
+        )
     return True
 
 
@@ -180,6 +189,13 @@ def _to_int(value, default):
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _to_decimal(value):
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def _validated(value, valid, default):
@@ -238,6 +254,7 @@ def preview_rule(user, data):
             data.get('operator'), _VALID_OPERATORS, 'AND'
         ),
         is_active=data.get('is_active') in ('on', 'true', '1', True),
+        excluded_amount=_to_decimal(data.get('excluded_amount')),
         category=category,
         category_id=category.pk,
     )

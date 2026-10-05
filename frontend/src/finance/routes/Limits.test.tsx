@@ -33,7 +33,9 @@ const ACCOUNTS = [
   { id: 6, label: 'Savings' },
 ];
 
-const CATEGORIES = [{ id: 3, name: 'Groceries', color: '#00aa00' }];
+const CATEGORIES = [
+  { id: 3, name: 'Groceries', color: '#00aa00', is_excluded: false },
+];
 
 const PUSH_CONFIG = {
   vapid_public_key: '',
@@ -63,7 +65,12 @@ function makeLimit(overrides: Partial<LimitOut> = {}): LimitOut {
     accounts: [
       { id: 5, name: 'Everyday account', iban: null, currency: 'EUR' },
     ],
-    category: { id: 3, name: 'Groceries', color: '#00aa00' },
+    category: {
+      id: 3,
+      name: 'Groceries',
+      color: '#00aa00',
+      is_excluded: false,
+    },
     is_active: true,
     limit_7_days: '100.00',
     limit_30_days: null,
@@ -107,9 +114,16 @@ function makeTransactions(
         },
         remittance_information: 'Coffee',
         counterparty: 'Cafe',
-        effective_category: { id: 3, name: 'Groceries', color: '#00aa00' },
+        effective_category: {
+          id: 3,
+          name: 'Groceries',
+          color: '#00aa00',
+          is_excluded: false,
+        },
         category_is_manual: false,
         amount: '-4.50',
+        excluded_amount: '0.00',
+        counted_amount: '-4.50',
         currency: 'EUR',
       },
     ],

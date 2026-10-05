@@ -19,7 +19,7 @@ def home(request):
 # --- Progressive Web App (PWA) endpoints ---
 
 # Bump this to force clients to refresh the service worker cache.
-PWA_CACHE_VERSION = '19'
+PWA_CACHE_VERSION = '20'
 
 
 def manifest(request):

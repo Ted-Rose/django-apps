@@ -18,8 +18,8 @@ const mockedApiGet = vi.mocked(apiGet);
 const mockedApiPost = vi.mocked(apiPost);
 
 const CATEGORIES: CategoryOut[] = [
-  { id: 3, name: 'Groceries', color: '#00aa00' },
-  { id: 4, name: 'Housing', color: '#0000ff' },
+  { id: 3, name: 'Groceries', color: '#00aa00', is_excluded: false },
+  { id: 4, name: 'Housing', color: '#0000ff', is_excluded: false },
 ];
 
 const MATCH_TYPES = [
@@ -291,6 +291,75 @@ describe('Rules', () => {
     expect(screen.getByText(/would change category/)).toBeInTheDocument();
     expect(screen.getByText('— → Groceries')).toBeInTheDocument();
     expect(screen.getByText('-25.40 EUR')).toBeInTheDocument();
+  });
+
+  it('round-trips the excluded amount through the drawer', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeRules({
+        rules: [makeRule({ excluded_amount: '12.50' })],
+      }),
+    );
+    mockedApiPost.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('preview')
+          ? makePreview()
+          : { success: true, message: 'Rule saved.', changed: 0 },
+      ),
+    );
+    renderRules();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Edit rule 1' }),
+    );
+    const input = await screen.findByLabelText('Excluded amount');
+    expect(input).toHaveValue(12.5);
+    // The debounced preview carries the current value.
+    await waitFor(
+      () =>
+        expect(mockedApiPost).toHaveBeenCalledWith(
+          '/api/finance/rules/preview/',
+          expect.objectContaining({ excluded_amount: '12.50' }),
+        ),
+      { timeout: 2000 },
+    );
+    fireEvent.change(input, { target: { value: '7.5' } });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save rule' }),
+    );
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/rules/save/',
+        expect.objectContaining({
+          rule_id: 7,
+          excluded_amount: '7.5',
+        }),
+      ),
+    );
+  });
+
+  it('saves a blank excluded amount as null', async () => {
+    mockedApiGet.mockResolvedValue(makeRules());
+    mockedApiPost.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('preview')
+          ? makePreview()
+          : { success: true, message: 'Rule saved.', changed: 0 },
+      ),
+    );
+    renderRules();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Edit rule 1' }),
+    );
+    const input = await screen.findByLabelText('Excluded amount');
+    expect(input).toHaveValue(null);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save rule' }),
+    );
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/rules/save/',
+        expect.objectContaining({ excluded_amount: null }),
+      ),
+    );
   });
 
   it('posts the form to rules/save and closes the drawer', async () => {
