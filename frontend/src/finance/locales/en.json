@@ -394,6 +394,7 @@
     "recategorized_one": "{{count}} transaction recategorized.",
     "recategorized_other": "{{count}} transactions recategorized.",
     "categoryNameRequired": "Category name is required.",
+    "categoryNameTaken": "A category named \"{{name}}\" already exists.",
     "categorySaved": "Category \"{{name}}\" saved.",
     "categoryAssigned": "Category \"{{name}}\" assigned.",
     "markedUncategorized": "Marked as uncategorized.",

@@ -394,6 +394,7 @@
     "recategorized_one": "Pārkategorizēta {{count}} transakcija.",
     "recategorized_other": "Pārkategorizētas {{count}} transakcijas.",
     "categoryNameRequired": "Kategorijas nosaukums ir obligāts.",
+    "categoryNameTaken": "Kategorija ar nosaukumu \"{{name}}\" jau pastāv.",
     "categorySaved": "Kategorija \"{{name}}\" saglabāta.",
     "categoryAssigned": "Kategorija \"{{name}}\" piešķirta.",
     "markedUncategorized": "Atzīmēts kā bez kategorijas.",

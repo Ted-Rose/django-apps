@@ -1099,7 +1099,8 @@ export interface paths {
         put?: never;
         /**
          * Save Category
-         * @description Create a category (or update color when the name exists).
+         * @description Create a category, or update it in place when category_id is
+         *     given (rename keeps assignments/rules pointing at the row).
          */
         post: operations["finance_api_save_category"];
         delete?: never;
@@ -2292,6 +2293,8 @@ export interface components {
         };
         /** CategorySaveIn */
         CategorySaveIn: {
+            /** Category Id */
+            category_id?: number | null;
             /**
              * Name
              * @default

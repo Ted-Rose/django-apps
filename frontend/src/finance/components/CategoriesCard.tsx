@@ -12,9 +12,11 @@ const isNarrowScreen = () =>
   !window.matchMedia('(min-width: 768px)').matches;
 
 /**
- * The categories card: name + color create/edit form (the API
- * update_or_creates on (user, name), so "edit" just refills the
- * form) and the category list with edit/delete actions. Moved from
+ * The categories card: name + color create/edit form and the
+ * category list with edit/delete actions. "Edit" refills the form
+ * and sends `category_id` so the API updates that row (a rename
+ * keeps its transaction/rule assignments; without the id the API
+ * upserts by name and would create a new category). Moved from
  * the rules page to the category overview page.
  */
 export function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
@@ -47,7 +49,12 @@ export function CategoriesCard({ categories }: { categories: CategoryOut[] }) {
           const trimmed = name.trim();
           if (!trimmed) return;
           saveCategory.mutate(
-            { name: trimmed, color, is_excluded: isExcluded },
+            {
+              category_id: editingId,
+              name: trimmed,
+              color,
+              is_excluded: isExcluded,
+            },
             { onSuccess: (result) => result?.success && reset() },
           );
         }}

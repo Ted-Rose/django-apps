@@ -627,6 +627,9 @@ class RulePreviewOut(Schema):
 
 
 class CategorySaveIn(Schema):
+    # Set when editing an existing category — updates that row
+    # (name included) instead of upserting by name.
+    category_id: Optional[int] = None
     name: str = ''
     color: str = ''
     is_excluded: bool = False
@@ -1820,7 +1823,8 @@ def preview_rule_endpoint(request, payload: RulePreviewIn):
 
 @router.post('/categories/save/', response=MessageOut)
 def save_category(request, payload: CategorySaveIn):
-    """Create a category (or update color when the name exists)."""
+    """Create a category, or update it in place when category_id is
+    given (rename keeps assignments/rules pointing at the row)."""
     name = payload.name.strip()
     if not name:
         raise ApiHttpError(
@@ -1828,14 +1832,35 @@ def save_category(request, payload: CategorySaveIn):
             'Category name is required.',
             code='categoryNameRequired',
         )
-    Category.objects.update_or_create(
-        user=request.user,
-        name=name,
-        defaults={
-            'color': payload.color.strip(),
-            'is_excluded': payload.is_excluded,
-        },
-    )
+    if payload.category_id is not None:
+        category = get_object_or_404(
+            Category, pk=payload.category_id, user=request.user
+        )
+        taken = (
+            Category.objects
+            .filter(user=request.user, name=name)
+            .exclude(pk=category.pk)
+        )
+        if taken.exists():
+            raise ApiHttpError(
+                409,
+                f'A category named "{name}" already exists.',
+                code='categoryNameTaken',
+                params={'name': name},
+            )
+        category.name = name
+        category.color = payload.color.strip()
+        category.is_excluded = payload.is_excluded
+        category.save()
+    else:
+        Category.objects.update_or_create(
+            user=request.user,
+            name=name,
+            defaults={
+                'color': payload.color.strip(),
+                'is_excluded': payload.is_excluded,
+            },
+        )
     return {
         'success': True,
         'message': f'Category "{name}" saved.',

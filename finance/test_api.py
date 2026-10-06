@@ -1030,6 +1030,48 @@ class RulesApiTests(ApiTestCase):
         resp = self.post_json('/categories/save/', {'name': '  '})
         self.assertEqual(resp.status_code, 400)
 
+    def test_category_save_updates_existing(self):
+        """Editing sends category_id — a rename updates the row
+        instead of creating a second category."""
+        resp = self.post_json('/categories/save/', {
+            'category_id': self.category.pk,
+            'name': 'Renamed',
+            'color': '#ff0000',
+            'is_excluded': True,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['code'], 'categorySaved')
+        self.category.refresh_from_db()
+        self.assertEqual(self.category.name, 'Renamed')
+        self.assertEqual(self.category.color, '#ff0000')
+        self.assertTrue(self.category.is_excluded)
+        self.assertFalse(
+            Category.objects.filter(
+                user=self.user, name='Groceries'
+            ).exists()
+        )
+
+    def test_category_save_rename_conflict(self):
+        make_category(self.user, 'Travel')
+        resp = self.post_json('/categories/save/', {
+            'category_id': self.category.pk,
+            'name': 'Travel',
+        })
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.json()['code'], 'categoryNameTaken')
+        self.category.refresh_from_db()
+        self.assertEqual(self.category.name, 'Groceries')
+
+    def test_category_save_edit_foreign_404(self):
+        foreign = make_category(self.other, 'Foreign')
+        resp = self.post_json('/categories/save/', {
+            'category_id': foreign.pk,
+            'name': 'Hijacked',
+        })
+        self.assertEqual(resp.status_code, 404)
+        foreign.refresh_from_db()
+        self.assertEqual(foreign.name, 'Foreign')
+
 
 class PushApiTests(ApiTestCase):
     def setUp(self):

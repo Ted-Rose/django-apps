@@ -492,9 +492,10 @@ export function usePreviewRule() {
 }
 
 /**
- * POST /api/finance/categories/save/ — create a category (or update
- * its color when the name already exists — update_or_create keyed
- * on (user, name)).
+ * POST /api/finance/categories/save/ — create a category, or update
+ * it when `category_id` is sent (rename supported; a name clash
+ * with another of the user's categories comes back as a 409).
+ * Without an id the API upserts on (user, name).
  */
 export function useSaveCategory() {
   const { t } = useTranslation('finance');
@@ -510,7 +511,11 @@ export function useSaveCategory() {
     },
     onError: (error) =>
       pushToast(
-        t('mutations.categorySaveFailed', { detail: errorDetail(error) }),
+        error instanceof ApiError && error.status === 409
+          ? errorDetail(error)
+          : t('mutations.categorySaveFailed', {
+              detail: errorDetail(error),
+            }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),
