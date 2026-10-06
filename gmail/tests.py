@@ -1,3 +1,4 @@
+import base64
 import json
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -12,6 +13,7 @@ from httplib2 import Response as HttpLib2Response
 from google_api.models import GoogleOAuthCredentials
 from google_api.utils import AudioGenerationError
 from gmail import services
+from gmail.models import EmailParsingRule
 from gmail.services import GMAIL_MODIFY_SCOPE, GMAIL_READONLY_SCOPE
 
 API = '/api/gmail'
@@ -59,6 +61,101 @@ def gmail_service_raising(error, method='list'):
     api_call = service.users().messages()
     getattr(api_call, method)().execute.side_effect = error
     return service
+
+
+def gmail_service_with_raw(raw, message_id='m1'):
+    """A build() stand-in serving one raw RFC 822 message."""
+    service = Mock()
+    api_call = service.users().messages()
+    api_call.list().execute.return_value = {
+        'messages': [{'id': message_id}]
+    }
+    api_call.get().execute.return_value = {
+        'raw': base64.urlsafe_b64encode(raw).decode('ascii')
+    }
+    return service
+
+
+def raw_message(sender='Sender <s@example.lv>', subject='Hi',
+                body='Hello', content_type='text/plain',
+                charset='utf-8'):
+    """A single-part RFC 822 message as bytes."""
+    headers = (
+        f'From: {sender}\r\n'
+        f'Subject: {subject}\r\n'
+        'MIME-Version: 1.0\r\n'
+        f'Content-Type: {content_type}; charset="{charset}"\r\n'
+        '\r\n'
+    ).encode('ascii')
+    return headers + body.encode(charset)
+
+
+def nested_multipart_message():
+    """multipart/mixed → [multipart/alternative → [plain, html],
+    pdf attachment] — the standard shape for mail with attachments,
+    which the old top-level iter_parts() loop couldn't see into."""
+    return (
+        'From: Optio <info@optio.example>\r\n'
+        'Subject: Invoice\r\n'
+        'MIME-Version: 1.0\r\n'
+        'Content-Type: multipart/mixed; boundary="MIX"\r\n'
+        '\r\n'
+        '--MIX\r\n'
+        'Content-Type: multipart/alternative; boundary="ALT"\r\n'
+        '\r\n'
+        '--ALT\r\n'
+        'Content-Type: text/plain; charset="utf-8"\r\n'
+        '\r\n'
+        'Labdien, rēķins pievienots.\r\n'
+        '--ALT\r\n'
+        'Content-Type: text/html; charset="utf-8"\r\n'
+        '\r\n'
+        '<p>Labdien, <b>rēķins</b> pievienots.</p>\r\n'
+        '--ALT--\r\n'
+        '--MIX\r\n'
+        'Content-Type: application/pdf; name="inv.pdf"\r\n'
+        'Content-Transfer-Encoding: base64\r\n'
+        'Content-Disposition: attachment\r\n'
+        '\r\n'
+        'QUJD\r\n'
+        '--MIX--\r\n'
+    ).encode('utf-8')
+
+
+def cp1257_message():
+    """A windows-1257 text/plain part inside multipart/mixed — the
+    old code decoded it with the (absent → utf-8) top-level charset
+    and produced \\ufffd mojibake."""
+    headers = (
+        b'From: Baltic <b@example.lv>\r\n'
+        b'Subject: Baltic\r\n'
+        b'MIME-Version: 1.0\r\n'
+        b'Content-Type: multipart/mixed; boundary="X"\r\n'
+        b'\r\n'
+        b'--X\r\n'
+        b'Content-Type: text/plain; charset="windows-1257"\r\n'
+        b'Content-Transfer-Encoding: 8bit\r\n'
+        b'\r\n'
+    )
+    body = 'Pērle šodien'.encode('cp1257')
+    return headers + body + b'\r\n--X--\r\n'
+
+
+EKLASE_SENDER = 'e-klase <notifikacijas@e-klase.lv>'
+EKLASE_BODY = (
+    'No: a Tēma: Atzīmes No: b Kam: Vecāks '
+    'Lai aplūkotu pielikumus, pieslēdzieties E-klasei. '
+    'Īsā vēstule. ' + '_' * 60 + 'Lai atbildētu vai pārsūtītu'
+)
+
+
+def make_rule(user, **kwargs):
+    defaults = {
+        'name': 'rule',
+        'sender_pattern': 'e-klase',
+    }
+    defaults.update(kwargs)
+    return EmailParsingRule.objects.create(user=user, **defaults)
 
 
 class GmailApiTests(TestCase):
@@ -199,7 +296,7 @@ class GmailApiTests(TestCase):
     def test_messages_success_shape(self):
         msgs = [{
             'id': 'm1', 'subject': 'Hi', 'sender': 'a@b.c',
-            'body': 'hello',
+            'body': 'hello', 'lang': None,
         }]
         with patch('gmail.api.get_user_credentials',
                    return_value=make_creds()), \
@@ -211,6 +308,8 @@ class GmailApiTests(TestCase):
             'messages': msgs, 'query': 'is:unread',
         })
         self.assertEqual(get.call_args.kwargs['query'], 'is:unread')
+        # The endpoint hands the user's active rules to the service.
+        self.assertEqual(get.call_args.kwargs['rules'], [])
 
     def test_messages_gmail_403_maps_to_401_google_reauth(self):
         # Gmail itself rejects the token (e.g. scopes revoked after
@@ -344,6 +443,18 @@ class GmailApiTests(TestCase):
             resp = self.client.get(f'{API}/audio/?text=x')
         self.assertEqual(resp.status_code, 502)
         self.assertEqual(resp.json()['error'], 'upstream_error')
+
+    def test_audio_passes_lang_through_to_text_to_audio(self):
+        # The rule's force_language hint arrives as ?lang= and must
+        # reach text_to_audio so detection is skipped server-side.
+        with patch('gmail.api.text_to_audio',
+                   return_value='https://signed.example/x.mp3') as tts:
+            resp = self.client.get(
+                f'{API}/audio/?text=Labdien&lang=lv&filename=m1'
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(tts.call_args.kwargs['lang'], 'lv')
+        self.assertEqual(tts.call_args.kwargs['filename'], 'm1')
 
 
 class GmailCutoverRouteTests(TestCase):
@@ -494,3 +605,297 @@ class GmailServicesTests(TestCase):
                 self.CREDS, ['m1']
             )
         self.assertFalse(result)
+
+
+class GmailMimeParsingTests(TestCase):
+    """Phase 1 fixes: get_body() descends nested multiparts, each
+    part decodes with its own charset, extract_text_from_html drops
+    style/script contents and unescapes entities."""
+
+    CREDS = GmailServicesTests.CREDS
+
+    def fetch(self, raw, rules=None):
+        service = gmail_service_with_raw(raw)
+        with patch('gmail.services.google_auth',
+                   return_value=make_creds()), \
+                patch('gmail.services.build', return_value=service):
+            return services.get_messages(
+                query='x', creds=self.CREDS, rules=rules
+            )
+
+    def test_nested_mixed_alternative_yields_plain_body(self):
+        # multipart/mixed → multipart/alternative used to fall
+        # through the top-level scan into 'Multipart message
+        # without text part!' — an English sentence read aloud.
+        [msg] = self.fetch(nested_multipart_message())
+        self.assertEqual(msg['subject'], 'Invoice')
+        self.assertEqual(msg['body'], 'Labdien, rēķins pievienots.')
+        self.assertIsNone(msg['lang'])
+
+    def test_nested_alternative_without_plain_uses_html(self):
+        raw = (
+            b'From: A <a@b.c>\r\nSubject: Html\r\n'
+            b'MIME-Version: 1.0\r\n'
+            b'Content-Type: multipart/alternative; boundary="A"\r\n'
+            b'\r\n--A\r\n'
+            b'Content-Type: text/html; charset="utf-8"\r\n\r\n'
+            b'<p>Sveiki</p>\r\n--A--\r\n'
+        )
+        [msg] = self.fetch(raw)
+        self.assertEqual(msg['body'], 'Sveiki')
+
+    def test_attachment_only_message_has_empty_body(self):
+        # No text part at all → '' (never the English placeholder).
+        raw = (
+            b'From: A <a@b.c>\r\nSubject: Files\r\n'
+            b'MIME-Version: 1.0\r\n'
+            b'Content-Type: multipart/mixed; boundary="X"\r\n\r\n'
+            b'--X\r\n'
+            b'Content-Type: application/pdf\r\n'
+            b'Content-Transfer-Encoding: base64\r\n\r\n'
+            b'QUJD\r\n--X--\r\n'
+        )
+        [msg] = self.fetch(raw)
+        self.assertEqual(msg['body'], '')
+
+    def test_part_decoded_with_its_own_charset(self):
+        [msg] = self.fetch(cp1257_message())
+        self.assertEqual(msg['body'], 'Pērle šodien')
+
+    def test_html_body_drops_style_script_and_unescapes(self):
+        raw = raw_message(
+            content_type='text/html',
+            body=(
+                '<html><head><style>.msg-body p{color:red}</style>'
+                '</head><body><script>var x = 1;</script>'
+                '<p>Sveiki&nbsp;<b>pasaule</b></p></body></html>'
+            ),
+        )
+        [msg] = self.fetch(raw)
+        self.assertEqual(msg['body'], 'Sveiki pasaule')
+
+    def test_extract_text_from_html_collapses_whitespace(self):
+        self.assertEqual(
+            services.extract_text_from_html('<p>a</p>\n\n<p>b</p>'),
+            'a b',
+        )
+
+
+class EmailParsingRuleTests(TestCase):
+    """Phase 2: per-user EmailParsingRules applied inside
+    get_messages — first sender match (priority, pk) wins; the
+    hardcoded e-klase parse remains the no-rule fallback."""
+
+    CREDS = GmailServicesTests.CREDS
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+
+    def fetch(self, raw):
+        rules = services.active_rules_for(self.user)
+        service = gmail_service_with_raw(raw)
+        with patch('gmail.services.google_auth',
+                   return_value=make_creds()), \
+                patch('gmail.services.build', return_value=service):
+            return services.get_messages(
+                query='x', creds=self.CREDS, rules=rules
+            )
+
+    def eklase_raw(self):
+        return raw_message(
+            sender=EKLASE_SENDER, subject='E-klase',
+            body=EKLASE_BODY,
+        )
+
+    def test_sender_match_types(self):
+        cases = [
+            ('contains', 'e-klase', True),
+            # Match is case-insensitive, like CategoryRule's.
+            ('contains', 'E-KLASE', True),
+            ('contains', 'skola.lv', False),
+            ('equals', EKLASE_SENDER, True),
+            ('equals', 'e-klase', False),
+            ('starts_with', 'e-klase <', True),
+            ('starts_with', 'notifikacijas', False),
+            ('ends_with', 'e-klase.lv>', True),
+            ('ends_with', 'e-klase', False),
+        ]
+        for match_type, pattern, expected in cases:
+            with self.subTest(match_type=match_type, pattern=pattern):
+                rule = make_rule(
+                    self.user, sender_pattern=pattern,
+                    sender_match_type=match_type,
+                )
+                self.assertIs(
+                    services._sender_matches(rule, EKLASE_SENDER),
+                    expected,
+                )
+
+    def test_first_matching_rule_wins_by_priority(self):
+        make_rule(self.user, name='later', priority=200,
+                  force_language='lv')
+        first = make_rule(self.user, name='first', priority=50,
+                          force_language='en')
+        rule = services._first_matching_rule(
+            services.active_rules_for(self.user), EKLASE_SENDER
+        )
+        self.assertEqual(rule.pk, first.pk)
+
+    def test_same_priority_wins_by_pk(self):
+        first = make_rule(self.user, name='a')
+        make_rule(self.user, name='b')
+        rule = services._first_matching_rule(
+            services.active_rules_for(self.user), EKLASE_SENDER
+        )
+        self.assertEqual(rule.pk, first.pk)
+
+    def test_inactive_rules_are_skipped(self):
+        make_rule(self.user, is_active=False, force_language='lv')
+        self.assertEqual(services.active_rules_for(self.user), [])
+        # ...so the e-klase fallback still applies.
+        [msg] = self.fetch(self.eklase_raw())
+        self.assertEqual(msg['subject'], 'Atzīmes')
+        self.assertIsNone(msg['lang'])
+
+    def test_eklase_fallback_when_no_rules(self):
+        [msg] = self.fetch(self.eklase_raw())
+        self.assertEqual(msg['subject'], 'Atzīmes')
+        self.assertEqual(msg['body'], 'Īsā vēstule.')
+        self.assertIsNone(msg['lang'])
+
+    def test_rule_extracts_strips_and_forces_language(self):
+        make_rule(
+            self.user,
+            sender_pattern='optio.example',
+            force_language='lv',
+            subject_regex=r'Tēma: (.*?)(?=No:)',
+            body_regex=r'Kam: ([\s\S]*?)(?=BEIGAS)',
+            strip_patterns=[
+                r'Vēstulei pievienoti dokumenti:\s*\S+',
+            ],
+        )
+        raw = raw_message(
+            sender='Optio <i@optio.example>', subject='orig',
+            body=(
+                'No: x Tēma: Rēķins No: y Kam: Klients Saturs. '
+                'Vēstulei pievienoti dokumenti: inv.pdf BEIGAS'
+            ),
+        )
+        [msg] = self.fetch(raw)
+        # subject_regex searched the body, like the e-klase parse.
+        self.assertEqual(msg['subject'], 'Rēķins')
+        self.assertEqual(msg['body'], 'Klients Saturs.')
+        self.assertEqual(msg['lang'], 'lv')
+
+    def test_matching_user_rule_replaces_eklase_fallback(self):
+        make_rule(
+            self.user, sender_pattern='e-klase',
+            force_language='lv',
+            body_regex=r'Kam: ([\s\S]*?)(?=_+Lai)',
+        )
+        [msg] = self.fetch(self.eklase_raw())
+        # The user rule's body_regex won over the hardcoded parse —
+        # the fallback would have stripped 'Lai aplūkotu…'.
+        self.assertIn('Lai aplūkotu', msg['body'])
+        self.assertEqual(msg['lang'], 'lv')
+        # force_language surfaced, but subject_regex was empty so
+        # the header subject is kept.
+        self.assertEqual(msg['subject'], 'E-klase')
+
+    def test_invalid_rule_regex_is_logged_and_skipped(self):
+        make_rule(
+            self.user, subject_regex='([', body_regex='(*',
+            strip_patterns=['[unclosed'],
+        )
+        raw = raw_message(
+            sender=EKLASE_SENDER, subject='Hi', body='teksts'
+        )
+        [msg] = self.fetch(raw)
+        self.assertEqual(msg['subject'], 'Hi')
+        self.assertEqual(msg['body'], 'teksts')
+
+    def test_non_participating_group_uses_next_group(self):
+        # '(foo)|(bar)' matching 'bar' leaves group(1) None —
+        # group(1).strip() used to AttributeError, 500ing the
+        # whole fetch; now the next participating group wins.
+        make_rule(self.user, body_regex=r'(foo)|(bar)')
+        raw = raw_message(
+            sender=EKLASE_SENDER, subject='Hi', body='say bar here'
+        )
+        [msg] = self.fetch(raw)
+        self.assertEqual(msg['body'], 'bar')
+
+    def test_no_participating_group_uses_whole_match(self):
+        # 'ba(r)?' matching 'ba' has no participating group at all
+        # — extraction falls back to match.group(0).
+        make_rule(self.user, body_regex=r'ba(r)?')
+        raw = raw_message(
+            sender=EKLASE_SENDER, subject='Hi', body='ba ba'
+        )
+        [msg] = self.fetch(raw)
+        self.assertEqual(msg['body'], 'ba')
+
+    def test_strip_patterns_skips_non_string_entries(self):
+        make_rule(self.user, strip_patterns=[123, None, 'zzz'])
+        raw = raw_message(
+            sender=EKLASE_SENDER, subject='Hi', body='teksts zzz'
+        )
+        [msg] = self.fetch(raw)
+        # 'zzz' still strips; the non-string entries are skipped
+        # instead of TypeError-ing the whole fetch.
+        self.assertEqual(msg['body'], 'teksts')
+
+    def test_strip_patterns_plain_string_value_ignored(self):
+        # A non-list JSON value must not be iterated
+        # character-by-character (each char a regex — that would
+        # gut the body).
+        make_rule(self.user, strip_patterns='teksts')
+        raw = raw_message(
+            sender=EKLASE_SENDER, subject='Hi', body='teksts vēl'
+        )
+        [msg] = self.fetch(raw)
+        self.assertEqual(msg['body'], 'teksts vēl')
+
+    def test_broken_rule_degrades_message_not_response(self):
+        # Through the API: a rule that would previously have
+        # raised mid-extraction must leave the response intact —
+        # that message just gets degraded extraction, not a 500.
+        make_rule(
+            self.user, body_regex=r'(foo)|(bar)',
+            strip_patterns='not a list',
+        )
+        self.client.force_login(self.user)
+        service = gmail_service_with_raw(
+            raw_message(
+                sender=EKLASE_SENDER, subject='Hi', body='x bar y'
+            )
+        )
+        with patch('gmail.api.get_user_credentials',
+                   return_value=make_creds()), \
+                patch('gmail.services.google_auth',
+                      return_value=make_creds()), \
+                patch('gmail.services.build', return_value=service):
+            resp = self.client.get(f'{API}/messages/?query=x')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()['messages'][0]['body'], 'bar'
+        )
+
+    def test_lang_hint_in_messages_api_response(self):
+        make_rule(self.user, sender_pattern='optio',
+                  force_language='lv')
+        self.client.force_login(self.user)
+        service = gmail_service_with_raw(
+            raw_message(sender='Optio <i@optio.example>')
+        )
+        with patch('gmail.api.get_user_credentials',
+                   return_value=make_creds()), \
+                patch('gmail.services.google_auth',
+                      return_value=make_creds()), \
+                patch('gmail.services.build', return_value=service):
+            resp = self.client.get(f'{API}/messages/?query=x')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['messages'][0]['lang'], 'lv')

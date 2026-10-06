@@ -1,5 +1,7 @@
+import os
 from contextlib import contextmanager
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlparse
 
 from django.test import TestCase
@@ -9,6 +11,8 @@ from oauthlib.oauth2.rfc6749.errors import (
     InvalidGrantError,
     MissingCodeError,
 )
+
+from google_api.utils import text_to_audio
 
 CALLBACK_URL = '/google/callback'
 
@@ -66,3 +70,98 @@ class OAuthCallbackTests(TestCase):
         with fetch_token_raising(InvalidGrantError()):
             resp = self.client.get(CALLBACK_URL)
         self.assert_login_redirect(resp)
+
+
+@contextmanager
+def audio_pipeline():
+    """Patch the gTTS → GCS upload chain inside text_to_audio so it
+    returns a fake signed URL without network access or GCP
+    credentials. Yields the gTTS mock — its call kwargs carry the
+    lang the audio would have been generated in."""
+    with patch.dict(os.environ, {'GCS_AUDIO_BUCKET': 'bucket'}), \
+            patch('google.auth.default') as adc, \
+            patch('google_api.utils.storage.Client') as client_cls, \
+            patch('google_api.utils.gTTS') as gtts:
+        creds = Mock()
+        creds.service_account_email = 'sa@example.com'
+        creds.token = 'tok'
+        adc.return_value = (creds, 'project')
+        blob = (
+            client_cls.return_value.bucket.return_value
+            .blob.return_value
+        )
+        blob.generate_signed_url.return_value = 'https://signed/x.mp3'
+        yield gtts
+
+
+class TextToAudioLanguageTests(TestCase):
+    """text_to_audio detects language as an lv-vs-en argmax over
+    detect_langs (the global winner over 55 profiles used to lose
+    Latvian to fr/lt by a hair and fall back to 'en'), and detection
+    runs on the sanitized text so URLs can't skew it."""
+
+    @staticmethod
+    def langs(*pairs):
+        """detect_langs() result stand-ins: (lang, prob) tuples."""
+        return [
+            SimpleNamespace(lang=lang, prob=prob)
+            for lang, prob in pairs
+        ]
+
+    def test_lv_runner_up_beats_fr_winner(self):
+        # Production case: a Latvian-subject invoice detected
+        # fr:0.57 with lv a close second — previously mapped to
+        # 'en' by the whitelist fallback.
+        with audio_pipeline() as gtts, \
+                patch('google_api.utils.detect_langs',
+                      return_value=self.langs(('fr', 0.57),
+                                              ('lv', 0.43))):
+            url = text_to_audio('Rēķins par pakalpojumu')
+        self.assertEqual(url, 'https://signed/x.mp3')
+        self.assertEqual(gtts.call_args.kwargs['lang'], 'lv')
+
+    def test_en_when_lv_absent_from_candidates(self):
+        with audio_pipeline() as gtts, \
+                patch('google_api.utils.detect_langs',
+                      return_value=self.langs(('de', 0.7),
+                                              ('fr', 0.3))):
+            text_to_audio('Some message')
+        self.assertEqual(gtts.call_args.kwargs['lang'], 'en')
+
+    def test_en_wins_when_it_outscores_lv(self):
+        with audio_pipeline() as gtts, \
+                patch('google_api.utils.detect_langs',
+                      return_value=self.langs(('en', 0.8),
+                                              ('lv', 0.2))):
+            text_to_audio('hello there')
+        self.assertEqual(gtts.call_args.kwargs['lang'], 'en')
+
+    def test_explicit_lang_skips_detection(self):
+        with audio_pipeline() as gtts, \
+                patch('google_api.utils.detect_langs') as detect:
+            text_to_audio('jebkurš teksts', lang='lv')
+        detect.assert_not_called()
+        self.assertEqual(gtts.call_args.kwargs['lang'], 'lv')
+
+    def test_detection_runs_on_sanitized_text(self):
+        # The URL must be gone before langdetect sees the text —
+        # ASCII noise used to skew the n-gram scoring.
+        seen = []
+
+        def fake_detect_langs(text):
+            seen.append(text)
+            return self.langs(('en', 0.9), ('lv', 0.1))
+
+        with audio_pipeline(), \
+                patch('google_api.utils.detect_langs',
+                      side_effect=fake_detect_langs):
+            text_to_audio('See https://example.com/invoice.pdf now')
+        self.assertEqual(seen, ['See web link now'])
+
+    def test_url_only_text_does_not_crash_detection(self):
+        # '-' and URLs sanitize away to nothing; langdetect raises
+        # LangDetectException on empty input → 'en', no 500.
+        with audio_pipeline() as gtts:
+            url = text_to_audio('----- -----')
+        self.assertEqual(url, 'https://signed/x.mp3')
+        self.assertEqual(gtts.call_args.kwargs['lang'], 'en')

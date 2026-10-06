@@ -7,6 +7,7 @@ import {
   audioText,
   circularOrder,
   MAX_AUDIO_TEXT_LENGTH,
+  senderName,
   useAudioQueue,
 } from './useAudioQueue';
 import type { GmailMessageOut } from '../api';
@@ -92,9 +93,39 @@ describe('circularOrder', () => {
   });
 });
 
+describe('senderName', () => {
+  it('drops the <addr> part of a Name <addr> header', () => {
+    expect(senderName('e-klase <notifikacijas@e-klase.lv>')).toBe('e-klase');
+    expect(senderName('Jānis Bērziņš <janis@example.lv>')).toBe(
+      'Jānis Bērziņš',
+    );
+  });
+
+  it('passes bare addresses and odd formats through', () => {
+    expect(senderName('a@b.c')).toBe('a@b.c');
+    expect(senderName('')).toBe('');
+    expect(senderName(null)).toBe('');
+  });
+
+  it('strips surrounding quotes from the display name', () => {
+    expect(senderName('"Rozenfelds, Pēteris" <p@example.lv>')).toBe(
+      'Rozenfelds, Pēteris',
+    );
+  });
+});
+
 describe('audioText', () => {
   it('joins subject, sender and body with newlines', () => {
     expect(audioText(makeMessage('m1'))).toBe('subject-m1\nsender-m1\nbody-m1');
+  });
+
+  it('reads only the sender display name, not the <addr>', () => {
+    const msg = {
+      ...makeMessage('m1'),
+      sender: 'e-klase <notifikacijas@e-klase.lv>',
+    };
+    expect(audioText(msg)).toBe('subject-m1\ne-klase\nbody-m1');
+    expect(audioText(msg)).not.toContain('notifikacijas');
   });
 
   it('truncates at 2300 chars plus the truncation marker', () => {
@@ -174,6 +205,22 @@ describe('useAudioQueue', () => {
     // The wrap-around 'a' is the last one — queue is done.
     fireEvent(audioFor('a'), new Event('ended'));
     await waitFor(() => expect(played).toHaveLength(4));
+  });
+
+  it('passes the message lang hint through to /api/gmail/audio/', async () => {
+    const { getByText } = renderHarness([
+      { ...makeMessage('a'), lang: 'lv' },
+      makeMessage('b'),
+    ]);
+    fireEvent.click(getByText('play-a'));
+
+    await waitFor(() => expect(mockedApiGet).toHaveBeenCalledTimes(2));
+    const params = mockedApiGet.mock.calls.map(
+      ([url]) => new URLSearchParams(String(url).split('?')[1]),
+    );
+    expect(params[0].get('lang')).toBe('lv');
+    // No rule → no lang param → the backend auto-detects.
+    expect(params[1].get('lang')).toBeNull();
   });
 
   it('Play only plays the clicked message (playOnlyCurrent parity)', async () => {

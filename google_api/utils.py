@@ -21,7 +21,11 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import re
 from datetime import datetime, timedelta, timezone as dt_timezone
-from langdetect import detect, DetectorFactory, LangDetectException
+from langdetect import (
+    DetectorFactory,
+    LangDetectException,
+    detect_langs,
+)
 import tempfile
 import google.auth
 import google.auth.transport.requests
@@ -113,25 +117,28 @@ def text_to_audio(
     if len(text) > 5000:
         raise ValueError("Text too long (max 5000 characters)")
 
-    # Detect language
+    # Sanitize BEFORE detecting — URLs and other ASCII noise skew
+    # langdetect's n-gram scoring (sanitized text is also what gTTS
+    # gets, so detection sees exactly what is read aloud).
+    text = _sanitize_text_for_audio(text)
+
+    # Detect language. The audio only ever plays 'lv' or 'en', so
+    # instead of trusting detect()'s global winner over 55 profiles
+    # (Latvian mail regularly loses by a hair to lt/fr/de and used
+    # to fall back to 'en'), pick the higher-probability of the two.
     DetectorFactory.seed = 0
     if lang is None:
         try:
-            lang = detect(text)
-            logger.info(f"Detected language: {lang}")
-            # Sometimes English is mistaken as German or Danish
-            if lang not in ['lv', 'en']:
-                lang = 'en'
-                logger.info("Defaulting to English")
+            probs = {p.lang: p.prob for p in detect_langs(text)}
+            lang = 'lv' if probs.get('lv', 0) > probs.get('en', 0) \
+                else 'en'
+            logger.info(f"Detected language: {lang} ({probs})")
         except LangDetectException as e:
             logger.warning(
                 f"Language detection failed: {e}, "
                 f"defaulting to English"
             )
             lang = 'en'
-
-    # Sanitize text
-    text = _sanitize_text_for_audio(text)
 
     # Generate unique filename (timestamp + microseconds avoids
     # collisions; no blob.exists() check needed)

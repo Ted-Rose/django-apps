@@ -1242,6 +1242,8 @@ export interface components {
             sender?: string | null;
             /** Body */
             body?: string | null;
+            /** Lang */
+            lang?: string | null;
         };
         /** GmailMessagesOut */
         GmailMessagesOut: {

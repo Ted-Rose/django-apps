@@ -36,6 +36,7 @@ class GmailMessageOut(Schema):
     subject: Optional[str] = None
     sender: Optional[str] = None
     body: Optional[str] = None
+    lang: Optional[str] = None
 
 
 class GmailMessagesOut(Schema):
@@ -101,7 +102,12 @@ def messages(request, query: str = Query('', max_length=500)):
         'expiry': creds.expiry.isoformat(),
         'scopes': list(creds.scopes or []),
     }
-    result = services.get_messages(query=query, creds=creds_dict)
+    # Per-user EmailParsingRules (priority, pk order) drive the
+    # per-sender parsing + the 'lang' audio hint on each message.
+    result = services.get_messages(
+        query=query, creds=creds_dict,
+        rules=services.active_rules_for(request.user),
+    )
 
     # get_messages returns {'authorization_url', 'state', 'scopes'}
     # when Google reauth is needed — store OAuth state in the session

@@ -8,15 +8,30 @@ platform never imports gmail; `gmail` must not import
 `google_tasks` or other feature apps — shared helpers like
 `_adapt`/`_reauth_url` live in `django_apps.api`).
 
-No models, no admin, no migrations — everything lives in Google and
-the session.
+`EmailParsingRule` (models.py + admin.py + migrations) is the app's
+only model — per-user parsing/audio rules configured via Django
+admin; messages themselves live in Google and the session.
 
 ## Layout
 
-- `services.py` — `get_messages(query, creds)` (Gmail fetch with
-  MIME parsing + the `e-klase.lv` boilerplate special-case),
+- `models.py` — `EmailParsingRule`: per-user rule evaluated in
+  (priority, pk) order, first sender-pattern match wins
+  (contains/equals/starts_with/ends_with, case-insensitive — the
+  `finance.CategoryRule` convention). Optional `subject_regex` /
+  `body_regex` extraction (first capture group, searched in the
+  parsed body with DOTALL), `strip_patterns` (JSON list of regexes
+  re.sub'd out), `force_language` ('lv'/'en' → the message's `lang`
+  hint), `include_subject`/`include_sender`/`is_shared` (model
+  only, unused). Managed via `admin.py` — no SPA editor yet.
+- `services.py` — `get_messages(query, creds, rules=None)` (Gmail
+  fetch with MIME parsing via `EmailMessage.get_body` — nested
+  multiparts descend, each part decodes with its own charset; the
+  caller passes `active_rules_for(request.user)`, the first
+  matching rule applies and the hardcoded `e-klase.lv` boilerplate
+  special-case is the fallback when none match),
   `mark_messages_as_read(creds, ids)` (batchModify removing UNREAD),
-  `extract_text_from_html`, and the scope constants
+  `extract_text_from_html` (BeautifulSoup — drops script/style
+  contents, unescapes entities), and the scope constants
   `GMAIL_READONLY_SCOPE` / `GMAIL_MODIFY_SCOPE` (the same strings
   are duplicated as literals in `google_api.ALL_APP_SCOPES` —
   deliberate, per the dependency direction).
@@ -28,7 +43,8 @@ the session.
 - `api.py` — ninja router mounted at `/api/gmail/`:
   `GET status/` (eager credential check the SPA gates on),
   `GET messages/?query=` (the reader fetch; auth dict → OAuth
-  session state + `401 google_reauth`),
+  session state + `401 google_reauth`; each message carries a
+  `lang` hint from the matched rule's `force_language`),
   `POST mark-read/` (delegates to the view),
   `GET audio/?text=&lang=&filename=` (session-authed wrapper over
   `google_api.utils.text_to_audio`; `ValueError` → 400, pipeline

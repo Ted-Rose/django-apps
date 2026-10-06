@@ -26,12 +26,25 @@ import { pushToast } from '../../shared/toasts';
 export const MAX_AUDIO_TEXT_LENGTH = 2300;
 
 /**
+ * The display-name part of a raw 'Name <addr>' From header — the
+ * address is noise when read aloud ("notifikacijas at e-klase dot
+ * lv"). Bare addresses and other formats pass through unchanged.
+ */
+export function senderName(sender: string | null | undefined): string {
+  if (!sender) return '';
+  const match = /^(.*)<[^>]*>$/.exec(sender.trim());
+  const name = (match ? match[1] : sender).trim();
+  return name.replace(/^["']|["']$/g, '').trim();
+}
+
+/**
  * The text read aloud for a message. The template scraped textContent
  * off the card DOM, which incidentally prepended the "Body:" label;
- * the SPA sends the clean field values instead.
+ * the SPA sends the clean field values instead. The sender is the
+ * display name only — the raw 'Name <addr>' header reads badly.
  */
 export function audioText(message: GmailMessageOut): string {
-  let text = [message.subject, message.sender, message.body]
+  let text = [message.subject, senderName(message.sender), message.body]
     .filter(Boolean)
     .join('\n');
   if (text.length > MAX_AUDIO_TEXT_LENGTH) {
@@ -95,7 +108,9 @@ export function useAudioQueue(messages: GmailMessageOut[]): AudioQueue {
       const message = messages.find((m) => m.id === id);
       if (!message) return;
       pending.current.add(id);
-      fetchAudio(audioText(message), id)
+      // message.lang is the EmailParsingRule's force_language hint —
+      // when set it pins the TTS language server-side (no detect).
+      fetchAudio(audioText(message), id, message.lang ?? undefined)
         .then((data) => {
           if (data?.audio_url) {
             setAudioUrls((prev) => ({
