@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 import json
 
 
@@ -137,6 +138,17 @@ else:
     GOOGLE_APP_SECRETS_PATH = os.path.join(
         BASE_DIR, 'google_api', 'app_secrets.json'
     )
+
+# Tests always run on a local throwaway sqlite DB: the configured
+# connection is a read-only user against production that cannot
+# create the test database.
+if 'test' in sys.argv:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 LOGIN_URL = '/login/'
 

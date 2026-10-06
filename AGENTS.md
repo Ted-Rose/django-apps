@@ -54,6 +54,15 @@ root — single_pages owns `/twister`, `/spoki/` and the `/app/*`
     missing, settings fall back to env vars, then insecure dev
     defaults (sqlite `db.sqlite3`, `DEBUG=True`) with a warning —
     enough for `check`/`test`, not for real data work.
+  - The `DATABASES` entry in `private_settings.json` connects to
+    the production Aiven Postgres through the read-only
+    `ai_agent` user — local `runserver`, `manage.py shell`,
+    `dbshell` and `inspectdb` can inspect real data for
+    investigation, but every write (INSERT/UPDATE/DELETE, DDL,
+    `migrate`) fails with `permission denied`. `manage.py test`
+    is the exception: a `sys.argv` check at the bottom of
+    `settings.py` swaps `DATABASES` to local sqlite, so tests
+    never touch production.
 - Google OAuth client secrets live in `google_api/app_secrets.json`
   locally (gitignored); DB CA cert in `ca.pem` (gitignored).
 - Virtualenv is at `venv/` (VS Code already points at it).
@@ -66,6 +75,8 @@ python manage.py check            # sanity check settings/imports
 python manage.py runserver        # dev server (sslserver also installed:
                                   # runsslserver for HTTPS, needed for OAuth)
 python manage.py test <app>       # e.g. python manage.py test finance google_tasks
+                                  # runs on local sqlite automatically —
+                                  # see "Database access" hard rule
 python manage.py makemigrations   # allowed: generate files after model
                                   # changes — but NEVER `migrate` (see below)
 python manage.py sync_bank_transactions --dry-run
@@ -95,6 +106,22 @@ No linter/formatter is configured. Follow the existing style: PEP 8,
 quotes vs single quotes are mixed — match the surrounding file.
 
 ## Hard rules
+
+### Database access
+
+- The local DB connection is **read-only**: `private_settings.json`
+  points at production via the `ai_agent` Postgres user (SELECT
+  only, no `CREATEDB`/DDL/DML). Use it freely for investigation —
+  `manage.py shell` ORM queries, `manage.py dbshell`, `inspectdb`.
+- A `permission denied` write error is intended behavior, not a
+  bug. Never work around it by switching back to admin
+  credentials — ask the user if a write is genuinely needed.
+- All testing must run against the local database: `python
+  manage.py test` is pinned to throwaway sqlite by the `sys.argv`
+  check in `django_apps/settings.py`. Don't remove that check,
+  and don't run tests via another runner without equivalent
+  isolation — anything else would hit (and fail against, or
+  worse, write to) production.
 
 ### Database migrations
 Creating migration files is allowed and expected — after any model
