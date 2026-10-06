@@ -39,6 +39,7 @@ import type {
   RuleSaveIn,
   RulesChangedOut,
   ShareIn,
+  ShareOverviewIn,
   SyncAccountOut,
   SyncIn,
   SyncOut,
@@ -249,6 +250,64 @@ export function useShareAccount() {
     onError: (error) =>
       pushToast(
         t('mutations.shareFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/categories/overview/share/ — upserts the
+ * caller's overview share for a username; `accounts` limits it to
+ * a subset of the caller's visible accounts (empty = everything).
+ * Re-sharing the same user replaces the account set.
+ */
+export function useShareOverview() {
+  const { t } = useTranslation('finance');
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: { username: string; accounts: number[] }) =>
+      apiPost<MessageOut>('/api/finance/categories/overview/share/', {
+        username: variables.username,
+        accounts: variables.accounts,
+      } satisfies ShareOverviewIn),
+    onSuccess: (data) => {
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        t('mutations.shareFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/categories/overview/unshare/ — deletes the
+ * caller's share row for a username; idempotent server-side, so a
+ * repeat click still toasts success.
+ */
+export function useUnshareOverview() {
+  const { t } = useTranslation('finance');
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (username: string) =>
+      apiPost<MessageOut>('/api/finance/categories/overview/unshare/', {
+        username,
+      } satisfies ShareIn),
+    onSuccess: (data) => {
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        t('mutations.unshareFailed', { detail: errorDetail(error) }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),

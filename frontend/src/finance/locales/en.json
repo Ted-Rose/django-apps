@@ -82,7 +82,14 @@
     "emptyCategories": "No categories yet — create one, then add rules that assign it.",
     "excludeFromStats": "Exclude from statistics",
     "excludedFromStats": "Excluded from statistics",
-    "excludedSection": "Excluded categories — not counted in totals"
+    "excludedSection": "Excluded categories — not counted in totals",
+    "myOverview": "My overview",
+    "sharedBy": "Shared by {{username}}",
+    "shareOverview": "Share overview",
+    "username": "Username",
+    "onlyTheseAccounts": "Only these accounts (all unchecked = everything)",
+    "sharedWith": "Shared with:",
+    "unshare": "Stop sharing with {{username}}"
   },
   "connect": {
     "title": "Connect a Bank",
@@ -311,6 +318,7 @@
     "connectFailed": "Could not start bank link: {{detail}}",
     "balanceCheckFailed": "Failed to update balance check: {{detail}}",
     "shareFailed": "Failed to share account: {{detail}}",
+    "unshareFailed": "Failed to remove share: {{detail}}",
     "alertSaveFailed": "Failed to save balance alert: {{detail}}",
     "alertRemoveFailed": "Failed to remove balance alert: {{detail}}",
     "applyFailed": "Failed to apply rules: {{detail}}",
@@ -333,6 +341,9 @@
     "provideUsername": "Please provide a username.",
     "unknownUsername": "Unknown or invalid username.",
     "accountShared": "Account shared with {{username}}.",
+    "overviewShared": "Category overview shared with {{username}}.",
+    "overviewUnshared": "Category overview share removed.",
+    "unknownAccounts": "One or more accounts are not available.",
     "balanceAlertSaved": "Balance alert saved.",
     "balanceAlertRemoved": "Balance alert removed.",
     "noLinkedAccounts": "No linked bank accounts to sync.",

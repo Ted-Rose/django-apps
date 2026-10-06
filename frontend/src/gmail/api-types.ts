@@ -592,6 +592,11 @@ export interface paths {
         /**
          * Category Overview
          * @description Per-category spending totals over a selectable time window.
+         *
+         *     ``?owner=<username>`` renders another user's overview through a
+         *     CategoryOverviewShare: ``view_user`` is the sharer, and the
+         *     transaction scope is the share's effective account set (their
+         *     whole ``for_user`` set unless the share limits it).
          */
         get: operations["finance_api_category_overview"];
         put?: never;
@@ -732,6 +737,49 @@ export interface paths {
          * @description Owner-only: share an owned account with another user.
          */
         post: operations["finance_api_share_account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/categories/overview/share/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Overview
+         * @description Share (part of) the caller's category overview — an empty
+         *     ``accounts`` list means the whole overview. Re-sharing an
+         *     existing (sharer, viewer) pair replaces the account set.
+         */
+        post: operations["finance_api_share_overview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finance/categories/overview/unshare/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unshare Overview
+         * @description Revoke the caller's overview share to a user — idempotent:
+         *     deleting a non-existent share still succeeds.
+         */
+        post: operations["finance_api_unshare_overview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1620,6 +1668,18 @@ export interface components {
             selected_account: string;
             /** Categories */
             categories: components["schemas"]["CategoryOut"][];
+            /** View Owner */
+            view_owner?: string | null;
+            /**
+             * Shared With Me
+             * @default []
+             */
+            shared_with_me: string[];
+            /**
+             * My Shares
+             * @default []
+             */
+            my_shares: components["schemas"]["ShareTargetOut"][];
         };
         /** CategoryRowOut */
         CategoryRowOut: {
@@ -1668,6 +1728,16 @@ export interface components {
             date_to: string;
             /** Active */
             active: boolean;
+        };
+        /** ShareTargetOut */
+        ShareTargetOut: {
+            /** Username */
+            username: string;
+            /**
+             * Accounts
+             * @default []
+             */
+            accounts: string[];
         };
         /** LimitOut */
         LimitOut: {
@@ -1894,6 +1964,19 @@ export interface components {
              * @default
              */
             username: string;
+        };
+        /** ShareOverviewIn */
+        ShareOverviewIn: {
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+            /**
+             * Accounts
+             * @default []
+             */
+            accounts: number[];
         };
         /** BalanceAlertSaveIn */
         BalanceAlertSaveIn: {
@@ -2985,6 +3068,7 @@ export interface operations {
                 creditor?: string;
                 q?: string;
                 source?: string;
+                owner?: string;
                 from?: string;
                 to?: string;
                 sort?: string;
@@ -3014,6 +3098,7 @@ export interface operations {
                 from?: string;
                 to?: string;
                 account?: string;
+                owner?: string;
             };
             header?: never;
             path?: never;
@@ -3167,6 +3252,54 @@ export interface operations {
             path: {
                 account_id: number;
             };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_share_overview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareOverviewIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    finance_api_unshare_overview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody: {

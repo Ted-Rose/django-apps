@@ -5,6 +5,7 @@ from finance.models import (
     AccountShare,
     BalanceAlert,
     Category,
+    CategoryOverviewShare,
     CategoryRule,
     LimitEvaluation,
     Notification,
@@ -41,6 +42,13 @@ class AccountAdmin(admin.ModelAdmin):
 class AccountShareAdmin(admin.ModelAdmin):
     list_display = ['account', 'shared_with', 'created_at']
     search_fields = ['account__name', 'shared_with__username']
+
+
+@admin.register(CategoryOverviewShare)
+class CategoryOverviewShareAdmin(admin.ModelAdmin):
+    list_display = ['sharer', 'shared_with', 'created_at']
+    search_fields = ['sharer__username', 'shared_with__username']
+    filter_horizontal = ['accounts']
 
 
 @admin.register(UserAccountPreference)

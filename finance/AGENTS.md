@@ -44,6 +44,18 @@ transactions, and get spending-limit alerts.
 - `AccountShare` — grants another user read access.
 - `UserAccountPreference` — per-user `included_in_balance_check` toggle
   (created automatically on link/share).
+- `CategoryOverviewShare` — grants another user read access to the
+  sharer's category overview (`/finance/categories/?owner=<sharer>`)
+  plus its transaction drill-down (`/api/finance/…?owner=`). One row
+  per (sharer, viewer); an empty `accounts` M2M = the sharer's whole
+  `for_user` view, otherwise only those accounts — shared-in
+  accounts may be re-shared. `_resolve_overview_user` (api.py)
+  intersects the stored set with `for_user(sharer)` per request, so
+  a revoked `AccountShare` shrinks the view automatically; the view
+  is annotated with the sharer's taxonomy and the drill-down is
+  read-only. Share/unshare via
+  `POST /api/finance/categories/overview/share|unshare/`; the first
+  share creates a `Notification` for the recipient.
 - `Transaction` — booked transactions; `amount < 0` = outgoing.
   Unique per `(account, transaction_id)`. Raw bank data only —
   categorization is per-user (below). Banks disagree on date

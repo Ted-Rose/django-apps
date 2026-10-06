@@ -85,6 +85,38 @@ class AccountShare(models.Model):
         return f'{self.account} shared with {self.shared_with}'
 
 
+class CategoryOverviewShare(models.Model):
+    """Read access to (part of) the sharer's category overview.
+
+    ``accounts`` empty = the sharer's whole overview (every
+    account ``for_user(sharer)`` covers). Non-empty = only those
+    accounts — which may be owned or merely shared with the
+    sharer.
+    """
+    sharer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='overview_shares',
+    )
+    shared_with = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='shared_overviews',
+    )
+    accounts = models.ManyToManyField(
+        Account,
+        blank=True,
+        related_name='overview_shares',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('sharer', 'shared_with')
+
+    def __str__(self):
+        return f'{self.sharer} overview shared with {self.shared_with}'
+
+
 class UserAccountPreference(models.Model):
     """Per-user preference for a (owned or shared) account."""
     user = models.ForeignKey(

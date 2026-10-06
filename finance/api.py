@@ -26,6 +26,7 @@ from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Query, Router, Schema
@@ -43,6 +44,7 @@ from finance.models import (
     AccountShare,
     BalanceAlert,
     Category,
+    CategoryOverviewShare,
     CategoryRule,
     Notification,
     PushSubscription,
@@ -162,10 +164,48 @@ def _push_config(user):
 
 
 def _account_options(user):
+    return _account_labels(Account.objects.for_user(user))
+
+
+def _account_labels(accounts):
     return [
         {'id': account.pk, 'label': str(account)}
-        for account in Account.objects.for_user(user)
+        for account in accounts
     ]
+
+
+def _resolve_overview_user(request, owner_username):
+    """(view_user, accounts) for the overview being viewed.
+
+    Empty/own username → (request.user, for_user(request.user)).
+    Otherwise requires CategoryOverviewShare(sharer=owner,
+    shared_with=request.user) and returns the share's effective
+    account set. 404s on unknown usernames and missing shares so
+    the endpoint doesn't reveal which usernames exist.
+    """
+    owner_username = (owner_username or '').strip()
+    if not owner_username or owner_username == request.user.username:
+        return (
+            request.user,
+            Account.objects.for_user(request.user),
+        )
+    owner = get_user_model().objects.filter(
+        username=owner_username
+    ).first()
+    share = None
+    if owner is not None:
+        share = CategoryOverviewShare.objects.filter(
+            sharer=owner, shared_with=request.user
+        ).first()
+    if share is None:
+        raise Http404('Overview not shared')
+    # Re-intersect on every read: if the sharer loses access to an
+    # account (AccountShare revoked), the viewer's scope shrinks
+    # without any cleanup of the share row.
+    visible = Account.objects.for_user(owner)
+    if share.accounts.exists():
+        return owner, share.accounts.filter(pk__in=visible)
+    return owner, visible
 
 
 def _choices(pairs):
@@ -325,6 +365,13 @@ class PeriodOut(Schema):
     active: bool
 
 
+class ShareTargetOut(Schema):
+    username: str
+    # Account display labels the share is limited to;
+    # empty = the sharer's whole overview.
+    accounts: List[str] = []
+
+
 class CategoryOverviewOut(Schema):
     rows: List[CategoryRowOut]
     totals: Dict[str, CurrencyTotalOut]
@@ -336,6 +383,13 @@ class CategoryOverviewOut(Schema):
     # The user's full category list (filter-independent) — the page
     # also hosts the category create/edit/delete card.
     categories: List[CategoryOut]
+    # Username whose overview is shown; null = the caller's own view.
+    view_owner: Optional[str] = None
+    # Owners who shared their overview with the caller — drives the
+    # subsection nav chips.
+    shared_with_me: List[str] = []
+    # The caller's outgoing shares — drives the revoke list.
+    my_shares: List[ShareTargetOut] = []
 
 
 class WindowStatBase(Schema):
@@ -436,6 +490,12 @@ class ConnectOut(Schema):
 
 class ShareIn(Schema):
     username: str = ''
+
+
+class ShareOverviewIn(Schema):
+    username: str = ''
+    # Account pks the share is limited to; empty = whole overview.
+    accounts: List[int] = []
 
 
 class SyncIn(Schema):
@@ -663,14 +723,17 @@ def institutions(request, country: str = ''):
 @router.get('/transactions/', response=TransactionsOut)
 def transaction_list(request, account: str = '', category: str = '',
                      creditor: str = '', q: str = '',
-                     source: str = '',
+                     source: str = '', owner: str = '',
                      from_: str = Query('', alias='from'), to: str = '',
                      sort: str = 'date', direction: str = 'desc',
                      page: Optional[str] = None):
-    user = request.user
+    # ?owner=<username> reads another user's view through a
+    # CategoryOverviewShare (the category overview's drill-down) —
+    # `user` below is the sharer whose taxonomy annotates the rows.
+    user, scope_accounts = _resolve_overview_user(request, owner)
     transactions = annotate_counted_amount(
         annotate_effective_category(
-            Transaction.objects.for_user(user)
+            Transaction.objects.filter(account__in=scope_accounts)
             .select_related('account')
             .with_occurrence_date(),
             user,
@@ -752,7 +815,7 @@ def transaction_list(request, account: str = '', category: str = '',
     categories = list(Category.objects.filter(user=user))
     category_by_id = {cat.pk: cat for cat in categories}
     counterparties = (
-        Transaction.objects.for_user(user)
+        Transaction.objects.filter(account__in=scope_accounts)
         .annotate(name=Coalesce('creditor_name', 'debtor_name'))
         .exclude(name__isnull=True)
         .exclude(name='')
@@ -775,7 +838,7 @@ def transaction_list(request, account: str = '', category: str = '',
         'count': paginator.count,
         'has_next': page_obj.has_next(),
         'has_previous': page_obj.has_previous(),
-        'accounts': _account_options(user),
+        'accounts': _account_labels(scope_accounts),
         'categories': categories,
         'counterparties': list(counterparties),
         'selected_account': (
@@ -802,15 +865,23 @@ def transaction_list(request, account: str = '', category: str = '',
 @router.get('/categories/overview/', response=CategoryOverviewOut)
 def category_overview(request,
                       from_: str = Query('', alias='from'),
-                      to: str = '', account: str = ''):
-    """Per-category spending totals over a selectable time window."""
+                      to: str = '', account: str = '',
+                      owner: str = ''):
+    """Per-category spending totals over a selectable time window.
+
+    ``?owner=<username>`` renders another user's overview through a
+    CategoryOverviewShare: ``view_user`` is the sharer, and the
+    transaction scope is the share's effective account set (their
+    whole ``for_user`` set unless the share limits it).
+    """
+    view_user, accounts = _resolve_overview_user(request, owner)
     transactions = annotate_counted_amount(
         annotate_effective_category(
-            Transaction.objects.for_user(request.user)
+            Transaction.objects.filter(account__in=accounts)
             .with_occurrence_date(),
-            request.user,
+            view_user,
         ),
-        request.user,
+        view_user,
     )
 
     today = timezone.localdate()
@@ -848,7 +919,7 @@ def category_overview(request,
     )
     category_by_id = {
         category.pk: category
-        for category in Category.objects.filter(user=request.user)
+        for category in Category.objects.filter(user=view_user)
     }
     rows = []
     totals = {}
@@ -920,9 +991,35 @@ def category_overview(request,
         'periods': periods,
         'date_from': date_from.isoformat() if date_from else '',
         'date_to': date_to.isoformat() if date_to else '',
-        'accounts': _account_options(request.user),
+        # The share's effective account set — an account-scoped
+        # share must not leak the sharer's other accounts into the
+        # dropdown.
+        'accounts': _account_labels(accounts),
         'selected_account': account,
         'categories': list(category_by_id.values()),
+        'view_owner': (
+            view_user.username if view_user != request.user else None
+        ),
+        'shared_with_me': list(
+            CategoryOverviewShare.objects.filter(
+                shared_with=request.user
+            ).order_by('sharer__username').values_list(
+                'sharer__username', flat=True
+            )
+        ),
+        'my_shares': [
+            {
+                'username': share.shared_with.username,
+                'accounts': [
+                    str(shared) for shared in share.accounts.all()
+                ],
+            }
+            for share in CategoryOverviewShare.objects.filter(
+                sharer=request.user
+            ).select_related('shared_with').prefetch_related(
+                'accounts'
+            )
+        ],
     }
 
 
@@ -1143,6 +1240,82 @@ def share_account(request, account_id: int, payload: ShareIn):
         'message': f'Account shared with {target.username}.',
         'code': 'accountShared',
         'params': {'username': target.username},
+    }
+
+
+@router.post(
+    '/categories/overview/share/', response=MessageOut
+)
+def share_overview(request, payload: ShareOverviewIn):
+    """Share (part of) the caller's category overview — an empty
+    ``accounts`` list means the whole overview. Re-sharing an
+    existing (sharer, viewer) pair replaces the account set."""
+    form = ShareAccountForm({'username': payload.username})
+    if not form.is_valid():
+        raise ApiHttpError(
+            400, 'Please provide a username.', code='provideUsername'
+        )
+    target = get_user_model().objects.filter(
+        username=form.cleaned_data['username']
+    ).first()
+    if target is None or target == request.user:
+        raise ApiHttpError(
+            400, 'Unknown or invalid username.', code='unknownUsername'
+        )
+    # A sharer can only share what they can see — including
+    # accounts merely shared with them (re-sharing is supported).
+    pks = set(payload.accounts)
+    accounts = list(
+        Account.objects.for_user(request.user).filter(pk__in=pks)
+    )
+    if len(accounts) != len(pks):
+        raise ApiHttpError(
+            400,
+            'One or more accounts are not available.',
+            code='unknownAccounts',
+        )
+    share, created = CategoryOverviewShare.objects.get_or_create(
+        sharer=request.user, shared_with=target
+    )
+    share.accounts.set(accounts)
+    if created:
+        Notification.objects.create(
+            user=target,
+            title='Category overview shared',
+            body=(
+                f'{request.user.username} shared their category '
+                f'overview with you.'
+            ),
+            url=(
+                f'/finance/categories/'
+                f'?owner={request.user.username}'
+            ),
+        )
+    return {
+        'success': True,
+        'message': (
+            f'Category overview shared with {target.username}.'
+        ),
+        'code': 'overviewShared',
+        'params': {'username': target.username},
+    }
+
+
+@router.post(
+    '/categories/overview/unshare/', response=MessageOut
+)
+def unshare_overview(request, payload: ShareIn):
+    """Revoke the caller's overview share to a user — idempotent:
+    deleting a non-existent share still succeeds."""
+    CategoryOverviewShare.objects.filter(
+        sharer=request.user,
+        shared_with__username=payload.username,
+    ).delete()
+    return {
+        'success': True,
+        'message': 'Category overview share removed.',
+        'code': 'overviewUnshared',
+        'params': {'username': payload.username},
     }
 
 

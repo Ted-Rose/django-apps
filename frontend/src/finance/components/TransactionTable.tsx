@@ -26,6 +26,10 @@ interface TransactionTableProps {
   onAddRule: (tx: TransactionOut) => void;
   /** Transaction id whose rule form is still loading (spinner). */
   ruleLoadingId?: number | null;
+  /** Shared-view rows render a plain category badge — assign,
+      exclusion and rule writes are the overview owner's, not the
+      viewer's, so the whole dropdown is skipped. */
+  readOnly?: boolean;
 }
 
 /**
@@ -48,6 +52,7 @@ export function TransactionTable({
   onUpdate,
   onAddRule,
   ruleLoadingId = null,
+  readOnly = false,
 }: TransactionTableProps) {
   const { t } = useTranslation('finance');
   const { sort, direction } = data;
@@ -306,6 +311,7 @@ export function TransactionTable({
                 canAddRule={hasCategories}
                 ruleLoading={ruleLoadingId === tx.id}
                 onAddRule={onAddRule}
+                readOnly={readOnly}
               />
             ))
           ) : (
@@ -458,12 +464,14 @@ function TransactionRow({
   canAddRule,
   ruleLoading,
   onAddRule,
+  readOnly = false,
 }: {
   tx: TransactionOut;
   categories: CategoryOut[];
   canAddRule: boolean;
   ruleLoading: boolean;
   onAddRule: (tx: TransactionOut) => void;
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation('finance');
   const assign = useAssignCategory();
@@ -496,110 +504,134 @@ function TransactionRow({
           menu also carries the per-row rule action and, for manual
           overrides, the revert item. */}
       <td className="tx-cell-category">
-        <Dropdown
-          buttonClassName="tx-cat-toggle"
-          menuStyle={{ maxHeight: '300px', overflowY: 'auto' }}
-          ariaLabel={t('transactions.categoryMenuAria', { id: tx.id })}
-          label={
-            tx.effective_category ? (
-              <>
-                <CategoryBadge category={tx.effective_category} />
-                {tx.category_is_manual ? (
-                  <i
-                    className="bi bi-pencil-fill tx-manual-mark"
-                    title={t('transactions.manualMark')}
-                    aria-hidden="true"
-                  />
-                ) : null}
-              </>
-            ) : (
-              <span className="tx-cat-empty">
-                {t('transactions.setCategory')}
-              </span>
-            )
-          }
-        >
-          <li>
-            <h6 className="dropdown-header">
-              {t('transactions.assignCategory')}
-            </h6>
-          </li>
-          {categories.map((category) => (
-            <FilterItem
-              key={category.id}
-              label={
-                <>
-                  {currentId === category.id && (
-                    <i className="bi bi-check me-1" aria-hidden="true" />
-                  )}
-                  {category.name}
-                </>
-              }
-              active={currentId === category.id}
-              onClick={() =>
-                assign.mutate({ txId: tx.id, categoryId: category.id })
-              }
-            />
-          ))}
-          <FilterItem
-            label={t('transactions.noCategory')}
-            active={currentId === null}
-            onClick={() => assign.mutate({ txId: tx.id, categoryId: null })}
-          />
-          <li>
-            <hr className="dropdown-divider" />
-          </li>
-          <li>
-            <button
-              type="button"
-              className="dropdown-item"
-              title={canAddRule ? undefined : t('transactions.addRuleDisabled')}
-              aria-label={t('transactions.addRuleAria', { id: tx.id })}
-              disabled={!canAddRule || ruleLoading}
-              onClick={() => onAddRule(tx)}
-            >
-              {ruleLoading ? (
-                <span
-                  className="spinner-border spinner-border-sm me-1"
-                  role="status"
-                />
-              ) : (
-                <i className="bi bi-tag me-1" aria-hidden="true" />
-              )}
-              {t('transactions.createRuleFromTx')}
-            </button>
-          </li>
-          <li>
-            <button
-              type="button"
-              className="dropdown-item"
-              onClick={() => setExclusionOpen(true)}
-            >
-              <i className="bi bi-eye-slash me-1" aria-hidden="true" />
-              {t('transactions.excludeAmount')}
-            </button>
-          </li>
-          {tx.category_is_manual && (
+        {readOnly ? (
+          // Shared views are read-only: the badge shows the
+          // sharer's taxonomy but the viewer can't write their own
+          // assignment, exclusion or rules onto these rows.
+          tx.effective_category ? (
             <>
-              <li>
-                <hr className="dropdown-divider" />
-              </li>
-              <li>
-                <button
-                  type="button"
-                  className="dropdown-item"
-                  onClick={() => clearManual.mutate(tx.id)}
-                >
-                  <i
-                    className="bi bi-arrow-counterclockwise me-1"
-                    aria-hidden="true"
-                  />
-                  {t('transactions.revertToAutomatic')}
-                </button>
-              </li>
+              <CategoryBadge category={tx.effective_category} />
+              {tx.category_is_manual ? (
+                <i
+                  className="bi bi-pencil-fill tx-manual-mark"
+                  title={t('transactions.manualMark')}
+                  aria-hidden="true"
+                />
+              ) : null}
             </>
-          )}
-        </Dropdown>
+          ) : (
+            <span className="text-muted">
+              {t('transactions.uncategorized')}
+            </span>
+          )
+        ) : (
+          <Dropdown
+            buttonClassName="tx-cat-toggle"
+            menuStyle={{ maxHeight: '300px', overflowY: 'auto' }}
+            ariaLabel={t('transactions.categoryMenuAria', { id: tx.id })}
+            label={
+              tx.effective_category ? (
+                <>
+                  <CategoryBadge category={tx.effective_category} />
+                  {tx.category_is_manual ? (
+                    <i
+                      className="bi bi-pencil-fill tx-manual-mark"
+                      title={t('transactions.manualMark')}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <span className="tx-cat-empty">
+                  {t('transactions.setCategory')}
+                </span>
+              )
+            }
+          >
+            <li>
+              <h6 className="dropdown-header">
+                {t('transactions.assignCategory')}
+              </h6>
+            </li>
+            {categories.map((category) => (
+              <FilterItem
+                key={category.id}
+                label={
+                  <>
+                    {currentId === category.id && (
+                      <i className="bi bi-check me-1" aria-hidden="true" />
+                    )}
+                    {category.name}
+                  </>
+                }
+                active={currentId === category.id}
+                onClick={() =>
+                  assign.mutate({ txId: tx.id, categoryId: category.id })
+                }
+              />
+            ))}
+            <FilterItem
+              label={t('transactions.noCategory')}
+              active={currentId === null}
+              onClick={() => assign.mutate({ txId: tx.id, categoryId: null })}
+            />
+            <li>
+              <hr className="dropdown-divider" />
+            </li>
+            <li>
+              <button
+                type="button"
+                className="dropdown-item"
+                title={
+                  canAddRule ? undefined : t('transactions.addRuleDisabled')
+                }
+                aria-label={t('transactions.addRuleAria', { id: tx.id })}
+                disabled={!canAddRule || ruleLoading}
+                onClick={() => onAddRule(tx)}
+              >
+                {ruleLoading ? (
+                  <span
+                    className="spinner-border spinner-border-sm me-1"
+                    role="status"
+                  />
+                ) : (
+                  <i className="bi bi-tag me-1" aria-hidden="true" />
+                )}
+                {t('transactions.createRuleFromTx')}
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className="dropdown-item"
+                onClick={() => setExclusionOpen(true)}
+              >
+                <i className="bi bi-eye-slash me-1" aria-hidden="true" />
+                {t('transactions.excludeAmount')}
+              </button>
+            </li>
+            {tx.category_is_manual && (
+              <>
+                <li>
+                  <hr className="dropdown-divider" />
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => clearManual.mutate(tx.id)}
+                  >
+                    <i
+                      className="bi bi-arrow-counterclockwise me-1"
+                      aria-hidden="true"
+                    />
+                    {t('transactions.revertToAutomatic')}
+                  </button>
+                </li>
+              </>
+            )}
+          </Dropdown>
+        )}
       </td>
       <td
         className={`tx-cell-amount text-end ${

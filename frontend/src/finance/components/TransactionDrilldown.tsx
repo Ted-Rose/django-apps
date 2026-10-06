@@ -25,6 +25,8 @@ export default function TransactionDrilldown({
   params,
   onUpdate,
   onClose,
+  owner = null,
+  readOnly = false,
 }: {
   /** Heading text — e.g. the category name (and window) being
       drilled into. */
@@ -33,6 +35,14 @@ export default function TransactionDrilldown({
   params: TransactionParams;
   onUpdate: (updates: ParamUpdates) => void;
   onClose: () => void;
+  /** Shared-view username — forwarded as ?owner= so the endpoint
+      scopes to the share and annotates with the sharer's
+      taxonomy. */
+  owner?: string | null;
+  /** Shared views are read-only end to end: no category assigns,
+      exclusions or rule creation (those would write the viewer's
+      rows on the sharer's transactions). */
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation('finance');
   const { openRuleDrawer, ruleLoadingId, drawer } = useRuleDrawer();
@@ -46,9 +56,10 @@ export default function TransactionDrilldown({
     });
   }, []);
 
+  const fetchParams = { ...params, owner };
   const { data, isPending, isError, error, refetch } = useQuery({
-    queryKey: ['finance', 'transactions', params],
-    queryFn: () => fetchTransactions(params),
+    queryKey: ['finance', 'transactions', fetchParams],
+    queryFn: () => fetchTransactions(fetchParams),
   });
 
   return (
@@ -86,6 +97,7 @@ export default function TransactionDrilldown({
             onUpdate={onUpdate}
             onAddRule={openRuleDrawer}
             ruleLoadingId={ruleLoadingId}
+            readOnly={readOnly}
           />
           <Pagination
             page={data.page}
@@ -97,7 +109,7 @@ export default function TransactionDrilldown({
           />
         </>
       )}
-      {drawer}
+      {!readOnly && drawer}
     </section>
   );
 }

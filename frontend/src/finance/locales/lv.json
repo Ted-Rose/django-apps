@@ -82,7 +82,14 @@
     "emptyCategories": "Kategoriju vēl nav — izveido vienu, tad pievieno noteikumus, kas to piešķir.",
     "excludeFromStats": "Izslēgt no statistikas",
     "excludedFromStats": "Izslēgta no statistikas",
-    "excludedSection": "Izslēgtas kategorijas — netiek skaitītas kopsummās"
+    "excludedSection": "Izslēgtas kategorijas — netiek skaitītas kopsummās",
+    "myOverview": "Mans pārskats",
+    "sharedBy": "Koplieto {{username}}",
+    "shareOverview": "Koplietot pārskatu",
+    "username": "Lietotājvārds",
+    "onlyTheseAccounts": "Tikai šie konti (neviens neatzīmēts = viss)",
+    "sharedWith": "Koplietots ar:",
+    "unshare": "Beigt koplietošanu ar {{username}}"
   },
   "connect": {
     "title": "Pievienot banku",
@@ -311,6 +318,7 @@
     "connectFailed": "Neizdevās izveidot bankas saiti: {{detail}}",
     "balanceCheckFailed": "Neizdevās atjaunināt atlikuma pārbaudi: {{detail}}",
     "shareFailed": "Neizdevās koplietot kontu: {{detail}}",
+    "unshareFailed": "Neizdevās noņemt koplietošanu: {{detail}}",
     "alertSaveFailed": "Neizdevās saglabāt atlikuma brīdinājumu: {{detail}}",
     "alertRemoveFailed": "Neizdevās noņemt atlikuma brīdinājumu: {{detail}}",
     "applyFailed": "Neizdevās pielietot noteikumus: {{detail}}",
@@ -333,6 +341,9 @@
     "provideUsername": "Lūdzu, ievadi lietotājvārdu.",
     "unknownUsername": "Nezināms vai nederīgs lietotājvārds.",
     "accountShared": "Konts koplietots ar {{username}}.",
+    "overviewShared": "Kategoriju pārskats koplietots ar {{username}}.",
+    "overviewUnshared": "Kategoriju pārskata koplietošana noņemta.",
+    "unknownAccounts": "Viens vai vairāki konti nav pieejami.",
     "balanceAlertSaved": "Atlikuma brīdinājums saglabāts.",
     "balanceAlertRemoved": "Atlikuma brīdinājums noņemts.",
     "noLinkedAccounts": "Nav sasaistītu bankas kontu, ko sinhronizēt.",

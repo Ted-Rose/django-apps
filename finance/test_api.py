@@ -17,6 +17,7 @@ from finance.models import (
     AccountShare,
     BalanceAlert,
     Category,
+    CategoryOverviewShare,
     CategoryRule,
     Notification,
     PushSubscription,
@@ -1784,4 +1785,283 @@ class ExclusionApiTests(ApiTestCase):
         body = self.client.get(f'{self.API}/rules/').json()
         self.assertEqual(
             body['rules'][0]['excluded_amount'], '12.50'
+        )
+
+
+class OverviewShareApiTests(ApiTestCase):
+    """?owner= on the overview and transactions endpoints reads the
+    sharer's taxonomy over the share's effective account set;
+    share/unshare manage the CategoryOverviewShare rows."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.owner = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.viewer = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.third = User.objects.create_user(
+            username='carol', password='pw'
+        )
+        self.req = make_requisition(self.owner)
+        self.account = make_account(self.owner, self.req)
+        self.second = make_account(self.owner, self.req, 'acc-2')
+
+    def share(self, accounts=()):
+        share = CategoryOverviewShare.objects.create(
+            sharer=self.owner, shared_with=self.viewer
+        )
+        share.accounts.set(accounts)
+        return share
+
+    def test_share_creates_row_and_notification(self):
+        self.client.force_login(self.owner)
+        resp = self.post_json('/categories/overview/share/', {
+            'username': 'bob',
+            'accounts': [self.account.pk],
+        })
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body['code'], 'overviewShared')
+        self.assertEqual(body['params'], {'username': 'bob'})
+        share = CategoryOverviewShare.objects.get(
+            sharer=self.owner, shared_with=self.viewer
+        )
+        self.assertEqual(
+            [a.pk for a in share.accounts.all()],
+            [self.account.pk],
+        )
+        notification = Notification.objects.get(user=self.viewer)
+        self.assertEqual(
+            notification.url, '/finance/categories/?owner=alice'
+        )
+
+    def test_share_validation_errors(self):
+        self.client.force_login(self.owner)
+        resp = self.post_json('/categories/overview/share/', {
+            'username': ' ',
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'provideUsername')
+        for username in ('alice', 'nobody'):
+            resp = self.post_json('/categories/overview/share/', {
+                'username': username,
+            })
+            self.assertEqual(resp.status_code, 400)
+            self.assertEqual(
+                resp.json()['code'], 'unknownUsername'
+            )
+
+    def test_reshare_updates_account_set(self):
+        self.client.force_login(self.owner)
+        self.post_json('/categories/overview/share/', {
+            'username': 'bob', 'accounts': [self.account.pk],
+        })
+        resp = self.post_json('/categories/overview/share/', {
+            'username': 'bob', 'accounts': [self.second.pk],
+        })
+        self.assertEqual(resp.status_code, 200)
+        share = CategoryOverviewShare.objects.get(
+            sharer=self.owner
+        )
+        self.assertEqual(
+            [a.pk for a in share.accounts.all()], [self.second.pk]
+        )
+        # Re-sharing edits the row — no second notification.
+        self.assertEqual(Notification.objects.count(), 1)
+
+    def test_share_rejects_invisible_account(self):
+        foreign_req = make_requisition(self.third, 'req-c')
+        foreign = make_account(self.third, foreign_req, 'acc-c')
+        self.client.force_login(self.owner)
+        resp = self.post_json('/categories/overview/share/', {
+            'username': 'bob', 'accounts': [foreign.pk],
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'unknownAccounts')
+        self.assertFalse(CategoryOverviewShare.objects.exists())
+
+    def test_unshare_deletes_and_is_idempotent(self):
+        self.share()
+        self.client.force_login(self.owner)
+        resp = self.post_json('/categories/overview/unshare/', {
+            'username': 'bob',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['code'], 'overviewUnshared')
+        self.assertFalse(CategoryOverviewShare.objects.exists())
+        resp = self.post_json('/categories/overview/unshare/', {
+            'username': 'bob',
+        })
+        self.assertEqual(resp.status_code, 200)
+
+    def test_my_shares_lists_outgoing_shares(self):
+        self.share(accounts=[self.account])
+        self.client.force_login(self.owner)
+        body = self.client.get(
+            f'{self.API}/categories/overview/'
+        ).json()
+        self.assertIsNone(body['view_owner'])
+        self.assertEqual(body['shared_with_me'], [])
+        self.assertEqual(body['my_shares'], [{
+            'username': 'bob',
+            'accounts': [str(self.account)],
+        }])
+
+    def test_overview_owner_404s_without_share(self):
+        self.client.force_login(self.viewer)
+        for url in (
+            f'{self.API}/categories/overview/?owner=alice',
+            f'{self.API}/categories/overview/?owner=nobody',
+            f'{self.API}/transactions/?owner=alice',
+        ):
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 404, url)
+
+    def test_owner_param_matching_self_is_own_view(self):
+        make_transaction(self.account, 't-1', '-5.00')
+        self.client.force_login(self.owner)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertIsNone(body['view_owner'])
+        self.assertEqual(body['rows'][0]['tx_count'], 1)
+
+    def test_overview_owner_uses_sharers_taxonomy(self):
+        owner_cat = make_category(self.owner, 'OwnerCat')
+        make_category(self.viewer, 'ViewerCat')
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        make_assignment(self.owner, tx, owner_cat)
+        self.share()
+        self.client.force_login(self.viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertEqual(body['view_owner'], 'alice')
+        self.assertEqual(body['shared_with_me'], ['alice'])
+        self.assertEqual(
+            [row['category_name'] for row in body['rows']],
+            ['OwnerCat'],
+        )
+        # The sharer's category list — the viewer's own categories
+        # must not leak in.
+        names = [c['name'] for c in body['categories']]
+        self.assertIn('OwnerCat', names)
+        self.assertNotIn('ViewerCat', names)
+
+    def test_overview_owner_respects_sharers_exclusion(self):
+        excluded = make_category(
+            self.owner, 'Hidden', color=''
+        )
+        excluded.is_excluded = True
+        excluded.save(update_fields=['is_excluded'])
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        make_assignment(self.owner, tx, excluded)
+        self.share()
+        self.client.force_login(self.viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        row = body['rows'][0]
+        self.assertTrue(row['is_excluded'])
+        # sqlite drops the decimal scale ('10' vs '10.00') — compare
+        # numerically so the test holds on both backends.
+        self.assertEqual(Decimal(row['spent']), Decimal('10.00'))
+        # Excluded rows keep their own sums but feed no totals.
+        self.assertEqual(body['totals'], {})
+
+    def test_account_scoped_share_limits_rows_and_options(self):
+        make_transaction(self.account, 't-1', '-10.00')
+        make_transaction(self.second, 't-2', '-20.00')
+        self.share(accounts=[self.account])
+        self.client.force_login(self.viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertEqual(body['accounts'], [{
+            'id': self.account.pk, 'label': str(self.account),
+        }])
+        self.assertEqual(len(body['rows']), 1)
+        self.assertEqual(body['rows'][0]['tx_count'], 1)
+
+    def test_reshared_account_shows_sharers_categories(self):
+        """The sharer doesn't own the account — an AccountShare —
+        but their own categorization is what the viewer sees."""
+        AccountShare.objects.create(
+            account=self.account, shared_with=self.viewer
+        )
+        sharer_cat = make_category(self.viewer, 'SharerCat')
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        make_assignment(self.viewer, tx, sharer_cat)
+        share = CategoryOverviewShare.objects.create(
+            sharer=self.viewer, shared_with=self.third
+        )
+        share.accounts.set([self.account])
+        self.client.force_login(self.third)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=bob'
+        ).json()
+        self.assertEqual(
+            body['rows'][0]['category_name'], 'SharerCat'
+        )
+
+    def test_revoked_account_share_shrinks_overview(self):
+        AccountShare.objects.create(
+            account=self.account, shared_with=self.viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        share = CategoryOverviewShare.objects.create(
+            sharer=self.viewer, shared_with=self.third
+        )
+        share.accounts.set([self.account])
+        self.client.force_login(self.third)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=bob'
+        ).json()
+        self.assertEqual(body['rows'][0]['tx_count'], 1)
+        # Revoking the underlying AccountShare empties the
+        # effective account set — no cleanup needed.
+        AccountShare.objects.all().delete()
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=bob'
+        ).json()
+        self.assertEqual(body['rows'], [])
+        self.assertEqual(body['accounts'], [])
+
+    def test_transactions_owner_scopes_and_annotates(self):
+        owner_cat = make_category(self.owner, 'OwnerCat')
+        tx = make_transaction(
+            self.account, 't-1', '-10.00', creditor_name='Rimi'
+        )
+        make_assignment(
+            self.owner, tx, owner_cat,
+            excluded_amount=Decimal('4.00'),
+        )
+        make_transaction(self.second, 't-2', '-20.00')
+        self.share(accounts=[self.account])
+        self.client.force_login(self.viewer)
+        body = self.client.get(
+            f'{self.API}/transactions/?owner=alice'
+        ).json()
+        self.assertEqual(body['count'], 1)
+        row = body['transactions'][0]
+        self.assertEqual(row['transaction_id'], 't-1')
+        self.assertEqual(
+            row['effective_category']['name'], 'OwnerCat'
+        )
+        # The sharer's per-transaction exclusion applies too.
+        # (Decimal() compares — sqlite drops the .00 scale.)
+        self.assertEqual(
+            Decimal(row['excluded_amount']), Decimal('4.00')
+        )
+        self.assertEqual(
+            Decimal(row['counted_amount']), Decimal('-6.00')
+        )
+        self.assertEqual(body['accounts'], [{
+            'id': self.account.pk, 'label': str(self.account),
+        }])
+        self.assertEqual(body['counterparties'], ['Rimi'])
+        self.assertIn(
+            'OwnerCat', [c['name'] for c in body['categories']]
         )

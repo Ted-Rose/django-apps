@@ -28,6 +28,8 @@ export type NotificationsOut = components['schemas']['NotificationsOut'];
 export type ConnectIn = components['schemas']['ConnectIn'];
 export type ConnectOut = components['schemas']['ConnectOut'];
 export type ShareIn = components['schemas']['ShareIn'];
+export type ShareOverviewIn = components['schemas']['ShareOverviewIn'];
+export type ShareTargetOut = components['schemas']['ShareTargetOut'];
 export type SyncIn = components['schemas']['SyncIn'];
 export type SyncOut = components['schemas']['SyncOut'];
 export type SyncAccountOut = components['schemas']['SyncAccountOut'];
@@ -82,6 +84,10 @@ export interface TransactionParams {
   sort?: string | null;
   direction?: string | null;
   page?: number | string | null;
+  /** View another user's transactions through their
+      CategoryOverviewShare (the categories page's shared-view
+      drill-down); the sharer's taxonomy annotates the rows. */
+  owner?: string | null;
 }
 
 /**
@@ -103,6 +109,7 @@ export function fetchTransactions(
   if (params.sort) qs.set('sort', params.sort);
   if (params.direction) qs.set('direction', params.direction);
   if (params.page != null) qs.set('page', String(params.page));
+  if (params.owner) qs.set('owner', params.owner);
   const suffix = qs.toString();
   return apiGet<TransactionsOut>(
     `/api/finance/transactions/${suffix ? `?${suffix}` : ''}`,
@@ -114,9 +121,12 @@ export interface CategoryOverviewParams {
   from?: string | null;
   to?: string | null;
   account?: number | string | null;
+  /** Username whose shared overview to view (their taxonomy and
+      the share's account set); omit for the caller's own. */
+  owner?: string | null;
 }
 
-/** GET /api/finance/categories/overview/?from=&to=&account= */
+/** GET /api/finance/categories/overview/?from=&to=&account=&owner= */
 export function fetchCategoryOverview(
   params: CategoryOverviewParams = {},
 ): Promise<CategoryOverviewOut> {
@@ -124,6 +134,7 @@ export function fetchCategoryOverview(
   if (params.from) qs.set('from', params.from);
   if (params.to) qs.set('to', params.to);
   if (params.account != null) qs.set('account', String(params.account));
+  if (params.owner) qs.set('owner', params.owner);
   const suffix = qs.toString();
   return apiGet<CategoryOverviewOut>(
     `/api/finance/categories/overview/${suffix ? `?${suffix}` : ''}`,

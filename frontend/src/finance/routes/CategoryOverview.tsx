@@ -16,8 +16,17 @@ import MoneyText from '../components/MoneyText';
 import Toasts from '../../shared/components/Toasts';
 import TransactionDrilldown from '../components/TransactionDrilldown';
 import type { ParamUpdates } from '../components/TransactionTable';
-import { fetchCategoryOverview, type CategoryRowOut } from '../api';
+import { useShareOverview, useUnshareOverview } from '../mutations';
+import {
+  fetchCategoryOverview,
+  type AccountOptionOut,
+  type CategoryRowOut,
+  type ShareTargetOut,
+} from '../api';
 import './categories.css';
+// .acct-shared-badge/.acct-icon-btn/.acct-share-form — the share
+// chip and inline form reuse the accounts page's chrome.
+import './accounts.css';
 // .tx-panel/.tx-table styles — the drill-down reuses the
 // transactions page's table chrome.
 import './transactions.css';
@@ -57,6 +66,9 @@ export default function CategoryOverview() {
     sort: searchParams.get('sort'),
     direction: searchParams.get('direction'),
     page: searchParams.get('page'),
+    // Whose overview is shown — null = the caller's own; a
+    // username selects a CategoryOverviewShare'd view.
+    owner: searchParams.get('owner'),
   };
   // The account filter is a PK — ignore non-numeric garbage the
   // same way the ORM-side int lookup would.
@@ -64,6 +76,7 @@ export default function CategoryOverview() {
     ? Number(params.account)
     : null;
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   // The overview query keys on its own window params only — the
   // drill-down params (category/sort/page/…) must not refetch it.
@@ -71,6 +84,7 @@ export default function CategoryOverview() {
     from: params.from,
     to: params.to,
     account: params.account,
+    owner: params.owner,
   };
 
   /** Merge updates into the URL; `null`/'' removes the key. Any
@@ -101,8 +115,22 @@ export default function CategoryOverview() {
         from: params.from,
         to: params.to,
         account: accountId,
+        owner: params.owner,
       }),
   });
+  const isSharedView = data?.view_owner != null;
+
+  /** Subsection nav — pick another user's shared overview (or the
+      caller's own). The open drill-down and page reset: a category
+      id only makes sense within its owner's taxonomy. */
+  const selectOwner = (name: string | null) => {
+    const next = new URLSearchParams(searchParams);
+    if (name) next.set('owner', name);
+    else next.delete('owner');
+    next.delete('category');
+    next.delete('page');
+    setSearchParams(next);
+  };
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -162,6 +190,55 @@ export default function CategoryOverview() {
         title={t('categories.title')}
         subtitle={t('categories.subtitle')}
       >
+        {data && (
+          <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+            {(data.shared_with_me.length > 0 || isSharedView) && (
+              <>
+                <button
+                  type="button"
+                  className={`fin-chip${params.owner ? '' : ' active'}`}
+                  aria-pressed={!params.owner}
+                  onClick={() => selectOwner(null)}
+                >
+                  {t('categories.myOverview')}
+                </button>
+                {data.shared_with_me.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={`fin-chip${
+                      params.owner === name ? ' active' : ''
+                    }`}
+                    aria-pressed={params.owner === name}
+                    onClick={() => selectOwner(name)}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </>
+            )}
+            {isSharedView && (
+              <span className="badge acct-shared-badge">
+                {t('categories.sharedBy', { username: data.view_owner })}
+              </span>
+            )}
+            {!isSharedView && (
+              <button
+                type="button"
+                className="btn btn-sm acct-icon-btn ms-auto"
+                title={t('categories.shareOverview')}
+                aria-label={t('categories.shareOverview')}
+                aria-expanded={shareOpen}
+                onClick={() => setShareOpen((open) => !open)}
+              >
+                <i className="bi bi-share" />
+              </button>
+            )}
+          </div>
+        )}
+        {data && !isSharedView && shareOpen && (
+          <ShareOverviewCard accounts={data.accounts} shares={data.my_shares} />
+        )}
         <div className="fin-card p-3 mb-3">
           <button
             type="button"
@@ -238,7 +315,7 @@ export default function CategoryOverview() {
           )}
         </div>
 
-        {data && (
+        {data && !isSharedView && (
           <div className="mb-3">
             <CategoriesCard categories={data.categories} />
           </div>
@@ -411,6 +488,8 @@ export default function CategoryOverview() {
             key={params.category}
             label={selectedLabel}
             params={params}
+            owner={params.owner}
+            readOnly={isSharedView}
             onUpdate={updateParams}
             onClose={() => updateParams({ category: null })}
           />
@@ -418,6 +497,130 @@ export default function CategoryOverview() {
       </PageShell>
       <Toasts />
     </>
+  );
+}
+
+/**
+ * The overview-share card — the accounts page's inline share form
+ * extended with an account checklist (empty selection = the whole
+ * overview) and the caller's outgoing shares as removable chips.
+ * Only rendered in the caller's own view.
+ */
+function ShareOverviewCard({
+  accounts,
+  shares,
+}: {
+  /** The caller's visible accounts — any of them may be shared,
+      including ones only shared with the caller. */
+  accounts: AccountOptionOut[];
+  shares: ShareTargetOut[];
+}) {
+  const { t } = useTranslation('finance');
+  const share = useShareOverview();
+  const unshare = useUnshareOverview();
+  const [username, setUsername] = useState('');
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const toggleAccount = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = username.trim();
+    if (!trimmed) return;
+    share.mutate(
+      { username: trimmed, accounts: [...selected] },
+      {
+        onSuccess: (result) => {
+          if (!result?.success) return;
+          setUsername('');
+          setSelected(new Set());
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="fin-card p-3 mb-3">
+      <form className="d-flex gap-2 flex-wrap" onSubmit={submit}>
+        <input
+          type="text"
+          className="form-control form-control-sm w-auto"
+          placeholder={t('categories.username')}
+          aria-label={t('categories.username')}
+          required
+          autoFocus
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+        />
+        <button
+          type="submit"
+          className="btn btn-sm btn-primary"
+          disabled={share.isPending}
+        >
+          {share.isPending ? (
+            <span className="spinner-border spinner-border-sm" role="status" />
+          ) : (
+            <i className="bi bi-share" />
+          )}{' '}
+          {t('common:common.share')}
+        </button>
+      </form>
+      <fieldset className="mt-2">
+        <legend className="form-text mb-1">
+          {t('categories.onlyTheseAccounts')}
+        </legend>
+        <div className="d-flex flex-wrap gap-2">
+          {accounts.map((account) => (
+            <label
+              key={account.id}
+              className="form-check fin-chip m-0"
+              style={{ cursor: 'pointer' }}
+            >
+              <input
+                type="checkbox"
+                className="form-check-input m-0"
+                checked={selected.has(account.id)}
+                onChange={() => toggleAccount(account.id)}
+              />
+              <span className="form-check-label">{account.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {shares.length > 0 && (
+        <div className="mt-3 pt-2 border-top">
+          <div className="form-text mb-1">{t('categories.sharedWith')}</div>
+          <div className="d-flex flex-wrap gap-2">
+            {shares.map((target) => (
+              <span key={target.username} className="fin-chip">
+                {target.username}
+                {target.accounts.length > 0 &&
+                  ` (${target.accounts.join(', ')})`}
+                <button
+                  type="button"
+                  className="btn-close btn-close-sm ms-1"
+                  style={{ fontSize: '0.6rem' }}
+                  aria-label={t('categories.unshare', {
+                    username: target.username,
+                  })}
+                  disabled={
+                    unshare.isPending && unshare.variables === target.username
+                  }
+                  onClick={() => unshare.mutate(target.username)}
+                />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

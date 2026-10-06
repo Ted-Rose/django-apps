@@ -104,6 +104,9 @@ function makeOverview(
     accounts: [{ id: 5, label: 'Everyday account' }],
     selected_account: '',
     categories: CATEGORIES,
+    view_owner: null,
+    shared_with_me: [],
+    my_shares: [],
     ...overrides,
   };
 }
@@ -480,12 +483,8 @@ describe('CategoryOverview', () => {
     const list = await screen.findByRole('list');
     const row = within(list).getByText('Excluded').closest('li')!;
     expect(row.querySelector('.bi-eye-slash')).not.toBeNull();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Edit Excluded' }),
-    );
-    expect(
-      screen.getByLabelText('Exclude from statistics'),
-    ).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Excluded' }));
+    expect(screen.getByLabelText('Exclude from statistics')).toBeChecked();
   });
 
   it('renders excluded rows in a muted section without a share bar', async () => {
@@ -523,9 +522,7 @@ describe('CategoryOverview', () => {
     // A muted section header separates excluded rows; the row shows
     // a marker instead of a share bar but keeps its own sums.
     expect(
-      await screen.findByText(
-        'Excluded categories — not counted in totals',
-      ),
+      await screen.findByText('Excluded categories — not counted in totals'),
     ).toBeInTheDocument();
     const row = screen.getByText('Excluded').closest('tr')!;
     expect(row).toHaveClass('text-muted');
@@ -547,6 +544,135 @@ describe('CategoryOverview', () => {
     // Cancel restores the plain "Add" form.
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.getByLabelText('Name')).toHaveValue('');
+  });
+
+  it('renders no owner chips when nobody shared their overview', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview();
+    await screen.findByText('Groceries');
+    expect(
+      screen.queryByRole('button', { name: 'My overview' }),
+    ).not.toBeInTheDocument();
+    // The share affordance is still there in the caller's own view.
+    expect(
+      screen.getByRole('button', { name: 'Share overview' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders sharer chips and selects a shared view via ?owner=', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview({ shared_with_me: ['alice'] }));
+    renderOverview();
+    const mine = await screen.findByRole('button', {
+      name: 'My overview',
+    });
+    expect(mine).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'alice' }));
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenLastCalledWith(
+        '/api/finance/categories/overview/?owner=alice',
+      ),
+    );
+    // The shared view reports the owner — chips keep rendering and
+    // "My overview" navigates back.
+    fireEvent.click(await screen.findByRole('button', { name: 'My overview' }));
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenLastCalledWith(
+        '/api/finance/categories/overview/',
+      ),
+    );
+  });
+
+  it('shared view hides the categories card and share button, and the drill-down is read-only', async () => {
+    mockedApiGet.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/finance/transactions/')
+          ? makeTransactions()
+          : makeOverview({
+              view_owner: 'alice',
+              shared_with_me: ['alice'],
+            }),
+      ),
+    );
+    renderOverview('/categories?owner=alice');
+    expect(mockedApiGet).toHaveBeenCalledWith(
+      '/api/finance/categories/overview/?owner=alice',
+    );
+    expect(await screen.findByText('Shared by alice')).toBeInTheDocument();
+    // Category management and the share affordance are owner-only.
+    expect(
+      screen.queryByRole('button', { name: 'Share overview' }),
+    ).not.toBeInTheDocument();
+    expect(document.getElementById('categoriesCollapse')).toBeNull();
+
+    // The drill-down forwards the owner and renders a plain badge —
+    // no category dropdown/menu on shared rows.
+    fireEvent.click((await screen.findByText('Groceries')).closest('tr')!);
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenCalledWith(
+        '/api/finance/transactions/?category=1&owner=alice',
+      ),
+    );
+    expect(
+      await screen.findByText('Transactions — Groceries'),
+    ).toBeInTheDocument();
+    expect(document.querySelector('.tx-cat-toggle')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Create rule/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('posts a share limited to the checked accounts', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Category overview shared with bob.',
+    });
+    renderOverview();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Share overview' }),
+    );
+    fireEvent.change(screen.getByPlaceholderText('Username'), {
+      target: { value: 'bob' },
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Everyday account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/categories/overview/share/',
+        { username: 'bob', accounts: [5] },
+      ),
+    );
+    expect(
+      await screen.findByText('Category overview shared with bob.'),
+    ).toBeInTheDocument();
+  });
+
+  it('lists outgoing shares and revokes them', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeOverview({
+        my_shares: [{ username: 'bob', accounts: ['Everyday account'] }],
+      }),
+    );
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Category overview share removed.',
+    });
+    renderOverview();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Share overview' }),
+    );
+    expect(
+      await screen.findByText(/bob \(Everyday account\)/),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Stop sharing with bob' }),
+    );
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/categories/overview/unshare/',
+        { username: 'bob' },
+      ),
+    );
   });
 
   it('deletes a category and toasts the recategorized count', async () => {
