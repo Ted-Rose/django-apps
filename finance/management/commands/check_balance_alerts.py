@@ -10,7 +10,7 @@ from django_apps.models import user_language
 from finance.models import BalanceAlert, Notification
 from finance.services.gocardless import GoCardlessClient
 from finance.services.money import fmt_money
-from finance.services.push import send_limit_alert
+from finance.services.push import ALERT_REPEAT_AFTER, send_limit_alert
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,10 @@ class Command(BaseCommand):
         'Refresh stored balances for accounts carrying an active '
         'BalanceAlert, then push-notify (and record an in-app '
         'Notification for) each user whose balance dropped below '
-        'their threshold. Alerts fire once per breach episode: '
-        'alerted_at is stamped on notify and cleared once the '
-        'balance recovers. Accounts whose fetch fails are skipped '
+        'their threshold. Alerts re-fire every ALERT_REPEAT_AFTER '
+        '(~daily) while the breach persists: alerted_at is stamped '
+        'on each notify and cleared once the balance recovers. '
+        'Accounts whose fetch fails are skipped '
         'entirely — a stale balance must never false-alert.'
     )
 
@@ -134,8 +135,11 @@ class Command(BaseCommand):
         """One alert against one fresh balance; 1 when it fired."""
         account = alert.account
         if amount < alert.threshold:
-            if alert.alerted_at is not None:
-                # Still in the same breach episode — already told.
+            if (
+                alert.alerted_at is not None
+                and now - alert.alerted_at < ALERT_REPEAT_AFTER
+            ):
+                # Still in the repeat cooldown — told recently.
                 return 0
             logger.warning(
                 'BALANCE_ALERT_TRIGGERED user=%s account=%s '

@@ -5,14 +5,24 @@ fanned out to all of them via ``pywebpush`` using the VAPID keys from
 settings. Empty ``VAPID_PRIVATE_KEY`` disables the feature entirely —
 the sender is then a no-op. ``send_limit_alert`` is generic
 (title/body/url) — the name predates balance alerts.
+
+``ALERT_REPEAT_AFTER`` is the shared repeat cooldown for the alert
+management commands (see below).
 """
 import json
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from pywebpush import WebPushException, webpush
 
 logger = logging.getLogger('django')
+
+# How long a breach alert stays quiet after notifying — shared by
+# check_balance_alerts and evaluate_spending_limits so their daily
+# scheduled runs re-notify once a day while the breach persists.
+# 20h rather than 24h so scheduler jitter can't skip a day.
+ALERT_REPEAT_AFTER = timedelta(hours=20)
 
 
 def send_limit_alert(user, title, body, url):

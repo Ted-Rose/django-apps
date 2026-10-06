@@ -14,7 +14,7 @@ from finance.services.limits import (
     spent_in_window,
 )
 from finance.services.money import fmt_money
-from finance.services.push import send_limit_alert
+from finance.services.push import ALERT_REPEAT_AFTER, send_limit_alert
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +23,15 @@ class Command(BaseCommand):
     help = (
         'Evaluate active outgoing-spending limits; log '
         'and push-notify when a 7-day, 30-day or monthly limit is '
-        'exceeded. Each run also records one LimitEvaluation row '
+        'exceeded. Exceeded windows re-notify every '
+        'ALERT_REPEAT_AFTER (~daily) until back under the '
+        'threshold. Each run also records one LimitEvaluation row '
         'per monthly limit per month.'
     )
 
     def handle(self, *args, **options):
-        today = timezone.now().date()
+        now = timezone.now()
+        today = now.date()
         limits = TransactionLimit.objects.filter(
             is_active=True
         ).select_related('user', 'category').prefetch_related(
@@ -37,7 +40,7 @@ class Command(BaseCommand):
 
         alerts = 0
         for limit in limits:
-            new_breaches = []
+            due_alerts = []
             dirty = set()
             windows = {
                 w.threshold_field: w
@@ -78,8 +81,14 @@ class Command(BaseCommand):
                         window.threshold,
                         accounts[0].currency if accounts else '',
                     )
-                    if getattr(limit, alert_field) is None:
-                        new_breaches.append(
+                    last_alerted = getattr(limit, alert_field)
+                    if (
+                        last_alerted is None
+                        or now - last_alerted >= ALERT_REPEAT_AFTER
+                    ):
+                        # Fresh breach, or still exceeded past the
+                        # repeat cooldown — (re-)notify.
+                        due_alerts.append(
                             (window, spent, alert_field)
                         )
                 elif getattr(limit, alert_field) is not None:
@@ -88,12 +97,11 @@ class Command(BaseCommand):
                     setattr(limit, alert_field, None)
                     dirty.add(alert_field)
 
-            if new_breaches:
-                now = timezone.now()
-                for _window, _spent, alert_field in new_breaches:
+            if due_alerts:
+                for _window, _spent, alert_field in due_alerts:
                     setattr(limit, alert_field, now)
-                dirty.update(b[2] for b in new_breaches)
-                self._send_alert(limit, new_breaches)
+                dirty.update(b[2] for b in due_alerts)
+                self._send_alert(limit, due_alerts)
             if dirty:
                 limit.save(
                     update_fields=sorted(dirty) + ['updated_at']

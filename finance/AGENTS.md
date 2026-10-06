@@ -73,9 +73,11 @@ transactions, and get spending-limit alerts.
   30 days, or the current calendar month. `category` is optional —
   when set, only the limit user's own category assignments count.
   `alerted_7d_at` / `alerted_30d_at` / `alerted_monthly_at` are
-  per-window episode flags for push alerts: set when a breach
-  notification is sent, cleared once spending falls back under the
-  threshold so the next breach alerts again. Window math
+  per-window last-notified stamps for push alerts: set each time a
+  breach notification is sent, and the alert repeats once the stamp
+  is older than `ALERT_REPEAT_AFTER` (~daily, `services/push.py`)
+  while the window stays breached. Cleared once spending falls back
+  under the threshold so the next breach alerts again. Window math
   (`limit_windows`, `monthly_period_start`), spend sums
   (`spent_in_window`), display stats (`limit_window_stats`) and the
   per-past-month breakdown (`monthly_history`) live in
@@ -99,8 +101,10 @@ transactions, and get spending-limit alerts.
   months that predate the first evaluation.
 - `BalanceAlert` — per `(user, account)` low-balance threshold
   (`threshold` may be negative for overdraft alerts). Sharers set
-  their own. `alerted_at` is the episode flag: stamped when the
-  breach notification goes out, cleared once the balance is back
+  their own. `alerted_at` is the last-notified stamp: set each time
+  the breach notification goes out, and the alert re-fires once it
+  is older than `ALERT_REPEAT_AFTER` (~daily) while the balance
+  stays below threshold. Cleared once the balance is back
   at/above the threshold so the next drop alerts again. Managed via
   `POST /api/finance/accounts/<id>/balance-alert/` (+ `/delete/`)
   from the Accounts page bell; `AccountOut.balance_alert` carries
@@ -158,15 +162,17 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   window — 7-day, 30-day, or monthly — via `services/limits.py`
   (filtered to the limit's category when set); logs
   `SPENDING_LIMIT_EXCEEDED ...` warnings and sends one Web Push
-  notification per limit per breach episode (both windows naming in
-  a single notification when breached together) to the user's
+  notification per limit on each breach and then every
+  `ALERT_REPEAT_AFTER` (~daily) while still breached (all due
+  windows named in a single notification) to the user's
   `PushSubscription`s.
 - `check_balance_alerts` (`--dry-run`): fetches each alerted
   account's balance once (`fetch_balances_parallel`, deduped across
   users of shared accounts), writes `Account.last_balance`/
   `balance_updated_at` like `POST /api/finance/balances/refresh/`,
   then evaluates each `BalanceAlert` — below threshold with no
-  `alerted_at` creates the in-app `Notification` row AND pushes via
+  `alerted_at` or one older than `ALERT_REPEAT_AFTER` creates the
+  in-app `Notification` row AND pushes via
   `send_limit_alert`, then stamps `alerted_at` unconditionally (the
   Notification row is the record of delivery). Accounts whose fetch
   failed/429'd or whose currency mismatches are skipped — never

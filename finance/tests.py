@@ -2175,7 +2175,7 @@ class LimitPushAlertCommandTests(TestCase):
         limit.refresh_from_db()
         self.assertIsNotNone(limit.alerted_7d_at)
 
-    def test_second_run_while_exceeded_sends_nothing(self):
+    def test_second_run_within_cooldown_sends_nothing(self):
         make_limit(
             account=self.account,
             user=self.user,
@@ -2187,6 +2187,31 @@ class LimitPushAlertCommandTests(TestCase):
         mock_send = self.run_command()
 
         mock_send.assert_not_called()
+
+    def test_renotifies_once_cooldown_expires(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+        self.run_command()
+
+        # Pretend the last alert went out over the repeat cooldown
+        # ago — a still-breached window must notify again.
+        TransactionLimit.objects.filter(pk=limit.pk).update(
+            alerted_7d_at=(
+                timezone.now() - timezone.timedelta(hours=21)
+            )
+        )
+        mock_send = self.run_command()
+
+        mock_send.assert_called_once()
+        limit.refresh_from_db()
+        self.assertGreater(
+            limit.alerted_7d_at,
+            timezone.now() - timezone.timedelta(hours=1),
+        )
 
     def test_flag_cleared_when_back_under_then_realerts(self):
         limit = make_limit(
@@ -2391,7 +2416,7 @@ class CheckBalanceAlertsTests(TestCase):
         self.assertIsNone(alert.alerted_at)
         self.assertFalse(Notification.objects.exists())
 
-    def test_second_run_while_below_sends_nothing(self):
+    def test_second_run_within_cooldown_sends_nothing(self):
         BalanceAlert.objects.create(
             user=self.user,
             account=self.account,
@@ -2401,6 +2426,31 @@ class CheckBalanceAlertsTests(TestCase):
         mock_send, _ = self.run_command()
         mock_send.assert_not_called()
         self.assertEqual(Notification.objects.count(), 1)
+
+    def test_renotifies_once_cooldown_expires(self):
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        self.run_command()
+
+        # Pretend the last alert went out over the repeat cooldown
+        # ago — a still-breached alert must notify again.
+        BalanceAlert.objects.filter(pk=alert.pk).update(
+            alerted_at=(
+                timezone.now() - timezone.timedelta(hours=21)
+            )
+        )
+        mock_send, _ = self.run_command()
+
+        mock_send.assert_called_once()
+        self.assertEqual(Notification.objects.count(), 2)
+        alert.refresh_from_db()
+        self.assertGreater(
+            alert.alerted_at,
+            timezone.now() - timezone.timedelta(hours=1),
+        )
 
     def test_breach_notification_localized_for_lv_user(self):
         from django_apps.models import UserSettings

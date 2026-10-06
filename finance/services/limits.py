@@ -15,7 +15,7 @@ from django.utils import timezone
 from finance.models import Transaction
 from finance.services.categories import annotate_counted_amount
 
-# (threshold field, alert-episode flag field, window length, label,
+# (threshold field, last-alerted stamp field, window length, label,
 #  i18n key — the SPA translates `key`, `label` stays the English
 #  fallback, and gettext uses `key` for the push-alert wording).
 FIXED_WINDOWS = (
@@ -23,8 +23,8 @@ FIXED_WINDOWS = (
     ('limit_30_days', 'alerted_30d_at', 30, '30 days', 'days30'),
 )
 
-# Every threshold field paired with its alert flag, monthly included —
-# used to reset stale flags when a threshold is removed.
+# Every threshold field paired with its last-alerted stamp, monthly
+# included — used to reset stale stamps when a threshold is removed.
 ALERT_FIELD_BY_THRESHOLD = {
     'limit_7_days': 'alerted_7d_at',
     'limit_30_days': 'alerted_30d_at',

@@ -459,9 +459,11 @@ class LimitEvaluation(models.Model):
 class BalanceAlert(models.Model):
     """Per user+account low-balance push alert.
 
-    Fires once per breach episode: ``alerted_at`` is stamped when the
-    notification goes out and cleared once the balance is back at or
-    above ``threshold``, so a later drop alerts again.
+    Re-fires while the breach persists: ``alerted_at`` is stamped
+    each time the notification goes out, and the alert repeats once
+    it is older than ``ALERT_REPEAT_AFTER`` (services/push.py). The
+    flag is cleared once the balance is back at or above
+    ``threshold``, so a later drop alerts again immediately.
     """
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
