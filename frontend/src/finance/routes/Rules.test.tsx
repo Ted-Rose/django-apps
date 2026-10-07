@@ -307,9 +307,7 @@ describe('Rules', () => {
       ),
     );
     renderRules();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Edit rule 1' }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit rule 1' }));
     const input = await screen.findByLabelText('Excluded amount');
     expect(input).toHaveValue(12.5);
     // The debounced preview carries the current value.
@@ -322,9 +320,7 @@ describe('Rules', () => {
       { timeout: 2000 },
     );
     fireEvent.change(input, { target: { value: '7.5' } });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Save rule' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save rule' }));
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/rules/save/',
@@ -346,14 +342,10 @@ describe('Rules', () => {
       ),
     );
     renderRules();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Edit rule 1' }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit rule 1' }));
     const input = await screen.findByLabelText('Excluded amount');
     expect(input).toHaveValue(null);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Save rule' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save rule' }));
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/rules/save/',

@@ -500,9 +500,7 @@ function TransactionRow({
       <td className="tx-cell-desc">
         {tx.status !== 'booked' && (
           <span className="badge text-bg-warning me-1">
-            {tx.status === 'pending'
-              ? t('transactions.pending')
-              : tx.status}
+            {tx.status === 'pending' ? t('transactions.pending') : tx.status}
           </span>
         )}
         {tx.remittance_information || '-'}

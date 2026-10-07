@@ -613,9 +613,7 @@ describe('Transactions', () => {
     const struck = cell.querySelector('s');
     expect(struck).toHaveTextContent('-100.00 EUR');
     expect(struck).toHaveClass('text-muted');
-    expect(
-      cell.querySelector('.bi-eye-slash'),
-    ).not.toBeNull();
+    expect(cell.querySelector('.bi-eye-slash')).not.toBeNull();
   });
 
   it('mutes the amount cell for an excluded category', async () => {
@@ -659,26 +657,19 @@ describe('Transactions', () => {
         name: 'Change category for transaction 1',
       }),
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: /Exclude amount/ }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: /Exclude amount/ }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(
-      within(dialog).getByLabelText('Amount not counted'),
-      { target: { value: '40' } },
-    );
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Save' }),
-    );
+    fireEvent.change(within(dialog).getByLabelText('Amount not counted'), {
+      target: { value: '40' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/transactions/1/exclusion/',
         { excluded_amount: '40' },
       ),
     );
-    expect(
-      await screen.findByText('Excluding 40.00 EUR.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Excluding 40.00 EUR.')).toBeInTheDocument();
   });
 
   it('filters to manual overrides via the source menu item', async () => {
