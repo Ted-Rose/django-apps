@@ -139,10 +139,13 @@ else:
         BASE_DIR, 'google_api', 'app_secrets.json'
     )
 
-# Tests always run on a local throwaway sqlite DB: the configured
-# connection is a read-only user against production that cannot
-# create the test database.
-if 'test' in sys.argv:
+# DEBUG (local dev) and tests always run on a local sqlite DB:
+# the private_settings.json connection is a read-only user against
+# production that cannot create the test database, and a dev server
+# should never write to production. The read-only production
+# connection is reachable only via DEBUG=false in
+# private_settings.json.
+if DEBUG or 'test' in sys.argv:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',

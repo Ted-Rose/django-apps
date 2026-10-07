@@ -56,13 +56,14 @@ root — single_pages owns `/twister`, `/spoki/` and the `/app/*`
     enough for `check`/`test`, not for real data work.
   - The `DATABASES` entry in `private_settings.json` connects to
     the production Aiven Postgres through the read-only
-    `ai_agent` user — local `runserver`, `manage.py shell`,
-    `dbshell` and `inspectdb` can inspect real data for
-    investigation, but every write (INSERT/UPDATE/DELETE, DDL,
-    `migrate`) fails with `permission denied`. `manage.py test`
-    is the exception: a `sys.argv` check at the bottom of
-    `settings.py` swaps `DATABASES` to local sqlite, so tests
-    never touch production.
+    `ai_agent` user — but a check at the bottom of `settings.py`
+    swaps `DATABASES` to local sqlite `db.sqlite3` whenever
+    `DEBUG` is true or `test` is in `sys.argv`. So local
+    `runserver`/`shell`/`dbshell` normally hit a scratch sqlite
+    DB; to inspect real production data (read-only, every write
+    fails with `permission denied`), set `"DEBUG": false` in
+    `private_settings.json` first. `manage.py test` always runs
+    on sqlite regardless.
 - Google OAuth client secrets live in `google_api/app_secrets.json`
   locally (gitignored); DB CA cert in `ca.pem` (gitignored).
 - Virtualenv is at `venv/` (VS Code already points at it).
@@ -109,19 +110,28 @@ quotes vs single quotes are mixed — match the surrounding file.
 
 ### Database access
 
-- The local DB connection is **read-only**: `private_settings.json`
-  points at production via the `ai_agent` Postgres user (SELECT
-  only, no `CREATEDB`/DDL/DML). Use it freely for investigation —
-  `manage.py shell` ORM queries, `manage.py dbshell`, `inspectdb`.
-- A `permission denied` write error is intended behavior, not a
-  bug. Never work around it by switching back to admin
-  credentials — ask the user if a write is genuinely needed.
+- With `DEBUG` true (normal local dev), `settings.py` overrides
+  `DATABASES` to local sqlite `db.sqlite3` — `runserver`,
+  `shell`, `migrate` and friends all operate on a throwaway dev
+  DB. `migrate` against this sqlite file is fine (unlike
+  production — see "Database migrations").
+- Setting `"DEBUG": false` in `private_settings.json` switches
+  the local DB connection to **read-only production**:
+  `private_settings.json` points at production via the
+  `ai_agent` Postgres user (SELECT only, no
+  `CREATEDB`/DDL/DML). Use it for investigation only —
+  `manage.py shell` ORM queries, `manage.py dbshell`,
+  `inspectdb`.
+- A `permission denied` write error against production is
+  intended behavior, not a bug. Never work around it by
+  switching back to admin credentials — ask the user if a write
+  is genuinely needed.
 - All testing must run against the local database: `python
-  manage.py test` is pinned to throwaway sqlite by the `sys.argv`
-  check in `django_apps/settings.py`. Don't remove that check,
-  and don't run tests via another runner without equivalent
-  isolation — anything else would hit (and fail against, or
-  worse, write to) production.
+  manage.py test` is pinned to throwaway sqlite by the `DEBUG or
+  'test' in sys.argv` check in `django_apps/settings.py`. Don't
+  remove that check, and don't run tests via another runner
+  without equivalent isolation — anything else would hit (and
+  fail against, or worse, write to) production.
 
 ### Database migrations
 Creating migration files is allowed and expected — after any model
@@ -130,7 +140,8 @@ generated files). Applying migrations is forbidden: never run
 `python manage.py migrate` or any equivalent command that applies
 migrations to a real database — that is managed outside of agent
 sessions. (Django's test runner applying migrations to its
-throwaway test DB is fine. CI deploy also runs `migrate` on the
+throwaway test DB is fine, as is `migrate` on the local
+`db.sqlite3` dev DB. CI deploy also runs `migrate` on the
 GitHub Actions runner — that happens in the workflow, not here.)
 
 ### Documentation and planning
