@@ -17,6 +17,11 @@
       }
     }
   ],
+  "functions": {
+    "django_apps/wsgi.py": {
+      "maxDuration": 60
+    }
+  },
   "routes": [
     {
       "src": "/static/(.*)",
