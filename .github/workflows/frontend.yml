@@ -1,21 +1,12 @@
 name: Frontend
 
+# Runs on every PR and every push to main (every push deploys to
+# Cloud Run via deploy.yml), so type/lint/test breakage can't reach
+# production unchecked — even when a change doesn't touch frontend/.
 on:
   pull_request:
-    paths:
-      - 'frontend/**'
-      - '*/api.py'
-      - 'django_apps/views.py'
-      - 'django_apps/templates/spa_shell.html'
-      - '.github/workflows/frontend.yml'
   push:
     branches: [main]
-    paths:
-      - 'frontend/**'
-      - '*/api.py'
-      - 'django_apps/views.py'
-      - 'django_apps/templates/spa_shell.html'
-      - '.github/workflows/frontend.yml'
 
 jobs:
   frontend:
