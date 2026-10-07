@@ -56,7 +56,15 @@ transactions, and get spending-limit alerts.
   read-only. Share/unshare via
   `POST /api/finance/categories/overview/share|unshare/`; the first
   share creates a `Notification` for the recipient.
-- `Transaction` — booked transactions; `amount < 0` = outgoing.
+- `Transaction` — synced bank transactions; `amount < 0` = outgoing.
+  `status` is the transactions-list group the entry came from
+  (`booked`, `pending`, or any other group the API returns — Berlin
+  Group spec also allows `info`). Pending entries lack
+  `transactionId`/`bookingDate`: sync synthesizes a deterministic
+  `pending-<digest>` id (stable across syncs while the entry stays
+  pending) and fills `booking_date` from `value_date`; non-booked
+  groups are snapshots, so rows that leave the list are deleted —
+  a pending hold is replaced by the booked row once it settles.
   Unique per `(account, transaction_id)`. Raw bank data only —
   categorization is per-user (below). Banks disagree on date
   semantics: Swedbank puts the card-purchase date in `value_date`
@@ -164,10 +172,12 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
 ## Management commands → Cloud Run jobs
 
 - `sync_bank_transactions` (`--dry-run`): incremental sync per
-  `status='LN'` account using `Max(booking_date)` as `date_from`;
-  `update_or_create` on transaction id; only `booked` transactions;
-  per-account failures are logged and don't abort the run. Synced
-  rows are auto-categorized per viewer — one pass writes the
+  `status='LN'` account using `Max(booking_date)` of **booked**
+  rows as `date_from` (pending value dates can't push the cursor
+  forward and skip real bookings); `update_or_create` on
+  transaction id for every status group in the payload; per-account
+  failures are logged and don't abort the run. Synced rows are
+  auto-categorized per viewer — one pass writes the
   owner's `UserTransactionCategory` row plus each sharer's via
   `categorize_transaction()`.
 - `evaluate_spending_limits`: sums negative amounts per active limit

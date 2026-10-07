@@ -497,7 +497,16 @@ function TransactionRow({
       <td className="tx-cell-account">
         {tx.account.name || tx.account.iban || ''}
       </td>
-      <td className="tx-cell-desc">{tx.remittance_information || '-'}</td>
+      <td className="tx-cell-desc">
+        {tx.status !== 'booked' && (
+          <span className="badge text-bg-warning me-1">
+            {tx.status === 'pending'
+              ? t('transactions.pending')
+              : tx.status}
+          </span>
+        )}
+        {tx.remittance_information || '-'}
+      </td>
       <td className="tx-cell-counterparty">{tx.counterparty || '-'}</td>
       {/* The badge itself is the assign-category dropdown toggle —
           Monarch/YNAB-style: click the pill, pick a category. The

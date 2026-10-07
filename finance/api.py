@@ -276,6 +276,9 @@ class CategoryOut(Schema):
 class TransactionOut(Schema):
     id: int
     transaction_id: str
+    # Transactions-list group the entry came from — 'booked' or a
+    # transient group like 'pending' (card holds awaiting posting).
+    status: str
     # The user's "when it happened" date — the earlier of
     # booking_date/value_date (banks disagree on which carries the
     # event; Swedbank books card purchases days after valueDate).

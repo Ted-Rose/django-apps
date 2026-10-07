@@ -5,7 +5,8 @@ from django.core.management.base import BaseCommand
 from finance.models import Account
 from finance.services.gocardless import GoCardlessClient
 from finance.services.sync import (
-    iter_booked_transactions,
+    fetch_transactions_payload,
+    iter_status_entries,
     sync_account_transactions,
 )
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = (
-        'Sync booked transactions for all linked (status=LN) bank '
+        'Sync transactions for all linked (status=LN) bank '
         'accounts from the GoCardless Bank Account Data API.'
     )
 
@@ -79,13 +80,17 @@ class Command(BaseCommand):
             return sync_account_transactions(client, account)
 
         count = 0
-        for transaction_id, defaults in iter_booked_transactions(
-            client, account
-        ):
-            self.stdout.write(
-                f'[dry-run] {account.account_id} '
-                f'{transaction_id} {defaults["amount"]} '
-                f'{defaults["currency"]}'
-            )
-            count += 1
+        data = fetch_transactions_payload(client, account)
+        for status, entries in data.items():
+            if not isinstance(entries, list):
+                continue
+            for transaction_id, defaults in iter_status_entries(
+                entries, status, account
+            ):
+                self.stdout.write(
+                    f'[dry-run] {account.account_id} {status} '
+                    f'{transaction_id} {defaults["amount"]} '
+                    f'{defaults["currency"]}'
+                )
+                count += 1
         return 0, count

@@ -171,7 +171,10 @@ class Category(models.Model):
 
 
 class Transaction(models.Model):
-    """Booked bank transaction synced from GoCardless."""
+    """Bank transaction synced from GoCardless."""
+    STATUS_BOOKED = 'booked'
+    STATUS_PENDING = 'pending'
+
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
@@ -180,6 +183,17 @@ class Transaction(models.Model):
     transaction_id = models.CharField(max_length=255)
     internal_transaction_id = models.CharField(
         max_length=255, blank=True, null=True
+    )
+    status = models.CharField(
+        max_length=20,
+        default=STATUS_BOOKED,
+        help_text=(
+            'Transactions-list group the entry came from: booked, '
+            'pending, or any other group the API returns (Berlin '
+            'Group spec also allows info). Non-booked rows are '
+            'transient — replaced by the booked transaction once '
+            'it settles'
+        ),
     )
     amount = models.DecimalField(
         max_digits=12,

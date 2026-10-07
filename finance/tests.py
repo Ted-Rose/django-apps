@@ -953,9 +953,12 @@ class SyncBankTransactionsTests(TestCase):
         self.req = make_requisition(self.user)
         self.account = make_account(self.user, self.req)
 
-    def run_command(self, booked, **kwargs):
+    def run_command(self, booked, pending=None, **kwargs):
         client = MagicMock()
-        client.fetch_transactions.return_value = {'booked': booked}
+        client.fetch_transactions.return_value = {
+            'booked': booked,
+            'pending': pending or [],
+        }
         with patch(
             'finance.management.commands'
             '.sync_bank_transactions.GoCardlessClient',
@@ -1144,6 +1147,115 @@ class SyncBankTransactionsTests(TestCase):
                 user=sharer, transaction=tx
             ).category,
             sharer_cat,
+        )
+
+    def test_stores_pending_transactions(self):
+        """Pending entries lack transactionId — sync synthesizes a
+        deterministic content-derived id and fills booking_date from
+        valueDate (the column is NOT NULL)."""
+        self.run_command([], pending=[
+            {
+                'valueDate': '2026-10-06',
+                'transactionAmount': {
+                    'amount': '-0.18', 'currency': 'EUR',
+                },
+                'remittanceInformationUnstructured':
+                    'PIRKUMS card 0.18 EUR',
+            },
+        ])
+        tx = Transaction.objects.get(account=self.account)
+        self.assertEqual(tx.status, 'pending')
+        self.assertTrue(tx.transaction_id.startswith('pending-'))
+        self.assertEqual(tx.booking_date, date(2026, 10, 6))
+        self.assertEqual(tx.value_date, date(2026, 10, 6))
+        self.assertEqual(tx.amount, Decimal('-0.18'))
+        self.assertEqual(
+            tx.remittance_information, 'PIRKUMS card 0.18 EUR'
+        )
+
+    def test_pending_row_is_stable_across_syncs(self):
+        """The digest id keeps the same pk (and its category
+        assignments) while the entry stays pending."""
+        pending = [{
+            'valueDate': '2026-10-06',
+            'transactionAmount': {
+                'amount': '-0.18', 'currency': 'EUR',
+            },
+        }]
+        self.run_command([], pending=pending)
+        tx = Transaction.objects.get(account=self.account)
+        self.run_command([], pending=pending)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(Transaction.objects.get().pk, tx.pk)
+
+    def test_pending_row_deleted_once_it_leaves_the_list(self):
+        """Snapshot semantics: a pending entry that booked (or was
+        released) disappears from the pending list and its row is
+        deleted — the booked row replaces it."""
+        self.run_command([], pending=[
+            {
+                'valueDate': '2026-10-06',
+                'transactionAmount': {
+                    'amount': '-0.18', 'currency': 'EUR',
+                },
+            },
+        ])
+        self.run_command([
+            {
+                'transactionId': 'tx-1',
+                'bookingDate': '2026-10-07',
+                'transactionAmount': {
+                    'amount': '-0.18', 'currency': 'EUR',
+                },
+            },
+        ])
+        tx = Transaction.objects.get(account=self.account)
+        self.assertEqual(tx.status, 'booked')
+        self.assertEqual(tx.transaction_id, 'tx-1')
+
+    def test_pending_with_real_id_upgrades_to_booked(self):
+        """A pending entry carrying transactionId reuses the real
+        id, so booking just flips the same row's status."""
+        self.run_command([], pending=[
+            {
+                'transactionId': 'tx-1',
+                'valueDate': '2026-10-06',
+                'transactionAmount': {
+                    'amount': '-0.18', 'currency': 'EUR',
+                },
+            },
+        ])
+        tx = Transaction.objects.get(account=self.account)
+        self.assertEqual(tx.status, 'pending')
+        self.run_command([
+            {
+                'transactionId': 'tx-1',
+                'bookingDate': '2026-10-07',
+                'transactionAmount': {
+                    'amount': '-0.18', 'currency': 'EUR',
+                },
+            },
+        ])
+        tx.refresh_from_db()
+        self.assertEqual(tx.status, 'booked')
+        self.assertEqual(tx.booking_date, date(2026, 10, 7))
+
+    def test_pending_does_not_advance_sync_cursor(self):
+        """date_from must come from booked rows only — a pending
+        entry's (possibly future) value date can't skip bookings."""
+        make_transaction(self.account, 't-1', '-1.00', days_ago=1)
+        client = self.run_command([], pending=[
+            {
+                'valueDate': '2999-01-01',
+                'transactionAmount': {
+                    'amount': '-0.18', 'currency': 'EUR',
+                },
+            },
+        ])
+        _, kwargs = client.fetch_transactions.call_args
+        self.assertEqual(
+            kwargs['date_from'],
+            timezone.now().date() - timezone.timedelta(days=1),
         )
 
 

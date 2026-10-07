@@ -438,7 +438,12 @@ describe('CategoryOverview', () => {
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/categories/save/',
-        { name: 'Travel', color: '#6c757d', is_excluded: false },
+        {
+          category_id: null,
+          name: 'Travel',
+          color: '#6c757d',
+          is_excluded: false,
+        },
       ),
     );
     expect(
@@ -461,7 +466,12 @@ describe('CategoryOverview', () => {
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/categories/save/',
-        { name: 'Travel', color: '#6c757d', is_excluded: true },
+        {
+          category_id: null,
+          name: 'Travel',
+          color: '#6c757d',
+          is_excluded: true,
+        },
       ),
     );
   });
@@ -479,12 +489,30 @@ describe('CategoryOverview', () => {
         ],
       }),
     );
+    mockedApiPost.mockResolvedValue({ success: true });
     renderOverview();
     const list = await screen.findByRole('list');
     const row = within(list).getByText('Excluded').closest('li')!;
     expect(row.querySelector('.bi-eye-slash')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Edit Excluded' }));
     expect(screen.getByLabelText('Exclude from statistics')).toBeChecked();
+    // Saving an edit sends the id so the API renames the row in
+    // place instead of creating a second category.
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Hidden' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/categories/save/',
+        {
+          category_id: 9,
+          name: 'Hidden',
+          color: '#6c757d',
+          is_excluded: true,
+        },
+      ),
+    );
   });
 
   it('renders excluded rows in a muted section without a share bar', async () => {
@@ -675,7 +703,7 @@ describe('CategoryOverview', () => {
     );
   });
 
-  it('deletes a category and toasts the recategorized count', async () => {
+  it('deletes a category after confirming in the modal', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     mockedApiPost.mockResolvedValue({
       success: true,
@@ -686,6 +714,10 @@ describe('CategoryOverview', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Delete Dining' }),
     );
+    // The confirm modal gates the POST.
+    expect(mockedApiPost).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Delete "Dining"\?/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/categories/3/delete/',
@@ -696,5 +728,15 @@ describe('CategoryOverview', () => {
         'Category deleted; 2 transaction(s) recategorized.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('posts nothing when the delete confirm is cancelled', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete Dining' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(mockedApiPost).not.toHaveBeenCalled();
   });
 });

@@ -1568,6 +1568,8 @@ export interface components {
             id: number;
             /** Transaction Id */
             transaction_id: string;
+            /** Status */
+            status: string;
             /**
              * Occurrence Date
              * Format: date
