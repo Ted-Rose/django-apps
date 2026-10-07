@@ -81,6 +81,19 @@ if IS_CLOUD_ENVIRONMENT:
         with open(GOOGLE_APP_SECRETS_PATH, 'w') as f:
             f.write(get_env_str('GOOGLE_OAUTH_CLIENT_JSON', '{}'))
 
+    # Vercel lambdas have no GCP metadata server: when a service
+    # account JSON key is provided, write it to /tmp so
+    # google.auth.default() picks it up as ADC. Cloud Run doesn't set
+    # this — it uses its attached service account.
+    gcp_sa_json = get_env_str('GCP_SERVICE_ACCOUNT_JSON')
+    if gcp_sa_json and 'GOOGLE_APPLICATION_CREDENTIALS' \
+            not in os.environ:
+        gcp_creds_path = '/tmp/gcp_service_account.json'
+        if not os.path.exists(gcp_creds_path):
+            with open(gcp_creds_path, 'w') as f:
+                f.write(gcp_sa_json)
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = gcp_creds_path
+
 elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
     with open(PRIVATE_SETTINGS_JSON_PATH, 'r') as file:
         private_settings = json.load(file)

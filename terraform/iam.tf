@@ -94,7 +94,8 @@ resource "google_project_iam_member" "github_deployer_service_account_admin_scop
     expression  = <<-EOT
       resource.name.endsWith("/serviceAccounts/github-deployer@${var.project_id}.iam.gserviceaccount.com") ||
       resource.name.endsWith("/serviceAccounts/${local.cloudrun_email}") ||
-      resource.name.endsWith("/serviceAccounts/cloud-scheduler@${var.project_id}.iam.gserviceaccount.com")
+      resource.name.endsWith("/serviceAccounts/cloud-scheduler@${var.project_id}.iam.gserviceaccount.com") ||
+      resource.name.endsWith("/serviceAccounts/vercel-audio@${var.project_id}.iam.gserviceaccount.com")
     EOT
   }
 
@@ -167,4 +168,30 @@ resource "google_service_account_iam_member" "cloudrun_self_token_creator" {
     google_project_service.enabled,
     google_service_account.cloudrun
   ]
+}
+
+# Vercel lambdas have no GCP identity (no metadata server), so audio
+# uploads there authenticate as this dedicated SA via a JSON key in
+# the GCP_SERVICE_ACCOUNT_JSON env var.
+resource "google_service_account" "vercel_audio" {
+  account_id   = "vercel-audio"
+  display_name = "Vercel audio (TTS uploads)"
+  description  = "Used by the Vercel deployment to upload TTS audio to GCS"
+  project      = var.project_id
+
+  depends_on = [google_project_service.enabled]
+}
+
+# Vercel SA can upload audio files; signed-URL reads need no IAM —
+# the URL signature itself authorizes the GET.
+resource "google_storage_bucket_iam_member" "vercel_audio_object_creator" {
+  bucket = google_storage_bucket.audio_recordings.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.vercel_audio.email}"
+}
+
+# JSON key — consumed as the GCP_SERVICE_ACCOUNT_JSON env var on
+# Vercel (terraform output -raw vercel_audio_sa_key_json).
+resource "google_service_account_key" "vercel_audio" {
+  service_account_id = google_service_account.vercel_audio.name
 }

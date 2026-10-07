@@ -31,3 +31,9 @@ output "audio_storage_bucket_url" {
   description = "GCS bucket URL"
   value       = google_storage_bucket.audio_recordings.url
 }
+
+output "vercel_audio_sa_key_json" {
+  description = "Service account JSON key — paste verbatim into the Vercel GCP_SERVICE_ACCOUNT_JSON env var"
+  value       = base64decode(google_service_account_key.vercel_audio.private_key)
+  sensitive   = true
+}

@@ -16,6 +16,7 @@ from oauthlib.oauth2.rfc6749.errors import (
     MissingCodeError,
 )
 from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
@@ -161,9 +162,6 @@ def text_to_audio(
 
     try:
         # Refresh ADC credentials so access_token is current.
-        # On Cloud Run there is no private key — signed URLs must
-        # use the IAM signBlob API via service_account_email +
-        # access_token.
         credentials, _ = google.auth.default()
         credentials.refresh(
             google.auth.transport.requests.Request()
@@ -192,13 +190,22 @@ def text_to_audio(
         finally:
             os.unlink(tmp_path)
 
-        # Generate signed URL valid for 7 days
+        # Generate signed URL valid for 7 days. Service-account-key
+        # creds (Vercel lambdas) carry a private key and sign locally;
+        # Cloud Run metadata-server creds have none, so signing goes
+        # through the IAM signBlob API instead.
+        sign_kwargs = {}
+        if not isinstance(credentials, service_account.Credentials):
+            sign_kwargs = {
+                'service_account_email':
+                    credentials.service_account_email,
+                'access_token': credentials.token,
+            }
         signed_url = blob.generate_signed_url(
             version="v4",
             expiration=timedelta(days=7),
             method="GET",
-            service_account_email=credentials.service_account_email,
-            access_token=credentials.token,
+            **sign_kwargs,
         )
 
         return signed_url

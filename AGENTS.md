@@ -43,10 +43,14 @@ root — single_pages owns `/twister`, `/spoki/` and the `/app/*`
     come from env vars (`DJANGO_SECRET_KEY`, `DATABASE_URL`,
     `APP_BASE_URL`, `GOOGLE_OAUTH_CLIENT_JSON`,
     `GOCARDLESS_SECRET_ID`, `GOCARDLESS_SECRET_KEY`,
-    `GCS_AUDIO_BUCKET`). `GOOGLE_OAUTH_CLIENT_JSON` is written to
-    `/tmp/app_secrets.json` at settings import (writable on both
-    Cloud Run and Vercel/Lambda). `CONN_MAX_AGE` is 600 on Cloud Run
-    (long-lived gunicorn workers) but 0 on Vercel — serverless
+    `GCS_AUDIO_BUCKET`, `GCP_SERVICE_ACCOUNT_JSON`).
+    `GOOGLE_OAUTH_CLIENT_JSON` is written to `/tmp/app_secrets.json`
+    at settings import (writable on both Cloud Run and
+    Vercel/Lambda); `GCP_SERVICE_ACCOUNT_JSON` (Vercel only — the
+    `vercel-audio` SA key, needed because lambdas have no GCP
+    metadata server) is written to `/tmp/gcp_service_account.json`
+    and exported as `GOOGLE_APPLICATION_CREDENTIALS` for
+    `google.auth.default()`. `CONN_MAX_AGE` is 0 on both — serverless
     instances must not hold persistent connections or they exhaust
     Aiven's `max_connections`.
   - Local: reads `private_settings.json` at repo root (gitignored;

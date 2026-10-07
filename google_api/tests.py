@@ -12,6 +12,8 @@ from oauthlib.oauth2.rfc6749.errors import (
     MissingCodeError,
 )
 
+from google.oauth2 import service_account
+
 from google_api.utils import text_to_audio
 
 CALLBACK_URL = '/google/callback'
@@ -165,3 +167,50 @@ class TextToAudioLanguageTests(TestCase):
             url = text_to_audio('----- -----')
         self.assertEqual(url, 'https://signed/x.mp3')
         self.assertEqual(gtts.call_args.kwargs['lang'], 'en')
+
+
+class TextToAudioSigningTests(TestCase):
+    """Signed URLs are generated via IAM signBlob when ADC has no
+    private key (Cloud Run metadata server), but service-account-key
+    creds (Vercel lambdas) sign locally — no signBlob args."""
+
+    def test_service_account_key_signs_locally(self):
+        sa_creds = Mock(spec=service_account.Credentials)
+        with patch.dict(os.environ, {'GCS_AUDIO_BUCKET': 'bucket'}), \
+                patch('google.auth.default',
+                      return_value=(sa_creds, 'project')), \
+                patch('google_api.utils.storage.Client') as client_cls, \
+                patch('google_api.utils.gTTS'):
+            blob = (
+                client_cls.return_value.bucket.return_value
+                .blob.return_value
+            )
+            blob.generate_signed_url.return_value = \
+                'https://signed/x.mp3'
+            url = text_to_audio('sveiki', lang='lv')
+        self.assertEqual(url, 'https://signed/x.mp3')
+        kwargs = blob.generate_signed_url.call_args.kwargs
+        self.assertNotIn('service_account_email', kwargs)
+        self.assertNotIn('access_token', kwargs)
+
+    def test_metadata_creds_sign_via_signblob(self):
+        with patch.dict(os.environ, {'GCS_AUDIO_BUCKET': 'bucket'}), \
+                patch('google.auth.default') as adc, \
+                patch('google_api.utils.storage.Client') as client_cls, \
+                patch('google_api.utils.gTTS'):
+            creds = Mock()
+            creds.service_account_email = 'sa@example.com'
+            creds.token = 'tok'
+            adc.return_value = (creds, 'project')
+            blob = (
+                client_cls.return_value.bucket.return_value
+                .blob.return_value
+            )
+            blob.generate_signed_url.return_value = \
+                'https://signed/x.mp3'
+            text_to_audio('hello', lang='en')
+        kwargs = blob.generate_signed_url.call_args.kwargs
+        self.assertEqual(
+            kwargs['service_account_email'], 'sa@example.com'
+        )
+        self.assertEqual(kwargs['access_token'], 'tok')

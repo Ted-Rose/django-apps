@@ -84,6 +84,9 @@ feature apps (that's why `_adapt`/`_reauth_url` were promoted to
   `include_granted_scopes='true'` returns extra granted scopes.
 - `AudioGenerationError` for pipeline failures, `ValueError` for bad
   input (max 5000 chars). Language detection restricted to lv/en.
-- Signed URLs on Cloud Run use the IAM `signBlob` path
-  (`service_account_email` + `access_token`) because no private key is
-  available.
+- Signed URLs use the IAM `signBlob` path
+  (`service_account_email` + `access_token`) on Cloud Run because the
+  metadata-server creds have no private key; on Vercel,
+  `GCP_SERVICE_ACCOUNT_JSON` (the `vercel-audio` SA key) becomes
+  `GOOGLE_APPLICATION_CREDENTIALS` → `service_account.Credentials`,
+  which signs locally.
