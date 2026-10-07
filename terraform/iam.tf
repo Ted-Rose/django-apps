@@ -190,6 +190,14 @@ resource "google_storage_bucket_iam_member" "vercel_audio_object_creator" {
   member = "serviceAccount:${google_service_account.vercel_audio.email}"
 }
 
+# objectViewer so blob.exists() can check whether the audio was
+# already generated (content-addressed dedup in text_to_audio).
+resource "google_storage_bucket_iam_member" "vercel_audio_object_viewer" {
+  bucket = google_storage_bucket.audio_recordings.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.vercel_audio.email}"
+}
+
 # Lets the deployer create the vercel-audio key. This must be a
 # per-SA binding: the project-level serviceAccountAdmin condition
 # above matches on the SA's email form, but serviceAccountKeys.*

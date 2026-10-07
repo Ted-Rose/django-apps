@@ -21,6 +21,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import re
+import hashlib
 from datetime import datetime, timedelta, timezone as dt_timezone
 from langdetect import (
     DetectorFactory,
@@ -151,18 +152,20 @@ def text_to_audio(
             )
             lang = 'en'
 
-    # Generate unique filename (timestamp + microseconds avoids
-    # collisions; no blob.exists() check needed)
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+    # Content-addressed filename: the same (lang, text) always maps to
+    # the same object, so repeat requests reuse it via blob.exists()
+    # instead of regenerating — the SPA's retry after a timeout then
+    # resolves instantly.
+    digest = hashlib.sha256(f'{lang}:{text}'.encode()).hexdigest()[:16]
     if filename:
         # Sanitize to prevent path traversal
         safe_filename = "".join(
             c for c in str(filename)
             if c.isalnum() or c in ('-', '_')
         )
-        unique_filename = f"{timestamp}_{safe_filename}.mp3"
+        unique_filename = f"{safe_filename}_{digest}.mp3"
     else:
-        unique_filename = f"{timestamp}_message_audio.mp3"
+        unique_filename = f"message_audio_{digest}.mp3"
 
     # Get GCS bucket
     bucket_name = os.environ.get('GCS_AUDIO_BUCKET')
@@ -181,24 +184,29 @@ def text_to_audio(
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(f"recordings/{unique_filename}")
 
-        # Generate audio and upload via a temp file (gTTS needs a
-        # path)
-        audio = gTTS(text=text, lang=lang, slow=False)
-        with tempfile.NamedTemporaryFile(
-            suffix='.mp3', delete=False
-        ) as tmp_file:
-            tmp_path = tmp_file.name
-            audio.save(tmp_path)
+        if blob.exists():
+            logger.info(f'Audio already in GCS: {unique_filename}')
+        else:
+            # Generate audio and upload via a temp file (gTTS needs a
+            # path)
+            audio = gTTS(text=text, lang=lang, slow=False)
+            with tempfile.NamedTemporaryFile(
+                suffix='.mp3', delete=False
+            ) as tmp_file:
+                tmp_path = tmp_file.name
+                audio.save(tmp_path)
 
-        try:
-            blob.upload_from_filename(
-                tmp_path,
-                content_type='audio/mpeg',
-                timeout=30,
-            )
-            logger.info(f'Uploaded audio to GCS: {unique_filename}')
-        finally:
-            os.unlink(tmp_path)
+            try:
+                blob.upload_from_filename(
+                    tmp_path,
+                    content_type='audio/mpeg',
+                    timeout=30,
+                )
+                logger.info(
+                    f'Uploaded audio to GCS: {unique_filename}'
+                )
+            finally:
+                os.unlink(tmp_path)
 
         # Generate signed URL valid for 7 days. Service-account-key
         # creds (Vercel lambdas) carry a private key and sign locally;

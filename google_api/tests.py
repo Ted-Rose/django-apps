@@ -92,6 +92,7 @@ def audio_pipeline():
             client_cls.return_value.bucket.return_value
             .blob.return_value
         )
+        blob.exists.return_value = False
         blob.generate_signed_url.return_value = 'https://signed/x.mp3'
         yield gtts
 
@@ -185,6 +186,7 @@ class TextToAudioSigningTests(TestCase):
                 client_cls.return_value.bucket.return_value
                 .blob.return_value
             )
+            blob.exists.return_value = False
             blob.generate_signed_url.return_value = \
                 'https://signed/x.mp3'
             url = text_to_audio('sveiki', lang='lv')
@@ -206,6 +208,7 @@ class TextToAudioSigningTests(TestCase):
                 client_cls.return_value.bucket.return_value
                 .blob.return_value
             )
+            blob.exists.return_value = False
             blob.generate_signed_url.return_value = \
                 'https://signed/x.mp3'
             text_to_audio('hello', lang='en')
@@ -214,3 +217,49 @@ class TextToAudioSigningTests(TestCase):
             kwargs['service_account_email'], 'sa@example.com'
         )
         self.assertEqual(kwargs['access_token'], 'tok')
+
+
+class TextToAudioReuseTests(TestCase):
+    """Filenames are content-addressed (lang + text hash): repeat
+    requests for the same audio skip gTTS/upload and just re-sign
+    the existing object — a retry after a timeout resumes instead
+    of regenerating and orphaning the previous upload."""
+
+    def test_existing_object_skips_generation(self):
+        with patch.dict(os.environ, {'GCS_AUDIO_BUCKET': 'bucket'}), \
+                patch('google.auth.default') as adc, \
+                patch('google_api.utils.storage.Client') as client_cls, \
+                patch('google_api.utils.gTTS') as gtts:
+            adc.return_value = (Mock(), 'project')
+            blob = (
+                client_cls.return_value.bucket.return_value
+                .blob.return_value
+            )
+            blob.exists.return_value = True
+            blob.generate_signed_url.return_value = \
+                'https://signed/existing.mp3'
+            url = text_to_audio('sveiki', lang='lv')
+        self.assertEqual(url, 'https://signed/existing.mp3')
+        gtts.assert_not_called()
+        blob.upload_from_filename.assert_not_called()
+
+    def test_same_text_and_lang_produce_same_filename(self):
+        with patch.dict(os.environ, {'GCS_AUDIO_BUCKET': 'bucket'}), \
+                patch('google.auth.default') as adc, \
+                patch('google_api.utils.storage.Client') as client_cls, \
+                patch('google_api.utils.gTTS'):
+            adc.return_value = (Mock(), 'project')
+            blob = (
+                client_cls.return_value.bucket.return_value
+                .blob.return_value
+            )
+            blob.exists.return_value = False
+            blob.generate_signed_url.return_value = 'https://signed/x'
+            blob_cls = client_cls.return_value.bucket.return_value.blob
+            text_to_audio('the same words', lang='en')
+            text_to_audio('the same words', lang='en')
+            text_to_audio('the same words', lang='lv')
+        names = [c.args[0] for c in blob_cls.call_args_list]
+        self.assertEqual(names[0], names[1])
+        self.assertNotEqual(names[0], names[2])
+        self.assertIn('recordings/message_audio_', names[0])
