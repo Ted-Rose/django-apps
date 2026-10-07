@@ -68,6 +68,16 @@ class AudioGenerationError(Exception):
     pass
 
 
+# OAuth scope the service account needs when uploading TTS audio from
+# a non-GCP host (Vercel) — its JWT-bearer token grant is rejected
+# with invalid_scope without it. Metadata-server creds (Cloud Run)
+# don't take scopes; google.auth.default applies them only to
+# credential types that require one.
+GCS_STORAGE_SCOPES = [
+    'https://www.googleapis.com/auth/devstorage.read_write',
+]
+
+
 def _sanitize_text_for_audio(text: str) -> str:
     """
     Sanitize text for audio generation.
@@ -162,7 +172,7 @@ def text_to_audio(
 
     try:
         # Refresh ADC credentials so access_token is current.
-        credentials, _ = google.auth.default()
+        credentials, _ = google.auth.default(scopes=GCS_STORAGE_SCOPES)
         credentials.refresh(
             google.auth.transport.requests.Request()
         )
