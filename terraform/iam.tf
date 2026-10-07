@@ -190,8 +190,22 @@ resource "google_storage_bucket_iam_member" "vercel_audio_object_creator" {
   member = "serviceAccount:${google_service_account.vercel_audio.email}"
 }
 
+# Lets the deployer create the vercel-audio key. This must be a
+# per-SA binding: the project-level serviceAccountAdmin condition
+# above matches on the SA's email form, but serviceAccountKeys.*
+# calls address the SA by unique_id, so a conditioned grant never
+# applies to them.
+resource "google_service_account_iam_member" "github_deployer_key_admin_vercel_audio" {
+  service_account_id = google_service_account.vercel_audio.name
+  role               = "roles/iam.serviceAccountKeyAdmin"
+  member             = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
 # JSON key — consumed as the GCP_SERVICE_ACCOUNT_JSON env var on
 # Vercel (terraform output -raw vercel_audio_sa_key_json).
 resource "google_service_account_key" "vercel_audio" {
   service_account_id = google_service_account.vercel_audio.name
+  depends_on = [
+    google_service_account_iam_member.github_deployer_key_admin_vercel_audio,
+  ]
 }
