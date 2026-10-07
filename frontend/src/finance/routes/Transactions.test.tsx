@@ -29,6 +29,7 @@ function makeTransaction(
   return {
     id: 1,
     transaction_id: 'tx-1',
+    status: 'booked',
     occurrence_date: '2025-01-15',
     booking_date: '2025-01-15',
     account: { id: 5, name: 'Everyday account', currency: 'EUR' },
