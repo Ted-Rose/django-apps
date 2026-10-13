@@ -11,6 +11,18 @@ sync and several local-only features. Full behavior docs:
 `needs_push=True`) then pulls remote state via `update_or_create` on
 `(user, task_id)`.
 
+- Recurring tasks: Google spawns a new remote entity per occurrence
+  and suppresses the old one from `tasks().list` (still resolvable
+  via `tasks().get`, parked at position INT32_MAX). `_upsert_remote_task`
+  merges an unknown remote id into the single open, same-titled local
+  row whose id vanished from the pull — 0 or ≥2 candidates just
+  creates. `_trash_ghost_tasks` then marks every remaining
+  same-titled row absent from the pull `is_deleted` + `needs_push`,
+  so the next push deletes the suppressed remote instances. Both
+  helpers need the complete remote id set across ALL lists (a remote
+  move between lists must not look like suppression), so `sync_tasks`
+  fetches every list's pages before writing anything.
+
 - Local edits set `needs_push=True`; push clears it and stamps
   `last_synced_at`.
 - Push of an `is_deleted` task deletes it in Google. Push that hits a

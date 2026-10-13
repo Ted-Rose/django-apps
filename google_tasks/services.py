@@ -312,6 +312,106 @@ def push_local_changes(user, creds):
         return {'error': 'unexpected'}
 
 
+def _upsert_remote_task(user, task_list, task_data, remote_ids):
+    """
+    Update or create a local GoogleTask from a remote task payload.
+
+    Google implements recurring tasks by spawning a brand-new remote
+    entity per occurrence and suppressing the previous one from
+    tasks().list. If the remote id is unknown locally but exactly one
+    open, same-titled local task in this list was dropped from the
+    remote pull, treat the remote task as the next occurrence of the
+    series and merge into that row (rewriting task_id) so stars,
+    labels, ordering and pending edits carry over. With zero or
+    several candidates the ambiguity resolves toward creating.
+    """
+    sync_time = timezone.now()
+    defaults = {
+        'task_list': task_list,
+        'title': task_data.get('title', 'Untitled'),
+        'notes': task_data.get('notes', ''),
+        'due_date': parse_datetime(task_data.get('due')),
+        'status': task_data.get('status', 'needsAction'),
+        'completed': parse_datetime(task_data.get('completed')),
+        'updated': parse_datetime(task_data.get('updated')),
+        'last_synced_at': sync_time,
+    }
+
+    known = GoogleTask.objects.filter(
+        user=user, task_id=task_data['id']
+    ).exists()
+
+    if not known:
+        candidates = list(GoogleTask.objects.filter(
+            user=user,
+            task_list=task_list,
+            title=defaults['title'],
+            status='needsAction',
+            is_deleted=False,
+            is_divider=False,
+        ).exclude(task_id__in=remote_ids))
+
+        if len(candidates) == 1:
+            task = candidates[0]
+            old_id = task.task_id
+            task.task_id = task_data['id']
+            for field, value in defaults.items():
+                setattr(task, field, value)
+            task.created = sync_time
+            task.save()
+            logger.info(
+                f'Recurring task: rewrote {old_id} -> '
+                f'{task_data["id"]} for \'{defaults["title"]}\''
+            )
+            return task
+
+    task, created = GoogleTask.objects.update_or_create(
+        user=user,
+        task_id=task_data['id'],
+        defaults=defaults
+    )
+
+    if created and not task.created:
+        task.created = timezone.now()
+        task.save(update_fields=['created'])
+
+    return task
+
+
+def _trash_ghost_tasks(user, task_list, remote_items, remote_ids):
+    """
+    Trash local rows whose remote entity vanished from tasks().list
+    while a same-titled remote task still exists in the list.
+
+    These are the superseded occurrences of recurring series (Google
+    parks them at position INT32_MAX, invisible to list). They are
+    marked is_deleted + needs_push so the next push issues real remote
+    deletes — invisible cleanup consistent with "app is source of
+    truth". Completed and open ghosts alike are trashed; dividers are
+    never remote entities and are excluded.
+    """
+    remote_titles = {t.get('title', 'Untitled') for t in remote_items}
+    ghosts = GoogleTask.objects.filter(
+        user=user,
+        task_list=task_list,
+        title__in=remote_titles,
+        is_deleted=False,
+        is_divider=False,
+    ).exclude(task_id__in=remote_ids)
+
+    count = ghosts.update(
+        is_deleted=True,
+        deleted_at=timezone.now(),
+        needs_push=True,
+    )
+    if count:
+        logger.info(
+            f'Trashed {count} ghost task(s) in {task_list.title} '
+            f'(superseded recurring occurrences)'
+        )
+    return count
+
+
 def sync_tasks(user, creds, task_list_id=None):
     """
     Bidirectional sync between local DB and Google Tasks API.
@@ -360,15 +460,18 @@ def sync_tasks(user, creds, task_list_id=None):
                 f'Syncing tasks for all {task_lists.count()} lists'
             )
 
-        total_synced = 0
-
+        # Fetch every list's pages before writing: recurring-
+        # succession detection and ghost cleanup need the complete
+        # remote id set, and a task moved between lists remotely must
+        # not look like a suppressed occurrence in its old list.
+        pulls = []
         for task_list in task_lists:
             logger.info(
                 f'Fetching tasks from list: {task_list.title} '
                 f'({task_list.list_id})'
             )
+            remote_items = []
             page_token = None
-            list_task_count = 0
             while True:
                 results = service.tasks().list(
                     tasklist=task_list.list_id,
@@ -378,48 +481,28 @@ def sync_tasks(user, creds, task_list_id=None):
                     pageToken=page_token
                 ).execute()
 
-                tasks = results.get('items', [])
-                list_task_count += len(tasks)
-
-                for task_data in tasks:
-                    sync_time = timezone.now()
-                    defaults = {
-                        'task_list': task_list,
-                        'title': task_data.get('title', 'Untitled'),
-                        'notes': task_data.get('notes', ''),
-                        'due_date': parse_datetime(
-                            task_data.get('due')
-                        ),
-                        'status': task_data.get(
-                            'status', 'needsAction'
-                        ),
-                        'completed': parse_datetime(
-                            task_data.get('completed')
-                        ),
-                        'updated': parse_datetime(
-                            task_data.get('updated')
-                        ),
-                        'last_synced_at': sync_time,
-                    }
-
-                    task, created = GoogleTask.objects.update_or_create(
-                        user=user,
-                        task_id=task_data['id'],
-                        defaults=defaults
-                    )
-
-                    if created and not task.created:
-                        task.created = timezone.now()
-                        task.save(update_fields=['created'])
-
-                    total_synced += 1
-
+                remote_items.extend(results.get('items', []))
                 page_token = results.get('nextPageToken')
                 if not page_token:
                     break
+            pulls.append((task_list, remote_items))
+
+        remote_ids = {
+            t['id'] for _, items in pulls for t in items
+        }
+
+        total_synced = 0
+        for task_list, remote_items in pulls:
+            for task_data in remote_items:
+                _upsert_remote_task(
+                    user, task_list, task_data, remote_ids
+                )
+
+            _trash_ghost_tasks(user, task_list, remote_items, remote_ids)
+            total_synced += len(remote_items)
 
             logger.info(
-                f'Synced {list_task_count} tasks from '
+                f'Synced {len(remote_items)} tasks from '
                 f'{task_list.title}'
             )
 

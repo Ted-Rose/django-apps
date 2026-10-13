@@ -1,7 +1,7 @@
 import json
 import os
 import tempfile
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
@@ -16,7 +16,7 @@ from django_vite.core.asset_loader import (
     ManifestEntry,
 )
 from google_tasks.models import GoogleTask, GoogleTaskList
-from google_tasks.services import process_task_labels
+from google_tasks.services import process_task_labels, sync_tasks
 from google_tasks.views import REORDER_CAP
 
 
@@ -721,6 +721,179 @@ class TasksApiTests(TestCase):
         )
         good.refresh_from_db()
         self.assertTrue(good.is_starred)
+
+
+class RecurringTaskSyncTests(TestCase):
+    """Pull-side handling of recurring Google tasks.
+
+    Google spawns a brand-new remote entity per occurrence and
+    suppresses the previous one from tasks().list (it still resolves
+    via tasks().get, parked at position INT32_MAX). sync_tasks must
+    merge the new entity into the local row of the superseded
+    occurrence — and trash leftover same-title ghosts — instead of
+    accumulating duplicate rows.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.task_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-1', title='List 1'
+        )
+
+    def make_task(self, task_id, title, **kwargs):
+        kwargs.setdefault('task_list', self.task_list)
+        return GoogleTask.objects.create(
+            user=self.user, task_id=task_id, title=title, **kwargs
+        )
+
+    def remote_item(self, task_id, title, **fields):
+        item = {
+            'id': task_id,
+            'title': title,
+            'status': 'needsAction',
+            'updated': '2026-10-10T03:00:00Z',
+        }
+        item.update(fields)
+        return item
+
+    def run_sync(self, items):
+        service = MagicMock()
+        service.tasks.return_value.list.return_value.execute \
+            .return_value = {'items': items}
+        with patch(
+            'google_tasks.services.push_local_changes',
+            return_value={}
+        ), patch(
+            'google_tasks.services.get_tasks_service',
+            return_value=service
+        ):
+            result = sync_tasks(self.user, creds={})
+        self.assertTrue(result)
+
+    def test_new_occurrence_merges_into_open_local_row(self):
+        task = self.make_task(
+            'old-id', 'check WhatsApp',
+            is_starred=True, starred_order=2.0, task_order=5.0,
+        )
+        self.run_sync([self.remote_item(
+            'new-id', 'check WhatsApp',
+            due='2026-10-17T00:00:00.000Z',
+        )])
+        task.refresh_from_db()
+        # Same row rewritten — local-only fields survive.
+        self.assertEqual(task.task_id, 'new-id')
+        self.assertTrue(task.is_starred)
+        self.assertEqual(task.starred_order, 2.0)
+        self.assertEqual(task.task_order, 5.0)
+        self.assertIsNotNone(task.due_date)
+        self.assertIsNotNone(task.created)
+        self.assertIsNotNone(task.last_synced_at)
+        self.assertEqual(
+            GoogleTask.objects.filter(title='check WhatsApp').count(),
+            1
+        )
+
+    def test_completed_local_match_creates_new_row(self):
+        done = self.make_task(
+            'old-id', 'check WhatsApp', status='completed'
+        )
+        self.run_sync([
+            self.remote_item('new-id', 'check WhatsApp'),
+        ])
+        done.refresh_from_db()
+        self.assertEqual(done.task_id, 'old-id')
+        new = GoogleTask.objects.get(task_id='new-id')
+        self.assertNotEqual(new.pk, done.pk)
+
+    def test_deleted_local_match_creates_new_row(self):
+        trashed = self.make_task('old-id', 'x', is_deleted=True)
+        self.run_sync([self.remote_item('new-id', 'x')])
+        trashed.refresh_from_db()
+        self.assertEqual(trashed.task_id, 'old-id')
+        self.assertTrue(
+            GoogleTask.objects.filter(task_id='new-id').exists()
+        )
+
+    def test_multiple_open_ghosts_do_not_merge(self):
+        g1 = self.make_task('g1', 'x')
+        g2 = self.make_task('g2', 'x')
+        self.run_sync([self.remote_item('new-id', 'x')])
+        # Ambiguity resolves toward creating, not merging.
+        self.assertTrue(
+            GoogleTask.objects.filter(task_id='new-id').exists()
+        )
+        # ...but the ambiguous ghosts are still trashed by the
+        # cleanup pass — their remote entities are suppressed.
+        for ghost in (g1, g2):
+            ghost.refresh_from_db()
+            self.assertTrue(ghost.is_deleted)
+            self.assertTrue(ghost.needs_push)
+
+    def test_same_titled_remote_tasks_update_independently(self):
+        """Legitimately duplicated remote tasks keep both ids in the
+        list output — neither may merge or be trashed."""
+        a = self.make_task('id-a', 'dup')
+        b = self.make_task('id-b', 'dup')
+        self.run_sync([
+            self.remote_item('id-a', 'dup', notes='n1'),
+            self.remote_item('id-b', 'dup', notes='n2'),
+        ])
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual(a.notes, 'n1')
+        self.assertEqual(b.notes, 'n2')
+        self.assertFalse(a.is_deleted)
+        self.assertFalse(b.is_deleted)
+        self.assertEqual(
+            GoogleTask.objects.filter(title='dup').count(), 2
+        )
+
+    def test_merge_keeps_needs_push_flag(self):
+        """Pending local edits must still be pushed onto the new
+        remote instance."""
+        task = self.make_task('old-id', 'x', needs_push=True)
+        self.run_sync([self.remote_item('new-id', 'x')])
+        task.refresh_from_db()
+        self.assertEqual(task.task_id, 'new-id')
+        self.assertTrue(task.needs_push)
+
+    def test_ghost_cleanup_marks_superseded_occurrences(self):
+        """The current occurrence was already synced locally; older
+        ghosts of the same series get trashed + flagged for remote
+        delete on the next push."""
+        self.make_task('cur-id', 'Pray for next week')
+        ghost = self.make_task('ghost-id', 'Pray for next week')
+        done_ghost = self.make_task(
+            'done-ghost', 'Pray for next week', status='completed'
+        )
+        self.run_sync([
+            self.remote_item('cur-id', 'Pray for next week'),
+        ])
+        for ghost_task in (ghost, done_ghost):
+            ghost_task.refresh_from_db()
+            self.assertTrue(ghost_task.is_deleted)
+            self.assertTrue(ghost_task.needs_push)
+            self.assertIsNotNone(ghost_task.deleted_at)
+
+    def test_ghost_cleanup_ignores_unrelated_titles(self):
+        """A remote-absent task whose title has no live remote
+        counterpart is not a recurring ghost — leave it alone."""
+        stray = self.make_task('stray-id', 'buy milk')
+        self.run_sync([self.remote_item('cur-id', 'other')])
+        stray.refresh_from_db()
+        self.assertFalse(stray.is_deleted)
+
+    def test_ghost_cleanup_ignores_dividers(self):
+        divider = self.make_task(
+            'divider_abc', 'Pray for next week', is_divider=True
+        )
+        self.run_sync([
+            self.remote_item('cur-id', 'Pray for next week'),
+        ])
+        divider.refresh_from_db()
+        self.assertFalse(divider.is_deleted)
 
 
 class ReactAppShellTests(TestCase):
