@@ -1116,6 +1116,51 @@ class BulkSyncWriteTests(TestCase):
         )
         self.assertEqual(GoogleTaskList.objects.count(), 2)
 
+    def test_sync_task_lists_dedupes_repeated_list_id(self):
+        """A repeated list_id in one remote payload mutates the
+        already-queued row (last wins) instead of queueing twice —
+        Postgres ignores extra WHENs for one pk in bulk_update's
+        CASE, and two same-(user, list_id) rows in one bulk_create
+        batch die on 'ON CONFLICT cannot affect row a second time'.
+        Spies assert each row is queued exactly once; on sqlite a
+        duplicate create row would pass silently otherwise."""
+        from google_tasks.services import sync_task_lists
+        service = MagicMock()
+        service.tasklists.return_value.list.return_value.execute \
+            .return_value = {'items': [
+                {'id': 'list-1', 'title': 'First'},
+                {'id': 'list-1', 'title': 'Last'},
+                {'id': 'list-2', 'title': 'New'},
+                {'id': 'list-2', 'title': 'Newer'},
+            ]}
+        created, updated = [], []
+        manager = GoogleTaskList.objects
+        real_create, real_update = \
+            manager.bulk_create, manager.bulk_update
+
+        def spy_create(objs, **kwargs):
+            created.extend(objs)
+            return real_create(objs, **kwargs)
+
+        def spy_update(objs, **kwargs):
+            updated.extend(objs)
+            return real_update(objs, **kwargs)
+
+        with patch(
+            'google_tasks.services.get_tasks_service',
+            return_value=service,
+        ), patch.object(
+            manager, 'bulk_create', side_effect=spy_create
+        ), patch.object(
+            manager, 'bulk_update', side_effect=spy_update
+        ):
+            self.assertTrue(sync_task_lists(self.user, creds={}))
+        self.assertEqual([o.pk for o in updated], [self.task_list.pk])
+        self.assertEqual([o.list_id for o in created], ['list-2'])
+        self.assertEqual(updated[0].title, 'Last')
+        self.assertEqual(created[0].title, 'Newer')
+        self.assertEqual(GoogleTaskList.objects.count(), 2)
+
 
 class ReactAppShellTests(TestCase):
     """Post-cutover SPA mount: /tasks/ + catch-all serve the shell;

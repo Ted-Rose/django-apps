@@ -99,6 +99,8 @@ def sync_task_lists(user, creds):
             for task_list in GoogleTaskList.objects.filter(user=user)
         }
         to_create, to_update = [], []
+        pending = {}  # list_id -> unsaved row already in to_create
+        queued = set()  # pks already in to_update
         for task_list_data in task_lists:
             defaults = {
                 'title': task_list_data.get('title', 'Untitled'),
@@ -106,17 +108,28 @@ def sync_task_lists(user, creds):
                     task_list_data.get('updated')
                 ),
             }
-            task_list = existing.get(task_list_data['id'])
+            list_id = task_list_data['id']
+            task_list = existing.get(list_id)
+            if task_list is None:
+                task_list = pending.get(list_id)
             if task_list is not None:
                 for field, value in defaults.items():
                     setattr(task_list, field, value)
-                to_update.append(task_list)
+                # A repeated remote id mutates the already-queued row
+                # in place (last wins) instead of appending a second
+                # CASE branch that Postgres would ignore.
+                if task_list.pk is not None \
+                        and task_list.pk not in queued:
+                    to_update.append(task_list)
+                    queued.add(task_list.pk)
             else:
-                to_create.append(GoogleTaskList(
+                task_list = GoogleTaskList(
                     user=user,
-                    list_id=task_list_data['id'],
+                    list_id=list_id,
                     **defaults,
-                ))
+                )
+                to_create.append(task_list)
+                pending[list_id] = task_list
 
         # Sync writes bypass save()/signals — see _write_remote_tasks.
         if to_create:
