@@ -403,6 +403,7 @@ def _write_remote_tasks(user, pulls, remote_ids):
 
     sync_time = timezone.now()
     to_create, to_update = [], []
+    queued = set()  # pks already in to_update
 
     for task_list, remote_items in pulls:
         for task_data in remote_items:
@@ -425,8 +426,12 @@ def _write_remote_tasks(user, pulls, remote_ids):
                 for field, value in defaults.items():
                     setattr(task, field, value)
                 task.updated_at = sync_time
-                if task.pk is not None:
+                # A repeated remote id mutates the already-queued row
+                # in place (last wins) instead of appending a second
+                # CASE branch that Postgres would ignore.
+                if task.pk is not None and task.pk not in queued:
                     to_update.append(task)
+                    queued.add(task.pk)
                 continue
 
             key = (task_list.pk, defaults['title'])
@@ -446,6 +451,7 @@ def _write_remote_tasks(user, pulls, remote_ids):
                 task.created = sync_time
                 task.updated_at = sync_time
                 to_update.append(task)
+                queued.add(task.pk)
                 logger.info(
                     f'Recurring task: rewrote {old_id} -> '
                     f'{task_id} for \'{defaults["title"]}\''
@@ -464,7 +470,8 @@ def _write_remote_tasks(user, pulls, remote_ids):
     if to_create:
         # update_conflicts heals rows raced in by a concurrent sync
         # (same remote id inserted after classification) instead of
-        # failing the whole batch on the unique task_id constraint.
+        # failing the whole batch on the unique task_id constraint —
+        # global by design since Google task ids are globally unique.
         GoogleTask.objects.bulk_create(
             to_create,
             batch_size=500,

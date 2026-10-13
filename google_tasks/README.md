@@ -116,7 +116,8 @@ JSON handlers in `views.py`). Non-GET/HEAD requests under `/tasks/`
 **Data Flow**:
 - Google API → `sync_task_lists()` → GoogleTaskList model
 - Google API → `sync_tasks()` → GoogleTask model
-- Uses `update_or_create()` to prevent duplicates
+- Pull classifies remote items against an in-memory snapshot, then
+  flushes via `bulk_create`/`bulk_update` to prevent duplicates
 
 ### Task Filtering
 **Dashboard View** supports task list filtering:
@@ -385,7 +386,7 @@ All required dependencies are already in the main `requirements.txt`:
 
 ### Database Queries
 - Uses `select_related()` and `prefetch_related()` where appropriate
-- Efficient `update_or_create()` for sync operations
+- Bulk `bulk_create`/`bulk_update` writes for sync operations
 
 ### Logging
 - Uses Django's logging framework

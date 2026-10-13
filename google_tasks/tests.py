@@ -929,9 +929,21 @@ class BulkSyncWriteTests(TestCase):
         return item
 
     def run_sync(self, items):
+        return self.run_sync_pulls({self.task_list.list_id: items})
+
+    def run_sync_pulls(self, items_by_list):
+        """Run sync_tasks with per-list remote payloads keyed on
+        list_id (needed for remote list-move cases)."""
         service = MagicMock()
-        service.tasks.return_value.list.return_value.execute \
-            .return_value = {'items': items}
+
+        def list_request(tasklist=None, **kwargs):
+            request = MagicMock()
+            request.execute.return_value = {
+                'items': items_by_list.get(tasklist, [])
+            }
+            return request
+
+        service.tasks.return_value.list.side_effect = list_request
         with patch(
             'google_tasks.services.push_local_changes',
             return_value={}
@@ -1018,6 +1030,7 @@ class BulkSyncWriteTests(TestCase):
         """A concurrent sync inserting the same remote task_id
         between classification and flush must not fail — the ON
         CONFLICT upsert heals the row with remote values."""
+        past = timezone.now() - timedelta(days=30)
         real_bulk_create = GoogleTask.objects.bulk_create
 
         def racy_bulk_create(objs, **kwargs):
@@ -1026,6 +1039,7 @@ class BulkSyncWriteTests(TestCase):
                 task_id='race-id',
                 task_list=self.task_list,
                 title='stale local title',
+                created=past,
             )
             return real_bulk_create(objs, **kwargs)
 
@@ -1038,6 +1052,9 @@ class BulkSyncWriteTests(TestCase):
             ]))
         row = GoogleTask.objects.get(task_id='race-id')
         self.assertEqual(row.title, 'remote title')
+        # created is excluded from the upsert update_fields — the
+        # pre-existing row keeps its original first-synced value.
+        self.assertEqual(row.created, past)
         self.assertEqual(GoogleTask.objects.count(), 1)
 
     def test_two_same_title_unknown_items_merge_once(self):
@@ -1057,6 +1074,24 @@ class BulkSyncWriteTests(TestCase):
         self.assertEqual(
             GoogleTask.objects.filter(title='x').count(), 2
         )
+
+    def test_remote_list_move_follows_task(self):
+        """A task moved to another list on Google keeps its row —
+        task_list follows the remote list and the row is not trashed
+        as a ghost in the old list (a same-titled remote task still
+        lives there, so the ghost query is genuinely exercised)."""
+        other_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-2', title='List 2'
+        )
+        task = self.make_task('moved-id', 'x')
+        self.assertTrue(self.run_sync_pulls({
+            'list-1': [self.remote_item('stay-id', 'x')],
+            'list-2': [self.remote_item('moved-id', 'x')],
+        }))
+        task.refresh_from_db()
+        self.assertEqual(task.task_list, other_list)
+        self.assertFalse(task.is_deleted)
+        self.assertFalse(task.needs_push)
 
     def test_sync_task_lists_bulk_writes(self):
         """Task lists use the same classify+bulk pattern: known
