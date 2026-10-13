@@ -91,16 +91,47 @@ def sync_task_lists(user, creds):
         task_lists = results.get('items', [])
         logger.info(f'Retrieved {len(task_lists)} task lists from API')
 
+        # Same classify-then-bulk-write pattern as the task pull:
+        # one snapshot read plus two bulk statements instead of two
+        # queries per list.
+        existing = {
+            task_list.list_id: task_list
+            for task_list in GoogleTaskList.objects.filter(user=user)
+        }
+        to_create, to_update = [], []
         for task_list_data in task_lists:
-            GoogleTaskList.objects.update_or_create(
-                user=user,
-                list_id=task_list_data['id'],
-                defaults={
-                    'title': task_list_data.get('title', 'Untitled'),
-                    'updated': parse_datetime(
-                        task_list_data.get('updated')
-                    ),
-                }
+            defaults = {
+                'title': task_list_data.get('title', 'Untitled'),
+                'updated': parse_datetime(
+                    task_list_data.get('updated')
+                ),
+            }
+            task_list = existing.get(task_list_data['id'])
+            if task_list is not None:
+                for field, value in defaults.items():
+                    setattr(task_list, field, value)
+                to_update.append(task_list)
+            else:
+                to_create.append(GoogleTaskList(
+                    user=user,
+                    list_id=task_list_data['id'],
+                    **defaults,
+                ))
+
+        # Sync writes bypass save()/signals — see _write_remote_tasks.
+        if to_create:
+            GoogleTaskList.objects.bulk_create(
+                to_create,
+                batch_size=500,
+                update_conflicts=True,
+                unique_fields=['user', 'list_id'],
+                update_fields=['title', 'updated'],
+            )
+        if to_update:
+            GoogleTaskList.objects.bulk_update(
+                to_update,
+                fields=['title', 'updated'],
+                batch_size=500,
             )
 
         logger.info(
@@ -312,70 +343,141 @@ def push_local_changes(user, creds):
         return {'error': 'unexpected'}
 
 
-def _upsert_remote_task(user, task_list, task_data, remote_ids):
-    """
-    Update or create a local GoogleTask from a remote task payload.
+# Fields bulk_update writes for known remote ids and recurring merges.
+# task_id is included so a merge can rewrite it in the same statement;
+# created is written back with its unchanged value on normal updates
+# (harmless) and set on merges; updated_at is stamped in memory since
+# auto_now is not bumped by bulk_update.
+TASK_BULK_UPDATE_FIELDS = [
+    'task_id', 'task_list', 'title', 'notes', 'due_date', 'status',
+    'completed', 'updated', 'last_synced_at', 'created', 'updated_at',
+]
 
-    Google implements recurring tasks by spawning a brand-new remote
-    entity per occurrence and suppressing the previous one from
-    tasks().list. If the remote id is unknown locally but exactly one
-    open, same-titled local task in this list was dropped from the
-    remote pull, treat the remote task as the next occurrence of the
-    series and merge into that row (rewriting task_id) so stars,
-    labels, ordering and pending edits carry over. With zero or
-    several candidates the ambiguity resolves toward creating.
+# Fields written on ON CONFLICT for raced bulk_create inserts; created
+# is deliberately excluded so an existing row keeps its original
+# first-synced timestamp.
+TASK_CREATE_UPSERT_FIELDS = [
+    'task_list', 'title', 'notes', 'due_date', 'status',
+    'completed', 'updated', 'last_synced_at', 'updated_at',
+]
+
+
+def _write_remote_tasks(user, pulls, remote_ids):
     """
+    Mirror the remote pull into local GoogleTask rows.
+
+    Every remote item classifies against one in-memory snapshot of the
+    user's tasks, then all rows flush via bulk_create / bulk_update —
+    the per-item update_or_create this replaced cost 2-4 queries per
+    task (hundreds of WAN round-trips to Postgres), which pushed syncs
+    past Vercel's 300s function cap.
+
+    NOTE: bulk writes bypass save()/signals — a future save()
+    override or signal receiver on GoogleTask will not run here.
+
+    Recurring tasks: Google spawns a brand-new remote entity per
+    occurrence and suppresses the previous one from tasks().list. If
+    the remote id is unknown locally but exactly one open,
+    same-titled local task in this list was dropped from the remote
+    pull, treat the remote task as the next occurrence of the series
+    and merge into that row (rewriting task_id) so stars, labels,
+    ordering and pending edits carry over. With zero or several
+    candidates the ambiguity resolves toward creating.
+    """
+    local_tasks = list(GoogleTask.objects.filter(user=user))
+    by_task_id = {t.task_id: t for t in local_tasks}
+    pending = {}  # task_id -> unsaved row already queued in to_create
+
+    # Recurring-succession candidates, mirroring the old per-item ORM
+    # filter. 'task_id not in remote_ids' is NOT baked into the index —
+    # it is re-checked on the live object at consume time, because a
+    # merged row's rewritten id IS remote and must stop matching later
+    # same-titled items.
+    candidates = {}
+    for task in local_tasks:
+        if (task.status == 'needsAction'
+                and not task.is_deleted
+                and not task.is_divider):
+            key = (task.task_list_id, task.title)
+            candidates.setdefault(key, []).append(task)
+
     sync_time = timezone.now()
-    defaults = {
-        'task_list': task_list,
-        'title': task_data.get('title', 'Untitled'),
-        'notes': task_data.get('notes', ''),
-        'due_date': parse_datetime(task_data.get('due')),
-        'status': task_data.get('status', 'needsAction'),
-        'completed': parse_datetime(task_data.get('completed')),
-        'updated': parse_datetime(task_data.get('updated')),
-        'last_synced_at': sync_time,
-    }
+    to_create, to_update = [], []
 
-    known = GoogleTask.objects.filter(
-        user=user, task_id=task_data['id']
-    ).exists()
+    for task_list, remote_items in pulls:
+        for task_data in remote_items:
+            defaults = {
+                'task_list': task_list,
+                'title': task_data.get('title', 'Untitled'),
+                'notes': task_data.get('notes', ''),
+                'due_date': parse_datetime(task_data.get('due')),
+                'status': task_data.get('status', 'needsAction'),
+                'completed': parse_datetime(task_data.get('completed')),
+                'updated': parse_datetime(task_data.get('updated')),
+                'last_synced_at': sync_time,
+            }
+            task_id = task_data['id']
 
-    if not known:
-        candidates = list(GoogleTask.objects.filter(
-            user=user,
-            task_list=task_list,
-            title=defaults['title'],
-            status='needsAction',
-            is_deleted=False,
-            is_divider=False,
-        ).exclude(task_id__in=remote_ids))
+            task = by_task_id.get(task_id)
+            if task is None:
+                task = pending.get(task_id)
+            if task is not None:
+                for field, value in defaults.items():
+                    setattr(task, field, value)
+                task.updated_at = sync_time
+                if task.pk is not None:
+                    to_update.append(task)
+                continue
 
-        if len(candidates) == 1:
-            task = candidates[0]
-            old_id = task.task_id
-            task.task_id = task_data['id']
-            for field, value in defaults.items():
-                setattr(task, field, value)
-            task.created = sync_time
-            task.save()
-            logger.info(
-                f'Recurring task: rewrote {old_id} -> '
-                f'{task_data["id"]} for \'{defaults["title"]}\''
-            )
-            return task
+            key = (task_list.pk, defaults['title'])
+            open_candidates = [
+                c for c in candidates.get(key, [])
+                if c.task_id not in remote_ids
+            ]
 
-    task, created = GoogleTask.objects.update_or_create(
-        user=user,
-        task_id=task_data['id'],
-        defaults=defaults
-    )
+            if len(open_candidates) == 1:
+                task = open_candidates[0]
+                old_id = task.task_id
+                del by_task_id[old_id]
+                task.task_id = task_id
+                by_task_id[task_id] = task
+                for field, value in defaults.items():
+                    setattr(task, field, value)
+                task.created = sync_time
+                task.updated_at = sync_time
+                to_update.append(task)
+                logger.info(
+                    f'Recurring task: rewrote {old_id} -> '
+                    f'{task_id} for \'{defaults["title"]}\''
+                )
+            else:
+                task = GoogleTask(
+                    user=user,
+                    task_id=task_id,
+                    created=sync_time,
+                    updated_at=sync_time,
+                    **defaults,
+                )
+                to_create.append(task)
+                pending[task_id] = task
 
-    if created and not task.created:
-        task.created = timezone.now()
-        task.save(update_fields=['created'])
-
-    return task
+    if to_create:
+        # update_conflicts heals rows raced in by a concurrent sync
+        # (same remote id inserted after classification) instead of
+        # failing the whole batch on the unique task_id constraint.
+        GoogleTask.objects.bulk_create(
+            to_create,
+            batch_size=500,
+            update_conflicts=True,
+            unique_fields=['task_id'],
+            update_fields=TASK_CREATE_UPSERT_FIELDS,
+        )
+    if to_update:
+        GoogleTask.objects.bulk_update(
+            to_update,
+            fields=TASK_BULK_UPDATE_FIELDS,
+            batch_size=500,
+        )
 
 
 def _trash_ghost_tasks(user, task_list, remote_items, remote_ids):
@@ -491,13 +593,13 @@ def sync_tasks(user, creds, task_list_id=None):
             t['id'] for _, items in pulls for t in items
         }
 
+        _write_remote_tasks(user, pulls, remote_ids)
+
+        # Ghost cleanup runs AFTER the bulk flush: merged rows must
+        # already carry their new remote task_id or they look like
+        # superseded occurrences and get trashed.
         total_synced = 0
         for task_list, remote_items in pulls:
-            for task_data in remote_items:
-                _upsert_remote_task(
-                    user, task_list, task_data, remote_ids
-                )
-
             _trash_ghost_tasks(user, task_list, remote_items, remote_ids)
             total_synced += len(remote_items)
 

@@ -8,12 +8,16 @@ sync and several local-only features. Full behavior docs:
 
 `sync_all(user, creds)` → `sync_task_lists` + `sync_tasks`, where
 `sync_tasks` first runs `push_local_changes` (push tasks with
-`needs_push=True`) then pulls remote state via `update_or_create` on
-`(user, task_id)`.
+`needs_push=True`) then pulls remote state. The pull classifies
+every remote item against one in-memory snapshot in
+`_write_remote_tasks`, then flushes via `bulk_create` (with
+`update_conflicts` for raced inserts) / `bulk_update` — per-item
+ORM calls timed syncs out at Vercel's 300s cap. Bulk writes bypass
+`save()`/signals.
 
 - Recurring tasks: Google spawns a new remote entity per occurrence
   and suppresses the old one from `tasks().list` (still resolvable
-  via `tasks().get`, parked at position INT32_MAX). `_upsert_remote_task`
+  via `tasks().get`, parked at position INT32_MAX). `_write_remote_tasks`
   merges an unknown remote id into the single open, same-titled local
   row whose id vanished from the pull — 0 or ≥2 candidates just
   creates. `_trash_ghost_tasks` then marks every remaining
