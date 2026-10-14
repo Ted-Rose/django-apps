@@ -7,6 +7,7 @@ Depends on google_api for the shared OAuth platform (`google_auth`)
 keeps these scope strings as literals.
 """
 import base64
+from dataclasses import dataclass, field
 from email import policy
 from email.parser import BytesParser
 import logging
@@ -150,8 +151,9 @@ def _sender_matches(rule, sender):
 
 
 def _first_matching_rule(rules, sender):
-    """First rule (the caller passes them in priority, pk order)
-    whose sender pattern matches — first match wins."""
+    """First rule or SenderPreset (the caller passes them in
+    priority, pk order) whose sender pattern matches — first match
+    wins."""
     for rule in rules or []:
         if _sender_matches(rule, sender):
             return rule
@@ -204,38 +206,44 @@ def active_rules_for(user):
     )
 
 
-_EKLASE_SENDER = 'e-klase <notifikacijas@e-klase.lv>'
-_EKLASE_SUBJECT_RE = r'Tēma: (.*?)(?=No:)'
-_EKLASE_BODY_RE = r'Kam: ([\s\S]*?)(?=_+Lai atbildētu vai pārsūtītu)'
-_EKLASE_STRIP_RE = (
-    r'.*?Lai aplūkotu pielikumus, pieslēdzieties E-klasei\.'
-)
+@dataclass(frozen=True)
+class SenderPreset:
+    """Built-in per-sender parse/audio defaults — the fallback when
+    no EmailParsingRule matches the From header.
+
+    Carries the same fields the rule machinery reads
+    (``sender_pattern``/``sender_match_type``/``subject_regex``/
+    ``body_regex``/``strip_patterns``/``force_language``/``name``),
+    so presets duck-type through ``_first_matching_rule`` and
+    ``_apply_rule``. Supporting a new sender means appending one
+    entry to ``BUILTIN_SENDER_PRESETS`` — no logic changes."""
+    name: str
+    sender_pattern: str
+    sender_match_type: str = 'contains'
+    subject_regex: str = ''
+    body_regex: str = ''
+    strip_patterns: list = field(default_factory=list)
+    force_language: str = ''
 
 
-def _eklase_fallback(sender, subject, body):
-    """The hardcoded notifikacijas@e-klase.lv parse — the default
-    path when no EmailParsingRule matched, so accounts without
-    rules see identical behavior."""
-    if sender != _EKLASE_SENDER:
-        return subject, body
-
-    # Extract subject using a regular expression
-    subject_match = re.search(_EKLASE_SUBJECT_RE, body or '')
-    if subject_match:
-        subject = subject_match.group(1).strip()
-
-    # Extract main body content, excluding boilerplate
-    body_match = re.search(_EKLASE_BODY_RE, body or '', re.DOTALL)
-    if body_match:
-        body = body_match.group(1).strip()
-
-        # Remove any remaining HTML tags + collapse whitespace
-        body = extract_text_from_html(body)
-
-        body = re.sub(_EKLASE_STRIP_RE, '', body, flags=re.DOTALL)
-        body = body.strip()
-
-    return subject, body
+BUILTIN_SENDER_PRESETS = [
+    SenderPreset(
+        name='e-klase',
+        sender_pattern='notifikacijas@e-klase.lv',
+        subject_regex=r'Tēma: (.*?)(?=No:)',
+        # '_*\s*' tolerates the space HTML extraction leaves between
+        # the '____' divider and 'Lai' — the old '_+Lai' lookahead
+        # could never match the collapsed text, so the boilerplate
+        # (Tēma:/No:/Kam: header + footer) was read aloud.
+        body_regex=r'Kam: ([\s\S]*?)(?=_*\s*Lai atbildētu)',
+        strip_patterns=[
+            r'Lai aplūkotu pielikumus, pieslēdzieties E-klasei\.',
+        ],
+        # e-klase mail is always Latvian — pin it so a short or
+        # boilerplate-heavy body can't lose the lv/en argmax.
+        force_language='lv',
+    ),
+]
 
 
 def get_messages(query, creds, rules=None):
@@ -246,8 +254,9 @@ def get_messages(query, creds, rules=None):
     ``rules`` is the user's active EmailParsingRules in (priority,
     pk) order (see ``active_rules_for``); after the generic MIME
     parse the first sender-matching rule applies, otherwise the
-    hardcoded e-klase fallback runs. Each returned dict carries a
-    ``lang`` hint = the matched rule's ``force_language`` (or None).
+    matching BUILTIN_SENDER_PRESETS entry runs. Each returned dict
+    carries a ``lang`` hint = the matched rule's/preset's
+    ``force_language`` (or None).
     """
     message_details = []
     try:
@@ -286,12 +295,17 @@ def get_messages(query, creds, rules=None):
             sender = mime_message['from']
             body = _message_body(mime_message)
 
+            # User rules win; the built-in sender presets are the
+            # fallback for senders nobody configured a rule for.
             rule = _first_matching_rule(rules, sender)
+            if rule is None:
+                rule = _first_matching_rule(
+                    BUILTIN_SENDER_PRESETS, sender
+                )
             if rule is not None:
                 subject, body = _apply_rule(rule, subject, body)
                 lang = rule.force_language or None
             else:
-                subject, body = _eklase_fallback(sender, subject, body)
                 lang = None
 
             message_details.append({

@@ -142,10 +142,12 @@ def cp1257_message():
 
 
 EKLASE_SENDER = 'e-klase <notifikacijas@e-klase.lv>'
+# Real e-klase mail has a space between the '____' divider and
+# 'Lai' — the old '_+Lai' lookahead never matched it.
 EKLASE_BODY = (
     'No: a Tēma: Atzīmes No: b Kam: Vecāks '
     'Lai aplūkotu pielikumus, pieslēdzieties E-klasei. '
-    'Īsā vēstule. ' + '_' * 60 + 'Lai atbildētu vai pārsūtītu'
+    'Īsā vēstule. ' + '_' * 60 + ' Lai atbildētu vai pārsūtītu'
 )
 
 
@@ -684,7 +686,7 @@ class GmailMimeParsingTests(TestCase):
 class EmailParsingRuleTests(TestCase):
     """Phase 2: per-user EmailParsingRules applied inside
     get_messages — first sender match (priority, pk) wins; the
-    hardcoded e-klase parse remains the no-rule fallback."""
+    built-in SenderPresets are the no-rule fallback."""
 
     CREDS = GmailServicesTests.CREDS
 
@@ -755,15 +757,26 @@ class EmailParsingRuleTests(TestCase):
     def test_inactive_rules_are_skipped(self):
         make_rule(self.user, is_active=False, force_language='lv')
         self.assertEqual(services.active_rules_for(self.user), [])
-        # ...so the e-klase fallback still applies.
+        # ...so the built-in e-klase preset still applies.
         [msg] = self.fetch(self.eklase_raw())
         self.assertEqual(msg['subject'], 'Atzīmes')
-        self.assertIsNone(msg['lang'])
+        self.assertEqual(msg['lang'], 'lv')
 
-    def test_eklase_fallback_when_no_rules(self):
+    def test_eklase_preset_when_no_rules(self):
         [msg] = self.fetch(self.eklase_raw())
         self.assertEqual(msg['subject'], 'Atzīmes')
-        self.assertEqual(msg['body'], 'Īsā vēstule.')
+        # body_regex cuts at the divider, the strip pattern drops
+        # the attachments line — the 'Kam:' recipient stays.
+        self.assertEqual(msg['body'], 'Vecāks Īsā vēstule.')
+        # The preset pins lv — no langdetect coin flip.
+        self.assertEqual(msg['lang'], 'lv')
+
+    def test_preset_does_not_apply_to_other_senders(self):
+        [msg] = self.fetch(raw_message(
+            sender='Optio <i@optio.example>', subject='Hi',
+            body='Sveiki',
+        ))
+        self.assertEqual(msg['body'], 'Sveiki')
         self.assertIsNone(msg['lang'])
 
     def test_rule_extracts_strips_and_forces_language(self):
@@ -790,15 +803,15 @@ class EmailParsingRuleTests(TestCase):
         self.assertEqual(msg['body'], 'Klients Saturs.')
         self.assertEqual(msg['lang'], 'lv')
 
-    def test_matching_user_rule_replaces_eklase_fallback(self):
+    def test_matching_user_rule_replaces_eklase_preset(self):
         make_rule(
             self.user, sender_pattern='e-klase',
             force_language='lv',
-            body_regex=r'Kam: ([\s\S]*?)(?=_+Lai)',
+            body_regex=r'Kam: ([\s\S]*?)(?=_+\s*Lai)',
         )
         [msg] = self.fetch(self.eklase_raw())
-        # The user rule's body_regex won over the hardcoded parse —
-        # the fallback would have stripped 'Lai aplūkotu…'.
+        # The user rule's body_regex won over the preset — the
+        # preset's strip_patterns would have dropped 'Lai aplūkotu…'.
         self.assertIn('Lai aplūkotu', msg['body'])
         self.assertEqual(msg['lang'], 'lv')
         # force_language surfaced, but subject_regex was empty so

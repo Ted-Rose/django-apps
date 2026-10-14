@@ -27,8 +27,12 @@ admin; messages themselves live in Google and the session.
   fetch with MIME parsing via `EmailMessage.get_body` — nested
   multiparts descend, each part decodes with its own charset; the
   caller passes `active_rules_for(request.user)`, the first
-  matching rule applies and the hardcoded `e-klase.lv` boilerplate
-  special-case is the fallback when none match),
+  matching rule applies, else the matching `BUILTIN_SENDER_PRESETS`
+  `SenderPreset` — a frozen dataclass duck-typed through the same
+  `_first_matching_rule`/`_apply_rule` machinery; add a sender by
+  appending one entry. The e-klase preset strips the
+  Tēma:/No:/Kam: boilerplate + `____` divider and pins
+  `force_language='lv'`),
   `mark_messages_as_read(creds, ids)` (batchModify removing UNREAD),
   `extract_text_from_html` (BeautifulSoup — drops script/style
   contents, unescapes entities), and the scope constants
