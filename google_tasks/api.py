@@ -7,10 +7,11 @@ calls, same OAuth session state, same per-user scoping — stay
 identical; _adapt() maps their reauth_required / error payloads onto
 the API contract (401 google_reauth, uniform {error, detail}).
 """
-from datetime import datetime
-from typing import List, Optional
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional
 
-from django.db.models import F, Q
+from django.db.models import Count, F, Q
+from django.db.models.functions import TruncMonth, TruncWeek
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Query, Router, Schema
@@ -156,6 +157,42 @@ class TaskUpdateIn(Schema):
     starred_order: Optional[float] = None
 
 
+class StatsLabelOut(Schema):
+    """Legend entry — the label colors the bucket stacks are drawn
+    with come from here, not from per-bucket data."""
+    id: int
+    name: str
+    color: str
+
+
+class StatsBucketOut(Schema):
+    """One zero-filled UTC week/month. `by_label` counts a
+    multi-labeled task once per label, so its values need not sum to
+    `total`. `by_list` keys are task-list titles; the '' key is the
+    NULL task_list group (the SPA renders it as "Unlisted")."""
+    start: date
+    total: int
+    by_label: Dict[str, int]
+    unlabeled: int
+    by_list: Dict[str, int]
+
+
+class StatsSummaryOut(Schema):
+    this_week: int
+    last_week: int
+    this_month: int
+    last_month: int
+    all_time: int
+    unknown_date: int
+
+
+class StatsOut(Schema):
+    labels: List[StatsLabelOut]
+    weekly: List[StatsBucketOut]
+    monthly: List[StatsBucketOut]
+    summary: StatsSummaryOut
+
+
 # --- Shared helpers ---
 #
 # `_adapt` / `_reauth_url` now live in django_apps.api (shared with
@@ -259,6 +296,45 @@ def _task_queryset(user):
     return GoogleTask.objects.filter(
         user=user
     ).select_related('task_list').prefetch_related('labels')
+
+
+def _stats_buckets(qs, trunc, starts):
+    """Zero-filled StatsBucketOut rows over `starts` (date objects,
+    chronological). Three aggregate passes over the dated queryset:
+    per-bucket totals, per (bucket, label) — the M2M LEFT JOIN lands
+    label-less tasks in the labels__name=None group — and per
+    (bucket, task-list title) where NULL lands under the '' key."""
+    totals, by_label, unlabeled, by_list = {}, {}, {}, {}
+    for row in qs.annotate(b=trunc('completed')).values('b').annotate(
+        n=Count('pk')
+    ):
+        totals[row['b'].date()] = row['n']
+    for row in qs.annotate(b=trunc('completed')).values(
+        'b', 'labels__name'
+    ).annotate(n=Count('pk')):
+        bucket = row['b'].date()
+        if row['labels__name'] is None:
+            unlabeled[bucket] = row['n']
+        else:
+            by_label.setdefault(
+                bucket, {}
+            )[row['labels__name']] = row['n']
+    for row in qs.annotate(b=trunc('completed')).values(
+        'b', 'task_list__title'
+    ).annotate(n=Count('pk')):
+        by_list.setdefault(row['b'].date(), {})[
+            row['task_list__title'] or ''
+        ] = row['n']
+    return [
+        {
+            'start': start,
+            'total': totals.get(start, 0),
+            'by_label': by_label.get(start, {}),
+            'unlabeled': unlabeled.get(start, 0),
+            'by_list': by_list.get(start, {}),
+        }
+        for start in starts
+    ]
 
 
 # --- Read endpoints ---
@@ -418,6 +494,74 @@ def search(request, q: str = Query('', max_length=200)):
         Q(title__icontains=q) | Q(notes__icontains=q)
     ).order_by('-updated')
     return {'tasks': tasks, 'total_results': tasks.count()}
+
+
+@router.get('/stats/', response=StatsOut)
+def stats(request,
+          weeks: int = Query(12, ge=1, le=52),
+          months: int = Query(12, ge=1, le=36),
+          list: Optional[str] = Query(None, max_length=255)):
+    """Completed-tasks productivity stats — a pure DB read over the
+    local mirror (sync already persists `completed` timestamps).
+    TIME_ZONE is UTC: buckets are UTC ISO weeks (Mon start) and
+    calendar months. `completed IS NULL` rows never fall into dated
+    buckets — they surface only in summary.unknown_date."""
+    _creds_or_reauth(request)
+    qs = GoogleTask.objects.filter(
+        user=request.user, status='completed',
+        is_deleted=False, is_divider=False,
+    )
+    if list:
+        qs = qs.filter(task_list__list_id=list)
+    dated = qs.exclude(completed=None)
+
+    today = timezone.now().date()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+    prev_month_start = (
+        date(month_start.year - 1, 12, 1)
+        if month_start.month == 1
+        else date(month_start.year, month_start.month - 1, 1)
+    )
+    week_starts = [
+        week_start - timedelta(weeks=i)
+        for i in range(weeks - 1, -1, -1)
+    ]
+    month_starts = []
+    year, month = month_start.year, month_start.month
+    for _ in range(months):
+        month_starts.append(date(year, month, 1))
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    month_starts.reverse()
+
+    summary = {
+        'this_week': dated.filter(
+            completed__date__gte=week_start
+        ).count(),
+        'last_week': dated.filter(
+            completed__date__gte=week_start - timedelta(weeks=1),
+            completed__date__lt=week_start,
+        ).count(),
+        'this_month': dated.filter(
+            completed__date__gte=month_start
+        ).count(),
+        'last_month': dated.filter(
+            completed__date__gte=prev_month_start,
+            completed__date__lt=month_start,
+        ).count(),
+        # all_time counts every finished task — including the
+        # unknown_date rows that never land in a dated bucket.
+        'all_time': qs.count(),
+        'unknown_date': qs.filter(completed=None).count(),
+    }
+    return {
+        'labels': TaskLabel.objects.filter(user=request.user),
+        'weekly': _stats_buckets(dated, TruncWeek, week_starts),
+        'monthly': _stats_buckets(dated, TruncMonth, month_starts),
+        'summary': summary,
+    }
 
 
 # --- Mutation endpoints (delegate to the existing JSON views) ---

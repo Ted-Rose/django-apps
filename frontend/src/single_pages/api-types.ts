@@ -225,6 +225,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/stats/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stats
+         * @description Completed-tasks productivity stats — a pure DB read over the
+         *     local mirror (sync already persists `completed` timestamps).
+         *     TIME_ZONE is UTC: buckets are UTC ISO weeks (Mon start) and
+         *     calendar months. `completed IS NULL` rows never fall into dated
+         *     buckets — they surface only in summary.unknown_date.
+         */
+        get: operations["google_tasks_api_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/sync/": {
         parameters: {
             query?: never;
@@ -1404,6 +1428,70 @@ export interface components {
             tasks: components["schemas"]["TaskOut"][];
             /** Total Results */
             total_results: number;
+        };
+        /**
+         * StatsBucketOut
+         * @description One zero-filled UTC week/month. `by_label` counts a
+         *     multi-labeled task once per label, so its values need not sum to
+         *     `total`. `by_list` keys are task-list titles; the '' key is the
+         *     NULL task_list group (the SPA renders it as "Unlisted").
+         */
+        StatsBucketOut: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** Total */
+            total: number;
+            /** By Label */
+            by_label: {
+                [key: string]: number;
+            };
+            /** Unlabeled */
+            unlabeled: number;
+            /** By List */
+            by_list: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * StatsLabelOut
+         * @description Legend entry — the label colors the bucket stacks are drawn
+         *     with come from here, not from per-bucket data.
+         */
+        StatsLabelOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Color */
+            color: string;
+        };
+        /** StatsOut */
+        StatsOut: {
+            /** Labels */
+            labels: components["schemas"]["StatsLabelOut"][];
+            /** Weekly */
+            weekly: components["schemas"]["StatsBucketOut"][];
+            /** Monthly */
+            monthly: components["schemas"]["StatsBucketOut"][];
+            summary: components["schemas"]["StatsSummaryOut"];
+        };
+        /** StatsSummaryOut */
+        StatsSummaryOut: {
+            /** This Week */
+            this_week: number;
+            /** Last Week */
+            last_week: number;
+            /** This Month */
+            this_month: number;
+            /** Last Month */
+            last_month: number;
+            /** All Time */
+            all_time: number;
+            /** Unknown Date */
+            unknown_date: number;
         };
         /** ReorderIn */
         ReorderIn: {
@@ -2649,6 +2737,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchOut"];
+                };
+            };
+        };
+    };
+    google_tasks_api_stats: {
+        parameters: {
+            query?: {
+                weeks?: number;
+                months?: number;
+                list?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsOut"];
                 };
             };
         };

@@ -216,6 +216,14 @@ export function TaskNavBar({
                   <i className="bi bi-trash" /> {t('views.trash')}
                 </Link>
               </li>
+              <li>
+                <hr className="dropdown-divider" />
+              </li>
+              <li>
+                <Link className="dropdown-item" to="/stats">
+                  <i className="bi bi-bar-chart" /> {t('stats.title')}
+                </Link>
+              </li>
               {data.labels.length > 0 && (
                 <>
                   <li>
