@@ -40,8 +40,25 @@ test.describe('unauthenticated', () => {
     expect(response.headers()['location']).toContain('/login/?next=');
   });
 
+  test('/tasks/stats redirects to login (session auth)', async ({
+    request,
+  }) => {
+    const response = await request.get('/tasks/stats', {
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(302);
+    expect(response.headers()['location']).toContain('/login/?next=');
+  });
+
   test('the API answers 401 without a session', async ({ request }) => {
     const response = await request.get('/api/tasks/dashboard/');
+    expect(response.status()).toBe(401);
+  });
+
+  test('the stats API answers 401 without a session', async ({
+    request,
+  }) => {
+    const response = await request.get('/api/tasks/stats/');
     expect(response.status()).toBe(401);
   });
 });

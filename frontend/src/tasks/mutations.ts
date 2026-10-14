@@ -41,6 +41,9 @@ import {
 import { pushToast } from '../shared/toasts';
 
 const DASHBOARD_KEY = ['dashboard'] as const;
+// The stats page's own root — completions, trash/restore/permanent
+// delete, label edits and sync all change what it reports.
+const STATS_KEY = ['stats'] as const;
 
 type Snapshots = [readonly unknown[], DashboardOut | undefined][];
 
@@ -67,6 +70,10 @@ function restoreDashboards(queryClient: QueryClient, snapshots?: Snapshots) {
 
 function invalidateDashboards(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
+}
+
+function invalidateStats(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: STATS_KEY });
 }
 
 // errorDetail lives in shared/api/errors.ts since finance Stage 1 —
@@ -216,7 +223,10 @@ export function useCompleteTask() {
         'warning',
       );
     },
-    onSettled: () => invalidateDashboards(queryClient),
+    onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
   });
 }
 
@@ -260,7 +270,10 @@ export function useUncompleteTask() {
         'warning',
       );
     },
-    onSettled: () => invalidateDashboards(queryClient),
+    onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
   });
 }
 
@@ -292,7 +305,10 @@ export function useDeleteTask() {
         t('toasts.deleteFailed', { detail: errorDetail(error) }),
         'warning',
       ),
-    onSettled: () => invalidateDashboards(queryClient),
+    onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
   });
 }
 
@@ -331,7 +347,10 @@ export function useRestoreTask() {
         t('toasts.restoreFailed', { detail: errorDetail(error) }),
         'warning',
       ),
-    onSettled: () => invalidateDashboards(queryClient),
+    onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
   });
 }
 
@@ -352,7 +371,10 @@ export function usePermanentDeleteTask() {
         }),
         'warning',
       ),
-    onSettled: () => invalidateDashboards(queryClient),
+    onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
   });
 }
 
@@ -391,7 +413,10 @@ export function useUpdateTask() {
         t('toasts.updateFailed', { detail: errorDetail(error) }),
         'warning',
       ),
-    onSettled: () => invalidateDashboards(queryClient),
+    onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
   });
 }
 
@@ -558,7 +583,10 @@ export function useSync() {
         t('toasts.syncFailed', { detail: errorDetail(error) }),
         'warning',
       ),
-    onSettled: () => invalidateDashboards(queryClient),
+    onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
   });
 }
 
@@ -601,6 +629,9 @@ export function useProcessLabels() {
         t('toasts.processFailed', { detail: errorDetail(error) }),
         'warning',
       ),
-    onSettled: () => invalidateDashboards(queryClient),
+    onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
   });
 }

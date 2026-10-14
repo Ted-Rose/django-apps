@@ -2,7 +2,7 @@
  * Display helpers for the tasks dashboard.
  */
 
-const MONTHS = [
+export const MONTHS = [
   'Jan',
   'Feb',
   'Mar',
