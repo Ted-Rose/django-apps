@@ -389,7 +389,7 @@ class ProcessTaskLabelsStarTests(TestCase):
         """Matched labels on the same task are still assigned; only
         the unmatched hashtag is skipped."""
         from google_tasks.models import TaskLabel
-        label = TaskLabel.objects.create(user=self.user, name='Home')
+        TaskLabel.objects.create(user=self.user, name='Home')
         task = self.make_task('mix', 'chores #home #growth')
         stats = process_task_labels(self.user, creds=None)
         task.refresh_from_db()
