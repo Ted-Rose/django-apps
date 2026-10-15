@@ -8,24 +8,30 @@ sync and several local-only features. Full behavior docs:
 
 `sync_all(user, creds)` → `sync_task_lists` + `sync_tasks`, where
 `sync_tasks` first runs `push_local_changes` (push tasks with
-`needs_push=True`) then pulls remote state. The pull classifies
-every remote item against one in-memory snapshot in
+`needs_push=True`) then pulls remote state. Lists pull in PARALLEL
+(`_pull_list_pages` per list on a ThreadPoolExecutor — each thread
+builds its own service since httplib2.Http is not thread-safe;
+pages within a list stay sequential on `nextPageToken`). The pull
+classifies every remote item against one in-memory snapshot in
 `_write_remote_tasks`, then flushes via `bulk_create` (with
 `update_conflicts` for raced inserts) / `bulk_update` — per-item
 ORM calls timed syncs out at Vercel's 300s cap. Bulk writes bypass
-`save()`/signals.
+`save()`/signals. Every ORM round-trip matters: cloud deploys run
+`CONN_MAX_AGE=0`, so each query is a fresh connection handshake —
+keep sync query counts flat, not per-item or per-list.
 
 - Recurring tasks: Google spawns a new remote entity per occurrence
   and suppresses the old one from `tasks().list` (still resolvable
   via `tasks().get`, parked at position INT32_MAX). `_write_remote_tasks`
   merges an unknown remote id into the single open, same-titled local
   row whose id vanished from the pull — 0 or ≥2 candidates just
-  creates. `_trash_ghost_tasks` then marks every remaining
-  same-titled row absent from the pull `is_deleted` + `needs_push`,
-  so the next push deletes the suppressed remote instances. Both
-  helpers need the complete remote id set across ALL lists (a remote
-  move between lists must not look like suppression), so `sync_tasks`
-  fetches every list's pages before writing anything.
+  creates — and returns the post-merge snapshot. `_trash_ghost_tasks`
+  then detects, in memory, every remaining same-titled row absent
+  from the pull and flips it `is_deleted` + `needs_push` in ONE
+  update, so the next push deletes the suppressed remote instances.
+  Both helpers need the complete remote id set across ALL lists (a
+  remote move between lists must not look like suppression), so
+  `sync_tasks` fetches every list's pages before writing anything.
 
 - Local edits set `needs_push=True`; push clears it and stamps
   `last_synced_at`.
@@ -62,6 +68,11 @@ ORM calls timed syncs out at Vercel's 300s cap. Bulk writes bypass
   hashtags before any mutation, but unmatched hashtags are **not**
   fatal: they get no label, are warning-logged, and land in
   `stats['unmatched']` while every other task keeps processing.
+- Perf contract: the task queryset is `select_related('task_list')`,
+  the user's labels are prefetched ONCE and passed to `match_label`
+  via `labels=`, and label assignments flush as ONE bulk through-
+  table `bulk_create(ignore_conflicts=True)` — re-querying per
+  hashtag previously made this phase the slowest part of sync.
 - First non-star hashtag → `match_task_list` (exact → 4-prefix →
   3-prefix) → `move_task_to_list`.
 - `#star`, `#starred`, `#start`, `#starr*` = special "star me" keywords:

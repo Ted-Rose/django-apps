@@ -1,6 +1,7 @@
 # google_api
 
 ## Changelog
+5. Google Tasks sync is much faster for heavy accounts: per-list pulls run in parallel, ghost-task cleanup is one UPDATE, and post-sync label processing prefetches labels once instead of re-querying per hashtag (~190 → ~13 DB queries end-to-end) — fixes sync timeouts at Vercel's 60s cap
 4. Removed the `tv_archive` and `bible_research` apps (with `/tv-arhivs`, `/bible/`, `/bible/verses`, the `tv_archive_content` table, and the `googletrans` dependency) — resolves security findings F8/F9
 3. Endpoint `/gmail-to-audio?` trims boilerplate from eklase messages and hides message body by default
 2. Endpoint `/twister` generates audio from text giving the user functionality to create Twister game bot who gives instructions for each player

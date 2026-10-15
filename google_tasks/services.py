@@ -1,6 +1,8 @@
 import logging
 import re
 import socket
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from difflib import SequenceMatcher
 from django.db import transaction
@@ -396,6 +398,9 @@ def _write_remote_tasks(user, pulls, remote_ids):
     and merge into that row (rewriting task_id) so stars, labels,
     ordering and pending edits carry over. With zero or several
     candidates the ambiguity resolves toward creating.
+
+    Returns the local task snapshot (post-merge task_ids), reused by
+    the ghost-cleanup pass so it does not re-select the table.
     """
     local_tasks = list(GoogleTask.objects.filter(user=user))
     by_task_id = {t.task_id: t for t in local_tasks}
@@ -499,11 +504,13 @@ def _write_remote_tasks(user, pulls, remote_ids):
             batch_size=500,
         )
 
+    return local_tasks
 
-def _trash_ghost_tasks(user, task_list, remote_items, remote_ids):
+
+def _trash_ghost_tasks(pulls, remote_ids, local_tasks):
     """
     Trash local rows whose remote entity vanished from tasks().list
-    while a same-titled remote task still exists in the list.
+    while a same-titled remote task still exists in the same list.
 
     These are the superseded occurrences of recurring series (Google
     parks them at position INT32_MAX, invisible to list). They are
@@ -511,27 +518,69 @@ def _trash_ghost_tasks(user, task_list, remote_items, remote_ids):
     deletes — invisible cleanup consistent with "app is source of
     truth". Completed and open ghosts alike are trashed; dividers are
     never remote entities and are excluded.
-    """
-    remote_titles = {t.get('title', 'Untitled') for t in remote_items}
-    ghosts = GoogleTask.objects.filter(
-        user=user,
-        task_list=task_list,
-        title__in=remote_titles,
-        is_deleted=False,
-        is_divider=False,
-    ).exclude(task_id__in=remote_ids)
 
-    count = ghosts.update(
+    Detection is pure in-memory over the snapshot _write_remote_tasks
+    already loaded — merged rows carry their rewritten remote id by
+    now, so they correctly stop matching. One UPDATE per sync instead
+    of a SELECT+UPDATE per list (each query is a fresh connection
+    under CONN_MAX_AGE=0 on cloud deploys).
+    """
+    remote_titles = {
+        task_list.pk: {t.get('title', 'Untitled') for t in items}
+        for task_list, items in pulls
+    }
+    ghost_pks = [
+        task.pk for task in local_tasks
+        if not task.is_deleted
+        and not task.is_divider
+        and task.task_id not in remote_ids
+        and task.title in remote_titles.get(task.task_list_id, ())
+    ]
+    if not ghost_pks:
+        return 0
+
+    count = GoogleTask.objects.filter(pk__in=ghost_pks).update(
         is_deleted=True,
         deleted_at=timezone.now(),
         needs_push=True,
     )
-    if count:
-        logger.info(
-            f'Trashed {count} ghost task(s) in {task_list.title} '
-            f'(superseded recurring occurrences)'
-        )
+    logger.info(
+        f'Trashed {count} ghost task(s) '
+        f'(superseded recurring occurrences)'
+    )
     return count
+
+
+def _pull_list_pages(creds, task_list):
+    """
+    Fetch every tasks().list page for one task list (read-only).
+
+    Builds its own service — httplib2.Http is not thread-safe, so
+    parallel pulls cannot share one. Returns the item list, or the
+    auth dict when get_tasks_service signals reauth.
+    """
+    service = get_tasks_service(creds)
+    if isinstance(service, dict) and 'authorization_url' in service:
+        return service
+
+    remote_items = []
+    page_token = None
+    while True:
+        results = service.tasks().list(
+            tasklist=task_list.list_id,
+            maxResults=100,
+            showCompleted=True,
+            showHidden=True,
+            pageToken=page_token
+        ).execute()
+        remote_items.extend(results.get('items', []))
+        page_token = results.get('nextPageToken')
+        if not page_token:
+            break
+    logger.info(
+        f'Fetched {len(remote_items)} tasks from {task_list.title}'
+    )
+    return remote_items
 
 
 def sync_tasks(user, creds, task_list_id=None):
@@ -554,6 +603,8 @@ def sync_tasks(user, creds, task_list_id=None):
     Returns: True on success, or auth dict if reauth needed
     """
     try:
+        started = time.monotonic()
+
         # First, push any local changes to Google
         logger.info('Step 1: Pushing local changes to Google Tasks')
         push_result = push_local_changes(user, creds)
@@ -561,13 +612,10 @@ def sync_tasks(user, creds, task_list_id=None):
         if isinstance(push_result, dict) and 'authorization_url' in \
                 push_result:
             return push_result
+        push_elapsed = time.monotonic() - started
 
         # Now pull updates from Google
         logger.info('Step 2: Pulling updates from Google Tasks')
-        service = get_tasks_service(creds)
-
-        if isinstance(service, dict) and 'authorization_url' in service:
-            return service
 
         if task_list_id:
             task_lists = [
@@ -577,59 +625,53 @@ def sync_tasks(user, creds, task_list_id=None):
                 f'Syncing tasks for specific list: {task_list_id}'
             )
         else:
-            task_lists = GoogleTaskList.objects.filter(user=user)
+            task_lists = list(GoogleTaskList.objects.filter(user=user))
             logger.info(
-                f'Syncing tasks for all {task_lists.count()} lists'
+                f'Syncing tasks for all {len(task_lists)} lists'
             )
 
         # Fetch every list's pages before writing: recurring-
         # succession detection and ghost cleanup need the complete
         # remote id set, and a task moved between lists remotely must
         # not look like a suppressed occurrence in its old list.
+        # Lists pull in parallel — each page is a ~0.2-0.5s remote
+        # round-trip and pages within a list must stay sequential
+        # (nextPageToken), so serial pulls dominated sync wall-time.
+        pull_started = time.monotonic()
         pulls = []
-        for task_list in task_lists:
-            logger.info(
-                f'Fetching tasks from list: {task_list.title} '
-                f'({task_list.list_id})'
-            )
-            remote_items = []
-            page_token = None
-            while True:
-                results = service.tasks().list(
-                    tasklist=task_list.list_id,
-                    maxResults=100,
-                    showCompleted=True,
-                    showHidden=True,
-                    pageToken=page_token
-                ).execute()
+        with ThreadPoolExecutor(
+            max_workers=min(8, max(1, len(task_lists)))
+        ) as pool:
+            for task_list, remote_items in pool.map(
+                lambda tl: (tl, _pull_list_pages(creds, tl)),
+                task_lists
+            ):
+                if isinstance(remote_items, dict) and \
+                        'authorization_url' in remote_items:
+                    return remote_items
+                pulls.append((task_list, remote_items))
+        pull_elapsed = time.monotonic() - pull_started
 
-                remote_items.extend(results.get('items', []))
-                page_token = results.get('nextPageToken')
-                if not page_token:
-                    break
-            pulls.append((task_list, remote_items))
-
+        write_started = time.monotonic()
         remote_ids = {
             t['id'] for _, items in pulls for t in items
         }
+        local_tasks = _write_remote_tasks(user, pulls, remote_ids)
+        write_elapsed = time.monotonic() - write_started
 
-        _write_remote_tasks(user, pulls, remote_ids)
+        # Ghost detection runs on the post-merge snapshot: merged rows
+        # already carry their new remote task_id in memory, so they do
+        # not look like superseded occurrences.
+        ghost_started = time.monotonic()
+        _trash_ghost_tasks(pulls, remote_ids, local_tasks)
+        ghost_elapsed = time.monotonic() - ghost_started
 
-        # Ghost cleanup runs AFTER the bulk flush: merged rows must
-        # already carry their new remote task_id or they look like
-        # superseded occurrences and get trashed.
-        total_synced = 0
-        for task_list, remote_items in pulls:
-            _trash_ghost_tasks(user, task_list, remote_items, remote_ids)
-            total_synced += len(remote_items)
-
-            logger.info(
-                f'Synced {len(remote_items)} tasks from '
-                f'{task_list.title}'
-            )
-
+        total_synced = sum(len(items) for _, items in pulls)
         logger.info(
-            f'Synced {total_synced} tasks for user {user.username}'
+            f'Synced {total_synced} tasks for user {user.username} '
+            f'in {time.monotonic() - started:.1f}s '
+            f'(push={push_elapsed:.1f}s pull={pull_elapsed:.1f}s '
+            f'write={write_elapsed:.1f}s ghosts={ghost_elapsed:.1f}s)'
         )
         return True
 
@@ -989,7 +1031,7 @@ def remove_starred_hashtags(notes):
     return cleaned_notes
 
 
-def match_label(hashtag, user, create_if_missing=None):
+def match_label(hashtag, user, create_if_missing=None, labels=None):
     """
     Smart label matching for voice-to-text input.
 
@@ -1005,6 +1047,9 @@ def match_label(hashtag, user, create_if_missing=None):
         user: User object
         create_if_missing: Auto-create label if no match.
             Defaults to LABEL_AUTO_CREATE setting.
+        labels: Optional prefetched iterable of the user's TaskLabels.
+            Fetched when not provided; pass it in hot loops so
+            matching does not re-query per hashtag.
 
     Returns: TaskLabel object (existing or newly created),
         or None if no match and creation not allowed
@@ -1013,17 +1058,18 @@ def match_label(hashtag, user, create_if_missing=None):
         create_if_missing = LABEL_AUTO_CREATE
 
     hashtag_lower = hashtag.lower()
-    user_labels = TaskLabel.objects.filter(user=user)
+    if labels is None:
+        labels = list(TaskLabel.objects.filter(user=user))
 
     # 1. Exact match (case-insensitive)
-    exact_match = user_labels.filter(name__iexact=hashtag).first()
-    if exact_match:
-        logger.info(f'Exact match: #{hashtag} -> {exact_match.name}')
-        return exact_match
+    for label in labels:
+        if label.name.lower() == hashtag_lower:
+            logger.info(f'Exact match: #{hashtag} -> {label.name}')
+            return label
 
     # 2. Starts-with match (first 4+ chars)
     if len(hashtag_lower) >= LABEL_MIN_PREFIX_LENGTH:
-        for label in user_labels:
+        for label in labels:
             if label.name.lower().startswith(
                 hashtag_lower[:LABEL_MIN_PREFIX_LENGTH]
             ):
@@ -1036,7 +1082,7 @@ def match_label(hashtag, user, create_if_missing=None):
     best_match = None
     best_ratio = 0.0
 
-    for label in user_labels:
+    for label in labels:
         ratio = SequenceMatcher(
             None,
             hashtag_lower,
@@ -1056,7 +1102,7 @@ def match_label(hashtag, user, create_if_missing=None):
 
     # 4. Fallback: 3-letter prefix match (for short hashtags)
     if len(hashtag_lower) >= 3:
-        for label in user_labels:
+        for label in labels:
             if label.name.lower().startswith(hashtag_lower[:3]):
                 logger.info(
                     f'3-letter prefix match: #{hashtag} -> {label.name}'
@@ -1455,22 +1501,30 @@ def process_task_labels(user, creds, task_id=None):
         'details': []
     }
 
-    # Get tasks to process (exclude dividers)
+    started = time.monotonic()
+
+    # Get tasks to process (exclude dividers). task_list is
+    # select_related'd: the move check below dereferences it for
+    # every hashtag-bearing task.
     if task_id:
         tasks = GoogleTask.objects.filter(
             user=user,
             task_id=task_id,
             is_divider=False
-        )
+        ).select_related('task_list')
     else:
         tasks = GoogleTask.objects.filter(
             user=user,
             status='needsAction',
             is_divider=False
-        )
+        ).select_related('task_list')
 
-    # Get all task lists for matching
-    task_lists = GoogleTaskList.objects.filter(user=user)
+    # Get all task lists and labels once — per-item ORM calls in this
+    # loop cost one fresh connection each on cloud deploys
+    # (CONN_MAX_AGE=0), which dominated sync wall-time.
+    task_lists = list(GoogleTaskList.objects.filter(user=user))
+    user_labels = list(TaskLabel.objects.filter(user=user))
+    through_model = GoogleTask.labels.through
 
     # Pre-pass: match all hashtags to existing labels before
     # modifying anything. Collect unmatched hashtags so they can
@@ -1478,6 +1532,7 @@ def process_task_labels(user, creds, task_id=None):
     # assignment, never the rest of the run.
     task_labels_map = {}
     unmatched = []
+    through_rows = []
 
     for task in tasks:
         hashtags = extract_hashtags(task.title)
@@ -1498,7 +1553,9 @@ def process_task_labels(user, creds, task_id=None):
                 continue
 
             label = match_label(
-                hashtag, user, create_if_missing=False
+                hashtag, user,
+                create_if_missing=False,
+                labels=user_labels,
             )
             if label:
                 labels.append(label)
@@ -1567,10 +1624,15 @@ def process_task_labels(user, creds, task_id=None):
                     h.lower().startswith('starr'))
         ]
 
-        # Assign pre-matched TaskLabels for ALL non-starred hashtags
+        # Assign pre-matched TaskLabels for ALL non-starred hashtags.
+        # Through rows are queued and bulk-inserted after the loop —
+        # one write instead of one per (task, label) pair.
         assigned_labels = []
         for label in task_labels_map.get(task.task_id, []):
-            task.labels.add(label)
+            through_rows.append(through_model(
+                googletask_id=task.pk,
+                tasklabel_id=label.pk,
+            ))
             assigned_labels.append(label.name)
             stats['labels_assigned'] += 1
 
@@ -1664,12 +1726,20 @@ def process_task_labels(user, creds, task_id=None):
 
         stats['details'].append(detail)
 
+    if through_rows:
+        # ignore_conflicts mirrors labels.add() idempotency — rows
+        # already linked are skipped instead of erroring the batch.
+        through_model.objects.bulk_create(
+            through_rows, ignore_conflicts=True
+        )
+
     logger.info(
         f'Label processing complete: {stats["processed"]} processed, '
         f'{stats["moved"]} moved, {stats["starred"]} starred, '
         f'{stats["labels_assigned"]} labels assigned, '
         f'{stats["errors"]} errors, '
-        f'{len(stats["unmatched"])} unmatched hashtags'
+        f'{len(stats["unmatched"])} unmatched hashtags, '
+        f'{time.monotonic() - started:.1f}s'
     )
 
     return stats
