@@ -169,6 +169,12 @@ export default function TaskDetail() {
       onClick: () => navigate(backTarget),
     },
     {
+      label: t('stats.title'),
+      icon: 'bar-chart',
+      btn_class: 'btn-light',
+      onClick: () => navigate('/stats'),
+    },
+    {
       label: t('common:common.logout', { user }),
       url: '/admin/logout/',
       icon: 'box-arrow-right',
