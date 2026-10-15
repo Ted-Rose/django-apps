@@ -100,6 +100,12 @@ export default function Search() {
       onClick: () => navigate(backTarget),
     },
     {
+      label: t('stats.title'),
+      icon: 'bar-chart',
+      btn_class: 'btn-light',
+      onClick: () => navigate('/stats'),
+    },
+    {
       label: syncMutation.isPending ? t('menu.syncing') : t('menu.syncNow'),
       icon: 'arrow-repeat',
       btn_class: 'btn-light',
