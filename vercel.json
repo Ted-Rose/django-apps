@@ -13,15 +13,15 @@
       "use": "@vercel/python",
       "config": {
         "maxLambdaSize": "15mb",
-        "runtime": "python3.12"
+        "runtime": "python3.12",
+        "functions": {
+          "django_apps/wsgi.py": {
+            "maxDuration": 60
+          }
+        }
       }
     }
   ],
-  "functions": {
-    "django_apps/wsgi.py": {
-      "maxDuration": 60
-    }
-  },
   "routes": [
     {
       "src": "/static/(.*)",

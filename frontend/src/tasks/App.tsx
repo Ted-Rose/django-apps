@@ -4,6 +4,7 @@ import Dashboard from './routes/Dashboard';
 import Overdue from './routes/Overdue';
 import Search from './routes/Search';
 import Starred from './routes/Starred';
+import Stats from './routes/Stats';
 import TaskDetail from './routes/TaskDetail';
 import Trash from './routes/Trash';
 
@@ -11,9 +12,9 @@ import Trash from './routes/Trash';
  * Router host for the tasks SPA (mounted at /tasks/ since the Stage 6
  * cutover, see `BrowserRouter basename` in main.tsx). `/` is the
  * dashboard; starred/overdue reuse the dashboard-shaped TaskListPage;
- * archived, trash, search and task detail are standalone pages. The
- * Django catch-all routes every /tasks/<subpath>/ here, so deep links
- * land on the right page — including the old template URLs like
+ * archived, trash, search, stats and task detail are standalone pages.
+ * The Django catch-all routes every /tasks/<subpath>/ here, so deep
+ * links land on the right page — including the old template URLs like
  * /tasks/starred/, which map onto the same route names.
  */
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/archived" element={<Archived />} />
       <Route path="/trash" element={<Trash />} />
       <Route path="/search" element={<Search />} />
+      <Route path="/stats" element={<Stats />} />
       <Route path="/task/:taskId" element={<TaskDetail />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

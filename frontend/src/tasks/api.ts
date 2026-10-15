@@ -10,6 +10,10 @@ export type LabelRef = components['schemas']['LabelRef'];
 export type FlagsOut = components['schemas']['FlagsOut'];
 export type TaskDetailOut = components['schemas']['TaskDetailOut'];
 export type SearchOut = components['schemas']['SearchOut'];
+export type StatsOut = components['schemas']['StatsOut'];
+export type StatsBucketOut = components['schemas']['StatsBucketOut'];
+export type StatsSummaryOut = components['schemas']['StatsSummaryOut'];
+export type StatsLabelOut = components['schemas']['StatsLabelOut'];
 
 /** Mutation request bodies (POST /api/tasks/…). */
 export type TaskCreateIn = components['schemas']['TaskCreateIn'];
@@ -112,4 +116,27 @@ export function fetchTaskDetail(taskId: string): Promise<TaskDetailOut> {
  */
 export function fetchSearchTasks(q: string): Promise<SearchOut> {
   return apiGet<SearchOut>(`/api/tasks/search/?q=${encodeURIComponent(q)}`);
+}
+
+export interface StatsParams {
+  weeks?: number;
+  months?: number;
+  list?: string | null;
+}
+
+/**
+ * GET /api/tasks/stats/?weeks=&months=&list= — completed-tasks
+ * productivity stats: zero-filled UTC weekly/monthly buckets broken
+ * down by label and task list, plus a summary block. All params are
+ * optional; the API defaults to 12 weeks / 12 months.
+ */
+export function fetchStats(params: StatsParams = {}): Promise<StatsOut> {
+  const qs = new URLSearchParams();
+  if (params.weeks) qs.set('weeks', String(params.weeks));
+  if (params.months) qs.set('months', String(params.months));
+  if (params.list) qs.set('list', params.list);
+  const suffix = qs.toString();
+  return apiGet<StatsOut>(
+    `/api/tasks/stats/${suffix ? `?${suffix}` : ''}`,
+  );
 }
