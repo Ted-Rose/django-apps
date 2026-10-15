@@ -55,9 +55,7 @@ test.describe('unauthenticated', () => {
     expect(response.status()).toBe(401);
   });
 
-  test('the stats API answers 401 without a session', async ({
-    request,
-  }) => {
+  test('the stats API answers 401 without a session', async ({ request }) => {
     const response = await request.get('/api/tasks/stats/');
     expect(response.status()).toBe(401);
   });

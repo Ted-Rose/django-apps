@@ -117,9 +117,7 @@ describe('Stats', () => {
     // Delta badge: this_week 3 vs last_week 0 → +3.
     expect(screen.getByText('+3')).toBeInTheDocument();
     // unknown_date shows under the all-time card.
-    expect(
-      screen.getByText('+1 with no recorded date'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('+1 with no recorded date')).toBeInTheDocument();
   });
 
   it('renders stacked weekly bars with label colors', async () => {
@@ -149,9 +147,7 @@ describe('Stats', () => {
     expect(screen.getByText('List 1')).toBeInTheDocument();
     // '' by_list key renders as the localized Unlisted row.
     expect(screen.getByText('Unlisted')).toBeInTheDocument();
-    expect(
-      screen.getByText(/counts once per label/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/counts once per label/)).toBeInTheDocument();
   });
 
   it('shows the empty state when nothing was ever completed', async () => {
