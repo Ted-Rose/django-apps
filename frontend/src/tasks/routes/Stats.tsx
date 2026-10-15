@@ -182,10 +182,7 @@ function StatsBody({
           value={summary.this_month}
           delta={summary.this_month - summary.last_month}
         />
-        <SummaryCard
-          label={t('stats.lastMonth')}
-          value={summary.last_month}
-        />
+        <SummaryCard label={t('stats.lastMonth')} value={summary.last_month} />
         <SummaryCard
           label={t('stats.allTime')}
           value={summary.all_time}
@@ -286,10 +283,7 @@ function BucketChart({
             // stays ∝ total/max like the other bars.
             const segmentSum =
               bucket.unlabeled +
-              Object.values(bucket.by_label).reduce(
-                (sum, n) => sum + n,
-                0,
-              );
+              Object.values(bucket.by_label).reduce((sum, n) => sum + n, 0);
             const scale = segmentSum > 0 ? bucket.total / segmentSum : 0;
             const segmentHeight = (count: number) =>
               `${((count * scale) / max) * 100}%`;
@@ -317,20 +311,18 @@ function BucketChart({
                       }}
                     />
                   )}
-                  {Object.entries(bucket.by_label).map(
-                    ([name, count]) => (
-                      <div
-                        key={name}
-                        className="stats-bar-segment"
-                        style={{
-                          height: segmentHeight(count),
-                          minHeight: '2px',
-                          backgroundColor:
-                            labelColors.get(name) ?? UNLABELED_COLOR,
-                        }}
-                      />
-                    ),
-                  )}
+                  {Object.entries(bucket.by_label).map(([name, count]) => (
+                    <div
+                      key={name}
+                      className="stats-bar-segment"
+                      style={{
+                        height: segmentHeight(count),
+                        minHeight: '2px',
+                        backgroundColor:
+                          labelColors.get(name) ?? UNLABELED_COLOR,
+                      }}
+                    />
+                  ))}
                 </div>
                 <div
                   className={`text-center text-truncate${
@@ -404,9 +396,7 @@ function LabelBreakdown({
 
   return (
     <div className="card h-100">
-      <div className="card-header py-1 fw-semibold">
-        {t('stats.byLabel')}
-      </div>
+      <div className="card-header py-1 fw-semibold">{t('stats.byLabel')}</div>
       <div className="card-body py-2 px-3">
         <table className="table table-sm mb-1">
           <thead>
@@ -470,9 +460,7 @@ function ListBreakdown({ data }: { data: StatsOut }) {
 
   return (
     <div className="card h-100">
-      <div className="card-header py-1 fw-semibold">
-        {t('stats.byList')}
-      </div>
+      <div className="card-header py-1 fw-semibold">{t('stats.byList')}</div>
       <div className="card-body py-2 px-3">
         <table className="table table-sm mb-0">
           <thead>

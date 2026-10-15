@@ -136,7 +136,5 @@ export function fetchStats(params: StatsParams = {}): Promise<StatsOut> {
   if (params.months) qs.set('months', String(params.months));
   if (params.list) qs.set('list', params.list);
   const suffix = qs.toString();
-  return apiGet<StatsOut>(
-    `/api/tasks/stats/${suffix ? `?${suffix}` : ''}`,
-  );
+  return apiGet<StatsOut>(`/api/tasks/stats/${suffix ? `?${suffix}` : ''}`);
 }

@@ -92,8 +92,9 @@ def _sanitize_text_for_audio(text: str) -> str:
     # Replace URLs with the word "web link"
     text = re.sub(r'https?://\S+', 'web link', text)
 
-    # Remove long dashes
-    text = re.sub(r'-{2,}', '', text)
+    # Remove divider runs — dashes, underscores, '=' and '~' (the
+    # e-klase footer is a '____' line gTTS would spell out)
+    text = re.sub(r'[-_~=*]{2,}', '', text)
 
     # Remove excessive whitespace
     text = re.sub(r'\s+', ' ', text).strip()
