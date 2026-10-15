@@ -1,12 +1,14 @@
 import json
 import os
 import tempfile
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.http import Http404
 from django.test import RequestFactory, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -387,7 +389,7 @@ class ProcessTaskLabelsStarTests(TestCase):
         """Matched labels on the same task are still assigned; only
         the unmatched hashtag is skipped."""
         from google_tasks.models import TaskLabel
-        label = TaskLabel.objects.create(user=self.user, name='Home')
+        TaskLabel.objects.create(user=self.user, name='Home')
         task = self.make_task('mix', 'chores #home #growth')
         stats = process_task_labels(self.user, creds=None)
         task.refresh_from_db()
@@ -894,6 +896,270 @@ class RecurringTaskSyncTests(TestCase):
         ])
         divider.refresh_from_db()
         self.assertFalse(divider.is_deleted)
+
+
+class BulkSyncWriteTests(TestCase):
+    """Pull-side bulk writes: remote items are classified against one
+    in-memory snapshot and flushed via bulk_create/bulk_update, so
+    query count stays flat regardless of task count and local-only
+    fields are never rewritten."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.task_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-1', title='List 1'
+        )
+
+    def make_task(self, task_id, title, **kwargs):
+        kwargs.setdefault('task_list', self.task_list)
+        return GoogleTask.objects.create(
+            user=self.user, task_id=task_id, title=title, **kwargs
+        )
+
+    def remote_item(self, task_id, title, **fields):
+        item = {
+            'id': task_id,
+            'title': title,
+            'status': 'needsAction',
+            'updated': '2026-10-10T03:00:00Z',
+        }
+        item.update(fields)
+        return item
+
+    def run_sync(self, items):
+        return self.run_sync_pulls({self.task_list.list_id: items})
+
+    def run_sync_pulls(self, items_by_list):
+        """Run sync_tasks with per-list remote payloads keyed on
+        list_id (needed for remote list-move cases)."""
+        service = MagicMock()
+
+        def list_request(tasklist=None, **kwargs):
+            request = MagicMock()
+            request.execute.return_value = {
+                'items': items_by_list.get(tasklist, [])
+            }
+            return request
+
+        service.tasks.return_value.list.side_effect = list_request
+        with patch(
+            'google_tasks.services.push_local_changes',
+            return_value={}
+        ), patch(
+            'google_tasks.services.get_tasks_service',
+            return_value=service
+        ):
+            return sync_tasks(self.user, creds={})
+
+    def test_pull_query_count_is_flat(self):
+        """~150 remote items must sync in a handful of queries, not
+        2-4 per item — the per-item version burned ~900 WAN
+        round-trips and timed out at Vercel's 300s cap."""
+        for i in range(50):
+            self.make_task(f'existing-{i}', f'task {i}')
+        items = [
+            self.remote_item(
+                f'existing-{i}', f'task {i}', notes='changed'
+            )
+            for i in range(50)
+        ] + [
+            self.remote_item(f'new-{i}', f'new task {i}')
+            for i in range(100)
+        ]
+        with CaptureQueriesContext(connection) as ctx:
+            self.assertTrue(self.run_sync(items))
+        # list count + list select + local snapshot + bulk_update +
+        # bulk_create + ghost update — flat regardless of item count.
+        self.assertLessEqual(len(ctx), 10)
+        self.assertEqual(GoogleTask.objects.count(), 150)
+
+    def test_updated_at_advances_on_update(self):
+        """auto_now is not bumped by bulk_update — the sync stamps
+        updated_at itself."""
+        task = self.make_task('t1', 'x')
+        old = timezone.now() - timedelta(hours=1)
+        GoogleTask.objects.filter(pk=task.pk).update(updated_at=old)
+        self.assertTrue(self.run_sync([self.remote_item('t1', 'x')]))
+        task.refresh_from_db()
+        self.assertGreater(task.updated_at, old)
+
+    def test_created_set_on_insert_preserved_on_update(self):
+        past = timezone.now() - timedelta(days=30)
+        keep = self.make_task('keep', 'x')
+        GoogleTask.objects.filter(pk=keep.pk).update(created=past)
+        self.assertTrue(self.run_sync([
+            self.remote_item('keep', 'x'),
+            self.remote_item('brand-new', 'y'),
+        ]))
+        keep.refresh_from_db()
+        self.assertEqual(keep.created, past)
+        new = GoogleTask.objects.get(task_id='brand-new')
+        self.assertIsNotNone(new.created)
+
+    def test_local_only_fields_survive_update(self):
+        """bulk_update touches only remote-mirrored fields — stars,
+        labels, ordering, trash and pending-push flags survive."""
+        from google_tasks.models import TaskLabel
+        label = TaskLabel.objects.create(user=self.user, name='Home')
+        task = self.make_task(
+            't1', 'x',
+            is_starred=True, starred_order=3.0, task_order=7.0,
+            needs_push=True,
+        )
+        task.labels.add(label)
+        trashed = self.make_task('t2', 'gone', is_deleted=True)
+        self.assertTrue(self.run_sync([
+            self.remote_item('t1', 'x', notes='remote'),
+            self.remote_item('t2', 'gone'),
+        ]))
+        task.refresh_from_db()
+        self.assertEqual(task.notes, 'remote')
+        self.assertTrue(task.is_starred)
+        self.assertEqual(task.starred_order, 3.0)
+        self.assertEqual(task.task_order, 7.0)
+        self.assertTrue(task.needs_push)
+        self.assertEqual(
+            [label.name for label in task.labels.all()], ['Home']
+        )
+        trashed.refresh_from_db()
+        self.assertTrue(trashed.is_deleted)
+
+    def test_raced_insert_conflicts_heal_via_upsert(self):
+        """A concurrent sync inserting the same remote task_id
+        between classification and flush must not fail — the ON
+        CONFLICT upsert heals the row with remote values."""
+        past = timezone.now() - timedelta(days=30)
+        real_bulk_create = GoogleTask.objects.bulk_create
+
+        def racy_bulk_create(objs, **kwargs):
+            GoogleTask.objects.create(
+                user=self.user,
+                task_id='race-id',
+                task_list=self.task_list,
+                title='stale local title',
+                created=past,
+            )
+            return real_bulk_create(objs, **kwargs)
+
+        with patch.object(
+            GoogleTask.objects, 'bulk_create',
+            side_effect=racy_bulk_create,
+        ):
+            self.assertTrue(self.run_sync([
+                self.remote_item('race-id', 'remote title'),
+            ]))
+        row = GoogleTask.objects.get(task_id='race-id')
+        self.assertEqual(row.title, 'remote title')
+        # created is excluded from the upsert update_fields — the
+        # pre-existing row keeps its original first-synced value.
+        self.assertEqual(row.created, past)
+        self.assertEqual(GoogleTask.objects.count(), 1)
+
+    def test_two_same_title_unknown_items_merge_once(self):
+        """Two same-titled new remote occurrences in one pull: the
+        first merges into the open local row, the second sees the
+        candidate's id is now remote and creates a fresh row."""
+        old = self.make_task('old-id', 'x')
+        self.assertTrue(self.run_sync([
+            self.remote_item('new-1', 'x'),
+            self.remote_item('new-2', 'x'),
+        ]))
+        old.refresh_from_db()
+        self.assertEqual(old.task_id, 'new-1')
+        self.assertTrue(
+            GoogleTask.objects.filter(task_id='new-2').exists()
+        )
+        self.assertEqual(
+            GoogleTask.objects.filter(title='x').count(), 2
+        )
+
+    def test_remote_list_move_follows_task(self):
+        """A task moved to another list on Google keeps its row —
+        task_list follows the remote list and the row is not trashed
+        as a ghost in the old list (a same-titled remote task still
+        lives there, so the ghost query is genuinely exercised)."""
+        other_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-2', title='List 2'
+        )
+        task = self.make_task('moved-id', 'x')
+        self.assertTrue(self.run_sync_pulls({
+            'list-1': [self.remote_item('stay-id', 'x')],
+            'list-2': [self.remote_item('moved-id', 'x')],
+        }))
+        task.refresh_from_db()
+        self.assertEqual(task.task_list, other_list)
+        self.assertFalse(task.is_deleted)
+        self.assertFalse(task.needs_push)
+
+    def test_sync_task_lists_bulk_writes(self):
+        """Task lists use the same classify+bulk pattern: known
+        list_ids update in place, new ones insert, others are left
+        alone."""
+        from google_tasks.services import sync_task_lists
+        service = MagicMock()
+        service.tasklists.return_value.list.return_value.execute \
+            .return_value = {'items': [
+                {'id': 'list-1', 'title': 'Renamed'},
+                {'id': 'list-2', 'title': 'New list'},
+            ]}
+        with patch(
+            'google_tasks.services.get_tasks_service',
+            return_value=service,
+        ):
+            self.assertTrue(sync_task_lists(self.user, creds={}))
+        self.task_list.refresh_from_db()
+        self.assertEqual(self.task_list.title, 'Renamed')
+        self.assertTrue(
+            GoogleTaskList.objects.filter(list_id='list-2').exists()
+        )
+        self.assertEqual(GoogleTaskList.objects.count(), 2)
+
+    def test_sync_task_lists_dedupes_repeated_list_id(self):
+        """A repeated list_id in one remote payload mutates the
+        already-queued row (last wins) instead of queueing twice —
+        Postgres ignores extra WHENs for one pk in bulk_update's
+        CASE, and two same-(user, list_id) rows in one bulk_create
+        batch die on 'ON CONFLICT cannot affect row a second time'.
+        Spies assert each row is queued exactly once; on sqlite a
+        duplicate create row would pass silently otherwise."""
+        from google_tasks.services import sync_task_lists
+        service = MagicMock()
+        service.tasklists.return_value.list.return_value.execute \
+            .return_value = {'items': [
+                {'id': 'list-1', 'title': 'First'},
+                {'id': 'list-1', 'title': 'Last'},
+                {'id': 'list-2', 'title': 'New'},
+                {'id': 'list-2', 'title': 'Newer'},
+            ]}
+        created, updated = [], []
+        manager = GoogleTaskList.objects
+        real_create, real_update = \
+            manager.bulk_create, manager.bulk_update
+
+        def spy_create(objs, **kwargs):
+            created.extend(objs)
+            return real_create(objs, **kwargs)
+
+        def spy_update(objs, **kwargs):
+            updated.extend(objs)
+            return real_update(objs, **kwargs)
+
+        with patch(
+            'google_tasks.services.get_tasks_service',
+            return_value=service,
+        ), patch.object(
+            manager, 'bulk_create', side_effect=spy_create
+        ), patch.object(
+            manager, 'bulk_update', side_effect=spy_update
+        ):
+            self.assertTrue(sync_task_lists(self.user, creds={}))
+        self.assertEqual([o.pk for o in updated], [self.task_list.pk])
+        self.assertEqual([o.list_id for o in created], ['list-2'])
+        self.assertEqual(updated[0].title, 'Last')
+        self.assertEqual(created[0].title, 'Newer')
+        self.assertEqual(GoogleTaskList.objects.count(), 2)
 
 
 class ReactAppShellTests(TestCase):

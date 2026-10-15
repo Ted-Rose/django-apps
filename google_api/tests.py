@@ -169,6 +169,17 @@ class TextToAudioLanguageTests(TestCase):
         self.assertEqual(url, 'https://signed/x.mp3')
         self.assertEqual(gtts.call_args.kwargs['lang'], 'en')
 
+    def test_divider_runs_stripped_before_tts(self):
+        # The e-klase '____' footer divider used to reach gTTS,
+        # which spells out each underscore.
+        with audio_pipeline() as gtts:
+            text_to_audio(
+                'Teksts ' + '_' * 50 + ' vēl teksts', lang='lv'
+            )
+        self.assertEqual(
+            gtts.call_args.kwargs['text'], 'Teksts vēl teksts'
+        )
+
 
 class TextToAudioSigningTests(TestCase):
     """Signed URLs are generated via IAM signBlob when ADC has no
