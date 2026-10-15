@@ -237,6 +237,30 @@ describe('Dashboard', () => {
     expect(mockedApiPost).not.toHaveBeenCalled();
   });
 
+  it('shows a Stats burger item', async () => {
+    mockedApiGet.mockResolvedValue(makeDashboard());
+    renderDashboard();
+    await screen.findByText('No tasks found');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }));
+    expect(
+      screen.getByRole('button', { name: 'Stats' }),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the Stats burger item without credentials', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeDashboard({
+        flags: { ...makeDashboard().flags, has_credentials: false },
+      }),
+    );
+    renderDashboard();
+    await screen.findByText('Google Authentication Required');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }));
+    expect(
+      screen.queryByRole('button', { name: 'Stats' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('posts divider/create for the Add Divider burger item', async () => {
     mockedApiPost.mockResolvedValue({ success: true, task_id: 'div-1' });
     mockedApiGet.mockResolvedValue(

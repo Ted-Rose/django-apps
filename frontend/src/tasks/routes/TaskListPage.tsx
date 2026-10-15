@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   DndContext,
@@ -91,6 +91,7 @@ const FETCHERS: Record<
 
 export function TaskListPage({ view }: { view: ListView }) {
   const { t } = useTranslation('tasks');
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // Only the main dashboard carries the ?list= filter.
   const list = view === 'dashboard' ? searchParams.get('list') : null;
@@ -319,6 +320,12 @@ export function TaskListPage({ view }: { view: ListView }) {
   ];
   if (hasCredentials) {
     burgerItems.push(
+      {
+        label: t('stats.title'),
+        icon: 'bar-chart',
+        btn_class: 'btn-light',
+        onClick: () => navigate('/stats'),
+      },
       {
         label: t('menu.addDivider'),
         icon: 'dash-lg',
