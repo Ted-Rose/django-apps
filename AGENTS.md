@@ -1,306 +1,334 @@
-# Project Guidelines for AI Agents
+# AGENTS.md — django-apps (Django 4.2 monolith + React/Vite SPAs)
 
-## What this repo is
+Guidance for AI agents. Read this before editing; **trust the code
+over any doc that disagrees**. Known-stale docs:
 
-Personal Django 4.2 monolith ("collection of random Django apps") —
-several small apps sharing one project and one (Aiven) Postgres
-database. GitHub: `Ted-Rose/django-apps`. Deployed to two live targets:
-GCP Cloud Run (project `django-apps-7345`, region `europe-west3`) and
-Vercel (`vercel.json`, `build_files.sh`), where the same Django app
-serves front-end traffic to reduce Cloud Run costs — both hit the
-same database. PythonAnywhere
-(`tedisrozenfelds_pythonanywhere_com_wsgi.py`) is legacy.
+- `README.md` — still describes the PythonAnywhere deployment.
+- `bootstrap_gcp.sh`, `migrate_to_django_apps.sh` — superseded; see
+  the appendix of `docs/plans/MIGRATION.md`.
+- `tedisrozenfelds_pythonanywhere_com_wsgi.py` — legacy.
+- `docs/plans/*` — historical design docs; several predate the
+  React SPA cutover (filenames predate the `<feature>-plan.md`
+  convention below).
+- `private_settings.json` — legacy local settings file; the current
+  mechanism is `config.yaml` (see "Environment & settings").
 
-## Repository map
+Each app also has its own `AGENTS.md`/`README.md` — read the one
+for the app you touch; it is more current than this file.
 
-| Path | Purpose |
-|------|---------|
-| `django_apps/` | Project settings, root urls, home page, PWA endpoints (`sw.js`, `manifest.webmanifest`, `offline/`), `gcp.py` (Secret Manager helper), `console_tasks/build.py` (Vercel build-time file generators) |
-| `google_api/` | Shared Google OAuth2 platform (per-user credential store, login/callback) + text-to-audio (gTTS → GCS signed URLs). See `google_api/AGENTS.md` and `google_api/README.md` |
-| `gmail/` | Gmail reader ("Gmail to audio") — feature app split out of `google_api`. React SPA at `/gmail/` (`frontend/src/gmail/`), API at `/api/gmail/`; no models. See `gmail/AGENTS.md` |
-| `google_tasks/` | Largest app. Google Tasks bidirectional sync with local-only features (stars, labels, dividers, archive/trash, manual ordering). See `google_tasks/AGENTS.md` and `google_tasks/README.md` |
-| `finance/` | GoCardless Bank Account Data integration: bank linking, shared accounts, transaction sync, spending limits, low-balance alerts, rule-based auto-categorization (`services/rules.py`). React SPA at `/finance/` (`frontend/src/finance/`), API at `/api/finance/`; `views.py` keeps only `requisition_callback`. See `finance/AGENTS.md` |
-| `single_pages/` | One-off pages that don't merit their own app: twister (Latvian TTS game) + spoki.lv proxy. React SPA mounted at root paths `/twister` + `/spoki/` (`frontend/src/single_pages/`), API at `/api/single_pages/`; no models/templates/views. See `single_pages/AGENTS.md` |
-| `terraform/` | All GCP infra: Cloud Run service + jobs, Cloud Scheduler triggers, secrets refs, Artifact Registry, GCS audio bucket, WIF |
-| `frontend/` | React rewrite workspace: Vite 5 + React 19 + TS, one entry per app (`src/tasks/`); builds to gitignored `frontend_dist/` (Vite manifest + hashed assets) |
-| `docs/` | `QUICKSTART.md` (GCP deploy runbook), `changelog.md`, `coding_diary.md` (dev log), `plans/` (design docs) |
+## What this is
 
-URL routing (`django_apps/urls.py`): `google_api`, `gmail` (legacy
-`/gmail-to-audio` 301s to `/gmail/`) and `single_pages` mount at
-root — single_pages owns `/twister`, `/spoki/` and the `/app/*`
-301s, and must never add a root-level `<path:subpath>` catch-all
-(it would shadow every later include); `google_tasks` under
-`/tasks/`; `finance` under `/finance/`; `admin/` is Django admin
-(also used for logout via `/admin/logout/`).
+Personal Django 4.2 monolith — several small apps sharing one
+project and one (Aiven) Postgres database. GitHub remote:
+`origin` = `Ted-Rose/django-apps`, the owner's own repo (not a
+fork, no upstream). All GitHub operations target that repo.
 
-## Environment & settings
+Two live deploy targets share the same database:
 
-- `django_apps/settings.py` has **two modes**:
-  - Cloud — detected by `_is_gcp_environment()` (`GAE_APPLICATION`,
-    `K_SERVICE`, or `USE_GCP_SECRETS=true`) or
-    `_is_vercel_environment()` (`VERCEL` env var, set by Vercel at
-    build and runtime); combined as `IS_CLOUD_ENVIRONMENT`. Secrets
-    come from env vars (`DJANGO_SECRET_KEY`, `DATABASE_URL`,
-    `APP_BASE_URL`, `GOOGLE_OAUTH_CLIENT_JSON`,
-    `GOCARDLESS_SECRET_ID`, `GOCARDLESS_SECRET_KEY`,
-    `GCS_AUDIO_BUCKET`, `GCP_SERVICE_ACCOUNT_JSON`).
-    `GOOGLE_OAUTH_CLIENT_JSON` is written to `/tmp/app_secrets.json`
-    at settings import (writable on both Cloud Run and
-    Vercel/Lambda); `GCP_SERVICE_ACCOUNT_JSON` (Vercel only — the
-    `vercel-audio` SA key, needed because lambdas have no GCP
-    metadata server) is written to `/tmp/gcp_service_account.json`
-    and exported as `GOOGLE_APPLICATION_CREDENTIALS` for
-    `google.auth.default()`. `CONN_MAX_AGE` is 0 on both — serverless
-    instances must not hold persistent connections or they exhaust
-    Aiven's `max_connections`.
-  - Local: reads `config.yaml` at repo root (gitignored;
-    template: `config_template.yaml`). If the file is
-    missing, settings fall back to env vars, then insecure dev
-    defaults (sqlite `db.sqlite3`, `DEBUG=True`) with a warning —
-    enough for `check`/`test`, not for real data work.
-  - The `DATABASES` entry in `config.yaml` connects to
-    the production Aiven Postgres through the read-only
-    `ai_agent` user — but a check at the bottom of `settings.py`
-    swaps `DATABASES` to local sqlite `db.sqlite3` whenever
-    `DEBUG` is true or `test` is in `sys.argv`. So local
-    `runserver`/`shell`/`dbshell` normally hit a scratch sqlite
-    DB; to inspect real production data (read-only, every write
-    fails with `permission denied`), set `DEBUG: false` in
-    `config.yaml` first. `manage.py test` always runs
-    on sqlite regardless.
-- Google OAuth client secrets live in `google_api/app_secrets.json`
-  locally (gitignored); DB CA cert in `ca.pem` (gitignored).
-- Virtualenv is at `venv/` (VS Code already points at it).
+- GCP Cloud Run — project `django-apps-7345`, region
+  `europe-west3`, service `django-apps` (scales 0→1).
+- Vercel — `vercel.json` + `build_files.sh`; absorbs front-end
+  traffic to keep Cloud Run inside the free tier.
 
-### Commands
+## Layout
+
+- `django_apps/` — project `settings.py`, root `urls.py`,
+  `api.py` (shared `NinjaAPI` + error contract + `SPA_BASES`),
+  `views.py` (home, `spa_shell`/`react_app`, PWA endpoints,
+  `PWA_CACHE_VERSION`), `gcp.py` (Secret Manager helper),
+  `console_tasks/build.py` (Vercel build-time generators).
+  Templates live ONLY in `django_apps/templates/` (`home.html`,
+  `spa_shell.html`, `pwa/`).
+- `google_api/` — shared Google OAuth2 platform (per-user
+  credential store, login/callback) + text-to-audio (gTTS → GCS
+  signed URLs). `utils.py` has `get_user_credentials()` /
+  `get_creds_dict()` — reuse them. See `google_api/AGENTS.md`.
+- `gmail/` — Gmail reader SPA at `/gmail/`
+  (`frontend/src/gmail/`), API at `/api/gmail/`; no models.
+  Legacy `/gmail-to-audio` 301s to `/gmail/`.
+- `google_tasks/` — largest app: Google Tasks bidirectional sync +
+  local-only features (stars, labels, dividers, archive/trash,
+  manual ordering). See `google_tasks/AGENTS.md`.
+- `finance/` — GoCardless bank data: bank linking, shared
+  accounts, transaction sync, spending limits, alerts, rule-based
+  auto-categorization (`services/rules.py`). SPA at `/finance/`,
+  API at `/api/finance/`; `views.py` keeps only
+  `requisition_callback`. See `finance/AGENTS.md`.
+- `single_pages/` — one-off pages (twister, spoki.lv proxy).
+  Backend-only Django app; SPA mounted at root paths `/twister`
+  and `/spoki/`. See `single_pages/AGENTS.md`.
+- `frontend/` — Vite 5 + React 19 + TS workspace, one entry per
+  app (`src/tasks/`, `src/finance/`, `src/gmail/`,
+  `src/single_pages/`) plus `src/shared/` (API client
+  `api/client.ts`, i18n, components). Builds to gitignored
+  `frontend_dist/`. `frontend/openapi.json` is the committed
+  django-ninja schema — regenerated by CI-checked command.
+- `terraform/` — all GCP infra (Cloud Run service + jobs, Cloud
+  Scheduler, Artifact Registry, GCS audio bucket, WIF).
+- `docs/` — `QUICKSTART.md` (deploy runbook), `changelog.md`,
+  `coding_diary.md` (dev log), `plans/` (design docs).
+
+URL routing (`django_apps/urls.py`): `google_api`, `gmail` and
+`single_pages` mount at root — single_pages owns only `/twister`,
+`/spoki/` and the `/app/*` 301s and must NEVER add a root-level
+`<path:subpath>` catch-all (it would shadow every later include);
+`google_tasks` under `/tasks/`; `finance` under `/finance/`;
+`admin/` is Django admin (also used for logout via
+`/admin/logout/`); the shared ninja API mounts at `/api/`.
+
+## Domain contract — what breaks if you get it wrong
+
+1. **Local config ↔ live resources.** `config.yaml` at repo root
+   (gitignored; template `config_template.yaml`) is the local
+   settings file. When `DEBUG` is true, `settings.py` swaps
+   `DATABASES` to local sqlite `db.sqlite3` — `runserver`,
+   `shell`, `migrate`, `test` all hit a throwaway dev DB. Setting
+   `DEBUG: false` in `config.yaml` instead connects to
+   **production Postgres via the read-only `ai_agent` user**
+   (SELECT only — every write fails `permission denied`, which is
+   intended, not a bug). Use it for investigation only; never work
+   around it with admin credentials — ask the user first.
+2. **Shared API contract.** One `NinjaAPI` in
+   `django_apps/api.py`, mounted at `/api/`; apps register a
+   `Router` in `<app>/api.py` via `api.add_router('/<entry>/', …)`
+   in `django_apps/urls.py`. Auth is session `django_auth` (CSRF
+   on unsafe methods); failures use the uniform
+   `{error: <slug>, detail}` shape; dead Google creds surface as
+   `401 {error: 'google_reauth', authorization_url}` and the SPA
+   navigates there itself. Every mutation is per-user scoped.
+3. **Per-user isolation.** Every ORM query filters
+   `user=request.user` (finance uses `for_user()` helpers that
+   include shared accounts); scope `get_object_or_404` by user.
+4. **SPA shell.** App pages are
+   `react_app(request, entry='<entry>', title=…)` served by
+   `spa_shell` (login + CSRF + `json_script` bootstrap).
+   `@login_required` covers them; a 401 from `/api/<app>/*` maps
+   back to the SPA page via `spa_url_for`/`SPA_BASES`. Keep one
+   slug everywhere: entry folder = vite input key = URL prefix =
+   `/api/<entry>/` mount.
+
+## Commands — verified
 
 ```bash
-source venv/bin/activate
+source venv/bin/activate          # venv at venv/ (Python 3.11)
 python manage.py check            # sanity check settings/imports
-python manage.py runserver        # dev server (sslserver also installed:
-                                  # runsslserver for HTTPS, needed for OAuth)
-python manage.py test <app>       # e.g. python manage.py test finance google_tasks
-                                  # runs on local sqlite automatically —
-                                  # see "Database access" hard rule
-python manage.py makemigrations   # allowed: generate files after model
-                                  # changes — but NEVER `migrate` (see below)
+python manage.py runserver        # dev server; runsslserver for
+                                  # HTTPS (needed for OAuth)
+python manage.py test <app>       # scoped per-app tests — always
+                                  # sqlite (see contract #1)
+python manage.py makemigrations   # allowed; NEVER `migrate` below
+python manage.py export_openapi_schema --output frontend/openapi.json
 python manage.py sync_bank_transactions --dry-run
 python manage.py evaluate_spending_limits
+python manage.py check_balance_alerts
 ```
 
-React dev loop (HMR, no rebuilds) — two terminals, browse `:8000`:
+Frontend (cwd `frontend/` or `npm run <script> --prefix frontend`):
 
 ```bash
-VITE_DEV=1 python manage.py runserver   # django-vite dev_mode:
-                                        # vite_asset emits :5273 URLs
-npm run dev --prefix frontend           # vite dev server on :5273
-                                        # (VITE_PORT overrides; not
-                                        # 5173 — avoids collisions
-                                        # with other projects' vite)
+npm run dev            # vite dev server on :5273 (VITE_DEV=1 pairs
+                       # it with runserver for HMR)
+npm run build          # tsc --noEmit && vite build → frontend_dist/
+npm run lint           # eslint .
+npm run format:check   # prettier --check . (CI gate)
+npm run typecheck      # tsc --noEmit
+npm test               # vitest run
+npm run i18n:check     # locale catalog drift check
+npm run gen:types      # openapi.json → src/*/api-types.ts
+npm run test:e2e       # Playwright — opt-in, needs a running
+                       # server + seeded user (see Testing)
 ```
 
-Or `npx vite build --watch` (cwd `frontend/`) + a normal `runserver`
-for manual-reload dev without the env var. Without either, Django
-serves the last-built `frontend_dist/` — editing `frontend/src/`
-alone never reaches the page. VS Code: the "Django + Vite" compound
-in `.vscode/launch.json` launches both. The PWA service worker is
-not registered on localhost (it would stale-serve vite modules).
+React dev loop (HMR): `VITE_DEV=1 python manage.py runserver` in
+one terminal, `npm run dev --prefix frontend` in another, browse
+`:8000`. Without either, Django serves the last-built
+`frontend_dist/` — editing `frontend/src/` alone never reaches the
+page. No Python linter is configured; match existing style.
 
-No linter/formatter is configured. Follow the existing style: PEP 8,
-**max line length 79 chars**, compact function-based views, double
-quotes vs single quotes are mixed — match the surrounding file.
+## Conventions / rules
 
-## Hard rules
+Universal rules — follow exactly:
 
-### Database access
+1. **Max 79 chars per line, every file type.** Verify with
+   `awk 'length > 79 {print FILENAME":"NR}' <file>`. Fix
+   violations you introduce plus long lines in files already being
+   modified.
+2. **Commit format `Type: Capitalized message`** — one of
+   Feat / Fix / Docs / Refactor / Test / Chore.
+3. **Commit on feature branches only, never `main`.** Stage only
+   files changed this session, by path — never `git add -A`, `git
+   add .` or `git commit -a`; run `git status` first and leave the
+   user's dirty files alone; never commit scratch markdown.
+4. **Never run dangerous commands**: `python manage.py migrate`
+   or anything applying migrations to a real DB (CI runs it on
+   deploy; the throwaway test DB and local `db.sqlite3` are the
+   only exceptions); `terraform apply`/`destroy`; `gcloud run
+   deploy`, `gcloud scheduler` mutations; `vercel` CLI deploys;
+   `git push` to `main` (every push deploys). If one is needed,
+   write the change and tell the user the command to run.
+5. **Run scoped tests for what you changed** — `manage.py test
+   <app>` or a single Vitest file — not the whole suite.
+6. **PR bodies go to a temp file** + `gh pr create --body-file`,
+   never inline `--body`; delete the temp file after. (See the
+   `/create-pr` skill.)
+7. **Every PR body includes a UI verification / QC section**:
+   concrete steps (page, clicks, expected result) exercising the
+   change end-to-end. Omit only when genuinely unreachable from
+   the UI — then give an equivalent (curl, log line).
+8. **`origin` is the owner's repo** (`Ted-Rose/django-apps`, no
+   upstream) — all `gh`/GitHub operations target it. `gh` must be
+   installed (`brew install gh && gh auth login`) — if it is
+   missing, tell the user instead of working around it.
+9. **No secrets in code.** Gitignored and must stay that way:
+   `config.yaml`, `private_settings.json` (legacy),
+   `google_api/app_secrets.json`, `ca.pem`,
+   `terraform/terraform.tfstate*`, `terraform/tfplan`,
+   `terraform/.terraform/`, `settings.json`, `data/`. Cloud
+   secrets come from env vars / GCP Secret Manager; never log
+   tokens.
+10. **Update the developer docs after functionality changes** —
+    the owning app's `AGENTS.md`/`README.md`, and
+    `docs/changelog.md` for user-visible changes.
+11. **Plans live in `docs/plans/` as `<feature>-plan.md`**
+    (multi-file plans get a subdirectory), each starting with a
+    status header: `Status: implemented | partial | in progress |
+    not implemented | reverted`. Older UPPERCASE files predate
+    this convention — leave them, use the convention for new ones.
+12. **Test login**: no standing test account exists. E2E seeds a
+    local staff user `e2e` / `e2e-pass` (snippet in
+    `frontend/README.md`); app login is Google OAuth (the owner's
+    account). Ask the user before creating other accounts.
+13. **This file is self-updating.** When you hit local-setup,
+    infrastructure or missing-tooling friction (a CLI that isn't
+    installed, a non-obvious way to run the project, a required
+    version/path), do not grind through failing alternatives:
+    missing tool → tell the user what to install; working flow or
+    local quirk discovered → write it into the relevant AGENTS.md
+    and commit that doc update alongside the work.
 
-- With `DEBUG` true (normal local dev), `settings.py` overrides
-  `DATABASES` to local sqlite `db.sqlite3` — `runserver`,
-  `shell`, `migrate` and friends all operate on a throwaway dev
-  DB. `migrate` against this sqlite file is fine (unlike
-  production — see "Database migrations").
-- Setting `DEBUG: false` in `config.yaml` switches
-  the local DB connection to **read-only production**:
-  `config.yaml` points at production via the
-  `ai_agent` Postgres user (SELECT only, no
-  `CREATEDB`/DDL/DML). Use it for investigation only —
-  `manage.py shell` ORM queries, `manage.py dbshell`,
-  `inspectdb`.
-- A `permission denied` write error against production is
-  intended behavior, not a bug. Never work around it by
-  switching back to admin credentials — ask the user if a write
-  is genuinely needed.
-- All testing must run against the local database: `python
-  manage.py test` is pinned to throwaway sqlite by the `DEBUG or
-  'test' in sys.argv` check in `django_apps/settings.py`. Don't
-  remove that check, and don't run tests via another runner
-  without equivalent isolation — anything else would hit (and
-  fail against, or worse, write to) production.
+Code conventions:
 
-### Database migrations
-Creating migration files is allowed and expected — after any model
-change, run `python manage.py makemigrations` (the user commits the
-generated files). Applying migrations is forbidden: never run
-`python manage.py migrate` or any equivalent command that applies
-migrations to a real database — that is managed outside of agent
-sessions. (Django's test runner applying migrations to its
-throwaway test DB is fine, as is `migrate` on the local
-`db.sqlite3` dev DB. CI deploy also runs `migrate` on the
-GitHub Actions runner — that happens in the workflow, not here.)
-
-### Documentation and planning
-When the user requests writing a plan to a markdown file, always save it
-in the `docs/plans/` directory.
-
-Example:
-- ✅ `docs/plans/FEATURE_IMPLEMENTATION_PLAN.md`
-- ❌ `FEATURE_IMPLEMENTATION_PLAN.md` (root directory)
-- ❌ `docs/FEATURE_IMPLEMENTATION_PLAN.md` (docs directory)
-
-### Secrets — never commit or print
-Gitignored and must stay that way: `config.yaml`,
-`google_api/app_secrets.json`, `ca.pem`, `terraform/terraform.tfstate*`,
-`terraform/tfplan`, `terraform/.terraform/`, `settings.json`, `data/`.
-Never log tokens/credentials; Terraform state lives in GCS backend
-(`django-apps-7345-tf-state`).
-
-## Conventions
-
-- **Views**: function-based only. `@login_required` on everything
-  user-facing; POST endpoints also get `@require_POST`. JSON endpoints
-  return `JsonResponse({'success': ...})` or `{'error': ...}` with an
-  HTTP status. **API endpoints use django-ninja** (`<app>/api.py`
-  routers on the shared `NinjaAPI` in `django_apps/api.py`, mounted
-  under `/api/<app>/`); page views stay function-based.
-- **Auth pattern for Google APIs**: services return either a result or a
-  dict `{'authorization_url', 'state', 'scopes'}` — page views redirect
-  into the OAuth flow; API endpoints surface it as a `401
-  google_reauth` JSON body (see `google_tasks/api.py` `_adapt`) and the
-  SPA navigates to `authorization_url` itself.
-- **Per-user isolation**: every query filters by `user=request.user`;
-  finance uses `for_user()` queryset helpers that include shared
-  accounts. Always scope `get_object_or_404` by user.
+- **Views**: function-based only; `@login_required` on everything
+  user-facing; POST endpoints also get `@require_POST`. JSON
+  endpoints return `JsonResponse({'success': ...})` or
+  `{'error': ...}` with an HTTP status. API endpoints use
+  django-ninja routers (`<app>/api.py`).
+- **Google API auth**: services return either a result or
+  `{'authorization_url', 'state', 'scopes'}`; page views redirect
+  into OAuth, API endpoints surface `401 google_reauth`
+  (`_adapt`/`_creds_or_reauth` in the app `api.py`).
 - **Navigation**: views build a `burger_menu_items` list of dicts
   (`label`, `url`, `icon`, `btn_class`) rendered by
-  `django_apps/templates/components/burger_menu.html`. Copy this pattern
-  for new pages.
-- **Templates/static**: Bootstrap 5 + Bootstrap Icons via CDN;
-  templates live only in `django_apps/templates/` (home.html,
-  spa_shell.html, pwa/) — every app UI is the React SPA (below).
-- **Sync pattern**: external objects are mirrored locally via
-  `update_or_create` keyed on the remote ID (`task_id`, `list_id`,
-  `transaction_id`, `account_id`, `requisition_id` are unique-ish keys).
+  `django_apps/templates/components/burger_menu.html`.
+- **Templates/static**: Bootstrap 5 + Bootstrap Icons via CDN.
+  Every app UI is the React SPA — new apps are React-first (no
+  templates, no app `static/`, no form-POST views); follow the
+  `/new-react-app` skill checklist.
+- **Sync pattern**: external objects are mirrored via
+  `update_or_create` keyed on the remote ID (`task_id`,
+  `list_id`, `transaction_id`, `account_id`, `requisition_id`).
 - **Logging**: `logging.getLogger('django')` in all apps.
-- **Tests**: Django `TestCase` in each app's `tests.py`; factory helper
-  functions (`make_*`) instead of fixtures; mock external APIs with
-  `unittest.mock.patch`.
-- **React SPA mounts**: `django_apps.views.spa_shell(request, entry,
-  title)` renders `spa_shell.html` (login + CSRF + `json_script`
-  bootstrap) for a `frontend/src/<entry>/main.tsx` Vite entry. The
-  google_tasks, finance, gmail and single_pages cutovers are
-  complete: `/tasks/`, `/finance/` and `/gmail/` ARE the SPAs
-  (`BrowserRouter basename='/<app>'`), `<path:subpath>` catch-alls
-  serve deep links, non-GET/HEAD requests to the old mutation URLs
-  404, and `/<app>/app/*` 301-redirects to `/<app>/*` (gmail's
-  legacy `/gmail-to-audio` 301s to `/gmail/` instead — it never had
-  a staging mount). single_pages is the root-mounted exception: the
-  shell serves only the explicit `/twister` + `/spoki/` routes (no
-  basename, no root catch-all) and `/app/*` 301s to `/*`; a 401 from
-  `/api/single_pages/*` collapses to `/twister` via `SPA_BASES`.
-  New apps should mount the shell at `/<app>/` the same way —
-  mutations live in the ninja API (`<app>/api.py` →
-  `/api/<app>/…`); see `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md`.
-- **New apps are React-first** — no templates, no app `static/`, no
-  form-POST views; go straight to the post-cutover shape. Canonical
-  checklist (full playbook: the `/new-react-app` skill at
-  `.devin/skills/new-react-app/SKILL.md`):
-  `startapp` + `INSTALLED_APPS` → `<app>/urls.py` mounting
-  `partial(react_app, entry='<entry>', title=…)` on `''` +
-  `'<path:subpath>'` → `<app>/api.py` ninja `Router` (mutations
-  implemented directly there, `{'success', 'message'}` responses,
-  per-user-scoped querysets) → `api.add_router('/<entry>/', …)` +
-  `path('<entry>/', include(...))` in `django_apps/urls.py` →
-  `frontend/src/<entry>/` entry (copy `src/finance/`:
-  main.tsx/App.tsx/api.ts/mutations.ts/routes/, `BrowserRouter
-  basename='/<entry>'`, query keys `['<entry>']`) → vite input +
-  `gen:types` output → bump `PWA_CACHE_VERSION` → tests (Django
-  TestCase on `/api/`, Vitest, Playwright smoke) → AGENTS.md repo
-  map + `<app>/AGENTS.md`. Keep one slug everywhere: entry folder =
-  vite input key = URL prefix = `/api/<entry>/` mount. Public
-  pages use `react_app_public` + `auth=None` (deliberate, not the
-  default); root-mounted legacy deviations use `SPA_BASES` in
-  `spa_url_for` — see the playbook's naming invariants.
+- **Tests**: Django `TestCase` in each app's `tests.py`; factory
+  helpers (`make_*`) instead of fixtures; mock external APIs with
+  `unittest.mock.patch`. Frontend: Vitest `*.test.ts(x)` colocated
+  in `frontend/src/`.
+
+## Known gaps (do NOT "fix" without asking)
+
+- google_tasks trash advertises "auto-purged after 30 days" in UI
+  text and `help_text`, but **no purge job exists** — rows stay
+  until `permanent_delete_task_view` runs.
+- google_tasks `models.py` has per-user ordering constraints
+  **commented out** pending a follow-up migration — keep the
+  two-phase `bulk_update` reorder pattern regardless.
+- Vercel **preview** deploys fail on every branch (env vars are
+  Production-scoped) — only production deploys are a usable
+  signal.
+- `CONN_MAX_AGE` is forced to 0 on cloud deploys — deliberate;
+  Aiven's low `max_connections` is shared between Cloud Run and
+  Vercel lambdas ("remaining connection slots are reserved…"
+  means it was exhausted; the fix is PgBouncer, not longer-lived
+  connections).
+- `OAUTHLIB_INSECURE_TRANSPORT=1` and `OAUTHLIB_RELAX_TOKEN_SCOPE=1`
+  are set at `google_api.utils` import time — needed for local dev
+  and incremental scopes.
+- `text_to_audio` requires `GCS_AUDIO_BUCKET` + GCP credentials —
+  cannot work in pure local dev.
+- Google Tasks API limits (no reminders, date-only `due`, no
+  move-between-lists op) are worked around deliberately — see
+  `google_tasks/AGENTS.md`.
+- single_pages deep links like `/twister/foo` 404 on purpose (no
+  root catch-all, contract #4 / single_pages AGENTS.md).
+- Twister is Latvian-only with i18n lint disabled per-file —
+  deliberate.
+
+## Testing
+
+- Backend: `python manage.py test <app>` — always runs on
+  throwaway sqlite (the `DEBUG or 'test' in sys.argv` swap in
+  `settings.py`); never point tests at another runner or DB.
+- Frontend: `npm test` (Vitest, jsdom) — or scope to a file:
+  `npx vitest run src/tasks/reorder.test.ts` from `frontend/`.
+- CI gates on every PR (`frontend.yml`): `npm run lint`,
+  `format:check`, `typecheck`, `test`, plus two drift checks —
+  `frontend/openapi.json` must match
+  `manage.py export_openapi_schema` output (ninja ships the
+  command) and `src/*/api-types.ts` must match `npm run
+  gen:types`. Regenerate both when you touch any `*/api.py`.
+- E2E: `npm run test:e2e` (Playwright, `frontend/tests/e2e/`) is
+  opt-in — NOT in `npm test` or CI. Needs `npm run build`,
+  `runserver` on :8000, and a seeded staff user
+  (`E2E_USERNAME`/`E2E_PASSWORD`; seed snippet in
+  `frontend/README.md`). Authenticated specs skip without them.
+- No currently known pre-existing test failures; if you hit one,
+  confirm it fails on a clean `main` checkout before assuming
+  your change caused it.
 
 ## Deployment & CI
 
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
-  Artifact Registry → `manage.py migrate` runs on the GitHub Actions
-  runner (secrets fetched from GCP Secret Manager via WIF) →
-  `gcloud run deploy django-apps`. Dockerfile has a `node:22-slim`
-  stage that builds `frontend_dist/` (Vite) before collectstatic.
-- Vercel deploys the same repo automatically via its GitHub
-  integration (no GitHub Actions involved) and serves front-end
-  traffic to keep Cloud Run costs down. `build_files.sh` runs
-  `npm ci --include=dev` + `npm run build --prefix frontend` before
-  collectstatic, then deletes `frontend/node_modules` so the Python
-  lambda stays under `maxLambdaSize` — verified: `frontend_dist/`
-  generated at build time IS bundled into the lambda, so
-  `{% vite_asset %}` resolves `manifest.json` there. Vercel
-  **preview** deploys fail on every branch (env vars look
-  Production-scoped); only production deploys are a usable signal.
-- `terraform.yml` plans on PRs touching `terraform/`, applies on main.
-- Both workflows share `concurrency: gcp-main` — intentional, they
-  mutate the same Cloud Run resources.
-- Auth to GCP uses Workload Identity Federation (no service-account
-  keys).
-- Cloud Run service: `django-apps`, scales 0→1, unauthenticated access
-  allowed (app does its own auth), image tag `latest` is what Cloud Run
-  actually runs.
-- Scheduled jobs (`sync-bank-transactions` at 02:00 UTC,
-  `evaluate-spending-limits` at 02:30 UTC) run daily: Cloud Scheduler
-  → Cloud Run jobs (`terraform/cloud_run_jobs.tf`, `paused = false`).
-  To save costs set `paused = true`; they can also be run manually
-  via `manage.py sync_bank_transactions` / `evaluate_spending_limits`.
-- Cost goal: keep production within the GCP free tier — Cloud Run
-  scales 0→1 and Vercel absorbs front-end traffic for that reason.
-  Prefer free-tier-friendly choices when changing infra.
-- `bootstrap_gcp.sh` = one-time GCP setup; `migrate_to_django_apps.sh` =
-  move infra to a new GCP project. Both are stale (see the appendix of
-  `docs/plans/MIGRATION.md`) — for a fresh project follow
-  `docs/plans/MIGRATION.md` Phase 4, which pre-applies the
-  `cloudrun-sa` + `secretAccessor` IAM grant before the full apply.
-  Cloud Run's SecretsAccessCheck runs once at revision creation and
-  never retries; a revision stuck `SecretsAccessCheckFailed` must be
-  deleted and re-created (`docs/plans/GCP_MIGRATION_SECRETS_RACE.md`).
-- Dockerfile builds `collectstatic` against a dummy
-  `config.yaml` created at build time — keep that block
-  strict, a silent failure ships a site with no CSS/JS.
+  Artifact Registry → `manage.py migrate` on the Actions runner
+  (secrets via WIF) → `gcloud run deploy django-apps`. Dockerfile
+  builds `frontend_dist/` in a `node:22-slim` stage before
+  collectstatic; its build-time dummy `config.yaml` block must
+  stay strict — a silent failure ships a site with no CSS/JS.
+- `frontend.yml` runs on PRs and main pushes; `terraform.yml`
+  plans on PRs touching `terraform/` and applies on main. Both
+  share `concurrency: gcp-main` with deploy — intentional.
+- Vercel deploys via its GitHub integration (not Actions);
+  `build_files.sh` runs `npm ci --include=dev` +
+  `npm run build --prefix frontend`, then deletes
+  `frontend/node_modules` so the lambda stays under
+  `maxLambdaSize`.
+- Scheduled Cloud Run jobs (Cloud Scheduler →
+  `terraform/cloud_run_jobs.tf`): `sync-bank-transactions` 02:00
+  UTC, `evaluate-spending-limits` 02:30 UTC daily.
+- GCP auth uses Workload Identity Federation (no SA keys). Cost
+  goal: stay in the GCP free tier — prefer free-tier-friendly
+  infra choices.
 
 ## Gotchas
 
-- Google credential datetimes: Google auth lib expects **naive UTC**,
-  Django stores **aware** — `google_api/utils.py` converts both
-  directions. Reuse `get_user_credentials()` / `get_creds_dict()`;
-  don't build `Credentials` objects manually.
-- Google Tasks API limitations: no reminders, `due` is date-only, no
-  move-between-lists op (code does get+insert+delete), limited batching.
-- `OAUTHLIB_INSECURE_TRANSPORT=1` and `OAUTHLIB_RELAX_TOKEN_SCOPE=1`
-  are set at `google_api.utils` import time (needed for local dev and
-  incremental scopes).
-- `text_to_audio` requires `GCS_AUDIO_BUCKET` + GCP credentials — it
-  cannot work in pure local dev.
-- Both Vercel and Cloud Run share one Aiven Postgres with a low
-  `max_connections` on small plans — exhausted slots surface as
-  "remaining connection slots are reserved for non-replication
-  superuser connections". Keep `CONN_MAX_AGE=0` on Vercel; if it
-  resurfaces, point `DATABASE_URL` at Aiven's PgBouncer pool.
-- google_tasks trash is advertised as "auto-purged after 30 days" in UI
-  text and model help_text, but **no purge job exists** — items stay
-  until `permanent_delete_task_view` runs.
+- Google credential datetimes: google-auth expects naive UTC,
+  Django stores aware — `google_api/utils.py` converts both ways;
+  reuse `get_user_credentials()`/`get_creds_dict()`.
+- Cloud settings write `GOOGLE_OAUTH_CLIENT_JSON` →
+  `/tmp/app_secrets.json` and (Vercel only)
+  `GCP_SERVICE_ACCOUNT_JSON` → `/tmp/gcp_service_account.json` +
+  `GOOGLE_APPLICATION_CREDENTIALS` at settings import.
+- Missing `config.yaml` locally → insecure dev defaults (sqlite,
+  `DEBUG=True`) with a warning — enough for `check`/`test`, not
+  for real data work.
+- The PWA service worker is not registered on localhost (it would
+  stale-serve vite modules). Bump `PWA_CACHE_VERSION` in
+  `django_apps/views.py` when shipping frontend changes.
 
 ## Where to look first
 
-- App behavior details: `google_api/README.md`, `google_tasks/README.md`
-  (very thorough), `single_pages/README.MD`
-- Infra/deploy: `docs/QUICKSTART.md`, `terraform/`
-- Past design docs: `docs/plans/`, `.research/`
+- App behavior: `<app>/AGENTS.md`, `google_tasks/README.md` (very
+  thorough), `google_api/README.md`, `single_pages/README.MD`.
+- Infra/deploy: `docs/QUICKSTART.md`, `terraform/`,
+  `.github/workflows/`.
+- Past design docs: `docs/plans/`, `.research/`.
+- Repo skills: `.devin/skills/` (`new-react-app`,
+  `fix-good-first-issue`, `implement-plan`, `create-pr`).
