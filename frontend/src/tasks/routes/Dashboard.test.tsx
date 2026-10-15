@@ -242,9 +242,7 @@ describe('Dashboard', () => {
     renderDashboard();
     await screen.findByText('No tasks found');
     fireEvent.click(screen.getByRole('button', { name: 'Toggle menu' }));
-    expect(
-      screen.getByRole('button', { name: 'Stats' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stats' })).toBeInTheDocument();
   });
 
   it('hides the Stats burger item without credentials', async () => {
