@@ -1,7 +1,6 @@
 import os
 import re
 import textwrap
-import json
 from django.conf import settings
 from pathlib import Path
 
@@ -43,22 +42,16 @@ def create_ca_pem():
         print("Environment variable 'capem' is not set.")
 
 
-def create_private_settings_json():
-    print("Starting to create 'private_settings.json'...")
-    private_settings_str = os.environ.get('private_settings')
-    if private_settings_str:
-        try:
-            print("private_settings content found")
-            private_settings = json.loads(private_settings_str)
-
-            file_path = os.path.join(BASE_DIR, 'private_settings.json')
-            with open(file_path, 'w') as file:
-                json.dump(private_settings, file, indent=4)
-            print(f"'private_settings.json' has been created at {file_path}.")
-        except json.JSONDecodeError as e:
-            print(f"Error decoding 'private_settings': {e}")
+def create_config_yaml():
+    print("Starting to create 'config.yaml'...")
+    config_yaml_str = os.environ.get('config_yaml')
+    if config_yaml_str:
+        file_path = os.path.join(BASE_DIR, 'config.yaml')
+        with open(file_path, 'w') as file:
+            file.write(config_yaml_str)
+        print(f"'config.yaml' has been created at {file_path}.")
     else:
-        print("Environment variable 'private_settings' is not set.")
+        print("Environment variable 'config_yaml' is not set.")
 
 
 def compile_po():
@@ -85,5 +78,5 @@ def compile_po():
 
 
 create_ca_pem()
-create_private_settings_json()
+create_config_yaml()
 compile_po()

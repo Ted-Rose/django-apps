@@ -15,7 +15,7 @@ else
   python3 -m pip install -r requirements.txt
 fi
 
-python3 django_apps/console_tasks/build.py create_ca_pem create_private_settings_json
+python3 django_apps/console_tasks/build.py create_ca_pem create_config_yaml
 
 # Build the React frontend → frontend_dist/ (a STATICFILES_DIRS entry,
 # so collectstatic ships it to the CDN below).

@@ -13,12 +13,11 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import os
 import sys
-import json
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-PRIVATE_SETTINGS_JSON_PATH = os.path.join(BASE_DIR, 'private_settings.json')
+CONFIG_YAML_PATH = os.path.join(BASE_DIR, 'config.yaml')
 
 
 def _is_gcp_environment():
@@ -94,34 +93,29 @@ if IS_CLOUD_ENVIRONMENT:
                 f.write(gcp_sa_json)
         os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = gcp_creds_path
 
-elif os.path.isfile(PRIVATE_SETTINGS_JSON_PATH):
-    with open(PRIVATE_SETTINGS_JSON_PATH, 'r') as file:
-        private_settings = json.load(file)
-        SECRET_KEY = private_settings.get('SECRET_KEY')
-        DEBUG = private_settings.get('DEBUG')
-        BASE_URL = private_settings.get('BASE_URL')
-        DATABASES = private_settings.get('DATABASES')
-        GOCARDLESS_SECRET_ID = private_settings.get(
-            'GOCARDLESS_SECRET_ID'
-        )
-        GOCARDLESS_SECRET_KEY = private_settings.get(
-            'GOCARDLESS_SECRET_KEY'
-        )
-        VAPID_PUBLIC_KEY = private_settings.get('VAPID_PUBLIC_KEY', '')
-        VAPID_PRIVATE_KEY = private_settings.get(
-            'VAPID_PRIVATE_KEY', ''
-        )
-        VAPID_SUBJECT = private_settings.get('VAPID_SUBJECT', '')
+elif os.path.isfile(CONFIG_YAML_PATH):
+    import yaml
+    with open(CONFIG_YAML_PATH, 'r') as file:
+        config = yaml.safe_load(file)
+    SECRET_KEY = config.get('SECRET_KEY')
+    DEBUG = config.get('DEBUG')
+    BASE_URL = config.get('BASE_URL')
+    DATABASES = config.get('DATABASES')
+    GOCARDLESS_SECRET_ID = config.get('GOCARDLESS_SECRET_ID')
+    GOCARDLESS_SECRET_KEY = config.get('GOCARDLESS_SECRET_KEY')
+    VAPID_PUBLIC_KEY = config.get('VAPID_PUBLIC_KEY', '')
+    VAPID_PRIVATE_KEY = config.get('VAPID_PRIVATE_KEY', '')
+    VAPID_SUBJECT = config.get('VAPID_SUBJECT', '')
     GOOGLE_APP_SECRETS_PATH = os.path.join(
         BASE_DIR, 'google_api', 'app_secrets.json'
     )
 else:
     # Local fallback when neither GCP env vars nor
-    # private_settings.json are available (fresh clones, CI).
+    # config.yaml are available (fresh clones, CI).
     # Uses safe dev defaults so manage.py commands still work.
     import warnings
     warnings.warn(
-        'private_settings.json not found and no GCP environment '
+        'config.yaml not found and no GCP environment '
         'detected - falling back to insecure local dev defaults '
         '(sqlite db.sqlite3, DEBUG=True).'
     )
@@ -153,11 +147,11 @@ else:
     )
 
 # DEBUG (local dev) and tests always run on a local sqlite DB:
-# the private_settings.json connection is a read-only user against
+# the config.yaml connection is a read-only user against
 # production that cannot create the test database, and a dev server
 # should never write to production. The read-only production
 # connection is reachable only via DEBUG=false in
-# private_settings.json.
+# config.yaml.
 if DEBUG or 'test' in sys.argv:
     DATABASES = {
         'default': {
@@ -302,7 +296,7 @@ STATICFILES_DIRS = [
     ) if os.path.isdir(p)
 ]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles', 'static')
-# collectstatic silently fails in Docker build (no private_settings.json
+# collectstatic silently fails in Docker build (no config.yaml
 # available at build time), so STATIC_ROOT stays empty. WHITENOISE_USE_FINDERS
 # tells WhiteNoise to also scan STATICFILES_DIRS (i.e. static/) directly,
 # which IS committed to git and present in the container.

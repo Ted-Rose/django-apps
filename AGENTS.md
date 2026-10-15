@@ -53,20 +53,20 @@ root — single_pages owns `/twister`, `/spoki/` and the `/app/*`
     `google.auth.default()`. `CONN_MAX_AGE` is 0 on both — serverless
     instances must not hold persistent connections or they exhaust
     Aiven's `max_connections`.
-  - Local: reads `private_settings.json` at repo root (gitignored;
-    template: `private_settings_template.json`). If the file is
+  - Local: reads `config.yaml` at repo root (gitignored;
+    template: `config_template.yaml`). If the file is
     missing, settings fall back to env vars, then insecure dev
     defaults (sqlite `db.sqlite3`, `DEBUG=True`) with a warning —
     enough for `check`/`test`, not for real data work.
-  - The `DATABASES` entry in `private_settings.json` connects to
+  - The `DATABASES` entry in `config.yaml` connects to
     the production Aiven Postgres through the read-only
     `ai_agent` user — but a check at the bottom of `settings.py`
     swaps `DATABASES` to local sqlite `db.sqlite3` whenever
     `DEBUG` is true or `test` is in `sys.argv`. So local
     `runserver`/`shell`/`dbshell` normally hit a scratch sqlite
     DB; to inspect real production data (read-only, every write
-    fails with `permission denied`), set `"DEBUG": false` in
-    `private_settings.json` first. `manage.py test` always runs
+    fails with `permission denied`), set `DEBUG: false` in
+    `config.yaml` first. `manage.py test` always runs
     on sqlite regardless.
 - Google OAuth client secrets live in `google_api/app_secrets.json`
   locally (gitignored); DB CA cert in `ca.pem` (gitignored).
@@ -119,9 +119,9 @@ quotes vs single quotes are mixed — match the surrounding file.
   `shell`, `migrate` and friends all operate on a throwaway dev
   DB. `migrate` against this sqlite file is fine (unlike
   production — see "Database migrations").
-- Setting `"DEBUG": false` in `private_settings.json` switches
+- Setting `DEBUG: false` in `config.yaml` switches
   the local DB connection to **read-only production**:
-  `private_settings.json` points at production via the
+  `config.yaml` points at production via the
   `ai_agent` Postgres user (SELECT only, no
   `CREATEDB`/DDL/DML). Use it for investigation only —
   `manage.py shell` ORM queries, `manage.py dbshell`,
@@ -158,7 +158,7 @@ Example:
 - ❌ `docs/FEATURE_IMPLEMENTATION_PLAN.md` (docs directory)
 
 ### Secrets — never commit or print
-Gitignored and must stay that way: `private_settings.json`,
+Gitignored and must stay that way: `config.yaml`,
 `google_api/app_secrets.json`, `ca.pem`, `terraform/terraform.tfstate*`,
 `terraform/tfplan`, `terraform/.terraform/`, `settings.json`, `data/`.
 Never log tokens/credentials; Terraform state lives in GCS backend
@@ -273,7 +273,7 @@ Never log tokens/credentials; Terraform state lives in GCS backend
   never retries; a revision stuck `SecretsAccessCheckFailed` must be
   deleted and re-created (`docs/plans/GCP_MIGRATION_SECRETS_RACE.md`).
 - Dockerfile builds `collectstatic` against a dummy
-  `private_settings.json` created at build time — keep that block
+  `config.yaml` created at build time — keep that block
   strict, a silent failure ships a site with no CSS/JS.
 
 ## Gotchas

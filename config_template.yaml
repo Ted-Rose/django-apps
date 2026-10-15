@@ -1,0 +1,21 @@
+# Local development settings — copy to config.yaml and fill in.
+# config.yaml is gitignored; never commit real values.
+DATABASES:
+  default:
+    ENGINE: django.db.backends.postgresql
+    NAME: django_apps
+    USER: my_username
+    PASSWORD: my_password
+    HOST: superhost.com
+    PORT: "9999"
+    OPTIONS:
+      sslmode: verify-full
+      sslrootcert: /path/to/ca.pem
+DEBUG: true
+SECRET_KEY: safe_key
+BASE_URL: https://127.0.0.1:8000
+GOCARDLESS_SECRET_ID: your_gocardless_secret_id
+GOCARDLESS_SECRET_KEY: your_gocardless_secret_key
+VAPID_PUBLIC_KEY: your_vapid_public_key
+VAPID_PRIVATE_KEY: your_vapid_private_key
+VAPID_SUBJECT: mailto:you@example.com

@@ -14,7 +14,7 @@ Django's `<path:subpath>` catch-all already serves the shell on every
 
 | Variable | Value | Notes |
 |---|---|---|
-| `DJANGO_SECRET_KEY` | same as Cloud Run's `django-secret-key` | copy from GCP Secret Manager or local `private_settings.json` → `SECRET_KEY` |
+| `DJANGO_SECRET_KEY` | same as Cloud Run's `django-secret-key` | copy from GCP Secret Manager or local `config.yaml` → `SECRET_KEY` |
 | `APP_BASE_URL` | `https://<your-vercel-domain>` (e.g. `https://tedisrozenfelds.vercel.app`) | **Must match the host serving the traffic.** GoCardless bakes `{BASE_URL}/finance/callback/` into the requisition; if a user starts Connect Bank on Vercel but `APP_BASE_URL` points at Cloud Run, the callback lands there and the session cookie is gone → "No pending bank connection found." |
 | `DATABASE_URL` | Aiven Postgres URL, e.g. `postgres://user:pass@host:port/db?sslmode=verify-full&sslrootcert=<path-to-ca.pem>` | Same DB as Cloud Run. `sslmode` defaults to `require` if unset; `verify-full` needs the `ca.pem` generated at build time from `capem` (written to the repo root, i.e. `/var/task/ca.pem` in the lambda). `CONN_MAX_AGE=0` is automatic on Vercel — keep it that way to protect Aiven's `max_connections`. |
 | `GOOGLE_OAUTH_CLIENT_JSON` | full contents of `google_api/app_secrets.json` | written to `/tmp/app_secrets.json` at settings import |
@@ -34,7 +34,7 @@ not set it manually; it's what puts `settings.py` into cloud mode.
 | Variable | Value | Notes |
 |---|---|---|
 | `capem` | full PEM text of the Aiven project CA certificate | parsed and written to `ca.pem` during build (needed only if `DATABASE_URL` uses `sslmode=verify-full`) |
-| `private_settings` | JSON blob of `private_settings.json` | written to `private_settings.json` during build. Effectively redundant while `VERCEL=1` is set (cloud env vars take precedence), but the build script still generates it — keep it in sync if you set it |
+| `config_yaml` | YAML text of `config.yaml` | written to `config.yaml` during build. Effectively redundant while `VERCEL=1` is set (cloud env vars take precedence), but the build script still generates it — keep it in sync if you set it |
 
 ## Scope settings
 

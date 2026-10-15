@@ -10,6 +10,7 @@ settings.json
 ca.pem
 data/
 staticfiles
+config.yaml
 private_settings.json
 
 terraform/.terraform/

@@ -34,12 +34,12 @@ COPY --from=frontend /frontend_dist /app/frontend_dist
 RUN python django_apps/console_tasks/build.py
 
 # collectstatic needs settings to import, which requires
-# private_settings.json (dockerignored). Create a build-time dummy,
+# config.yaml (dockerignored). Create a build-time dummy,
 # collect, then remove it — the GCP runtime uses env vars instead.
 # Keep this strict: a silent failure here ships a site with no JS/CSS.
-RUN python -c "import json; json.dump({'SECRET_KEY': 'build-time-dummy', 'DEBUG': False, 'BASE_URL': '', 'DATABASES': {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}}, open('private_settings.json', 'w'))" \
+RUN python -c "import yaml; yaml.safe_dump({'SECRET_KEY': 'build-time-dummy', 'DEBUG': False, 'BASE_URL': '', 'DATABASES': {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}}, open('config.yaml', 'w'))" \
     && python manage.py collectstatic --noinput \
-    && rm private_settings.json
+    && rm config.yaml
 
 EXPOSE 8080
 

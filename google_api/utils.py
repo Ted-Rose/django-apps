@@ -494,7 +494,7 @@ def google_auth(creds=None, scopes=None, user=None):
                 # opaque 'invalid_request' error.
                 raise ImproperlyConfigured(
                     'BASE_URL is not set - configure APP_BASE_URL '
-                    '(env var or private_settings.json) with the '
+                    '(env var or config.yaml) with the '
                     'full site URL, e.g. https://example.com'
                 )
             flow = InstalledAppFlow.from_client_secrets_file(

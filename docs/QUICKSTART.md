@@ -30,7 +30,7 @@ This creates all GCP resources, secrets, and infrastructure.
 
 ```bash
 # Verify secrets are NOT staged
-git status | grep -E "(GCP_DEPLOYMENT_PLAN|private_settings|ca.pem|app_secrets)"
+git status | grep -E "(GCP_DEPLOYMENT_PLAN|config.yaml|ca.pem|app_secrets)"
 # Should return nothing
 
 # Stage changes
@@ -77,7 +77,7 @@ openssl ec -in private_key.pem -outform DER \
                                # -> VAPID_PRIVATE_KEY
 ```
 
-Put the same values in local `private_settings.json`, then create
+Put the same values in local `config.yaml`, then create
 the secrets like the bootstrap script:
 
 ```bash

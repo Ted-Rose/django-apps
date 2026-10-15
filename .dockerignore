@@ -25,7 +25,7 @@ db.sqlite3
 *.swp
 *.swo
 *~
-private_settings.json
+config.yaml
 google_api/app_secrets.json
 ca.pem
 GCP_DEPLOYMENT_PLAN.md
