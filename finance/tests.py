@@ -2011,8 +2011,11 @@ class CategoryOverviewViewTests(TestCase):
         groceries = next(
             row for row in rows if row['category_name'] == 'Groceries'
         )
-        # Money serializes as a JSON string (DjangoJSONEncoder).
-        self.assertEqual(groceries['spent'], '10.00')
+        # Money serializes as a JSON string; sqlite drops the
+        # decimal scale ('10' vs '10.00') — compare numerically.
+        self.assertEqual(
+            Decimal(groceries['spent']), Decimal('10.00')
+        )
         self.assertEqual(groceries['category_color'], '#00ff00')
         # The SPA's drill-down sends category_id back as ?category=;
         # the uncategorized bucket is NULL (→ 'none' client-side).
@@ -2023,6 +2026,64 @@ class CategoryOverviewViewTests(TestCase):
             if row['category_name'] == 'Uncategorized'
         )
         self.assertIsNone(uncategorized['category_id'])
+
+    def test_last_year_preset_and_monthly_breakdown(self):
+        today = timezone.now().date()
+        cat = make_category(self.user, 'Groceries')
+        tx = make_transaction(self.account, 't-1', '-10.00', days_ago=40)
+        make_assignment(self.user, tx, cat)
+        # Well outside the round-year window.
+        make_transaction(self.account, 't-old', '-99.00', days_ago=400)
+        self.client.force_login(self.user)
+
+        body = self.client.get(
+            '/api/finance/categories/overview/'
+        ).json()
+        preset = next(
+            p for p in body['periods'] if p['key'] == 'lastYear'
+        )
+        month_start = today.replace(day=1)
+        prev_end = month_start - timezone.timedelta(days=1)
+        self.assertEqual(preset['date_to'], prev_end.isoformat())
+        self.assertEqual(
+            preset['date_from'],
+            month_start.replace(
+                year=month_start.year - 1
+            ).isoformat(),
+        )
+        self.assertFalse(preset['active'])
+
+        # Selecting the preset's window marks it active and
+        # yields a full year of month columns; the out-of-window
+        # transaction is filtered out like the main rows.
+        body = self.client.get(
+            '/api/finance/categories/overview/'
+            f'?from={preset["date_from"]}&to={preset["date_to"]}'
+        ).json()
+        preset = next(
+            p for p in body['periods'] if p['key'] == 'lastYear'
+        )
+        self.assertTrue(preset['active'])
+        monthly = body['monthly']
+        self.assertEqual(len(monthly['months']), 12)
+        month_key = (
+            today - timezone.timedelta(days=40)
+        ).strftime('%Y-%m')
+        self.assertEqual(len(monthly['rows']), 1)
+        row = monthly['rows'][0]
+        self.assertEqual(row['category_name'], 'Groceries')
+        self.assertEqual(
+            Decimal(row['months'][month_key]), Decimal('10.00')
+        )
+        self.assertEqual(Decimal(row['total']), Decimal('10.00'))
+        self.assertEqual(
+            Decimal(monthly['totals']['EUR']['months'][month_key]),
+            Decimal('10.00'),
+        )
+        self.assertEqual(
+            Decimal(monthly['totals']['EUR']['total']),
+            Decimal('10.00'),
+        )
 
 
 class RuleViewTests(TestCase):
@@ -3405,14 +3466,16 @@ class ExcludedCategoryOverviewTests(TestCase):
         self.assertTrue(rows['Excluded']['is_excluded'])
         self.assertFalse(rows['Groceries']['is_excluded'])
         # The row keeps its own sums + tx count for drill-down…
-        self.assertEqual(rows['Excluded']['spent'], '200.00')
+        # (numeric compares — sqlite drops the decimal scale).
+        self.assertEqual(
+            Decimal(rows['Excluded']['spent']), Decimal('200.00')
+        )
         self.assertEqual(rows['Excluded']['tx_count'], 1)
         self.assertEqual(rows['Excluded']['share'], 0)
         # …but the totals (StatCards) and share math skip it.
-        self.assertEqual(
-            response.json()['totals'],
-            {'EUR': {'spent': '80.00', 'received': '0'}},
-        )
+        totals = response.json()['totals']['EUR']
+        self.assertEqual(Decimal(totals['spent']), Decimal('80.00'))
+        self.assertEqual(Decimal(totals['received']), Decimal('0'))
         self.assertEqual(rows['Groceries']['share'], 100)
         # Excluded rows sort last.
         names = [
@@ -3433,4 +3496,4 @@ class ExcludedCategoryOverviewTests(TestCase):
             f'{self.API}/categories/overview/'
         )
         row = response.json()['rows'][0]
-        self.assertEqual(row['spent'], '60.00')
+        self.assertEqual(Decimal(row['spent']), Decimal('60.00'))

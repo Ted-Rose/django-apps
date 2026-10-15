@@ -375,10 +375,46 @@ class ShareTargetOut(Schema):
     accounts: List[str] = []
 
 
+class MonthlyRowOut(Schema):
+    """One category's per-month spend inside the selected window."""
+    category_id: Optional[int] = None
+    category_name: str
+    category_key: Optional[str] = None
+    category_color: str
+    is_excluded: bool = False
+    currency: str
+    # 'YYYY-MM' → spent (positive); months with nothing spent are
+    # absent so the SPA renders a dash.
+    months: Dict[str, Decimal]
+    total: Decimal
+
+
+class MonthlyTotalOut(Schema):
+    months: Dict[str, Decimal]
+    total: Decimal
+
+
+class MonthlyBreakdownOut(Schema):
+    """Per-category-per-month spending matrix for the window.
+
+    Shown by the SPA under the breakdown table when the "Last
+    year" preset is active — `months` lists every 'YYYY-MM'
+    column chronologically (the whole bounded window, or just
+    the months with data when unbounded) and `totals` keeps the
+    per-currency overall spending row.
+    """
+    months: List[str]
+    rows: List[MonthlyRowOut]
+    # currency → per-month spent + grand total; excluded
+    # categories contribute nothing, like `totals` above.
+    totals: Dict[str, MonthlyTotalOut]
+
+
 class CategoryOverviewOut(Schema):
     rows: List[CategoryRowOut]
     totals: Dict[str, CurrencyTotalOut]
     periods: List[PeriodOut]
+    monthly: MonthlyBreakdownOut
     date_from: str
     date_to: str
     accounts: List[AccountOptionOut]
@@ -971,12 +1007,93 @@ def category_overview(request,
         total = totals[row['currency']]['spent']
         row['share'] = row['spent'] / total * 100 if total else 0
 
+    # Same window grouped per calendar month — the SPA's "Last
+    # year" matrix. Spending only: groups with no outgoing money
+    # get no row; excluded categories keep a muted row but feed
+    # no totals, matching the main table.
+    monthly_grouped = (
+        transactions
+        .annotate(month=TruncMonth('occurrence_date'))
+        .values('effective_category_id', 'currency', 'month')
+        .annotate(
+            spent=Sum(
+                'counted_amount',
+                filter=Q(counted_amount__lt=0),
+            ),
+        )
+        .order_by()
+    )
+    monthly_by_key = {}
+    data_months = set()
+    for mrow in monthly_grouped:
+        period = mrow['month']
+        if isinstance(period, datetime):
+            period = period.date()
+        month_key = period.strftime('%Y-%m')
+        data_months.add(month_key)
+        spent = -(mrow['spent'] or 0)
+        if not spent:
+            continue
+        key = (mrow['effective_category_id'], mrow['currency'])
+        entry = monthly_by_key.setdefault(
+            key, {'months': {}, 'total': Decimal('0')}
+        )
+        entry['months'][month_key] = spent
+        entry['total'] += spent
+
+    monthly = {'months': [], 'rows': [], 'totals': {}}
+    if date_from and date_to:
+        # A bounded window lists every covered month, empty ones
+        # included, so the matrix always has a full year of
+        # columns under the "Last year" preset.
+        cursor = date_from.replace(day=1)
+        end_month = date_to.replace(day=1)
+        while cursor <= end_month:
+            monthly['months'].append(cursor.strftime('%Y-%m'))
+            cursor = (cursor + timedelta(days=32)).replace(day=1)
+    else:
+        monthly['months'] = sorted(data_months)
+    for (category_id, currency), entry in monthly_by_key.items():
+        category = category_by_id.get(category_id)
+        is_excluded = bool(category and category.is_excluded)
+        monthly['rows'].append({
+            'category_id': category_id,
+            'category_name': (
+                category.name if category else 'Uncategorized'
+            ),
+            'category_key': None if category else 'uncategorized',
+            'category_color': (
+                category.color if category and category.color
+                else '#6c757d'
+            ),
+            'is_excluded': is_excluded,
+            'currency': currency,
+            'months': entry['months'],
+            'total': entry['total'],
+        })
+        if is_excluded:
+            continue
+        total = monthly['totals'].setdefault(
+            currency, {'months': {}, 'total': Decimal('0')}
+        )
+        for month_key, amount in entry['months'].items():
+            total['months'][month_key] = (
+                total['months'].get(month_key, Decimal('0'))
+                + amount
+            )
+            total['total'] += amount
+    monthly['rows'].sort(
+        key=lambda row: (row['is_excluded'], -row['total'])
+    )
+
     month_start = today.replace(day=1)
     prev_month_end = month_start - timedelta(days=1)
     prev_month_start = prev_month_end.replace(day=1)
+    year_start = month_start.replace(year=month_start.year - 1)
     presets = [
         ('This month', 'thisMonth', month_start, today),
         ('Last month', 'lastMonth', prev_month_start, prev_month_end),
+        ('Last year', 'lastYear', year_start, prev_month_end),
         ('All time', 'allTime', None, None),
     ]
     current = (date_from, date_to)
@@ -995,6 +1112,7 @@ def category_overview(request,
         'rows': rows,
         'totals': totals,
         'periods': periods,
+        'monthly': monthly,
         'date_from': date_from.isoformat() if date_from else '',
         'date_to': date_to.isoformat() if date_to else '',
         # The share's effective account set — an account-scoped

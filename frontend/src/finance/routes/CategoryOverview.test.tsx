@@ -92,6 +92,13 @@ function makeOverview(
         active: true,
       },
       {
+        label: 'Last year',
+        key: 'lastYear',
+        date_from: '2024-01-01',
+        date_to: '2024-12-31',
+        active: false,
+      },
+      {
         label: 'All time',
         key: 'allTime',
         date_from: '',
@@ -99,6 +106,7 @@ function makeOverview(
         active: false,
       },
     ],
+    monthly: { months: [], rows: [], totals: {} },
     date_from: '2025-01-09',
     date_to: '2025-01-15',
     accounts: [{ id: 5, label: 'Everyday account' }],
@@ -261,6 +269,100 @@ describe('CategoryOverview', () => {
         '/api/finance/categories/overview/',
       ),
     );
+  });
+
+  it('renders the per-month matrix when Last year is active', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeOverview({
+        periods: [
+          {
+            label: 'This month',
+            key: 'thisMonth',
+            date_from: '2025-01-01',
+            date_to: '2025-01-15',
+            active: false,
+          },
+          {
+            label: 'Last year',
+            key: 'lastYear',
+            date_from: '2024-01-01',
+            date_to: '2024-12-31',
+            active: true,
+          },
+        ],
+        monthly: {
+          months: ['2024-01', '2024-02', '2024-03'],
+          rows: [
+            {
+              category_id: 1,
+              category_name: 'Groceries',
+              category_color: '#00aa00',
+              is_excluded: false,
+              currency: 'EUR',
+              months: { '2024-01': '100.00', '2024-03': '20.50' },
+              total: '120.50',
+            },
+          ],
+          totals: {
+            EUR: {
+              months: { '2024-01': '100.00', '2024-03': '20.50' },
+              total: '120.50',
+            },
+          },
+        },
+      }),
+    );
+    renderOverview();
+    const title = await screen.findByText('Spending per month');
+    const table = title.closest('.fin-card')!.querySelector('table')!;
+    // One column per window month plus the category/total columns.
+    const headers = Array.from(table.querySelectorAll('th')).map(
+      (th) => th.textContent,
+    );
+    expect(headers).toEqual([
+      'Category',
+      'January 2024',
+      'February 2024',
+      'March 2024',
+      'Total',
+    ]);
+    // A month with no spend renders a muted dash.
+    const row = within(table).getByText('Groceries').closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    expect(within(cells[1]).getByText('-100.00')).toBeInTheDocument();
+    expect(within(cells[2]).getByText('—')).toBeInTheDocument();
+    // Per-category total and the overall-spending footer row.
+    expect(within(row).getByText('-120.50 EUR')).toBeInTheDocument();
+    const totalRow = within(table).getByText('Total (EUR)').closest('tr')!;
+    expect(within(totalRow).getByText('-20.50')).toBeInTheDocument();
+  });
+
+  it('hides the matrix outside the Last year preset', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeOverview({
+        monthly: {
+          months: ['2024-01'],
+          rows: [
+            {
+              category_id: 1,
+              category_name: 'Groceries',
+              category_color: '#00aa00',
+              is_excluded: false,
+              currency: 'EUR',
+              months: { '2024-01': '100.00' },
+              total: '100.00',
+            },
+          ],
+          totals: {
+            EUR: { months: { '2024-01': '100.00' }, total: '100.00' },
+          },
+        },
+      }),
+    );
+    renderOverview();
+    await screen.findByText('Spending by category');
+    const title = screen.queryByText('Spending per month');
+    expect(title).not.toBeInTheDocument();
   });
 
   it('applies the account filter via the form', async () => {

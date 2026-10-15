@@ -90,7 +90,9 @@
     "username": "Username",
     "onlyTheseAccounts": "Only these accounts (all unchecked = everything)",
     "sharedWith": "Shared with:",
-    "unshare": "Stop sharing with {{username}}"
+    "unshare": "Stop sharing with {{username}}",
+    "monthlyTitle": "Spending per month",
+    "totalCol": "Total"
   },
   "connect": {
     "title": "Connect a Bank",
@@ -439,6 +441,7 @@
     "periods": {
       "thisMonth": "This month",
       "lastMonth": "Last month",
+      "lastYear": "Last year",
       "allTime": "All time"
     },
     "windows": {

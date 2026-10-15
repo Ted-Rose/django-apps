@@ -1748,6 +1748,7 @@ export interface components {
             };
             /** Periods */
             periods: components["schemas"]["PeriodOut"][];
+            monthly: components["schemas"]["MonthlyBreakdownOut"];
             /** Date From */
             date_from: string;
             /** Date To */
@@ -1808,6 +1809,62 @@ export interface components {
             spent: string;
             /** Received */
             received: string;
+        };
+        /**
+         * MonthlyBreakdownOut
+         * @description Per-category-per-month spending matrix for the window.
+         *
+         *     Shown by the SPA under the breakdown table when the "Last
+         *     year" preset is active — `months` lists every 'YYYY-MM'
+         *     column chronologically (the whole bounded window, or just
+         *     the months with data when unbounded) and `totals` keeps the
+         *     per-currency overall spending row.
+         */
+        MonthlyBreakdownOut: {
+            /** Months */
+            months: string[];
+            /** Rows */
+            rows: components["schemas"]["MonthlyRowOut"][];
+            /** Totals */
+            totals: {
+                [key: string]: components["schemas"]["MonthlyTotalOut"];
+            };
+        };
+        /**
+         * MonthlyRowOut
+         * @description One category's per-month spend inside the selected window.
+         */
+        MonthlyRowOut: {
+            /** Category Id */
+            category_id?: number | null;
+            /** Category Name */
+            category_name: string;
+            /** Category Key */
+            category_key?: string | null;
+            /** Category Color */
+            category_color: string;
+            /**
+             * Is Excluded
+             * @default false
+             */
+            is_excluded: boolean;
+            /** Currency */
+            currency: string;
+            /** Months */
+            months: {
+                [key: string]: string;
+            };
+            /** Total */
+            total: string;
+        };
+        /** MonthlyTotalOut */
+        MonthlyTotalOut: {
+            /** Months */
+            months: {
+                [key: string]: string;
+            };
+            /** Total */
+            total: string;
         };
         /** PeriodOut */
         PeriodOut: {

@@ -1780,19 +1780,27 @@ class ExclusionApiTests(ApiTestCase):
         body = self.client.get(
             f'{self.API}/transactions/'
         ).json()
+        # sqlite drops the decimal scale ('60' vs '60.00') —
+        # compare numerically so the test holds on both backends.
         self.assertEqual(
-            body['transactions'][0]['excluded_amount'], '60.00'
+            Decimal(body['transactions'][0]['excluded_amount']),
+            Decimal('60.00'),
         )
         self.assertEqual(
-            body['transactions'][0]['counted_amount'], '-40.00'
+            Decimal(body['transactions'][0]['counted_amount']),
+            Decimal('-40.00'),
         )
         # The owner's view of the same transaction is unaffected.
         self.client.force_login(self.user)
         row = self.client.get(
             f'{self.API}/transactions/'
         ).json()['transactions'][0]
-        self.assertEqual(row['excluded_amount'], '0.00')
-        self.assertEqual(row['counted_amount'], '-100.00')
+        self.assertEqual(
+            Decimal(row['excluded_amount']), Decimal('0.00')
+        )
+        self.assertEqual(
+            Decimal(row['counted_amount']), Decimal('-100.00')
+        )
 
     def test_clear_category_resets_exclusion_via_rules(self):
         make_rule(

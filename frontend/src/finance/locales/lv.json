@@ -90,7 +90,9 @@
     "username": "Lietotājvārds",
     "onlyTheseAccounts": "Tikai šie konti (neviens neatzīmēts = viss)",
     "sharedWith": "Koplietots ar:",
-    "unshare": "Beigt koplietošanu ar {{username}}"
+    "unshare": "Beigt koplietošanu ar {{username}}",
+    "monthlyTitle": "Izdevumi pa mēnešiem",
+    "totalCol": "Kopā"
   },
   "connect": {
     "title": "Pievienot banku",
@@ -439,6 +441,7 @@
     "periods": {
       "thisMonth": "Šis mēnesis",
       "lastMonth": "Pagājušais mēnesis",
+      "lastYear": "Pēdējais gads",
       "allTime": "Viss laiks"
     },
     "windows": {

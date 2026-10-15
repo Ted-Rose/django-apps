@@ -270,6 +270,12 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   forever — it's the `redirect_url` configured in GoCardless
   requisitions, reads the session and mutates the DB, then
   redirects into the SPA.
+- `GET /api/finance/categories/overview/` returns `periods` (the
+  preset chips incl. `lastYear` — the round 12 months ending with
+  last calendar month) plus `monthly` (per-category spend per
+  'YYYY-MM' month, per-currency totals row; excluded categories
+  keep muted rows but feed no totals). The SPA renders the
+  monthly matrix only while the `lastYear` preset is active.
 - All reads/mutations are the django-ninja router in `api.py`
   (`/api/finance/…`). Unlike google_tasks, nothing delegates to
   `views.py` — finance views were form-POST + `messages` +

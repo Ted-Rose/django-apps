@@ -17,10 +17,13 @@ import Toasts from '../../shared/components/Toasts';
 import TransactionDrilldown from '../components/TransactionDrilldown';
 import type { ParamUpdates } from '../components/TransactionTable';
 import { useShareOverview, useUnshareOverview } from '../mutations';
+import { fmtMonth } from '../../shared/format';
 import {
   fetchCategoryOverview,
   type AccountOptionOut,
   type CategoryRowOut,
+  type MonthlyBreakdownOut,
+  type MonthlyRowOut,
   type ShareTargetOut,
 } from '../api';
 import './categories.css';
@@ -168,6 +171,15 @@ export default function CategoryOverview() {
   ]
     .filter(Boolean)
     .join(' · ');
+
+  // The per-month matrix only makes sense under the "Last year"
+  // preset — a bounded twelve-month window with full month
+  // columns. Server-computed `active` also fires for a manually
+  // entered equivalent range.
+  const showMonthly =
+    data?.periods.some(
+      (period) => period.key === 'lastYear' && period.active,
+    ) ?? false;
 
   // Display name for the drill-down heading — resolved from the
   // breakdown rows (covers the translated 'uncategorized' bucket);
@@ -479,6 +491,9 @@ export default function CategoryOverview() {
             ) : (
               <EmptyState icon="pie-chart" title={t('categories.emptyTitle')} />
             )}
+            {showMonthly && data.monthly.rows.length > 0 && (
+              <MonthlyCard monthly={data.monthly} />
+            )}
           </>
         )}
         {params.category && (
@@ -726,5 +741,126 @@ function OverviewRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/**
+ * The "Last year" matrix — spending per category per month, one
+ * column per month of the window plus a per-category total; the
+ * footer rows keep the overall spend per currency. Excluded
+ * categories render muted and feed no totals, matching the main
+ * table. Twelve month columns don't fit narrow screens, so the
+ * table scrolls horizontally.
+ */
+function MonthlyCard({ monthly }: { monthly: MonthlyBreakdownOut }) {
+  const { t } = useTranslation('finance');
+  return (
+    <div className="fin-card p-3">
+      <h2 className="h6 text-muted">{t('categories.monthlyTitle')}</h2>
+      <div className="table-responsive">
+        <table className="table cat-table mb-0">
+          <thead>
+            <tr>
+              <th>{t('transactions.columns.category')}</th>
+              {monthly.months.map((month) => (
+                <th key={month} className="text-end text-nowrap">
+                  {fmtMonth(month)}
+                </th>
+              ))}
+              <th className="text-end">{t('categories.totalCol')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(() => {
+              // Excluded rows sort last server-side; a muted
+              // section header splits them off like the main
+              // table's.
+              const firstExcluded = monthly.rows.findIndex(
+                (row) => row.is_excluded,
+              );
+              return monthly.rows.map((row, index) => (
+                <Fragment key={`${row.category_name}-${index}`}>
+                  {index === firstExcluded && (
+                    <tr>
+                      <td
+                        colSpan={monthly.months.length + 2}
+                        className="text-muted small border-0 pt-3"
+                      >
+                        {t('categories.excludedSection')}
+                      </td>
+                    </tr>
+                  )}
+                  <MonthlyRow row={row} months={monthly.months} />
+                </Fragment>
+              ));
+            })()}
+          </tbody>
+          <tfoot>
+            {Object.entries(monthly.totals).map(([currency, total]) => (
+              <tr className="fw-bold" key={currency}>
+                <td>{t('categories.total', { currency })}</td>
+                {monthly.months.map((month) => (
+                  <SpentCell key={month} value={total.months[month]} />
+                ))}
+                <td className="text-end text-nowrap text-danger fin-money">
+                  -{total.total} {currency}
+                </td>
+              </tr>
+            ))}
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+type MonthlyRowProps = {
+  row: MonthlyRowOut;
+  months: string[];
+};
+
+/** One matrix row: the category badge + currency, then a spent
+    cell per month column and the window total. */
+function MonthlyRow({ row, months }: MonthlyRowProps) {
+  const { t } = useTranslation('finance');
+  return (
+    <tr className={row.is_excluded ? 'text-muted' : undefined}>
+      <td>
+        <CategoryBadge
+          category={{
+            id: row.category_id ?? 0,
+            name:
+              row.category_key === 'uncategorized'
+                ? t('transactions.uncategorized')
+                : row.category_name,
+            color: row.category_color,
+            is_excluded: row.is_excluded,
+          }}
+        />
+        <div className="small text-muted">{row.currency}</div>
+      </td>
+      {months.map((month) => (
+        <SpentCell key={month} value={row.months[month]} />
+      ))}
+      <td className="text-end text-nowrap fin-money">
+        <span className="text-danger fw-semibold">
+          -{row.total} {row.currency}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+/** One spend figure — negative red like the main table's spent
+    column, a muted dash when the month had none. */
+function SpentCell({ value }: { value?: string }) {
+  return (
+    <td className="text-end text-nowrap fin-money">
+      {value ? (
+        <span className="text-danger">-{value}</span>
+      ) : (
+        <span className="text-muted">—</span>
+      )}
+    </td>
   );
 }
