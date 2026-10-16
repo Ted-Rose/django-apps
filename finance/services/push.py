@@ -49,6 +49,11 @@ def send_limit_alert(user, title, body, url):
                 data=payload,
                 vapid_private_key=private_key,
                 vapid_claims={'sub': settings.VAPID_SUBJECT},
+                # FCM discards ttl=0 pushes when the device is
+                # offline (the default) — hold it half a day so a
+                # sleeping browser still gets the alert.
+                ttl=12 * 60 * 60,
+                headers={'Urgency': 'high'},
             )
         except WebPushException as exc:
             status = (

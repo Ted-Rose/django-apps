@@ -140,7 +140,10 @@ transactions, and get spending-limit alerts.
 - `PushSubscription` — one row per subscribed browser (`endpoint`
   unique); feeds Web Push spending alerts via `services/push.py`
   (`send_limit_alert`, uses `VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`
-  settings; 403/404/410 responses delete stale rows). Browsers
+  settings; 403/404/410 responses delete stale rows; pushes go
+  out with a 12h TTL + `Urgency: high` — the pywebpush default
+  ttl=0 makes FCM silently drop alerts to offline browsers).
+  Browsers
   subscribe via `POST /api/finance/push/subscribe/` (+
   `unsubscribe/`) from the SPA's limits page
   (`usePushSubscription` hook); no-op when `VAPID_*` settings are
