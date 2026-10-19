@@ -1,7 +1,7 @@
 resource "google_artifact_registry_repository" "gae_standard" {
   location      = var.region
   repository_id = "gae-standard"
-  description   = "Sole image store for django-apps App Engine Standard deployments - Cost Optimized"
+  description   = "Image store for the django-apps Cloud Run service"
   format        = "DOCKER"
 
   # 1. DELETE Policy: Target ALL images older than 1 day
@@ -14,12 +14,12 @@ resource "google_artifact_registry_repository" "gae_standard" {
     }
   }
 
-  # 2. KEEP Policy: Protect the most recent 3 versions from deletion
+  # 2. KEEP Policy: Protect only the most recent version from deletion
   cleanup_policies {
-    id     = "keep-latest-3"
+    id     = "keep-latest-1"
     action = "KEEP"
     most_recent_versions {
-      keep_count = 3
+      keep_count = 1
     }
   }
 
