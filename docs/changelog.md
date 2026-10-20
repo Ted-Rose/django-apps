@@ -1,6 +1,9 @@
 # google_api
 
 ## Changelog
+8. Finance re-applies the visitor's categorization rules over all
+   their transactions on every page load, so categorization is
+   always enforced when the app is opened
 7. Finance balance/spending-limit push alerts now actually reach
    devices that are asleep or offline when the daily 03:00 UTC job
    runs — pushes are sent with a 12h TTL and high urgency instead

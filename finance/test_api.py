@@ -1469,6 +1469,49 @@ class SpaMountTests(ApiTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'spa-bootstrap')
 
+    def test_shell_get_applies_rules(self):
+        """Every page load enforces the caller's categorization
+        rules before the SPA's API calls read them."""
+        self.client.force_login(self.user)
+        requisition = make_requisition(self.user)
+        account = make_account(self.user, requisition)
+        tx = make_transaction(
+            account, 'tx-1', '-5.00', creditor_name='RIMI'
+        )
+        category = make_category(self.user, name='Groceries')
+        make_rule(self.user, category, sender='rimi')
+        resp = self.client.get('/finance/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(
+            UserTransactionCategory.objects.filter(
+                user=self.user,
+                transaction=tx,
+                category=category,
+            ).exists()
+        )
+
+    def test_shell_rules_failure_still_renders(self):
+        """A rules-engine error is logged, never a 500 — the shell
+        still serves so the app stays usable."""
+        self.client.force_login(self.user)
+        with patch(
+            'finance.views.apply_rules', side_effect=ValueError
+        ):
+            resp = self.client.get('/finance/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'spa-bootstrap')
+
+    def test_post_to_shell_skips_rules(self):
+        self.client.force_login(self.user)
+        with patch('finance.views.apply_rules') as apply_mock:
+            resp = self.client.post(
+                '/finance/',
+                data='{}',
+                content_type='application/json',
+            )
+        self.assertEqual(resp.status_code, 404)
+        apply_mock.assert_not_called()
+
     def test_post_to_page_routes_is_404(self):
         # The shell is GET/HEAD-only — the retired form-POST URLs
         # (rules/save/, push/subscribe/, transactions/sync/) must
