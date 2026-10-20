@@ -2,12 +2,38 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 
+from django_apps.views import react_app
 from finance.models import Account, Requisition, UserAccountPreference
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
+from finance.services.rules import apply_rules
 
 logger = logging.getLogger('django')
+
+
+@login_required
+def finance_app(request, subpath=''):
+    """Serve the finance SPA shell for every /finance/* page.
+
+    Re-runs ``apply_rules`` for the caller on each page load so
+    categorization is enforced on visit — before the SPA's API
+    calls read categories. Non-GET requests 404 like
+    ``react_app``; a rules failure is logged but never blocks the
+    page.
+    """
+    if request.method not in ('GET', 'HEAD'):
+        raise Http404
+    try:
+        apply_rules(request.user)
+    except Exception:
+        logger.exception(
+            'apply_rules failed for user %s', request.user.pk
+        )
+    return react_app(
+        request, entry='finance', title='Finance', subpath=subpath
+    )
 
 
 @login_required
