@@ -27,6 +27,19 @@
     "allLabels": "All Labels",
     "filterByLabel": "Filter by Label"
   },
+  "labelsPage": {
+    "title": "Labels",
+    "manage": "Manage Labels",
+    "back": "Back to Dashboard",
+    "name": "Label",
+    "tasks": "Tasks",
+    "color": "Color",
+    "actions": "Actions",
+    "save": "Save",
+    "hexColor": "Hex color code",
+    "invalidColor": "Enter a #RRGGBB hex color",
+    "empty": "No labels yet — they are created from #hashtags in tasks."
+  },
   "menu": {
     "addDivider": "Add Divider",
     "processLabels": "Process Labels",
@@ -192,6 +205,7 @@
     "permanentDeleteFailed": "Failed to permanently delete task: {{detail}}",
     "createFailed": "Failed to create task: {{detail}}",
     "updateFailed": "Failed to update task: {{detail}}",
+    "updateLabelFailed": "Failed to update label: {{detail}}",
     "createDividerFailed": "Failed to create divider: {{detail}}",
     "updateDividerFailed": "Failed to update divider: {{detail}}",
     "deleteDividerFailed": "Failed to delete divider: {{detail}}",
@@ -242,6 +256,7 @@
     "emptyTitle": "Title cannot be empty",
     "createFailed": "Failed to create task in Google Tasks",
     "invalidOrderValue": "{{field}} must be a finite number",
-    "invalidLabelIds": "Invalid label IDs"
+    "invalidLabelIds": "Invalid label IDs",
+    "invalidColor": "Color must be a #RRGGBB hex code"
   }
 }

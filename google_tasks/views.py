@@ -13,6 +13,7 @@ contract and guard against accidental re-mounting.
 """
 import json
 import math
+import re
 import uuid
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -1046,6 +1047,48 @@ def update_task_view(request, task_id):
             'code': 'taskUpdateFailed',
             'params': {'detail': str(e)},
         }, status=400)
+
+
+LABEL_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
+
+
+@login_required
+@require_POST
+def update_label_view(request, label_id):
+    """Update a label's badge color (app-level only — labels never
+    sync to Google)."""
+    import logging
+    logger = logging.getLogger('django')
+
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON',
+            'code': 'invalidJson',
+        }, status=400)
+
+    color = data.get('color', '')
+    if not LABEL_COLOR_RE.match(color):
+        return JsonResponse({
+            'success': False,
+            'error': 'Color must be a #RRGGBB hex code',
+            'code': 'invalidColor',
+        }, status=400)
+
+    label = get_object_or_404(
+        TaskLabel, id=label_id, user=request.user
+    )
+    label.color = color
+    label.save()
+
+    logger.info(
+        f'Updated label {label_id} color to {color} '
+        f'for user {request.user.username}'
+    )
+
+    return JsonResponse({'success': True})
 
 
 # The SPA shell + strangler-redirect views moved to

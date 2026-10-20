@@ -27,6 +27,19 @@
     "allLabels": "Visas birkas",
     "filterByLabel": "Filtrēt pēc birkas"
   },
+  "labelsPage": {
+    "title": "Birkas",
+    "manage": "Pārvaldīt birkas",
+    "back": "Atpakaļ uz pārskatu",
+    "name": "Birka",
+    "tasks": "Uzdevumi",
+    "color": "Krāsa",
+    "actions": "Darbības",
+    "save": "Saglabāt",
+    "hexColor": "Hex krāsas kods",
+    "invalidColor": "Ievadi #RRGGBB hex krāsu",
+    "empty": "Birku vēl nav — tās veidojas no #tēmturiem uzdevumos."
+  },
   "menu": {
     "addDivider": "Pievienot atdalītāju",
     "processLabels": "Apstrādāt birkas",
@@ -192,6 +205,7 @@
     "permanentDeleteFailed": "Neizdevās neatgriezeniski dzēst uzdevumu: {{detail}}",
     "createFailed": "Neizdevās izveidot uzdevumu: {{detail}}",
     "updateFailed": "Neizdevās atjaunināt uzdevumu: {{detail}}",
+    "updateLabelFailed": "Neizdevās atjaunināt birku: {{detail}}",
     "createDividerFailed": "Neizdevās izveidot atdalītāju: {{detail}}",
     "updateDividerFailed": "Neizdevās atjaunināt atdalītāju: {{detail}}",
     "deleteDividerFailed": "Neizdevās dzēst atdalītāju: {{detail}}",
@@ -242,6 +256,7 @@
     "emptyTitle": "Virsrāksts nedrīkst būt tukšs",
     "createFailed": "Neizdevās izveidot uzdevumu Google Tasks",
     "invalidOrderValue": "{{field}} jābūt galīgam skaitlim",
-    "invalidLabelIds": "Nederīgi etiķešu ID"
+    "invalidLabelIds": "Nederīgi etiķešu ID",
+    "invalidColor": "Krāsai jābūt #RRGGBB hex kodam"
   }
 }

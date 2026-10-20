@@ -7,6 +7,7 @@ export type TaskOut = components['schemas']['TaskOut'];
 export type TaskListOut = components['schemas']['TaskListOut'];
 export type LabelOut = components['schemas']['LabelOut'];
 export type LabelRef = components['schemas']['LabelRef'];
+export type LabelsOut = components['schemas']['LabelsOut'];
 export type FlagsOut = components['schemas']['FlagsOut'];
 export type TaskDetailOut = components['schemas']['TaskDetailOut'];
 export type SearchOut = components['schemas']['SearchOut'];
@@ -20,6 +21,7 @@ export type TaskCreateIn = components['schemas']['TaskCreateIn'];
 export type TaskUpdateIn = components['schemas']['TaskUpdateIn'];
 export type DividerCreateIn = components['schemas']['DividerCreateIn'];
 export type DividerUpdateIn = components['schemas']['DividerUpdateIn'];
+export type LabelUpdateIn = components['schemas']['LabelUpdateIn'];
 
 /** Shape returned by the mutation views the API delegates to. */
 export interface MutationResult {
@@ -106,6 +108,14 @@ export function fetchTaskDetail(taskId: string): Promise<TaskDetailOut> {
   return apiGet<TaskDetailOut>(
     `/api/tasks/task/${encodeURIComponent(taskId)}/`,
   );
+}
+
+/**
+ * GET /api/tasks/labels/ → LabelsOut — every label with its
+ * active-task count; the /labels management page's data source.
+ */
+export function fetchLabels(): Promise<LabelsOut> {
+  return apiGet<LabelsOut>('/api/tasks/labels/');
 }
 
 /**

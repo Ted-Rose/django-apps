@@ -327,6 +327,12 @@ export function TaskListPage({ view }: { view: ListView }) {
         onClick: () => navigate('/stats'),
       },
       {
+        label: t('labelsPage.manage'),
+        icon: 'palette',
+        btn_class: 'btn-light',
+        onClick: () => navigate('/labels'),
+      },
+      {
         label: t('menu.addDivider'),
         icon: 'dash-lg',
         btn_class: 'btn-primary',

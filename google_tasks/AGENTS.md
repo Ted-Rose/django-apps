@@ -94,7 +94,8 @@ keep sync query counts flat, not per-item or per-list.
   handlers still defined in views.py** (`sync_view`,
   `toggle_star`, `complete_task_view`, `reorder_*`, `*_divider`,
   `archive/unarchive/delete/restore/permanent_delete`, `create`/
-  `update_task_view`, `process_labels*`) so semantics — service
+  `update_task_view`, `process_labels*`, `update_label_view`) so
+  semantics — service
   calls, `{'success': …}` shapes, session-stored OAuth state — stay
   identical; `api.py`'s `_adapt()` maps reauth/error payloads onto
   the API contract. Keep those handlers' decorators and bodies in

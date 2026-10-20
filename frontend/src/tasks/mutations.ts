@@ -27,6 +27,7 @@ import type {
   DashboardOut,
   DividerCreateIn,
   DividerUpdateIn,
+  LabelUpdateIn,
   MutationResult,
   TaskCreateIn,
   TaskOut,
@@ -44,6 +45,8 @@ const DASHBOARD_KEY = ['dashboard'] as const;
 // The stats page's own root — completions, trash/restore/permanent
 // delete, label edits and sync all change what it reports.
 const STATS_KEY = ['stats'] as const;
+// The /labels management page's own root.
+const LABELS_KEY = ['labels'] as const;
 
 type Snapshots = [readonly unknown[], DashboardOut | undefined][];
 
@@ -95,6 +98,10 @@ function mapTask(
 
 function taskUrl(taskId: string, action: string): string {
   return `/api/tasks/task/${encodeURIComponent(taskId)}/${action}/`;
+}
+
+function labelUrl(labelId: number): string {
+  return `/api/tasks/label/${labelId}/update/`;
 }
 
 /** Postgres-style ordering on a nullable key (nulls last/first). */
@@ -414,6 +421,32 @@ export function useUpdateTask() {
         'warning',
       ),
     onSettled: () => {
+      invalidateDashboards(queryClient);
+      invalidateStats(queryClient);
+    },
+  });
+}
+
+/**
+ * updateLabel — badge color edit from the /labels page. Local-only
+ * field (labels never sync to Google); the settle refetches the
+ * labels page plus dashboards/stats so badge colors propagate.
+ */
+export function useUpdateLabel() {
+  const { t } = useTranslation('tasks');
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: { labelId: number; color: string }) =>
+      apiPost<MutationResult>(labelUrl(variables.labelId), {
+        color: variables.color,
+      } satisfies LabelUpdateIn),
+    onError: (error) =>
+      pushToast(
+        t('toasts.updateLabelFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: LABELS_KEY });
       invalidateDashboards(queryClient);
       invalidateStats(queryClient);
     },

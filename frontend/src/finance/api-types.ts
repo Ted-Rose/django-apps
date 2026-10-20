@@ -208,6 +208,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/labels/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Labels
+         * @description Label list for the /labels management page — per-label counts
+         *     over the same active-task base the dashboard uses.
+         */
+        get: operations["google_tasks_api_labels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/search/": {
         parameters: {
             query?: never;
@@ -549,6 +570,23 @@ export interface paths {
         put?: never;
         /** Update Task */
         post: operations["google_tasks_api_update_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/label/{label_id}/update/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Label */
+        post: operations["google_tasks_api_update_label"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1422,6 +1460,11 @@ export interface components {
             /** Has Credentials */
             has_credentials: boolean;
         };
+        /** LabelsOut */
+        LabelsOut: {
+            /** Labels */
+            labels: components["schemas"]["LabelOut"][];
+        };
         /** SearchOut */
         SearchOut: {
             /** Tasks */
@@ -1553,6 +1596,11 @@ export interface components {
             task_order?: number | null;
             /** Starred Order */
             starred_order?: number | null;
+        };
+        /** LabelUpdateIn */
+        LabelUpdateIn: {
+            /** Color */
+            color: string;
         };
         /** AccountOut */
         AccountOut: {
@@ -2776,6 +2824,26 @@ export interface operations {
             };
         };
     };
+    google_tasks_api_labels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelsOut"];
+                };
+            };
+        };
+    };
     google_tasks_api_search: {
         parameters: {
             query?: {
@@ -3182,6 +3250,30 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TaskUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    google_tasks_api_update_label: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                label_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelUpdateIn"];
             };
         };
         responses: {

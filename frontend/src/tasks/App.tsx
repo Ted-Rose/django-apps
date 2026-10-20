@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Archived from './routes/Archived';
 import Dashboard from './routes/Dashboard';
+import Labels from './routes/Labels';
 import Overdue from './routes/Overdue';
 import Search from './routes/Search';
 import Starred from './routes/Starred';
@@ -27,6 +28,7 @@ export default function App() {
       <Route path="/trash" element={<Trash />} />
       <Route path="/search" element={<Search />} />
       <Route path="/stats" element={<Stats />} />
+      <Route path="/labels" element={<Labels />} />
       <Route path="/task/:taskId" element={<TaskDetail />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

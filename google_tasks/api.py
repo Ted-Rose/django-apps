@@ -157,6 +157,14 @@ class TaskUpdateIn(Schema):
     starred_order: Optional[float] = None
 
 
+class LabelsOut(Schema):
+    labels: List[LabelOut]
+
+
+class LabelUpdateIn(Schema):
+    color: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
+
+
 class StatsLabelOut(Schema):
     """Legend entry — the label colors the bucket stacks are drawn
     with come from here, not from per-bucket data."""
@@ -479,6 +487,19 @@ def task_detail(request, task_id: str):
     }
 
 
+@router.get('/labels/', response=LabelsOut)
+def labels(request):
+    """Label list for the /labels management page — per-label counts
+    over the same active-task base the dashboard uses."""
+    _creds_or_reauth(request)
+    user_labels = TaskLabel.objects.filter(user=request.user)
+    base = _task_queryset(request.user).filter(
+        is_archived=False, is_deleted=False, status='needsAction'
+    )
+    _label_task_counts(user_labels, base)
+    return {'labels': user_labels}
+
+
 @router.get('/search/', response=SearchOut)
 def search(request, q: str = Query('', max_length=200)):
     # Deliberate redesign vs the removed views.search_tasks: a single `q` param
@@ -665,4 +686,11 @@ def permanent_delete_task(request, task_id: str):
 def update_task(request, task_id: str, payload: TaskUpdateIn):
     return _adapt(
         request, views.update_task_view(request, task_id)
+    )
+
+
+@router.post('/label/{label_id}/update/')
+def update_label(request, label_id: int, payload: LabelUpdateIn):
+    return _adapt(
+        request, views.update_label_view(request, label_id)
     )

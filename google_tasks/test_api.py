@@ -527,3 +527,91 @@ class StatsApiTests(TestCase):
         body = resp.json()
         self.assertEqual(len(body['weekly']), 52)
         self.assertEqual(len(body['monthly']), 36)
+
+
+class LabelsApiTests(TestCase):
+    """GET /api/tasks/labels/ + POST /api/tasks/label/{id}/update/ —
+    the /tasks/labels management page's endpoints. Label colors are
+    app-local; nothing here touches Google."""
+
+    API = '/api/tasks'
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.other_user = User.objects.create_user(
+            username='bob', password='pw'
+        )
+        self.client.force_login(self.user)
+        self.task_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-1', title='List 1'
+        )
+        self.label = TaskLabel.objects.create(
+            user=self.user, name='Home', color='#ff0000'
+        )
+
+    def post_json(self, path, payload=None):
+        return self.client.post(
+            f'{self.API}{path}',
+            data=json.dumps(payload or {}),
+            content_type='application/json',
+        )
+
+    def make_task(self, task_id, **kwargs):
+        return GoogleTask.objects.create(
+            user=self.user,
+            task_id=task_id,
+            task_list=self.task_list,
+            title=task_id,
+            **kwargs,
+        )
+
+    def test_labels_returns_labels_with_active_counts(self):
+        self.make_task('a').labels.add(self.label)
+        self.make_task(
+            'done', status='completed'
+        ).labels.add(self.label)
+        TaskLabel.objects.create(user=self.other_user, name='Foreign')
+        resp = self.client.get(f'{self.API}/labels/')
+        self.assertEqual(resp.status_code, 200)
+        labels = resp.json()['labels']
+        # Other users' labels are never listed.
+        self.assertEqual([row['name'] for row in labels], ['Home'])
+        self.assertEqual(labels[0]['color'], '#ff0000')
+        # Only needsAction tasks count.
+        self.assertEqual(labels[0]['task_count'], 1)
+
+    def test_labels_unauthenticated_gets_401(self):
+        self.client.logout()
+        resp = self.client.get(f'{self.API}/labels/')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_update_label_color(self):
+        resp = self.post_json(
+            f'/label/{self.label.id}/update/', {'color': '#00ff00'}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.color, '#00ff00')
+
+    def test_update_label_rejects_bad_hex(self):
+        resp = self.post_json(
+            f'/label/{self.label.id}/update/', {'color': 'red'}
+        )
+        self.assertEqual(resp.status_code, 422)
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.color, '#ff0000')
+
+    def test_update_label_scoped_to_user(self):
+        foreign = TaskLabel.objects.create(
+            user=self.other_user, name='Foreign'
+        )
+        resp = self.post_json(
+            f'/label/{foreign.id}/update/', {'color': '#00ff00'}
+        )
+        self.assertEqual(resp.status_code, 404)
+        foreign.refresh_from_db()
+        self.assertEqual(foreign.color, '#0d6efd')

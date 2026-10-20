@@ -1,6 +1,9 @@
 # google_api
 
 ## Changelog
+9. Tasks gains a label management page at `/tasks/labels` — edit
+   each label's badge color via a color picker or hex input (labels
+   are app-local and never sync to Google)
 8. Finance re-applies the visitor's categorization rules over all
    their transactions on every page load, so categorization is
    always enforced when the app is opened
