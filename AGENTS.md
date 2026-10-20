@@ -113,7 +113,9 @@ URL routing (`django_apps/urls.py`): `google_api`, `gmail` and
 source venv/bin/activate          # venv at venv/ (Python 3.11)
 python manage.py check            # sanity check settings/imports
 python manage.py runserver        # dev server; runsslserver for
-                                  # HTTPS (needed for OAuth)
+                                  # HTTPS (VS Code dev loop uses it;
+                                  # OAuth also works over
+                                  # http://127.0.0.1 if registered)
 python manage.py test <app>       # scoped per-app tests — always
                                   # sqlite (see contract #1)
 python manage.py makemigrations   # allowed; NEVER `migrate` below
@@ -322,6 +324,21 @@ Code conventions:
 - The PWA service worker is not registered on localhost (it would
   stale-serve vite modules). Bump `PWA_CACHE_VERSION` in
   `django_apps/views.py` when shipping frontend changes.
+- VS Code debug hangs at "waiting for launcher to connect" (or a
+  stuck `debugpy/launcher … runsslserver 8001` in the terminal) can be
+  a stale `~/.pyenv/shims/.pyenv-shim` lock — left by a crashed
+  `pyenv rehash`, it blocks new terminals ~60s, past the debug
+  adapter's connect timeout. Fix: `rm ~/.pyenv/shims/.pyenv-shim`.
+- The VS Code dev loop is one entry: "Django + Vite (dev loop)" in
+  `.vscode/launch.json` runs the `vite dev server` background task
+  (`.vscode/tasks.json`) then runsslserver under debugpy on
+  https://127.0.0.1:8001 (internalConsole — no terminal activate
+  echo; bundled self-signed cert → accept the browser warning).
+  `config.yaml` `BASE_URL` must match scheme+port —
+  `google_auth` builds the OAuth redirect_uri from it and Google
+  rejects mismatches (http://127.0.0.1 redirect URIs are allowed).
+  To run vite alone: `npm run dev --prefix frontend` or Terminal →
+  Run Task → "vite dev server".
 
 ## Where to look first
 

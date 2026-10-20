@@ -1,66 +1,54 @@
 {
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    // Docs: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            // Same as above but with django-vite dev_mode on:
-            // {% vite_asset %} emits :5373 URLs (dev_server_port in
-            // settings.py reads VITE_PORT), so run this together
-            // with "Vite dev server" (or just use the compound).
+            // Full React dev loop in one entry: the "vite dev
+            // server" background task (tasks.json) starts vite on
+            // :5373, then runsslserver serves Django over HTTPS on
+            // :8001 with VITE_DEV=1 so {% vite_asset %} emits :5373
+            // URLs (dev_server_port in settings.py also reads
+            // VITE_PORT). Stopping the session kills the vite task.
+            // Browse https://localhost:8001/ — django-sslserver's
+            // bundled dev cert is self-signed, so accept the
+            // browser warning once.
+            //
+            // internalConsole keeps debugpy out of the integrated
+            // terminal: no `source venv/bin/activate` echo before
+            // the launcher (it already uses venv python by absolute
+            // path) and no shell-init stall — a stale
+            // ~/.pyenv/shims/.pyenv-shim lock used to block the
+            // launcher past the adapter's connect timeout.
+            //
             // Non-default ports on both sides: another project's
             // server squatting on :8000/:5173 makes the page hang
             // ("Loading React app…" / browser timeout).
-            "name": "Python Debugger: Django (VITE_DEV)",
+            "name": "Django + Vite (dev loop)",
             "type": "debugpy",
             "request": "launch",
             "args": [
-                "runserver",
+                "runsslserver",
                 "8001"
             ],
             "django": true,
             "autoStartBrowser": false,
             "program": "${workspaceFolder}/manage.py",
+            "console": "internalConsole",
+            "preLaunchTask": "vite dev server",
             "env": {
                 "VITE_DEV": "1",
-                "VITE_PORT": "5373"
+                "VITE_PORT": "5373",
+                "REQUESTS_CA_BUNDLE":
+                    "${env:HOME}/.config/nscacert_system.pem",
+                "SSL_CERT_FILE":
+                    "${env:HOME}/.config/nscacert_system.pem",
+                "HTTPLIB2_CA_CERTS":
+                    "${env:HOME}/.config/nscacert_system.pem",
+                "GRPC_DEFAULT_SSL_ROOTS_FILE_PATH":
+                    "${env:HOME}/.config/nscacert_system.pem"
             }
-        },
-        {
-            // Runs `npm run dev` in frontend/ on :5373 (server.port in
-            // vite.config.ts reads VITE_PORT; strictPort makes it fail
-            // loudly rather than silently take another port). Not
-            // itself debugged — vite is a long-running dev server,
-            // so it uses the integrated terminal.
-            "name": "Vite dev server",
-            "type": "node",
-            "request": "launch",
-            "cwd": "${workspaceFolder}/frontend",
-            // Absolute nvm path + PATH env: VS Code launched from the
-            // Dock doesn't inherit the shell's nvm PATH, so bare
-            // "npm" fails to spawn here.
-            "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v22.2.0/bin/npm",
-            "runtimeArgs": [
-                "run",
-                "dev"
-            ],
-            "env": {
-                "PATH": "${env:HOME}/.nvm/versions/node/v22.2.0/bin:${env:PATH}",
-                "VITE_PORT": "5373"
-            },
-            "console": "integratedTerminal"
-        }
-    ],
-    "compounds": [
-        {
-            // Full React dev loop: Django on :8001 with VITE_DEV=1
-            // plus vite on :5373. Browse http://localhost:8001/.
-            "name": "Django + Vite",
-            "configurations": [
-                "Python Debugger: Django (VITE_DEV)",
-                "Vite dev server"
-            ]
         }
     ]
 }

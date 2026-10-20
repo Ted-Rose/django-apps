@@ -1,0 +1,54 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            // Runs `npm run dev` in frontend/ on :5373 (server.port
+            // in vite.config.ts reads VITE_PORT; strictPort makes it
+            // fail loudly rather than silently take another port).
+            // Started automatically as preLaunchTask by the
+            // "Django + Vite (dev loop)" debug config and killed
+            // when the session ends.
+            "label": "vite dev server",
+            "type": "shell",
+            // Absolute nvm path + PATH env: VS Code launched from
+            // the Dock doesn't inherit the shell's nvm PATH, so
+            // bare "npm" fails to spawn here.
+            "command": "${env:HOME}/.nvm/versions/node/v22.2.0/bin/npm",
+            "args": [
+                "run",
+                "dev"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/frontend",
+                "env": {
+                    "VITE_PORT": "5373",
+                    "PATH": "${env:HOME}/.nvm/versions/node/v22.2.0/bin:${env:PATH}"
+                }
+            },
+            "isBackground": true,
+            // Background tasks need a problem matcher so VS Code
+            // knows when vite is "ready" (endsPattern) instead of
+            // waiting for the task to exit. The pattern itself
+            // never matches vite's output — it exists only to host
+            // the background block — so no fake problems appear.
+            "problemMatcher": {
+                "owner": "vite",
+                "pattern": {
+                    "regexp": "^\\[vite\\] (.*) ERROR (.*)$",
+                    "file": 1,
+                    "message": 2
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "ready in|Local:"
+                }
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        }
+    ]
+}

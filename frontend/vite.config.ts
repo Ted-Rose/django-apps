@@ -37,10 +37,14 @@ export default defineConfig({
     // root (/@react-refresh, /@id/*, /@fs/*, /src/*, /node_modules/*)
     // and under the /static/ base (dev asset URLs are
     // /static/src/*, /static/node_modules/*, /static/@*). Real Django
-    // static files under /static/ DO proxy to :8000.
+    // static files under /static/ DO proxy to :8001 — HTTPS because
+    // runsslserver serves the dev loop; secure:false because the
+    // dev cert is self-signed.
     proxy: {
-      '^/(?!@|src/|node_modules/|static/(?:@|src/|node_modules/))':
-        'http://localhost:8000',
+      '^/(?!@|src/|node_modules/|static/(?:@|src/|node_modules/))': {
+        target: 'https://localhost:8001',
+        secure: false,
+      },
     },
   },
   test: {
