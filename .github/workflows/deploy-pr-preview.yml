@@ -1,8 +1,22 @@
 name: Deploy PR preview to Cloud Run
 
+# Per-PR ephemeral Cloud Run preview (django-apps-pr-<num>).
+# Cost/abuse posture:
+#   - --no-allow-unauthenticated: unauthenticated requests are
+#     rejected by Google's edge with 403 before any container starts,
+#     so the URL cannot be abused into spend.
+#   - --min-instances=0: idles at zero.
+#   - The cleanup job deletes the service when the PR closes.
+# Browse a preview via:
+#   gcloud run services proxy django-apps-pr-<num> \
+#     --region=europe-west3 --project=django-apps-7345
+# (requires roles/run.invoker). Manual workflow_dispatch previews are
+# not auto-deleted — remove them with `gcloud run services delete`.
+
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
 
 permissions:
@@ -22,6 +36,7 @@ env:
 
 jobs:
   preview:
+    if: github.event_name == 'workflow_dispatch' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -52,13 +67,13 @@ jobs:
       # DOTENV exactly like a local .env file. Note APP_BASE_URL inside
       # env-file still points at production, so OAuth login redirects
       # there; the preview is for checking pages render, not full auth.
-      - name: Deploy preview service
+      - name: Deploy preview service (private)
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image="$IMAGE" \
             --region=${{ env.GCP_REGION }} \
             --platform=managed \
-            --allow-unauthenticated \
+            --no-allow-unauthenticated \
             --service-account=cloudrun-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
             --min-instances=0 \
             --max-instances=1 \
@@ -69,9 +84,58 @@ jobs:
             --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},GCS_AUDIO_BUCKET=${{ env.GCP_PROJECT_ID }}-audio-recordings \
             --project=${{ env.GCP_PROJECT_ID }}
 
-      - name: Show preview URL
+      # Private service: grant the deploy SA invoker so the smoke
+      # check below can prove the container actually boots.
+      - name: Grant deploy SA invoker access
         run: |
-          gcloud run services describe ${{ env.SERVICE_NAME }} \
+          gcloud run services add-iam-policy-binding ${{ env.SERVICE_NAME }} \
             --region=${{ env.GCP_REGION }} \
             --project=${{ env.GCP_PROJECT_ID }} \
-            --format='value(status.url)'
+            --member="serviceAccount:${{ env.DEPLOY_SA }}" \
+            --role="roles/run.invoker" \
+            --quiet
+
+      - name: Smoke check (authenticated)
+        run: |
+          set -euo pipefail
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(status.url)')
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+            "$URL/admin/login/")
+          echo "GET /admin/login/ -> $CODE"
+          test "$CODE" = "200"
+
+      - name: Show preview access
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(status.url)')
+          echo "Preview URL (private): $URL"
+          echo "Browse via: gcloud run services proxy ${{ env.SERVICE_NAME }} --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }}"
+
+  cleanup:
+    # Delete the PR's preview service when the pull request closes
+    # (merged or not) so previews never outlive their review.
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Delete preview service
+        run: |
+          gcloud run services delete ${{ env.SERVICE_NAME }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --quiet \
+            || echo "Preview service ${{ env.SERVICE_NAME }} not found - nothing to delete"
