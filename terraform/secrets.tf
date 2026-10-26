@@ -1,18 +1,8 @@
-data "google_secret_manager_secret" "app" {
-  for_each = toset([
-    "DJANGO_SECRET_KEY",
-    "ESV_KEY",
-    "DATABASE_URL",
-    "DB_SSL_CERT",
-    "GOOGLE_OAUTH_CLIENT_JSON",
-    "APP_BASE_URL",
-    "GOCARDLESS_SECRET_ID",
-    "GOCARDLESS_SECRET_KEY",
-    "VAPID_PUBLIC_KEY",
-    "VAPID_PRIVATE_KEY",
-    "VAPID_SUBJECT",
-  ])
-
+# Single consolidated secret: the whole .env file (KEY=VALUE lines,
+# multiline values double-quoted with \n escapes). Cloud Run mounts
+# it as the DOTENV env var and settings.py parses it exactly like a
+# local .env file — one secret, one schema, local and cloud.
+data "google_secret_manager_secret" "env_file" {
   project   = var.project_id
-  secret_id = each.value
+  secret_id = "env-file"
 }

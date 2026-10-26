@@ -17,61 +17,13 @@ resource "google_cloud_run_v2_service" "django_app" {
         value = var.project_id
       }
 
+      # All app secrets ship in one mounted value: the env-file
+      # secret holds a complete .env file which settings.py parses.
       env {
-        name = "DJANGO_SECRET_KEY"
+        name = "DOTENV"
         value_source {
           secret_key_ref {
-            secret  = data.google_secret_manager_secret.app["DJANGO_SECRET_KEY"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.app["DATABASE_URL"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "APP_BASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.app["APP_BASE_URL"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "GOOGLE_OAUTH_CLIENT_JSON"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.app["GOOGLE_OAUTH_CLIENT_JSON"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "GOCARDLESS_SECRET_ID"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.app["GOCARDLESS_SECRET_ID"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "GOCARDLESS_SECRET_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.app["GOCARDLESS_SECRET_KEY"].secret_id
+            secret  = data.google_secret_manager_secret.env_file.secret_id
             version = "latest"
           }
         }
@@ -80,16 +32,6 @@ resource "google_cloud_run_v2_service" "django_app" {
       env {
         name  = "GCS_AUDIO_BUCKET"
         value = google_storage_bucket.audio_recordings.name
-      }
-
-      env {
-        name = "VAPID_PUBLIC_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.app["VAPID_PUBLIC_KEY"].secret_id
-            version = "latest"
-          }
-        }
       }
 
       ports {

@@ -20,6 +20,84 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_YAML_PATH = os.path.join(BASE_DIR, 'config.yaml')
 
 
+def _dotenv_unescape(value):
+    """Decode escapes inside a double-quoted .env value."""
+    out = []
+    i = 0
+    while i < len(value):
+        ch = value[i]
+        if ch == '\\' and i + 1 < len(value):
+            nxt = value[i + 1]
+            if nxt == 'n':
+                out.append('\n')
+            elif nxt == 'r':
+                out.append('\r')
+            elif nxt == 't':
+                out.append('\t')
+            else:
+                out.append(nxt)
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return ''.join(out)
+
+
+def _parse_dotenv(text):
+    """Minimal .env parser.
+
+    Supports KEY=VALUE, single- and double-quoted values (escape
+    sequences decoded only inside double quotes), '#' comment lines,
+    blank lines and an optional 'export ' prefix.
+    """
+    values = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if line.startswith('export '):
+            line = line[len('export '):].lstrip()
+        key, sep, value = line.partition('=')
+        if not sep:
+            continue
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = _dotenv_unescape(value[1:-1])
+        elif len(value) >= 2 and value[0] == value[-1] == "'":
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def _load_dotenv():
+    """Populate os.environ from a dotenv source, never overriding
+    variables that are already set.
+
+    Precedence: the DOTENV env var holding the file contents (Cloud
+    Run injects the env-file secret this way), then DOTENV_PATH,
+    then a .env file in BASE_DIR. Returns True when a source was
+    loaded.
+    """
+    text = os.environ.get('DOTENV') or None
+    dotenv_path = os.environ.get('DOTENV_PATH')
+    if text is None and dotenv_path:
+        with open(dotenv_path) as f:
+            text = f.read()
+    if text is None:
+        default_path = os.path.join(BASE_DIR, '.env')
+        if os.path.isfile(default_path):
+            with open(default_path) as f:
+                text = f.read()
+    if text is None:
+        return False
+    for key, value in _parse_dotenv(text).items():
+        os.environ.setdefault(key, value)
+    return True
+
+
 def _is_gcp_environment():
     return (
         os.environ.get('GAE_APPLICATION') is not None
@@ -37,6 +115,12 @@ def _is_vercel_environment():
 IS_GCP_ENVIRONMENT = _is_gcp_environment()
 IS_VERCEL_ENVIRONMENT = _is_vercel_environment()
 IS_CLOUD_ENVIRONMENT = IS_GCP_ENVIRONMENT or IS_VERCEL_ENVIRONMENT
+
+# One config schema everywhere: Cloud Run mounts the `env-file`
+# secret as DOTENV, locally a gitignored .env file provides the
+# same KEY=VALUE pairs. Values only fill in unset env vars, so
+# real environment variables always win.
+DOTENV_LOADED = _load_dotenv()
 
 if IS_CLOUD_ENVIRONMENT:
     import dj_database_url
@@ -93,32 +177,20 @@ if IS_CLOUD_ENVIRONMENT:
                 f.write(gcp_sa_json)
         os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = gcp_creds_path
 
-elif os.path.isfile(CONFIG_YAML_PATH):
-    import yaml
-    with open(CONFIG_YAML_PATH, 'r') as file:
-        config = yaml.safe_load(file)
-    SECRET_KEY = config.get('SECRET_KEY')
-    DEBUG = config.get('DEBUG')
-    BASE_URL = config.get('BASE_URL')
-    DATABASES = config.get('DATABASES')
-    GOCARDLESS_SECRET_ID = config.get('GOCARDLESS_SECRET_ID')
-    GOCARDLESS_SECRET_KEY = config.get('GOCARDLESS_SECRET_KEY')
-    VAPID_PUBLIC_KEY = config.get('VAPID_PUBLIC_KEY', '')
-    VAPID_PRIVATE_KEY = config.get('VAPID_PRIVATE_KEY', '')
-    VAPID_SUBJECT = config.get('VAPID_SUBJECT', '')
-    GOOGLE_APP_SECRETS_PATH = os.path.join(
-        BASE_DIR, 'google_api', 'app_secrets.json'
-    )
-else:
-    # Local fallback when neither GCP env vars nor
-    # config.yaml are available (fresh clones, CI).
-    # Uses safe dev defaults so manage.py commands still work.
-    import warnings
-    warnings.warn(
-        'config.yaml not found and no GCP environment '
-        'detected - falling back to insecure local dev defaults '
-        '(sqlite db.sqlite3, DEBUG=True).'
-    )
+elif DOTENV_LOADED or not os.path.isfile(CONFIG_YAML_PATH):
+    # Env-var config — the same variable names the cloud branch
+    # reads. Reached when a dotenv source loaded above (local .env
+    # or DOTENV/DOTENV_PATH) or, as a last resort, on fresh clones
+    # and CI where neither .env nor config.yaml exists: safe dev
+    # defaults then apply so manage.py commands still work.
+    if not DOTENV_LOADED:
+        import warnings
+        warnings.warn(
+            'No .env or config.yaml found and no cloud environment '
+            'detected - falling back to insecure local dev defaults '
+            '(sqlite db.sqlite3, DEBUG=True).'
+        )
+    import dj_database_url
     SECRET_KEY = os.environ.get(
         'DJANGO_SECRET_KEY', 'dev-only-insecure-secret-key'
     )
@@ -128,7 +200,6 @@ else:
     BASE_URL = os.environ.get('APP_BASE_URL', 'http://127.0.0.1:8000')
     db_url = os.environ.get('DATABASE_URL')
     if db_url:
-        import dj_database_url
         DATABASES = {'default': dj_database_url.parse(db_url)}
     else:
         DATABASES = {
@@ -142,6 +213,33 @@ else:
     VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
     VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
     VAPID_SUBJECT = os.environ.get('VAPID_SUBJECT', '')
+    # GOOGLE_OAUTH_CLIENT_JSON travels inside the .env on GCP and
+    # is materialized to /tmp like in the cloud branch; without it,
+    # the local gitignored google_api/app_secrets.json is used.
+    oauth_client_json = os.environ.get('GOOGLE_OAUTH_CLIENT_JSON')
+    if oauth_client_json:
+        GOOGLE_APP_SECRETS_PATH = '/tmp/app_secrets.json'
+        if not os.path.exists(GOOGLE_APP_SECRETS_PATH):
+            with open(GOOGLE_APP_SECRETS_PATH, 'w') as f:
+                f.write(oauth_client_json)
+    else:
+        GOOGLE_APP_SECRETS_PATH = os.path.join(
+            BASE_DIR, 'google_api', 'app_secrets.json'
+        )
+elif os.path.isfile(CONFIG_YAML_PATH):
+    # Legacy fallback: config.yaml still works when no .env exists.
+    import yaml
+    with open(CONFIG_YAML_PATH, 'r') as file:
+        config = yaml.safe_load(file)
+    SECRET_KEY = config.get('SECRET_KEY')
+    DEBUG = config.get('DEBUG')
+    BASE_URL = config.get('BASE_URL')
+    DATABASES = config.get('DATABASES')
+    GOCARDLESS_SECRET_ID = config.get('GOCARDLESS_SECRET_ID')
+    GOCARDLESS_SECRET_KEY = config.get('GOCARDLESS_SECRET_KEY')
+    VAPID_PUBLIC_KEY = config.get('VAPID_PUBLIC_KEY', '')
+    VAPID_PRIVATE_KEY = config.get('VAPID_PRIVATE_KEY', '')
+    VAPID_SUBJECT = config.get('VAPID_SUBJECT', '')
     GOOGLE_APP_SECRETS_PATH = os.path.join(
         BASE_DIR, 'google_api', 'app_secrets.json'
     )

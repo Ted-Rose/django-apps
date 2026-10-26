@@ -59,15 +59,13 @@ jobs:
         run: pip install -r requirements.txt
 
       # Runs directly on the runner: Aiven Postgres is publicly
-      # reachable and sslmode=require needs no CA cert. Secrets are
-      # pulled from GCP Secret Manager at run time (WIF SA already has
-      # secretAccessor) so they live only in GCP.
+      # reachable and sslmode=require needs no CA cert. All settings
+      # travel in the single env-file secret (same format as a local
+      # .env), pulled at run time via WIF so it lives only in GCP.
       - name: Run database migrations
         run: |
-          export DATABASE_URL="$(gcloud secrets versions access latest \
-            --secret=DATABASE_URL --project=${{ env.GCP_PROJECT_ID }})"
-          export DJANGO_SECRET_KEY="$(gcloud secrets versions access latest \
-            --secret=DJANGO_SECRET_KEY --project=${{ env.GCP_PROJECT_ID }})"
+          export DOTENV="$(gcloud secrets versions access latest \
+            --secret=env-file --project=${{ env.GCP_PROJECT_ID }})"
           USE_GCP_SECRETS=true python manage.py migrate --noinput
 
       - name: Deploy to Cloud Run
