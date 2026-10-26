@@ -12,6 +12,7 @@ data/
 staticfiles
 config.yaml
 private_settings.json
+.env
 
 terraform/.terraform/
 terraform/tfplan

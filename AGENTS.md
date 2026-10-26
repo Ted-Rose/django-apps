@@ -78,12 +78,15 @@ URL routing (`django_apps/urls.py`): `google_api`, `gmail` and
 
 ## Domain contract — what breaks if you get it wrong
 
-1. **Local config ↔ live resources.** `config.yaml` at repo root
-   (gitignored; template `config_template.yaml`) is the local
-   settings file. When `DEBUG` is true, `settings.py` swaps
+1. **Local config ↔ live resources.** `.env` at repo root
+   (gitignored; schema `.env.example`) is the local settings file —
+   the same KEY=VALUE format the GCP `env-file` secret uses, parsed
+   by `settings.py` (`DOTENV`/`DOTENV_PATH` env vars also work).
+   `config.yaml` still works as a legacy fallback when no `.env`
+   exists. When `DEBUG` is true, `settings.py` swaps
    `DATABASES` to local sqlite `db.sqlite3` — `runserver`,
    `shell`, `migrate`, `test` all hit a throwaway dev DB. Setting
-   `DEBUG: false` in `config.yaml` instead connects to
+   `DEBUG=false` instead connects to
    **production Postgres via the read-only `ai_agent` user**
    (SELECT only — every write fails `permission denied`, which is
    intended, not a bug). Use it for investigation only; never work
@@ -182,7 +185,7 @@ Universal rules — follow exactly:
    installed (`brew install gh && gh auth login`) — if it is
    missing, tell the user instead of working around it.
 9. **No secrets in code.** Gitignored and must stay that way:
-   `config.yaml`, `private_settings.json` (legacy),
+   `.env`, `config.yaml`, `private_settings.json` (legacy),
    `google_api/app_secrets.json`, `ca.pem`,
    `terraform/terraform.tfstate*`, `terraform/tfplan`,
    `terraform/.terraform/`, `settings.json`, `data/`. Cloud
@@ -288,6 +291,12 @@ Code conventions:
 
 ## Deployment & CI
 
+- All GCP app secrets live in ONE Secret Manager secret
+  `env-file` — an entire .env file in the same schema as local
+  `.env`. Cloud Run service + jobs mount it as the `DOTENV` env
+  var; the deploy workflow's migrate step exports it the same way.
+- `deploy-pr-preview.yml` deploys a `django-apps-pr-<n>` Cloud Run
+  service per PR to main (min 0 / max 1) sharing `env-file`.
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
   Artifact Registry → `manage.py migrate` on the Actions runner
   (secrets via WIF) → `gcloud run deploy django-apps`. Dockerfile
@@ -318,9 +327,9 @@ Code conventions:
   `/tmp/app_secrets.json` and (Vercel only)
   `GCP_SERVICE_ACCOUNT_JSON` → `/tmp/gcp_service_account.json` +
   `GOOGLE_APPLICATION_CREDENTIALS` at settings import.
-- Missing `config.yaml` locally → insecure dev defaults (sqlite,
-  `DEBUG=True`) with a warning — enough for `check`/`test`, not
-  for real data work.
+- Missing `.env` and `config.yaml` locally → insecure dev defaults
+  (sqlite, `DEBUG=True`) with a warning — enough for `check`/`test`,
+  not for real data work.
 - The PWA service worker is not registered on localhost (it would
   stale-serve vite modules). Bump `PWA_CACHE_VERSION` in
   `django_apps/views.py` when shipping frontend changes.
@@ -334,7 +343,7 @@ Code conventions:
   (`.vscode/tasks.json`) then runsslserver under debugpy on
   https://127.0.0.1:8001 (internalConsole — no terminal activate
   echo; bundled self-signed cert → accept the browser warning).
-  `config.yaml` `BASE_URL` must match scheme+port —
+  `.env` `APP_BASE_URL` must match scheme+port —
   `google_auth` builds the OAuth redirect_uri from it and Google
   rejects mismatches (http://127.0.0.1 redirect URIs are allowed).
   To run vite alone: `npm run dev --prefix frontend` or Terminal →

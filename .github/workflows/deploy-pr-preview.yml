@@ -1,0 +1,77 @@
+name: Deploy PR preview to Cloud Run
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# One preview service per PR; serialize repeat pushes to the same PR.
+concurrency: pr-preview-${{ github.event.pull_request.number || 'staging' }}
+
+env:
+  GCP_PROJECT_ID: django-apps-7345
+  GCP_REGION: europe-west3
+  WIF_PROVIDER: projects/356166814755/locations/global/workloadIdentityPools/github-actions/providers/github
+  DEPLOY_SA: github-deployer@django-apps-7345.iam.gserviceaccount.com
+  ARTIFACT_REGISTRY: europe-west3-docker.pkg.dev/django-apps-7345/gae-standard
+  SERVICE_NAME: django-apps-pr-${{ github.event.pull_request.number || 'staging' }}
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker \
+            ${{ env.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build and push Docker image
+        run: |
+          REPO=${{ env.ARTIFACT_REGISTRY }}
+          IMAGE=$REPO/django-apps-preview:$SERVICE_NAME
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      # Previews share the single env-file secret — settings.py parses
+      # DOTENV exactly like a local .env file. Note APP_BASE_URL inside
+      # env-file still points at production, so OAuth login redirects
+      # there; the preview is for checking pages render, not full auth.
+      - name: Deploy preview service
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image="$IMAGE" \
+            --region=${{ env.GCP_REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --service-account=cloudrun-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
+            --min-instances=0 \
+            --max-instances=1 \
+            --memory=1Gi \
+            --cpu=1 \
+            --timeout=300 \
+            --set-secrets=DOTENV=env-file:latest \
+            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},GCS_AUDIO_BUCKET=${{ env.GCP_PROJECT_ID }}-audio-recordings \
+            --project=${{ env.GCP_PROJECT_ID }}
+
+      - name: Show preview URL
+        run: |
+          gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(status.url)'

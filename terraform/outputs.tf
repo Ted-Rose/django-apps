@@ -14,8 +14,8 @@ output "terraform_state_bucket" {
   value = google_storage_bucket.terraform_state.url
 }
 
-output "secret_ids_observed" {
-  value = sort(keys({ for k, v in data.google_secret_manager_secret.app : k => true }))
+output "env_file_secret_id" {
+  value = data.google_secret_manager_secret.env_file.secret_id
 }
 
 output "gae_standard_image_base" {
