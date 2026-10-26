@@ -286,9 +286,11 @@ INSTALLED_APPS = [
     'corsheaders',
     'django.contrib.staticfiles',
     'django_vite',
-    'ninja',
     'sslserver',
+    # Before ninja so its export_openapi_schema override wins
+    # (earlier INSTALLED_APPS entries take command precedence).
     'django_apps',
+    'ninja',
     'google_api',
     'gmail',
     'google_tasks',
