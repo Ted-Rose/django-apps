@@ -161,8 +161,6 @@ language}`).
   source venv/bin/activate
   python manage.py export_openapi_schema \
       --output frontend/openapi.json
-  printf '\n' >> frontend/openapi.json   # committed file keeps the
-                                         # trailing newline (CI diff)
   npm run gen:types --prefix frontend
   ```
 
@@ -207,7 +205,6 @@ python manage.py test <app>
 npm run typecheck --prefix frontend && npm run lint --prefix frontend
 npm test --prefix frontend
 python manage.py export_openapi_schema --output frontend/openapi.json \
-    && printf '\n' >> frontend/openapi.json \
     && npm run gen:types --prefix frontend
 git status --porcelain    # openapi.json + api-types.ts committed
 npm run build --prefix frontend   # manifest gains the new key

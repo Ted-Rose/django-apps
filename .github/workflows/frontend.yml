@@ -50,9 +50,6 @@ jobs:
           python -c "import yaml; yaml.safe_dump({'SECRET_KEY': 'build-time-dummy', 'DEBUG': False, 'BASE_URL': '', 'DATABASES': {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}}, open('config.yaml', 'w'))"
           python manage.py export_openapi_schema --output frontend/openapi.json
           rm config.yaml
-          # The committed file keeps a trailing newline; the export
-          # doesn't write one.
-          printf '\n' >> frontend/openapi.json
           # --porcelain catches deleted/untracked files too, which
           # `git diff --exit-code` would silently miss.
           if [ -n "$(git status --porcelain -- frontend/openapi.json)" ]; then
