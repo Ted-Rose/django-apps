@@ -205,45 +205,48 @@ resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_balance_alerts"
 # DB migrations are unaffected — deploy.yml runs them via a one-off
 # django-migrate-<sha> Cloud Run job on each deploy.
 
-resource "google_cloud_scheduler_job" "sync_transactions_schedule" {
-  name      = "sync-bank-transactions-schedule"
-  region    = var.region
-  project   = var.project_id
-  schedule  = "0 2 * * *"
-  time_zone = "UTC"
-  paused    = false
-
-  http_target {
-    http_method = "POST"
-    uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.sync_transactions_job.name}:run"
-
-    oauth_token {
-      service_account_email = google_service_account.scheduler.email
-    }
-  }
-
-  depends_on = [google_project_service.enabled]
-}
-
-resource "google_cloud_scheduler_job" "evaluate_limits_schedule" {
-  name      = "evaluate-spending-limits-schedule"
-  region    = var.region
-  project   = var.project_id
-  schedule  = "30 2 * * *"
-  time_zone = "UTC"
-  paused    = false
-
-  http_target {
-    http_method = "POST"
-    uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.evaluate_limits_job.name}:run"
-
-    oauth_token {
-      service_account_email = google_service_account.scheduler.email
-    }
-  }
-
-  depends_on = [google_project_service.enabled]
-}
+# Disabled to stay within the 3-free-jobs Cloud Scheduler quota
+# (billed $0.10/job/mo beyond 3 per billing account). Uncomment
+# to re-enable.
+# resource "google_cloud_scheduler_job" "sync_transactions_schedule" {
+#   name      = "sync-bank-transactions-schedule"
+#   region    = var.region
+#   project   = var.project_id
+#   schedule  = "0 2 * * *"
+#   time_zone = "UTC"
+#   paused    = false
+#
+#   http_target {
+#     http_method = "POST"
+#     uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.sync_transactions_job.name}:run"
+#
+#     oauth_token {
+#       service_account_email = google_service_account.scheduler.email
+#     }
+#   }
+#
+#   depends_on = [google_project_service.enabled]
+# }
+#
+# resource "google_cloud_scheduler_job" "evaluate_limits_schedule" {
+#   name      = "evaluate-spending-limits-schedule"
+#   region    = var.region
+#   project   = var.project_id
+#   schedule  = "30 2 * * *"
+#   time_zone = "UTC"
+#   paused    = false
+#
+#   http_target {
+#     http_method = "POST"
+#     uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.evaluate_limits_job.name}:run"
+#
+#     oauth_token {
+#       service_account_email = google_service_account.scheduler.email
+#     }
+#   }
+#
+#   depends_on = [google_project_service.enabled]
+# }
 
 resource "google_cloud_scheduler_job" "check_balance_alerts_schedule" {
   name      = "check-balance-alerts-schedule"
