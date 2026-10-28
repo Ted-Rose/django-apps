@@ -5,32 +5,42 @@ and every capture call here is a no-op.
 """
 from urllib.parse import urlparse
 
-# Paths whose request bodies carry credentials — the google_api
-# credential POST lives at /login/ (settings.LOGIN_URL) and the
-# Django admin login POSTs passwords under /admin/.
-# ``sentry_before_send`` strips the parsed body for these paths so
-# secrets can never reach Sentry.
+# Paths whose request bodies carry credentials — the only real
+# password POST is /admin/login/ (Django admin); /login/ is just
+# a GET redirect into Google OAuth but stays scrubbed as defense
+# in depth. ``sentry_before_send`` strips the parsed body for
+# these paths so secrets can never reach Sentry.
 _SENSITIVE_PATH_PREFIXES = (
     '/login/',
     '/admin/',
 )
+
+# The OAuth redirect_uri — its query string carries the single-use
+# authorization ``code`` (a credential), so events drop it.
+_OAUTH_CALLBACK_PATH = '/google/callback'
 
 
 def sentry_before_send(event, hint):
     """Scrub sensitive request data before a Sentry event sends.
 
     Drops the parsed request body (``request.data``) on credential
-    paths — those bodies contain passwords/OAuth secrets. Defense
-    in depth on top of ``send_default_pii=False`` and the org-level
-    data scrubbers. URL, method, and headers are kept so the event
-    stays debuggable.
+    paths — those bodies contain passwords/OAuth secrets — and the
+    query string on the OAuth callback, whose ``code`` param is a
+    credential. Defense in depth on top of
+    ``send_default_pii=False`` and the org-level data scrubbers.
+    URL, method, and headers are kept so the event stays
+    debuggable.
     """
     request = event.get('request')
     if not isinstance(request, dict):
         return event
-    path = urlparse(request.get('url') or '').path
-    if path.startswith(_SENSITIVE_PATH_PREFIXES):
+    parsed = urlparse(request.get('url') or '')
+    if parsed.path.startswith(_SENSITIVE_PATH_PREFIXES):
         request.pop('data', None)
+    if parsed.path == _OAUTH_CALLBACK_PATH:
+        request['url'] = parsed._replace(
+            query='', fragment=''
+        ).geturl()
     return event
 
 

@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react';
 import type { ErrorEvent, EventHint } from '@sentry/react';
+import { readBootstrap } from './bootstrap';
 
 /**
  * Sentry init + `beforeSend` for every SPA entry.
@@ -9,7 +10,7 @@ import type { ErrorEvent, EventHint } from '@sentry/react';
  * SPA is server-rendered, so the web DSN arrives at request time
  * and needs no build-time `VITE_*` plumbing. `useBootstrap` is a
  * React hook and cannot run before `createRoot`, so the DOM node
- * is read directly.
+ * is read via the plain `readBootstrap` helper.
  */
 interface SentryBootstrap {
   sentry?: {
@@ -17,16 +18,6 @@ interface SentryBootstrap {
     environment?: string | null;
     release?: string | null;
   };
-}
-
-function readBootstrap(): SentryBootstrap {
-  const el = document.getElementById('spa-bootstrap');
-  if (!el || !el.textContent) return {};
-  try {
-    return JSON.parse(el.textContent) as SentryBootstrap;
-  } catch {
-    return {};
-  }
 }
 
 /**
@@ -37,7 +28,7 @@ function readBootstrap(): SentryBootstrap {
 export function initSentry(): void {
   // VITE_SENTRY_DSN is an override escape hatch (e.g. a page
   // served without the Django-rendered bootstrap).
-  const bootstrap = readBootstrap().sentry ?? {};
+  const bootstrap = (readBootstrap() as SentryBootstrap).sentry ?? {};
   const dsn =
     (import.meta.env.VITE_SENTRY_DSN as string | undefined) ||
     bootstrap.dsn ||

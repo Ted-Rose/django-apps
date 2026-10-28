@@ -274,7 +274,9 @@ SENTRY_DSN = os.environ.get('SENTRY_DSN')
 SENTRY_WEB_DSN = os.environ.get('SENTRY_WEB_DSN')
 # Explicit override → Vercel's env ('production' | 'preview') →
 # production on GCP (Cloud Run service AND jobs set K_SERVICE) →
-# development everywhere else.
+# development everywhere else. USE_GCP_SECRETS=true one-off steps
+# (CI `migrate`, local secret-backed runs) also tag 'production' —
+# intentional: a migrate crash touches the prod DB and should page.
 SENTRY_ENVIRONMENT = (
     os.environ.get('SENTRY_ENVIRONMENT')
     or os.environ.get('VERCEL_ENV')
