@@ -341,6 +341,21 @@ Environment tag: `SENTRY_ENVIRONMENT` → `VERCEL_ENV` →
 `SENTRY_ENVIRONMENT=preview` so previews never pollute the prod
 queue.
 
+**Verified live** on Cloud Run since the PR#47 deploy (rev
+`django-apps-00058-h2c`) — DSNs are in the `env-file` GCP
+secret in project `django-apps-7345` and
+`error_code:internal_error` events were confirmed end-to-end.
+The Vercel deploy still needs `SENTRY_DSN` + `SENTRY_WEB_DSN`
+env vars set on the Vercel project (pending user action) —
+until then only Cloud Run reports. Org config worth knowing:
+per-project inbound filters (web project: browser-extensions,
+web-crawlers, legacy-browsers, localhost), org-level
+dataScrubber + sensitiveFields, and a "New issues and
+regressions (production)" email workflow matching
+`environment:production` + `level:error`. REST `rateLimit` PUTs
+silently no-op — the rate-limits feature is not enabled on
+these orgs.
+
 `is:unresolved level:error environment:production` = the
 agent-fixable bug queue:
 
@@ -358,6 +373,29 @@ POSTs); `send_default_pii=False`. Non-SPA pages (`/`, `/login/`,
 user-report or provider-outage streams yet — GoCardless sync
 failures are the natural `error_code:provider_error` candidate
 if added later.
+
+REST ops (the agent fix queue) — `source
+~/.config/devin/sentry.env` (exports `SENTRY_API_TOKEN`), then:
+
+```bash
+curl -sS -H "Authorization: Bearer $SENTRY_API_TOKEN" \
+  "https://de.sentry.io/api/0/projects/<org>/<proj>/issues/"\
+"?query=is:unresolved+level:error+environment:production"
+```
+
+That issue list IS the fix queue; `GET
+/issues/<id>/events/latest/` for event detail; `PUT
+/issues/<id>/` with `{"status":"resolvedInNextRelease"}` — only
+after the fix merges.
+
+Local-only quirk: this dev machine sits behind a Netskope
+TLS-intercepting proxy — Python→Sentry egress FAILS SILENTLY
+(`SSLCertVerificationError` inside the SDK transport; `flush()`
+returns but events never arrive) unless `SSL_CERT_FILE` points
+at a CA bundle that includes the Netskope root — build one by
+concatenating `certifi.where()` output with
+`/Library/Application Support/Netskope/STAgent/data/nscacert.pem`.
+Prod (Cloud Run/Vercel) is unaffected.
 
 ## Gotchas
 
