@@ -47,8 +47,9 @@ resource "google_cloud_run_v2_service" "django_app" {
         limits = {
           cpu = "1"
           # Keep in sync with deploy.yml's `gcloud run deploy
-          # --memory=1Gi` — the workflow is the source of truth.
-          memory = "1Gi"
+          # --memory=512Mi` — the workflow is the source of truth.
+          # 512Mi chosen over 1Gi for cost savings.
+          memory = "512Mi"
         }
       }
     }

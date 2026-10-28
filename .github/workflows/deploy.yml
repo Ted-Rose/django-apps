@@ -82,7 +82,7 @@ jobs:
             --service-account=cloudrun-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com \
             --min-instances=0 \
             --max-instances=1 \
-            --memory=1Gi \
+            --memory=512Mi \
             --cpu=1 \
             --timeout=300 \
             --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},GCS_AUDIO_BUCKET=${{ env.GCP_PROJECT_ID }}-audio-recordings \
