@@ -59,8 +59,14 @@ resource "google_cloud_run_v2_job" "all_jobs" {
   }
 
   lifecycle {
+    # image is owned by deploy.yml's `gcloud run jobs update`;
+    # client/client_version are gcloud-stamped annotations the
+    # same command rewrites every run — ignoring them avoids a
+    # perpetual no-op diff.
     ignore_changes = [
       template[0].template[0].containers[0].image,
+      client,
+      client_version,
     ]
   }
 
