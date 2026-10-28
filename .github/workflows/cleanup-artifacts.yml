@@ -54,7 +54,7 @@ jobs:
           # jobs resolve the image to a digest at update time, so
           # deleting that digest breaks the next scheduled execution.
           PROTECTED_DIGESTS=""
-          for JOB in sync-bank-transactions evaluate-spending-limits check-balance-alerts; do
+          for JOB in all-jobs; do
             JOB_IMAGE=$(gcloud run jobs describe "$JOB" \
               --region=${{ env.GCP_REGION }} \
               --project=${{ env.GCP_PROJECT_ID }} \
