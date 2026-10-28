@@ -72,6 +72,10 @@ jobs:
       # there; the preview is for checking pages render, not full auth.
       - name: Deploy preview service (private)
         run: |
+          GCP_PID=${{ env.GCP_PROJECT_ID }}
+          ENVS="GOOGLE_CLOUD_PROJECT=$GCP_PID"
+          ENVS+=",GCS_AUDIO_BUCKET=$GCP_PID-audio-recordings"
+          ENVS+=",SENTRY_ENVIRONMENT=preview"
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image="$IMAGE" \
             --region=${{ env.GCP_REGION }} \
@@ -84,10 +88,8 @@ jobs:
             --cpu=1 \
             --timeout=300 \
             --set-secrets=DOTENV=env-file:latest \
-            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},\
-GCS_AUDIO_BUCKET=${{ env.GCP_PROJECT_ID }}-audio-recordings,\
-SENTRY_ENVIRONMENT=preview \
-            --project=${{ env.GCP_PROJECT_ID }}
+            --set-env-vars="$ENVS" \
+            --project=$GCP_PID
 
       # WIF credentials cannot mint Cloud Run identity tokens, so the
       # smoke check verifies the two properties that matter: the
