@@ -12,11 +12,10 @@ resource "google_cloud_run_v2_service" "django_app" {
     containers {
       image = "${google_artifact_registry_repository.gae_standard.location}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.gae_standard.repository_id}/django-apps:latest"
 
-      env {
-        name  = "GOOGLE_CLOUD_PROJECT"
-        value = var.project_id
-      }
-
+      # Env order matches what `gcloud run deploy` leaves behind
+      # (deploy.yml is the source of truth — it puts the
+      # secret-backed var first); ordering here only avoids a
+      # perpetual no-op diff.
       # All app secrets ship in one mounted value: the env-file
       # secret holds a complete .env file which settings.py parses.
       env {
@@ -27,6 +26,11 @@ resource "google_cloud_run_v2_service" "django_app" {
             version = "latest"
           }
         }
+      }
+
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
       }
 
       env {
@@ -41,8 +45,10 @@ resource "google_cloud_run_v2_service" "django_app" {
       resources {
         cpu_idle = true
         limits = {
-          cpu    = "1"
-          memory = "512Mi"
+          cpu = "1"
+          # Keep in sync with deploy.yml's `gcloud run deploy
+          # --memory=1Gi` — the workflow is the source of truth.
+          memory = "1Gi"
         }
       }
     }
@@ -56,8 +62,14 @@ resource "google_cloud_run_v2_service" "django_app" {
   }
 
   lifecycle {
+    # image is owned by deploy.yml's `gcloud run deploy`;
+    # client/client_version are gcloud-stamped annotations the
+    # same deploy rewrites every run — ignoring them avoids a
+    # perpetual no-op diff.
     ignore_changes = [
       template[0].containers[0].image,
+      client,
+      client_version,
     ]
   }
 
