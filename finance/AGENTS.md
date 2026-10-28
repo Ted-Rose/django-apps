@@ -203,10 +203,13 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   failed/429'd or whose currency mismatches are skipped — never
   alert on a stale stored balance. Logs `BALANCE_ALERT_TRIGGERED`.
 - Terraform (`terraform/cloud_run_jobs.tf`) maps these to Cloud Run
-  jobs with Cloud Scheduler triggers running daily (`paused = false`:
-  sync at 02:00 UTC, evaluate at 02:30 UTC, balance alerts at
-  03:00 UTC) — set `paused = true` to
-  stop the schedules and save costs.
+  jobs. Only the balance-alerts Cloud Scheduler trigger is enabled
+  (03:00 UTC daily); the sync (02:00 UTC) and evaluate (02:30 UTC)
+  triggers are commented out to stay in the free Cloud Scheduler
+  quota. `run_all_jobs`
+  (`django_apps/management/commands/run_all_jobs.py`) drives the
+  same commands from a single `all-jobs` Cloud Run job — its
+  `JOBS` list is the place to re-enable them.
 
 ## Rules engine (`services/rules.py`)
 

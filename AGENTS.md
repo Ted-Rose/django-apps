@@ -126,6 +126,7 @@ python manage.py export_openapi_schema --output frontend/openapi.json
 python manage.py sync_bank_transactions --dry-run
 python manage.py evaluate_spending_limits
 python manage.py check_balance_alerts
+python manage.py run_all_jobs --dry-run   # also --only LBL/--force
 ```
 
 Frontend (cwd `frontend/` or `npm run <script> --prefix frontend`):
@@ -312,8 +313,15 @@ Code conventions:
   `frontend/node_modules` so the lambda stays under
   `maxLambdaSize`.
 - Scheduled Cloud Run jobs (Cloud Scheduler →
-  `terraform/cloud_run_jobs.tf`): `sync-bank-transactions` 02:00
-  UTC, `evaluate-spending-limits` 02:30 UTC daily.
+  `terraform/cloud_run_jobs.tf`): only `check-balance-alerts`
+  03:00 UTC daily is enabled; `sync-bank-transactions` and
+  `evaluate-spending-limits` schedulers are commented out to
+  stay in the free Cloud Scheduler quota. A single `all-jobs`
+  Cloud Run job (`python manage.py run_all_jobs`,
+  `django_apps/management/commands/run_all_jobs.py`) is being
+  phased in to replace the per-task jobs — its `JOBS` list is
+  the single place sub-jobs are enabled/disabled; Phase 1 has
+  no scheduler (run it manually via `gcloud run jobs execute`).
 - GCP auth uses Workload Identity Federation (no SA keys). Cost
   goal: stay in the GCP free tier — prefer free-tier-friendly
   infra choices.

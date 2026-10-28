@@ -1,6 +1,11 @@
 # google_api
 
 ## Changelog
+10. A single `all-jobs` Cloud Run job (`manage.py run_all_jobs`)
+    now runs the finance scheduled commands in one pass — Phase 1
+    of consolidating the per-task jobs to stay in the free Cloud
+    Scheduler quota; the existing jobs and balance-alerts schedule
+    are unchanged for now
 9. Tasks gains a label management page at `/tasks/labels` — edit
    each label's badge color via a color picker or hex input (labels
    are app-local and never sync to Google)

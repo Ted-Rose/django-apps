@@ -90,7 +90,8 @@ jobs:
 
       - name: Update Cloud Run Jobs image
         run: |
-          for JOB in sync-bank-transactions evaluate-spending-limits check-balance-alerts; do
+          for JOB in sync-bank-transactions evaluate-spending-limits \
+                     check-balance-alerts all-jobs; do
             gcloud run jobs update $JOB \
               --image=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest \
               --region=${{ env.GCP_REGION }} \

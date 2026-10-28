@@ -1,12 +1,22 @@
-"""Tests for the per-user settings API (/api/me/) and the
-build-time .po → .mo compile step used by job gettext."""
+"""Tests for the per-user settings API (/api/me/), the
+build-time .po → .mo compile step used by job gettext, and the
+run_all_jobs master command."""
 import json
+from datetime import date
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.test import SimpleTestCase, TestCase
 
+from django_apps.management.commands.run_all_jobs import (
+    JOBS,
+    scheduled_today,
+)
 from django_apps.models import UserSettings, user_language
 
 
@@ -99,3 +109,211 @@ class CompilePoTests(TestCase):
                 # en entries carry empty msgstrs (English IS the
                 # msgid) so the en catalog compiles to no entries.
                 self.assertIn('Spending limit exceeded', msgids)
+
+
+class RunAllJobsScheduleTests(SimpleTestCase):
+    """Predicate math for run_all_jobs.scheduled_today."""
+
+    def test_daily(self):
+        self.assertTrue(
+            scheduled_today('daily', date(2026, 10, 28))
+        )
+
+    def test_weekly_gates_on_weekday(self):
+        # 2026-10-26 is a Monday, 2026-10-27 a Tuesday.
+        self.assertTrue(
+            scheduled_today('weekly:mon', date(2026, 10, 26))
+        )
+        self.assertFalse(
+            scheduled_today('weekly:mon', date(2026, 10, 27))
+        )
+        self.assertTrue(
+            scheduled_today('weekly:sun', date(2026, 11, 1))
+        )
+
+    def test_dom_odd(self):
+        self.assertTrue(
+            scheduled_today('dom:odd', date(2026, 10, 27))
+        )
+        self.assertFalse(
+            scheduled_today('dom:odd', date(2026, 10, 28))
+        )
+
+    def test_dom_exact_day(self):
+        self.assertTrue(
+            scheduled_today('dom:15', date(2026, 10, 15))
+        )
+        self.assertFalse(
+            scheduled_today('dom:15', date(2026, 10, 16))
+        )
+
+    def test_last_day_of_month(self):
+        self.assertTrue(
+            scheduled_today(
+                'last_day_of_month', date(2026, 10, 31)
+            )
+        )
+        self.assertFalse(
+            scheduled_today(
+                'last_day_of_month', date(2026, 10, 30)
+            )
+        )
+        # February in a non-leap year.
+        self.assertTrue(
+            scheduled_today(
+                'last_day_of_month', date(2026, 2, 28)
+            )
+        )
+        # February in a leap year — only the 29th is the last
+        # day.
+        self.assertFalse(
+            scheduled_today(
+                'last_day_of_month', date(2028, 2, 28)
+            )
+        )
+        self.assertTrue(
+            scheduled_today(
+                'last_day_of_month', date(2028, 2, 29)
+            )
+        )
+
+    def test_dom_out_of_range_raises(self):
+        for bad in ('dom:0', 'dom:32'):
+            with self.subTest(schedule=bad):
+                with self.assertRaises(CommandError):
+                    scheduled_today(bad, date(2026, 10, 15))
+
+    def test_manual_is_never_due(self):
+        self.assertFalse(
+            scheduled_today('manual', date(2026, 10, 28))
+        )
+
+    def test_unknown_schedule_raises(self):
+        with self.assertRaises(CommandError):
+            scheduled_today('fortnightly', date(2026, 10, 28))
+
+    def test_every_jobs_entry_schedule_parses(self):
+        # Guards the real JOBS list against typo'd schedule
+        # specs — each must resolve without raising.
+        for label, _argv, schedule in JOBS:
+            with self.subTest(label=label):
+                scheduled_today(schedule, date(2026, 10, 28))
+
+
+class RunAllJobsCommandTests(SimpleTestCase):
+    """--dry-run/--only/--force behavior of run_all_jobs; the
+    inner call_command is mocked so no real sub-job runs."""
+
+    MOD = 'django_apps.management.commands.run_all_jobs'
+
+    def run_command(self, *argv):
+        out = StringIO()
+        call_command('run_all_jobs', *argv, stdout=out)
+        return out.getvalue()
+
+    def test_dry_run_lists_due_jobs_without_calling(self):
+        with patch(f'{self.MOD}.call_command') as sub:
+            output = self.run_command('--dry-run')
+        sub.assert_not_called()
+        self.assertIn('RUN check_balance_alerts', output)
+
+    def test_dry_run_marks_off_day_entries_skip(self):
+        # 2026-10-27 is a Tuesday — a weekly:mon entry is not due.
+        with patch(
+            f'{self.MOD}.JOBS', [('fake_job', [], 'weekly:mon')]
+        ), patch(
+            f'{self.MOD}._utc_today',
+            return_value=date(2026, 10, 27),
+        ), patch(f'{self.MOD}.call_command') as sub:
+            output = self.run_command('--dry-run')
+        sub.assert_not_called()
+        self.assertIn('SKIP fake_job', output)
+
+    def test_only_runs_named_job_ignoring_schedule(self):
+        with patch(
+            f'{self.MOD}.JOBS', [('fake_job', ['--x'], 'manual')]
+        ), patch(f'{self.MOD}.call_command') as sub:
+            self.run_command('--only', 'fake_job')
+        sub.assert_called_once_with('fake_job', '--x')
+
+    def test_only_unknown_label_errors(self):
+        with self.assertRaises(CommandError):
+            self.run_command('--only', 'nope')
+
+    def test_force_runs_entries_regardless_of_schedule(self):
+        with patch(
+            f'{self.MOD}.JOBS',
+            [('a', [], 'weekly:mon'), ('b', [], 'manual')],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            self.run_command('--force')
+        self.assertEqual(sub.call_count, 2)
+
+    def test_failure_continues_and_exits_nonzero(self):
+        with patch(
+            f'{self.MOD}.JOBS',
+            [('bad_job', [], 'daily'), ('good_job', [], 'daily')],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            sub.side_effect = [Exception('boom'), None]
+            with self.assertRaises(CommandError):
+                self.run_command()
+        # The second entry still ran after the first failed.
+        self.assertEqual(sub.call_count, 2)
+
+    def test_bad_schedule_fails_only_that_entry(self):
+        with patch(
+            f'{self.MOD}.JOBS',
+            [
+                ('bad_sched', [], 'weekly:monday'),
+                ('good_job', [], 'daily'),
+            ],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            with self.assertRaises(CommandError):
+                self.run_command()
+        # The bad spec did not abort the pass.
+        sub.assert_called_once_with('good_job')
+
+    def test_sub_command_system_exit_continues(self):
+        with patch(
+            f'{self.MOD}.JOBS',
+            [('exiting', [], 'daily'), ('ok', [], 'daily')],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            sub.side_effect = [SystemExit(2), None]
+            with self.assertRaises(CommandError):
+                self.run_command()
+        self.assertEqual(sub.call_count, 2)
+
+    def test_sub_command_clean_system_exit_is_not_failure(self):
+        with patch(
+            f'{self.MOD}.JOBS', [('exiting', [], 'daily')]
+        ), patch(f'{self.MOD}.call_command') as sub:
+            sub.side_effect = SystemExit(0)
+            output = self.run_command()
+        self.assertIn('1 ran, 0 skipped, 0 failed', output)
+
+    def test_dry_run_bad_schedule_exits_nonzero(self):
+        with patch(
+            f'{self.MOD}.JOBS',
+            [('bad_sched', [], 'fortnightly')],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            with self.assertRaises(CommandError):
+                self.run_command('--dry-run')
+        sub.assert_not_called()
+
+    def test_dry_run_force_still_evaluates_specs(self):
+        # --force must not hide a broken spec in dry-run.
+        with patch(
+            f'{self.MOD}.JOBS',
+            [('bad_sched', [], 'fortnightly')],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            with self.assertRaises(CommandError):
+                self.run_command('--force', '--dry-run')
+        sub.assert_not_called()
+
+    def test_dry_run_prints_summary(self):
+        with patch(
+            f'{self.MOD}.JOBS', [('fake_job', [], 'manual')]
+        ), patch(f'{self.MOD}.call_command'):
+            output = self.run_command('--dry-run')
+        self.assertIn(
+            '0 would run, 1 skipped, 0 failed', output
+        )
