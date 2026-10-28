@@ -10,175 +10,11 @@ resource "google_service_account" "scheduler" {
   depends_on = [google_project_service.enabled]
 }
 
-resource "google_cloud_run_v2_job" "sync_transactions_job" {
-  name     = "sync-bank-transactions"
-  location = var.region
-  project  = var.project_id
-
-  template {
-    template {
-      service_account = google_service_account.cloudrun.email
-      containers {
-        image   = local.django_image
-        command = ["python", "manage.py", "sync_bank_transactions"]
-
-        env {
-          name  = "USE_GCP_SECRETS"
-          value = "true"
-        }
-        env {
-          name  = "GOOGLE_CLOUD_PROJECT"
-          value = var.project_id
-        }
-        # All app secrets ship in one mounted value: the env-file
-        # secret holds a complete .env file which settings.py parses.
-        env {
-          name = "DOTENV"
-          value_source {
-            secret_key_ref {
-              secret  = data.google_secret_manager_secret.env_file.secret_id
-              version = "latest"
-            }
-          }
-        }
-
-        resources {
-          limits = {
-            cpu    = "1"
-            memory = "512Mi"
-          }
-        }
-      }
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      template[0].template[0].containers[0].image,
-    ]
-  }
-
-  depends_on = [
-    google_project_service.enabled,
-    google_artifact_registry_repository.gae_standard,
-    google_project_iam_member.cloudrun_secret_accessor,
-  ]
-}
-
-resource "google_cloud_run_v2_job" "evaluate_limits_job" {
-  name     = "evaluate-spending-limits"
-  location = var.region
-  project  = var.project_id
-
-  template {
-    template {
-      service_account = google_service_account.cloudrun.email
-      containers {
-        image   = local.django_image
-        command = ["python", "manage.py", "evaluate_spending_limits"]
-
-        env {
-          name  = "USE_GCP_SECRETS"
-          value = "true"
-        }
-        env {
-          name  = "GOOGLE_CLOUD_PROJECT"
-          value = var.project_id
-        }
-        # All app secrets ship in one mounted value: the env-file
-        # secret holds a complete .env file which settings.py parses.
-        env {
-          name = "DOTENV"
-          value_source {
-            secret_key_ref {
-              secret  = data.google_secret_manager_secret.env_file.secret_id
-              version = "latest"
-            }
-          }
-        }
-
-        resources {
-          limits = {
-            cpu    = "1"
-            memory = "512Mi"
-          }
-        }
-      }
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      template[0].template[0].containers[0].image,
-    ]
-  }
-
-  depends_on = [
-    google_project_service.enabled,
-    google_artifact_registry_repository.gae_standard,
-    google_project_iam_member.cloudrun_secret_accessor,
-  ]
-}
-
-resource "google_cloud_run_v2_job" "check_balance_alerts_job" {
-  name     = "check-balance-alerts"
-  location = var.region
-  project  = var.project_id
-
-  template {
-    template {
-      service_account = google_service_account.cloudrun.email
-      containers {
-        image   = local.django_image
-        command = ["python", "manage.py", "check_balance_alerts"]
-
-        env {
-          name  = "USE_GCP_SECRETS"
-          value = "true"
-        }
-        env {
-          name  = "GOOGLE_CLOUD_PROJECT"
-          value = var.project_id
-        }
-        # All app secrets ship in one mounted value: the env-file
-        # secret holds a complete .env file which settings.py parses.
-        env {
-          name = "DOTENV"
-          value_source {
-            secret_key_ref {
-              secret  = data.google_secret_manager_secret.env_file.secret_id
-              version = "latest"
-            }
-          }
-        }
-
-        resources {
-          limits = {
-            cpu    = "1"
-            memory = "512Mi"
-          }
-        }
-      }
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      template[0].template[0].containers[0].image,
-    ]
-  }
-
-  depends_on = [
-    google_project_service.enabled,
-    google_artifact_registry_repository.gae_standard,
-    google_project_iam_member.cloudrun_secret_accessor,
-  ]
-}
-
 # Master job: runs the JOBS list in
 # django_apps/management/commands/run_all_jobs.py in one pass.
-# Phase 1 is manually runnable only — no scheduler, no invoker
-# binding (the per-task jobs keep theirs until Phase 2).
+# That JOBS list is the single place sub-jobs are
+# enabled/disabled — there are no per-task Cloud Run jobs or
+# per-task scheduler triggers anymore.
 resource "google_cloud_run_v2_job" "all_jobs" {
   name     = "all-jobs"
   location = var.region
@@ -223,8 +59,14 @@ resource "google_cloud_run_v2_job" "all_jobs" {
   }
 
   lifecycle {
+    # image is owned by deploy.yml's `gcloud run jobs update`;
+    # client/client_version are gcloud-stamped annotations the
+    # same command rewrites every run — ignoring them avoids a
+    # perpetual no-op diff.
     ignore_changes = [
       template[0].template[0].containers[0].image,
+      client,
+      client_version,
     ]
   }
 
@@ -235,82 +77,23 @@ resource "google_cloud_run_v2_job" "all_jobs" {
   ]
 }
 
-resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_sync" {
-  location = google_cloud_run_v2_job.sync_transactions_job.location
+resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_all_jobs" {
+  location = google_cloud_run_v2_job.all_jobs.location
   project  = var.project_id
-  name     = google_cloud_run_v2_job.sync_transactions_job.name
+  name     = google_cloud_run_v2_job.all_jobs.name
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.scheduler.email}"
 }
 
-resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_evaluate" {
-  location = google_cloud_run_v2_job.evaluate_limits_job.location
-  project  = var.project_id
-  name     = google_cloud_run_v2_job.evaluate_limits_job.name
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.scheduler.email}"
-}
-
-resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_balance_alerts" {
-  location = google_cloud_run_v2_job.check_balance_alerts_job.location
-  project  = var.project_id
-  name     = google_cloud_run_v2_job.check_balance_alerts_job.name
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.scheduler.email}"
-}
-
-# Cloud Scheduler triggers run the jobs daily. Only
-# check-balance-alerts (03:00 UTC) is enabled below; the
-# 02:00/02:30 triggers are commented out to stay in quota.
-# To pause a schedule without destroying infra, set paused = true.
+# One Cloud Scheduler trigger runs the master job daily at 03:00
+# UTC (the old check-balance-alerts slot). Which sub-jobs actually
+# run is controlled by the JOBS list in
+# django_apps/management/commands/run_all_jobs.py, not here.
+# To pause without destroying infra, set paused = true.
 # DB migrations are unaffected — deploy.yml runs them via a one-off
 # django-migrate-<sha> Cloud Run job on each deploy.
-
-# Disabled to stay within the 3-free-jobs Cloud Scheduler quota
-# (billed $0.10/job/mo beyond 3 per billing account). Uncomment
-# to re-enable.
-# resource "google_cloud_scheduler_job" "sync_transactions_schedule" {
-#   name      = "sync-bank-transactions-schedule"
-#   region    = var.region
-#   project   = var.project_id
-#   schedule  = "0 2 * * *"
-#   time_zone = "UTC"
-#   paused    = false
-#
-#   http_target {
-#     http_method = "POST"
-#     uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.sync_transactions_job.name}:run"
-#
-#     oauth_token {
-#       service_account_email = google_service_account.scheduler.email
-#     }
-#   }
-#
-#   depends_on = [google_project_service.enabled]
-# }
-#
-# resource "google_cloud_scheduler_job" "evaluate_limits_schedule" {
-#   name      = "evaluate-spending-limits-schedule"
-#   region    = var.region
-#   project   = var.project_id
-#   schedule  = "30 2 * * *"
-#   time_zone = "UTC"
-#   paused    = false
-#
-#   http_target {
-#     http_method = "POST"
-#     uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.evaluate_limits_job.name}:run"
-#
-#     oauth_token {
-#       service_account_email = google_service_account.scheduler.email
-#     }
-#   }
-#
-#   depends_on = [google_project_service.enabled]
-# }
-
-resource "google_cloud_scheduler_job" "check_balance_alerts_schedule" {
-  name      = "check-balance-alerts-schedule"
+resource "google_cloud_scheduler_job" "all_jobs_schedule" {
+  name      = "all-jobs-daily"
   region    = var.region
   project   = var.project_id
   schedule  = "0 3 * * *"
@@ -319,7 +102,7 @@ resource "google_cloud_scheduler_job" "check_balance_alerts_schedule" {
 
   http_target {
     http_method = "POST"
-    uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.check_balance_alerts_job.name}:run"
+    uri         = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${google_cloud_run_v2_job.all_jobs.name}:run"
 
     oauth_token {
       service_account_email = google_service_account.scheduler.email

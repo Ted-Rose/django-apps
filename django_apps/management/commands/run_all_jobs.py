@@ -28,8 +28,9 @@ logger = logging.getLogger('django')
 # label, argv, schedule — runs only when `schedule` matches today.
 JOBS = [
     ("check_balance_alerts", [], "daily"),
-    # sync/evaluate schedulers are disabled upstream to stay in the
-    # free Cloud Scheduler quota — mirrored here, commented out:
+    # Every entry below runs under the single all-jobs-daily
+    # scheduler — adding one is free (no per-job Cloud Scheduler
+    # triggers anymore). To disable a sub-job, comment it out:
     # ("sync_bank_transactions", [], "daily"),
     # ("evaluate_spending_limits", [], "daily"),
 ]

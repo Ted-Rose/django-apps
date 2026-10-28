@@ -202,14 +202,12 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   Notification row is the record of delivery). Accounts whose fetch
   failed/429'd or whose currency mismatches are skipped — never
   alert on a stale stored balance. Logs `BALANCE_ALERT_TRIGGERED`.
-- Terraform (`terraform/cloud_run_jobs.tf`) maps these to Cloud Run
-  jobs. Only the balance-alerts Cloud Scheduler trigger is enabled
-  (03:00 UTC daily); the sync (02:00 UTC) and evaluate (02:30 UTC)
-  triggers are commented out to stay in the free Cloud Scheduler
-  quota. `run_all_jobs`
-  (`django_apps/management/commands/run_all_jobs.py`) drives the
-  same commands from a single `all-jobs` Cloud Run job — its
-  `JOBS` list is the place to re-enable them.
+- Terraform (`terraform/cloud_run_jobs.tf`) runs these via one
+  `all-jobs` Cloud Run job executing `run_all_jobs`
+  (`django_apps/management/commands/run_all_jobs.py`), fired daily
+  at 03:00 UTC by the `all-jobs-daily` Cloud Scheduler trigger —
+  the command's `JOBS` list is the place to enable/disable the
+  individual commands (only `check_balance_alerts` is enabled).
 
 ## Rules engine (`services/rules.py`)
 

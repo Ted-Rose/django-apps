@@ -1,6 +1,11 @@
 # google_api
 
 ## Changelog
+11. The three per-task Cloud Run jobs and the balance-alerts
+    scheduler are gone — the single `all-jobs` job now runs on
+    one `all-jobs-daily` 03:00 UTC Cloud Scheduler trigger;
+    which finance commands execute is controlled solely by the
+    `JOBS` list in `run_all_jobs.py`
 10. A single `all-jobs` Cloud Run job (`manage.py run_all_jobs`)
     now runs the finance scheduled commands in one pass — Phase 1
     of consolidating the per-task jobs to stay in the free Cloud
