@@ -175,6 +175,66 @@ resource "google_cloud_run_v2_job" "check_balance_alerts_job" {
   ]
 }
 
+# Master job: runs the JOBS list in
+# django_apps/management/commands/run_all_jobs.py in one pass.
+# Phase 1 is manually runnable only — no scheduler, no invoker
+# binding (the per-task jobs keep theirs until Phase 2).
+resource "google_cloud_run_v2_job" "all_jobs" {
+  name     = "all-jobs"
+  location = var.region
+  project  = var.project_id
+
+  template {
+    template {
+      service_account = google_service_account.cloudrun.email
+      timeout         = "3600s"
+      containers {
+        image   = local.django_image
+        command = ["python", "manage.py", "run_all_jobs"]
+
+        env {
+          name  = "USE_GCP_SECRETS"
+          value = "true"
+        }
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project_id
+        }
+        # All app secrets ship in one mounted value: the env-file
+        # secret holds a complete .env file which settings.py parses.
+        env {
+          name = "DOTENV"
+          value_source {
+            secret_key_ref {
+              secret  = data.google_secret_manager_secret.env_file.secret_id
+              version = "latest"
+            }
+          }
+        }
+
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "512Mi"
+          }
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].template[0].containers[0].image,
+    ]
+  }
+
+  depends_on = [
+    google_project_service.enabled,
+    google_artifact_registry_repository.gae_standard,
+    google_project_iam_member.cloudrun_secret_accessor,
+  ]
+}
+
 resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_sync" {
   location = google_cloud_run_v2_job.sync_transactions_job.location
   project  = var.project_id
