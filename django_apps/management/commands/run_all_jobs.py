@@ -54,7 +54,12 @@ def scheduled_today(schedule, today):
     if schedule == 'dom:odd':
         return today.day % 2 == 1
     if schedule.startswith('dom:') and schedule[4:].isdigit():
-        return today.day == int(schedule[4:])
+        day = int(schedule[4:])
+        if not 1 <= day <= 31:
+            raise CommandError(
+                f'dom:N day-of-month out of range {schedule!r}'
+            )
+        return today.day == day
     if (
         schedule.startswith('weekly:')
         and schedule[7:] in _WEEKDAYS
@@ -101,22 +106,26 @@ class Command(BaseCommand):
 
         ran = failures = 0
         for label, argv, schedule in jobs:
-            due = force or scheduled_today(schedule, today)
-            if dry_run:
-                verdict = 'RUN' if due else 'SKIP'
-                self.stdout.write(
-                    f'{verdict} {label} (schedule={schedule})'
-                )
-                continue
-            if not due:
-                self.stdout.write(
-                    f'Skipping {label} (schedule={schedule})'
-                )
-                continue
-            self.stdout.write(f'Running {label} ...')
             try:
+                # Inside the try so a bad schedule spec fails only
+                # this entry instead of aborting the whole pass.
+                due = force or scheduled_today(schedule, today)
+                if dry_run:
+                    verdict = 'RUN' if due else 'SKIP'
+                    self.stdout.write(
+                        f'{verdict} {label} (schedule={schedule})'
+                    )
+                    continue
+                if not due:
+                    self.stdout.write(
+                        f'Skipping {label} (schedule={schedule})'
+                    )
+                    continue
+                self.stdout.write(f'Running {label} ...')
                 call_command(label, *argv)
-            except Exception:
+            except (Exception, SystemExit):
+                # SystemExit included so a sub-command calling
+                # sys.exit() cannot kill the pass.
                 failures += 1
                 logger.exception('run_all_jobs: %s failed', label)
                 self.stderr.write(f'{label} failed — continuing')

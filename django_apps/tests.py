@@ -14,6 +14,7 @@ from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TestCase
 
 from django_apps.management.commands.run_all_jobs import (
+    JOBS,
     scheduled_today,
 )
 from django_apps.models import UserSettings, user_language
@@ -163,6 +164,24 @@ class RunAllJobsScheduleTests(SimpleTestCase):
                 'last_day_of_month', date(2026, 2, 28)
             )
         )
+        # February in a leap year — only the 29th is the last
+        # day.
+        self.assertFalse(
+            scheduled_today(
+                'last_day_of_month', date(2028, 2, 28)
+            )
+        )
+        self.assertTrue(
+            scheduled_today(
+                'last_day_of_month', date(2028, 2, 29)
+            )
+        )
+
+    def test_dom_out_of_range_raises(self):
+        for bad in ('dom:0', 'dom:32'):
+            with self.subTest(schedule=bad):
+                with self.assertRaises(CommandError):
+                    scheduled_today(bad, date(2026, 10, 15))
 
     def test_manual_is_never_due(self):
         self.assertFalse(
@@ -172,6 +191,13 @@ class RunAllJobsScheduleTests(SimpleTestCase):
     def test_unknown_schedule_raises(self):
         with self.assertRaises(CommandError):
             scheduled_today('fortnightly', date(2026, 10, 28))
+
+    def test_every_jobs_entry_schedule_parses(self):
+        # Guards the real JOBS list against typo'd schedule
+        # specs — each must resolve without raising.
+        for label, _argv, schedule in JOBS:
+            with self.subTest(label=label):
+                scheduled_today(schedule, date(2026, 10, 28))
 
 
 class RunAllJobsCommandTests(SimpleTestCase):
@@ -231,4 +257,27 @@ class RunAllJobsCommandTests(SimpleTestCase):
             with self.assertRaises(CommandError):
                 self.run_command()
         # The second entry still ran after the first failed.
+        self.assertEqual(sub.call_count, 2)
+
+    def test_bad_schedule_fails_only_that_entry(self):
+        with patch(
+            f'{self.MOD}.JOBS',
+            [
+                ('bad_sched', [], 'weekly:monday'),
+                ('good_job', [], 'daily'),
+            ],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            with self.assertRaises(CommandError):
+                self.run_command()
+        # The bad spec did not abort the pass.
+        sub.assert_called_once_with('good_job')
+
+    def test_sub_command_system_exit_continues(self):
+        with patch(
+            f'{self.MOD}.JOBS',
+            [('exiting', [], 'daily'), ('ok', [], 'daily')],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            sub.side_effect = [SystemExit(2), None]
+            with self.assertRaises(CommandError):
+                self.run_command()
         self.assertEqual(sub.call_count, 2)

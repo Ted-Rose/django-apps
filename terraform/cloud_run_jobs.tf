@@ -259,8 +259,9 @@ resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_balance_alerts"
   member   = "serviceAccount:${google_service_account.scheduler.email}"
 }
 
-# Cloud Scheduler triggers run the jobs daily at
-# 02:00/02:30/03:00 UTC.
+# Cloud Scheduler triggers run the jobs daily. Only
+# check-balance-alerts (03:00 UTC) is enabled below; the
+# 02:00/02:30 triggers are commented out to stay in quota.
 # To pause a schedule without destroying infra, set paused = true.
 # DB migrations are unaffected — deploy.yml runs them via a one-off
 # django-migrate-<sha> Cloud Run job on each deploy.
