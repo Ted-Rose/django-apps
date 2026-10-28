@@ -281,3 +281,39 @@ class RunAllJobsCommandTests(SimpleTestCase):
             with self.assertRaises(CommandError):
                 self.run_command()
         self.assertEqual(sub.call_count, 2)
+
+    def test_sub_command_clean_system_exit_is_not_failure(self):
+        with patch(
+            f'{self.MOD}.JOBS', [('exiting', [], 'daily')]
+        ), patch(f'{self.MOD}.call_command') as sub:
+            sub.side_effect = SystemExit(0)
+            output = self.run_command()
+        self.assertIn('1 ran, 0 skipped, 0 failed', output)
+
+    def test_dry_run_bad_schedule_exits_nonzero(self):
+        with patch(
+            f'{self.MOD}.JOBS',
+            [('bad_sched', [], 'fortnightly')],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            with self.assertRaises(CommandError):
+                self.run_command('--dry-run')
+        sub.assert_not_called()
+
+    def test_dry_run_force_still_evaluates_specs(self):
+        # --force must not hide a broken spec in dry-run.
+        with patch(
+            f'{self.MOD}.JOBS',
+            [('bad_sched', [], 'fortnightly')],
+        ), patch(f'{self.MOD}.call_command') as sub:
+            with self.assertRaises(CommandError):
+                self.run_command('--force', '--dry-run')
+        sub.assert_not_called()
+
+    def test_dry_run_prints_summary(self):
+        with patch(
+            f'{self.MOD}.JOBS', [('fake_job', [], 'manual')]
+        ), patch(f'{self.MOD}.call_command'):
+            output = self.run_command('--dry-run')
+        self.assertIn(
+            '0 would run, 1 skipped, 0 failed', output
+        )

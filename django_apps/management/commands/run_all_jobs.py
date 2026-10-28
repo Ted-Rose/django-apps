@@ -109,13 +109,18 @@ class Command(BaseCommand):
             try:
                 # Inside the try so a bad schedule spec fails only
                 # this entry instead of aborting the whole pass.
-                due = force or scheduled_today(schedule, today)
+                # Dry-run always evaluates the spec — even under
+                # --force — so a broken spec still flags as a
+                # failure below instead of printing RUN.
                 if dry_run:
+                    due = scheduled_today(schedule, today) or force
                     verdict = 'RUN' if due else 'SKIP'
                     self.stdout.write(
                         f'{verdict} {label} (schedule={schedule})'
                     )
+                    ran += int(due)
                     continue
+                due = force or scheduled_today(schedule, today)
                 if not due:
                     self.stdout.write(
                         f'Skipping {label} (schedule={schedule})'
@@ -123,20 +128,26 @@ class Command(BaseCommand):
                     continue
                 self.stdout.write(f'Running {label} ...')
                 call_command(label, *argv)
-            except (Exception, SystemExit):
+            except (Exception, SystemExit) as exc:
                 # SystemExit included so a sub-command calling
-                # sys.exit() cannot kill the pass.
+                # sys.exit() cannot kill the pass; a clean exit
+                # (code 0 or None) is not a failure.
+                if (
+                    isinstance(exc, SystemExit)
+                    and exc.code in (None, 0)
+                ):
+                    ran += 1
+                    continue
                 failures += 1
                 logger.exception('run_all_jobs: %s failed', label)
                 self.stderr.write(f'{label} failed — continuing')
             else:
                 ran += 1
 
-        if dry_run:
-            return
         skipped = len(jobs) - ran - failures
+        verb = 'would run' if dry_run else 'ran'
         self.stdout.write(
-            f'run_all_jobs done: {ran} ran, {skipped} skipped, '
+            f'run_all_jobs done: {ran} {verb}, {skipped} skipped, '
             f'{failures} failed'
         )
         if failures:
