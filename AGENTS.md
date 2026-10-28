@@ -326,6 +326,39 @@ Code conventions:
   goal: stay in the GCP free tier — prefer free-tier-friendly
   infra choices.
 
+## Sentry event streams
+
+Org `django-apps-ted` (EU, de.sentry.io); projects
+`django-apps-api` (python-django) + `django-apps-web`
+(javascript-react). Everything is DSN-gated: no `SENTRY_DSN` →
+`sentry_sdk.init` never runs and every
+`django_apps.sentry.capture_internal_exception` call no-ops; no
+`SENTRY_WEB_DSN` → the SPA's `initSentry()` (`src/shared/
+sentry.ts`) returns early. `SENTRY_WEB_DSN` ships to the SPA in
+the `spa-bootstrap` json_script — no build-time `VITE_*` vars.
+Environment tag: `SENTRY_ENVIRONMENT` → `VERCEL_ENV` →
+`production` on GCP → `development`; deploy-pr-preview sets
+`SENTRY_ENVIRONMENT=preview` so previews never pollute the prod
+queue.
+
+`is:unresolved level:error environment:production` = the
+agent-fixable bug queue:
+
+- Unhandled 500s — `DjangoIntegration`, level error.
+- Caught API/job bugs — `capture_internal_exception`, level
+  error, tag `error_code:internal_error`.
+- Browser exceptions — `captureException`, level error.
+- Resource loads — `captureMessage`, level warning, tag
+  `reportType:resource-load`.
+
+Logs are breadcrumbs only (`event_level=None`). `sentry_before_send`
+strips `request.data` on `/login/` + `/admin/` (credential
+POSTs); `send_default_pii=False`. Non-SPA pages (`/`, `/login/`,
+`/offline/`, admin) have no web-SDK coverage — accepted. No
+user-report or provider-outage streams yet — GoCardless sync
+failures are the natural `error_code:provider_error` candidate
+if added later.
+
 ## Gotchas
 
 - Google credential datetimes: google-auth expects naive UTC,
