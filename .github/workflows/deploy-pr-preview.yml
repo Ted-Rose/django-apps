@@ -84,7 +84,9 @@ jobs:
             --cpu=1 \
             --timeout=300 \
             --set-secrets=DOTENV=env-file:latest \
-            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},GCS_AUDIO_BUCKET=${{ env.GCP_PROJECT_ID }}-audio-recordings \
+            --set-env-vars=GOOGLE_CLOUD_PROJECT=${{ env.GCP_PROJECT_ID }},\
+GCS_AUDIO_BUCKET=${{ env.GCP_PROJECT_ID }}-audio-recordings,\
+SENTRY_ENVIRONMENT=preview \
             --project=${{ env.GCP_PROJECT_ID }}
 
       # WIF credentials cannot mint Cloud Run identity tokens, so the

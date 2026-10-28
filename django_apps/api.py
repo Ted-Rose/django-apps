@@ -17,6 +17,8 @@ from ninja import NinjaAPI
 from ninja.errors import AuthenticationError, HttpError, ValidationError
 from ninja.security import django_auth
 
+from django_apps.sentry import capture_internal_exception
+
 api = NinjaAPI(
     title='django-apps API',
     version='0.1.0',
@@ -210,3 +212,21 @@ def _on_http_error(request, exc):
     if params:
         body['params'] = params
     return api.create_response(request, body, status=exc.status_code)
+
+
+@api.exception_handler(Exception)
+def _on_server_error(request, exc):
+    """Unhandled exception → uniform 500 body + Sentry capture.
+
+    Once this handler exists ninja no longer re-raises API
+    exceptions, so ``got_request_exception`` never fires for them —
+    Sentry capture then depends solely on
+    ``capture_internal_exception`` (tagged
+    ``error_code:internal_error``). The body stays generic —
+    ``str(exc)`` can leak internals.
+    """
+    capture_internal_exception(exc)
+    return api.create_response(request, {
+        'error': 'server_error',
+        'detail': 'Internal Server Error',
+    }, status=500)

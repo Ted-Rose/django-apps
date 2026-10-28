@@ -117,6 +117,14 @@ def spa_shell(request, entry, title=''):
         'bootstrap': {
             'user': request.user.get_username(),
             'language': language,
+            # The web SDK reads this straight from the rendered
+            # #spa-bootstrap json_script before React mounts — no
+            # build-time VITE_* plumbing. None DSN → no init.
+            'sentry': {
+                'dsn': settings.SENTRY_WEB_DSN,
+                'environment': settings.SENTRY_ENVIRONMENT,
+                'release': settings.SENTRY_RELEASE,
+            },
         },
     })
 

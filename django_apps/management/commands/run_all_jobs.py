@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
+from django_apps.sentry import capture_internal_exception
+
 logger = logging.getLogger('django')
 
 
@@ -141,6 +143,12 @@ class Command(BaseCommand):
                     continue
                 failures += 1
                 logger.exception('run_all_jobs: %s failed', label)
+                # Caught here so the pass continues — but then the
+                # crash is invisible to DjangoIntegration, which
+                # only sees uncaught exceptions. The all-jobs Cloud
+                # Run job is the highest-value internal_error
+                # source; no-op when Sentry is uninitialized.
+                capture_internal_exception(exc)
                 self.stderr.write(f'{label} failed — continuing')
             else:
                 ran += 1
