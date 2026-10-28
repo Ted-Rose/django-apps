@@ -8,6 +8,7 @@ plus the google_reauth contract the SPA uses to bounce users into
 the OAuth flow (fetch must never follow Google redirects).
 """
 import json
+import logging
 from urllib.parse import urlencode
 
 from django.contrib.admin.views.decorators import staff_member_required
@@ -16,6 +17,10 @@ from django.urls import reverse
 from ninja import NinjaAPI
 from ninja.errors import AuthenticationError, HttpError, ValidationError
 from ninja.security import django_auth
+
+from django_apps.sentry import capture_internal_exception
+
+logger = logging.getLogger('django')
 
 api = NinjaAPI(
     title='django-apps API',
@@ -210,3 +215,24 @@ def _on_http_error(request, exc):
     if params:
         body['params'] = params
     return api.create_response(request, body, status=exc.status_code)
+
+
+@api.exception_handler(Exception)
+def _on_server_error(request, exc):
+    """Unhandled exception → uniform 500 body + Sentry capture.
+
+    Once this handler exists ninja no longer re-raises API
+    exceptions, so ``got_request_exception`` never fires for them —
+    Sentry capture then depends solely on
+    ``capture_internal_exception`` (tagged
+    ``error_code:internal_error``). The body stays generic —
+    ``str(exc)`` can leak internals. The ``logger.exception``
+    first is what carries the traceback into the logs — without
+    Sentry configured, capture alone would leave a bare 500.
+    """
+    logger.exception('Unhandled API exception')
+    capture_internal_exception(exc)
+    return api.create_response(request, {
+        'error': 'server_error',
+        'detail': 'Internal Server Error',
+    }, status=500)

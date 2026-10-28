@@ -16,6 +16,7 @@ import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 
+import { readBootstrap } from './bootstrap';
 import commonEn from './locales/en.json';
 import commonLv from './locales/lv.json';
 
@@ -34,14 +35,8 @@ function isSupported(lang: unknown): lang is Language {
 
 /** `language` field of the #spa-bootstrap json_script payload. */
 function readBootstrapLanguage(): string | undefined {
-  const el = document.getElementById('spa-bootstrap');
-  if (!el?.textContent) return undefined;
-  try {
-    const payload = JSON.parse(el.textContent) as { language?: unknown };
-    return isSupported(payload.language) ? payload.language : undefined;
-  } catch {
-    return undefined;
-  }
+  const language = readBootstrap().language;
+  return isSupported(language) ? language : undefined;
 }
 
 /**

@@ -5,12 +5,20 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { initI18n } from '../shared/i18n';
+import { initSentry } from '../shared/sentry';
+import { initGlobalErrorHandlers } from '../shared/errorReporter';
+import { ErrorBoundary } from '../shared/ErrorBoundary';
 import queryClient from '../shared/queryClient';
 import en from './locales/en.json';
 import lv from './locales/lv.json';
 // Ported from finance/static/finance/css/finance.css — provides the
 // fixed navbar offset (`body { padding-top: 60px }`).
 import './finance.css';
+
+// Before everything else, so even a failing i18n/module init is
+// reported. Both no-op without a DSN.
+initSentry();
+initGlobalErrorHandlers();
 
 // Must run before any component reads t() — catalogs are static
 // imports so both languages are already bundled.
@@ -24,7 +32,9 @@ if (root) {
         {/* Stage 6 cutover: the SPA owns /finance/ — the template
             UI is deleted and /finance/app/* 301-redirects here. */}
         <BrowserRouter basename="/finance">
-          <App />
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
         </BrowserRouter>
       </QueryClientProvider>
     </StrictMode>,

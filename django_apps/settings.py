@@ -11,8 +11,13 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import logging
 import os
 import sys
+
+from corsheaders.defaults import default_headers
+
+from .sentry import sentry_before_send
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -258,6 +263,62 @@ if DEBUG or 'test' in sys.argv:
         }
     }
 
+# --- Sentry error monitoring ---
+# The DSN is optional in every environment: absent or empty leaves
+# the SDK uninitialized (a complete no-op), so local dev, CI, and a
+# deploy made before the env-file secret carries DSNs all stay
+# silent. Plain os.environ reads cover every config branch: Cloud
+# Run/Vercel inject env vars directly and _load_dotenv() already
+# merged .env/DOTENV values into os.environ above.
+SENTRY_DSN = os.environ.get('SENTRY_DSN')
+SENTRY_WEB_DSN = os.environ.get('SENTRY_WEB_DSN')
+# Explicit override → Vercel's env ('production' | 'preview') →
+# production on GCP (Cloud Run service AND jobs set K_SERVICE) →
+# development everywhere else. USE_GCP_SECRETS=true one-off steps
+# (CI `migrate`, local secret-backed runs) also tag 'production' —
+# intentional: a migrate crash touches the prod DB and should page.
+SENTRY_ENVIRONMENT = (
+    os.environ.get('SENTRY_ENVIRONMENT')
+    or os.environ.get('VERCEL_ENV')
+    or ('production' if IS_GCP_ENVIRONMENT else 'development')
+)
+# Cloud Run sets K_REVISION per deploy, Vercel exposes the commit
+# sha — free release tracking with no build plumbing.
+SENTRY_RELEASE = (
+    os.environ.get('K_REVISION')
+    or os.environ.get('VERCEL_GIT_COMMIT_SHA')
+)
+
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            # INFO+ log records become breadcrumbs but are NOT
+            # turned into events — existing code logs routine
+            # failures at ERROR, which would flood the project with
+            # non-bugs. Real failures reach Sentry via
+            # DjangoIntegration (unhandled 500s) and explicit
+            # capture_internal_exception calls.
+            LoggingIntegration(
+                level=logging.INFO,
+                event_level=None,
+            ),
+        ],
+        # Credential-path request bodies carry passwords —
+        # sentry_before_send drops them; send_default_pii=False
+        # keeps IPs/usernames off events as well.
+        before_send=sentry_before_send,
+        send_default_pii=False,
+        environment=SENTRY_ENVIRONMENT,
+        release=SENTRY_RELEASE,
+        traces_sample_rate=0.1,
+    )
+
 LOGIN_URL = '/login/'
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -325,6 +386,15 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 CORS_ALLOW_METHODS = (
     "GET",
     "POST",
+)
+
+# Allow Sentry's tracing headers cross-origin so frontend errors
+# correlate with backend traces (the default header safelist does
+# not include them).
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+    'sentry-trace',
+    'baggage',
 )
 
 ROOT_URLCONF = 'django_apps.urls'
