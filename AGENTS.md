@@ -158,7 +158,8 @@ Universal rules — follow exactly:
 1. **Max 79 chars per line, every file type.** Verify with
    `awk 'length > 79 {print FILENAME":"NR}' <file>`. Fix
    violations you introduce plus long lines in files already being
-   modified.
+   modified. Exempt: the vendored `.agents/skills/openspec-*/`
+   files and their `.devin` copies — `openspec update` owns them.
 2. **Commit format `Type: Capitalized message`** — one of
    Feat / Fix / Docs / Refactor / Test / Chore.
 3. **Commit on feature branches only, never `main`.** Stage only

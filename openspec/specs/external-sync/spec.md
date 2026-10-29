@@ -15,9 +15,10 @@ local state that remote data MUST NOT clobber.
 
 External objects SHALL be upserted keyed on the provider's remote
 id — `update_or_create` or the equivalent bulk-upsert (google_tasks
-classifies pulls in memory and flushes via `bulk_create` /
-`bulk_update` for sync-time performance; same semantics). Remote id
-fields: Google Tasks `task_id` / `list_id` (unique per user);
+classifies pulls in memory, then flushes via
+`bulk_create`/`bulk_update`; same semantics). Remote id fields:
+Google Tasks `task_id` / `list_id` (globally unique columns,
+queried per user);
 GoCardless `requisition_id` / `account_id` (globally unique) and
 `transaction_id` (unique per `(account, transaction_id)`); Google
 OAuth credentials keyed per user.
@@ -31,8 +32,8 @@ OAuth credentials keyed per user.
 
 #### Scenario: Remote items lacking an id get a stable synthetic key
 
-- **WHEN** a GoCardless entry has no `transactionId` (pending and
-  other non-booked groups)
+- **WHEN** a GoCardless entry has neither `transactionId` nor
+  `internalTransactionId` (pending and other non-booked groups)
 - **THEN** sync synthesizes a deterministic `<status>-<digest>`
   id so the same entry reconciles across syncs while it stays in
   that group

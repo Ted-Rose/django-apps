@@ -17,8 +17,9 @@ is the backend-frontend seam — both sides MUST stay in sync.
 There SHALL be exactly one `NinjaAPI` instance, defined in
 `django_apps/api.py` and mounted at `/api/` in
 `django_apps/urls.py`. Each app SHALL register a `Router` from
-`<app>/api.py` via `api.add_router('/<entry>/', …)` where
-`<entry>` is the same slug used by the app's SPA mount. The API
+`<app>/api.py` via `api.add_router('/<entry>/', …)` matching the
+app's SPA slug; project-level routers (`django_apps/me.py`)
+register here too. The API
 MUST authenticate via ninja `django_auth` (session cookie plus
 CSRF on unsafe methods) and MUST return JSON errors — never HTML
 login redirects.
@@ -78,8 +79,9 @@ with `detail` as the English fallback.
 The API SHALL signal two distinct 401 auth failures the SPA
 navigates on itself: `unauthenticated` (session) with a
 `login_url`, and `google_reauth` (dead Google credentials) with
-an `authorization_url`. Both URL targets MUST be SPA pages via
-`spa_url_for` — never raw `/api/` JSON URLs.
+an `authorization_url`. Both URLs MUST carry an SPA page (via
+`spa_url_for`) as their `next` target — never a raw `/api/`
+JSON URL.
 
 #### Scenario: Expired session yields login_url 401
 
