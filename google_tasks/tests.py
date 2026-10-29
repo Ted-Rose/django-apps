@@ -17,8 +17,21 @@ from django_vite.core.asset_loader import (
     DjangoViteAssetLoader,
     ManifestEntry,
 )
-from google_tasks.models import GoogleTask, GoogleTaskList
-from google_tasks.services import process_task_labels, sync_tasks
+from google_tasks.models import (
+    GoogleTask,
+    GoogleTaskList,
+    NoteCategory,
+)
+from google_tasks.services import (
+    NOTE_TAG_RE,
+    find_note_marker,
+    note_marker_segments,
+    note_marker_for,
+    process_task_labels,
+    resolve_note_category,
+    strip_note_marker,
+    sync_tasks,
+)
 from google_tasks.views import REORDER_CAP
 
 
@@ -1352,3 +1365,218 @@ class ReactAppShellTests(TestCase):
         request.user = self.user
         with self.assertRaises(Http404):
             spa_shell(request, entry='../escape')
+
+
+class NoteMarkerUnitTests(TestCase):
+    """Pure marker helpers — the dedicated hyphen-aware NOTE_TAG_RE,
+    segment parsing, and marker text composition. The shared
+    hashtag regex splits on hyphens and stays untouched."""
+
+    def test_bare_marker_matches(self):
+        match = find_note_marker('todo #notes', None)
+        self.assertIsNotNone(match)
+        self.assertEqual(note_marker_segments(match.group(0)), [])
+
+    def test_path_marker_matches(self):
+        match = find_note_marker('#notes-projects-django-apps', '')
+        self.assertEqual(
+            note_marker_segments(match.group(0)),
+            ['projects', 'django', 'apps'],
+        )
+
+    def test_marker_is_case_insensitive(self):
+        match = find_note_marker('x', 'body #Notes-God-Prayer')
+        self.assertEqual(
+            note_marker_segments(match.group(0)),
+            ['god', 'prayer'],
+        )
+
+    def test_notebook_and_notesx_rejected(self):
+        self.assertIsNone(find_note_marker('#notebook-x', None))
+        self.assertIsNone(find_note_marker('#notesx', None))
+        self.assertIsNone(find_note_marker('#notes2', None))
+
+    def test_title_marker_wins_over_notes_marker(self):
+        match = find_note_marker('t #notes-aaa', 'b #notes-bbb')
+        self.assertEqual(note_marker_segments(match.group(0)),
+                         ['aaa'])
+
+    def test_underscore_canonicalizes_to_hyphen(self):
+        match = find_note_marker('#notes-bible_research-genesis', '')
+        self.assertEqual(
+            note_marker_segments(match.group(0)),
+            ['bible-research', 'genesis'],
+        )
+
+    def test_leaf_separators_equivalent(self):
+        hyphens = NOTE_TAG_RE.search(
+            '#notes-projects-django-apps').group(0)
+        underscores = NOTE_TAG_RE.search(
+            '#notes-projects-django_apps').group(0)
+        self.assertEqual(
+            '-'.join(note_marker_segments(hyphens)[1:]),
+            '-'.join(note_marker_segments(underscores)[1:]),
+        )
+
+    def test_strip_removes_all_markers(self):
+        title, notes = strip_note_marker(
+            'pray #notes-god-prayer #notes-x',
+            'body #notes-other #notes',
+        )
+        self.assertEqual(title, 'pray')
+        self.assertEqual(notes, 'body')
+
+    def test_marker_for_group_leaf_and_uncategorized(self):
+        self.assertEqual(note_marker_for(None), '#notes')
+        group = NoteCategory(slug='god')
+        self.assertEqual(note_marker_for(group), '#notes-god')
+        leaf = NoteCategory(slug='pra-yer', parent=group)
+        self.assertEqual(
+            note_marker_for(leaf), '#notes-god-pra-yer'
+        )
+
+
+class ProcessTaskLabelsNoteTests(TestCase):
+    """The notes pre-pass inside process_task_labels: a #notes
+    marker classifies the task, resolves/auto-creates the category
+    path, and its text is stripped before hashtag logic runs."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.task_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-1', title='List 1'
+        )
+
+    def make_task(self, task_id, title, notes=None):
+        return GoogleTask.objects.create(
+            user=self.user, task_id=task_id, title=title,
+            task_list=self.task_list, notes=notes,
+        )
+
+    def test_title_marker_classifies_and_creates_path(self):
+        task = self.make_task('a', 'x #notes-god-prayer')
+        stats = process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertTrue(task.is_note)
+        self.assertEqual(stats['notes'], 1)
+        category = task.note_category
+        self.assertEqual(category.slug, 'prayer')
+        self.assertEqual(category.parent.slug, 'god')
+        # The marker stays in the stored title — it is the source
+        # of truth the next run reclassifies from.
+        self.assertIn('#notes-god-prayer', task.title)
+
+    def test_marker_in_body_classifies(self):
+        task = self.make_task('a', 'plain title',
+                              notes='the body #notes-bbb')
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertTrue(task.is_note)
+        self.assertEqual(task.note_category.slug, 'bbb')
+
+    def test_bare_marker_is_uncategorized(self):
+        task = self.make_task('a', 'x #notes')
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertTrue(task.is_note)
+        self.assertIsNone(task.note_category)
+
+    def test_removing_marker_unclassifies(self):
+        task = self.make_task('a', 'x #notes-god')
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertTrue(task.is_note)
+        task.title = 'x'
+        task.save()
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertFalse(task.is_note)
+        self.assertIsNone(task.note_category)
+
+    def test_first_marker_wins(self):
+        task = self.make_task('a', 'x #notes-one #notes-two')
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertEqual(task.note_category.slug, 'one')
+
+    def test_marker_fragments_have_no_side_effects(self):
+        """The marker's fragments can never match a label, land in
+        stats['unmatched'], star the task, or move it to a list —
+        even when matching labels and a 'Projects' list exist."""
+        from google_tasks.models import TaskLabel
+        for name in ('Notes', 'Projects', 'Django', 'Apps'):
+            TaskLabel.objects.create(user=self.user, name=name)
+        GoogleTaskList.objects.create(
+            user=self.user, list_id='list-2', title='Projects'
+        )
+        task = self.make_task(
+            'a', 'x #notes-projects-django-apps'
+        )
+        with patch(
+            'google_tasks.services.move_task_to_list'
+        ) as move:
+            stats = process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertTrue(task.is_note)
+        self.assertEqual(task.task_list, self.task_list)
+        move.assert_not_called()
+        self.assertEqual(list(task.labels.all()), [])
+        self.assertEqual(stats['unmatched'], [])
+        self.assertFalse(task.is_starred)
+
+    def test_star_keyword_inside_marker_does_not_star(self):
+        task = self.make_task('a', 'x #notes-star-journal')
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertFalse(task.is_starred)
+
+    def test_other_hashtags_still_process(self):
+        """Only marker text is stripped — remaining hashtags label,
+        move, and star the note like any other task."""
+        from google_tasks.models import TaskLabel
+        TaskLabel.objects.create(user=self.user, name='Home')
+        GoogleTaskList.objects.create(
+            user=self.user, list_id='list-2', title='Home'
+        )
+        task = self.make_task('a', 'x #notes-god #home #star')
+        with patch(
+            'google_tasks.services.move_task_to_list',
+            return_value=True,
+        ):
+            stats = process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertTrue(task.is_note)
+        self.assertEqual(
+            [label.name for label in task.labels.all()], ['Home']
+        )
+        self.assertTrue(task.is_starred)
+        self.assertEqual(stats['moved'], 1)
+
+    def test_existing_path_is_reused(self):
+        one = self.make_task('a', 'x #notes-projects-django-apps')
+        two = self.make_task('b', 'y #notes-projects-django_apps')
+        process_task_labels(self.user, creds=None)
+        one.refresh_from_db()
+        two.refresh_from_db()
+        # One group + one leaf — the underscore spelling folded
+        # into the same category.
+        self.assertEqual(
+            NoteCategory.objects.filter(user=self.user).count(), 2
+        )
+        self.assertEqual(one.note_category, two.note_category)
+
+    def test_categories_are_per_user(self):
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        other_cat = resolve_note_category(other, ['shared'])
+        task = self.make_task('a', 'x #notes-shared')
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        self.assertNotEqual(task.note_category, other_cat)
+        self.assertEqual(task.note_category.user, self.user)
+        self.assertEqual(
+            NoteCategory.objects.filter(slug='shared').count(), 2
+        )
