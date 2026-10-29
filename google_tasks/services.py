@@ -11,7 +11,12 @@ from django.utils import timezone
 from google_api.utils import google_auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google_tasks.models import GoogleTaskList, GoogleTask, TaskLabel
+from google_tasks.models import (
+    GoogleTaskList,
+    GoogleTask,
+    NoteCategory,
+    TaskLabel,
+)
 
 logger = logging.getLogger('django')
 
@@ -1031,6 +1036,295 @@ def remove_starred_hashtags(notes):
     return cleaned_notes
 
 
+# --- Quick notes (#notes-<path> markers) ---
+#
+# A `#notes` marker anywhere in the title or body turns a task into
+# a note filed under an auto-created two-level category tree. The
+# dedicated hyphen-aware pattern below owns marker detection — the
+# shared extract_hashtags regex splits on hyphens and must stay
+# untouched, or '#notes-projects-django-apps' would extract as four
+# unrelated tags. Spelling convention: '-' separates the two path
+# levels, '_' joins words inside a segment; in leaf names '-' and
+# '_' are equivalent because the leaf rejoins every remaining
+# segment. Classification strips matched text BEFORE hashtag
+# extraction, so marker fragments can never reach label matching,
+# unmatched-tag warnings, list moves, or star keywords — which is
+# also what keeps notes in their original Google list.
+NOTE_TAG_RE = re.compile(
+    # Segments may be empty (`*`, not `+`) so separators still match
+    # — '#notes--x', '#notes-abc-', '#notes-' parse like their
+    # canonical spellings and the segment parser drops the empties.
+    # The lookahead still rejects '#notebook-x'/'#notesx', and a
+    # trailing dash is part of the match so stripping removes it.
+    r'#notes(?:-[a-z0-9_]*)*(?![a-z0-9_-])',
+    re.IGNORECASE,
+)
+
+
+def find_note_marker(title, notes):
+    """First #notes marker in the title or body, else None."""
+    match = NOTE_TAG_RE.search(title or '')
+    if match is None:
+        match = NOTE_TAG_RE.search(notes or '')
+    return match
+
+
+def note_marker_segments(marker_text):
+    """'#notes-bible_research-gen-1' → ['bible-research', 'gen-1'].
+
+    Segments are lowercased, separators canonicalized ('_' and
+    repeated '-' collapse to a single '-'), empties dropped.
+    """
+    tail = marker_text[len('#notes'):]
+    segments = []
+    for segment in tail.split('-'):
+        slug = re.sub(r'[-_]+', '-', segment.lower()).strip('-')
+        if slug:
+            segments.append(slug)
+    return segments
+
+
+def slugify_note_segment(name):
+    """'Bible Research!' → 'bible-research' — the canonical slug a
+    user-typed category name folds to (same rules as marker
+    parsing)."""
+    return re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+
+
+def note_display_name(slug):
+    """'bible-research' → 'Bible Research' — display name for
+    auto-created categories."""
+    return slug.replace('-', ' ').title()
+
+
+def note_marker_for(category):
+    """Canonical '#notes-<path>' marker text for a category; the
+    bare '#notes' marker for the uncategorized bucket (None)."""
+    if category is None:
+        return '#notes'
+    parent = getattr(category, 'parent', None)
+    if parent is None:
+        return f'#notes-{category.slug}'
+    return f'#notes-{parent.slug}-{category.slug}'
+
+
+def note_category_index(user):
+    """{(parent_id, slug): NoteCategory} covering the user's whole
+    tree — the single prefetch processing runs share."""
+    return {
+        (category.parent_id, category.slug): category
+        for category in NoteCategory.objects.filter(user=user)
+    }
+
+
+def resolve_note_category(user, segments, index=None):
+    """Resolve a marker path to a NoteCategory, auto-creating
+    missing nodes for `user`.
+
+    [] → None (uncategorized); ['x'] → top-level x;
+    ['x', 'y', …] → group x containing leaf 'y-…' (remaining
+    segments rejoined, so deeper tails fold into the leaf slug).
+    `index` is an optional note_category_index() dict — pass it in
+    hot loops so the user's categories are prefetched once instead
+    of re-queried per task.
+    """
+    if not segments:
+        return None
+    if index is None:
+        index = note_category_index(user)
+    group_slug = segments[0]
+    leaf_slug = (
+        '-'.join(segments[1:]) if len(segments) > 1 else None
+    )
+    group = index.get((None, group_slug))
+    if group is None:
+        group = NoteCategory.objects.create(
+            user=user,
+            slug=group_slug,
+            name=note_display_name(group_slug),
+        )
+        index[(None, group_slug)] = group
+    if leaf_slug is None:
+        return group
+    leaf = index.get((group.pk, leaf_slug))
+    if leaf is None:
+        leaf = NoteCategory.objects.create(
+            user=user,
+            slug=leaf_slug,
+            name=note_display_name(leaf_slug),
+            parent=group,
+        )
+        index[(group.pk, leaf_slug)] = leaf
+    return leaf
+
+
+def _collapse_marker_whitespace(text):
+    """Collapse the whitespace a stripped marker leaves behind.
+
+    Only HORIZONTAL whitespace collapses — `[ \t]+` runs fold to a
+    single space and each line is stripped. Newlines are paragraph
+    breaks in note bodies and must survive; collapsing all `\s+`
+    flattened multi-paragraph bodies into one line on every retag.
+    """
+    lines = (
+        re.sub(r'[ \t]+', ' ', line).strip(' \t')
+        for line in text.split('\n')
+    )
+    return '\n'.join(lines).strip()
+
+
+def strip_note_marker(title, notes):
+    """Remove every #notes marker occurrence from title/notes.
+
+    Returns (title, notes) — in-memory only: the stored text keeps
+    the marker, which is the source of truth the next processing
+    run reclassifies from.
+    """
+    return (
+        _collapse_marker_whitespace(
+            NOTE_TAG_RE.sub('', title or '')
+        ),
+        _collapse_marker_whitespace(
+            NOTE_TAG_RE.sub('', notes or '')
+        ),
+    )
+
+
+def rewrite_note_marker(task, new_marker):
+    """Replace the first #notes marker wherever it lives (title or
+    body) with `new_marker` and drop any further occurrences.
+    Returns True when the stored text changed."""
+    changed = False
+    written = False
+    for field in ('title', 'notes'):
+        text = getattr(task, field) or ''
+        if not NOTE_TAG_RE.search(text):
+            continue
+
+        def _sub(match):
+            nonlocal written
+            if written:
+                return ''
+            written = True
+            return new_marker
+
+        new_text = _collapse_marker_whitespace(
+            NOTE_TAG_RE.sub(_sub, text)
+        )
+        if new_text != text:
+            setattr(task, field, new_text)
+            changed = True
+    return changed
+
+
+def retag_notes(user, group_slug, leaf_slug, marker_for):
+    """Rewrite the first #notes marker in each of `user`'s notes
+    filed under the matched subtree.
+
+    (group_slug, None) matches the group's whole subtree — notes
+    filed directly under it AND under any of its leaves;
+    (group_slug, leaf_slug) matches one leaf. `marker_for` maps the
+    note's current path segments to the new marker text. Notes
+    whose text changed are flagged needs_push; the caller flushes
+    title/notes/needs_push (plus note_category when it also
+    repoints notes) via bulk_update.
+    """
+    retagged = []
+    notes = GoogleTask.objects.filter(user=user, is_note=True)
+    for note in notes:
+        match = find_note_marker(note.title, note.notes)
+        if match is None:
+            continue
+        segments = note_marker_segments(match.group(0))
+        if not segments or segments[0] != group_slug:
+            continue
+        if leaf_slug is not None and (
+                len(segments) == 1
+                or '-'.join(segments[1:]) != leaf_slug):
+            continue
+        # Only real rewrites count as retagged — a marker already
+        # carrying the target text (e.g. a name-only rename whose
+        # slug did not move) must not inflate the count or get
+        # flagged for a no-op push.
+        if rewrite_note_marker(note, marker_for(segments)):
+            note.needs_push = True
+            retagged.append(note)
+    return retagged
+
+
+def rename_note_category(category, new_slug, new_name):
+    """Rename a category and retag member markers.
+
+    The marker is the source of truth the next processing run
+    reclassifies from, so every note filed under the old path gets
+    its marker rewritten (and flagged for push) — a typo category
+    collapses permanently, in Google too. Returns the number of
+    notes retagged.
+    """
+    if category.parent_id is None:
+        old_slug = category.slug
+        group_slug, leaf_slug = old_slug, None
+        marker_for = lambda segs: (  # noqa: E731
+            f'#notes-{new_slug}'
+            + ('-' + '-'.join(segs[1:]) if len(segs) > 1 else '')
+        )
+    else:
+        group_slug = category.parent.slug
+        leaf_slug = category.slug
+        marker_for = lambda segs: (  # noqa: E731
+            f'#notes-{group_slug}-{new_slug}'
+        )
+    # One transaction: a mid-retag failure must not leave the
+    # category renamed while its members keep the old markers.
+    with transaction.atomic():
+        category.slug = new_slug
+        category.name = new_name
+        category.save(update_fields=['slug', 'name'])
+        retagged = retag_notes(
+            category.user, group_slug, leaf_slug, marker_for
+        )
+        if retagged:
+            GoogleTask.objects.bulk_update(
+                retagged,
+                ['title', 'notes', 'needs_push'],
+                batch_size=500,
+            )
+    return len(retagged)
+
+
+def retarget_note_category(user, source, target):
+    """Fold `source`'s whole subtree into `target` (None →
+    uncategorized): member markers are retagged to the target path
+    (or collapse to bare '#notes'), note_category is repointed, and
+    the source plus its descendant categories are deleted. Backs
+    both category merge and category delete — the marker stays
+    accurate either way. Returns the number of notes retagged.
+    """
+    marker = note_marker_for(target)
+    if source.parent_id is None:
+        group_slug, leaf_slug = source.slug, None
+    else:
+        group_slug = source.parent.slug
+        leaf_slug = source.slug
+    # One transaction: a mid-retag failure must not leave member
+    # markers half-rewritten or the source deleted with stale
+    # markers still pointing at it.
+    with transaction.atomic():
+        retagged = retag_notes(
+            user, group_slug, leaf_slug, lambda segs: marker
+        )
+        for note in retagged:
+            note.note_category = target
+        if retagged:
+            GoogleTask.objects.bulk_update(
+                retagged,
+                ['title', 'notes', 'needs_push', 'note_category'],
+                batch_size=500,
+            )
+        source.delete()
+    return len(retagged)
+
+
 def match_label(hashtag, user, create_if_missing=None, labels=None):
     """
     Smart label matching for voice-to-text input.
@@ -1497,6 +1791,7 @@ def process_task_labels(user, creds, task_id=None):
         'starred': 0,
         'labels_assigned': 0,
         'errors': 0,
+        'notes': 0,
         'unmatched': [],
         'details': []
     }
@@ -1526,6 +1821,54 @@ def process_task_labels(user, creds, task_id=None):
     user_labels = list(TaskLabel.objects.filter(user=user))
     through_model = GoogleTask.labels.through
 
+    # Notes pre-pass: a #notes marker classifies the task as a note
+    # (resolving/auto-creating its category path) and its text is
+    # stripped before hashtag extraction, so marker fragments can
+    # never reach match_label / match_task_list / star keywords.
+    # One category prefetch keeps the pass flat — is_note and
+    # note_category writes flush through the single bulk_update
+    # below, not per-task saves. The marker itself stays in the
+    # stored title/notes: it is the source of truth the next run
+    # reclassifies from.
+    category_index = note_category_index(user)
+    note_updates = []
+    stripped_text = {}
+    for task in tasks:
+        marker = find_note_marker(task.title, task.notes)
+        if marker is not None:
+            segments = note_marker_segments(marker.group(0))
+            category = resolve_note_category(
+                user, segments, index=category_index
+            )
+            category_id = category.pk if category else None
+            if (not task.is_note
+                    or task.note_category_id != category_id):
+                note_updates.append(task)
+            task.is_note = True
+            task.note_category = category
+            stats['notes'] += 1
+            stripped_text[task.pk] = strip_note_marker(
+                task.title, task.notes
+            )
+        elif task.is_note or task.note_category_id is not None:
+            # Marker removed since the last run → plain task again.
+            task.is_note = False
+            task.note_category = None
+            note_updates.append(task)
+    if note_updates:
+        GoogleTask.objects.bulk_update(
+            note_updates,
+            ['is_note', 'note_category'],
+            batch_size=500,
+        )
+
+    def _texts(task):
+        """Title/notes for hashtag extraction — the marker-stripped
+        version for notes, the stored text otherwise."""
+        return stripped_text.get(
+            task.pk, (task.title, task.notes or '')
+        )
+
     # Pre-pass: match all hashtags to existing labels before
     # modifying anything. Collect unmatched hashtags so they can
     # be reported all at once — they only forfeit their own label
@@ -1535,8 +1878,9 @@ def process_task_labels(user, creds, task_id=None):
     through_rows = []
 
     for task in tasks:
-        hashtags = extract_hashtags(task.title)
-        hashtags += extract_hashtags(task.notes or '')
+        proc_title, proc_notes = _texts(task)
+        hashtags = extract_hashtags(proc_title)
+        hashtags += extract_hashtags(proc_notes)
 
         # Skip if no hashtags
         if not hashtags:
@@ -1586,10 +1930,12 @@ def process_task_labels(user, creds, task_id=None):
             'message': ''
         }
 
-        # Extract hashtags from title and notes
+        # Extract hashtags from title and notes (marker text was
+        # already stripped for notes in the pre-pass above).
+        proc_title, proc_notes = _texts(task)
         hashtags = []
-        hashtags.extend(extract_hashtags(task.title))
-        hashtags.extend(extract_hashtags(task.notes or ''))
+        hashtags.extend(extract_hashtags(proc_title))
+        hashtags.extend(extract_hashtags(proc_notes))
 
         if not hashtags:
             detail['message'] = 'No hashtags found'

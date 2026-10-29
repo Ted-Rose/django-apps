@@ -73,6 +73,12 @@ export default function Labels() {
       btn_class: 'btn-light',
     },
     {
+      label: t('menu.notes'),
+      url: '/notes/',
+      icon: 'journal-text',
+      btn_class: 'btn-light',
+    },
+    {
       label: t('common:common.dashboard'),
       icon: 'list-task',
       btn_class: 'btn-primary',

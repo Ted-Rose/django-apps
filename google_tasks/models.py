@@ -2,7 +2,7 @@ import time
 
 from django.conf import settings
 from django.db import models
-from django.db.models import F
+from django.db.models import F, Q
 
 
 def get_unix_timestamp():
@@ -46,6 +46,47 @@ class GoogleTaskList(models.Model):
 
     def __str__(self):
         return f'{self.title} ({self.user.username})'
+
+
+class NoteCategory(models.Model):
+    """One node of a user's quick-notes category tree.
+
+    Two levels: parent=None rows are groups, children are leaves
+    (the #notes-<group>-<leaf> marker path). Auto-created by label
+    processing when a marker names an unseen path; rename/merge/
+    delete rewrites the markers in member notes (services.py).
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+    name = models.CharField(max_length=255)
+    slug = models.CharField(max_length=255)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children'
+    )
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'parent', 'slug']
+        constraints = [
+            # unique_together treats parent=NULL rows as distinct
+            # (NULL != NULL), so top-level slugs need their own
+            # conditional constraint to stay unique per user.
+            models.UniqueConstraint(
+                fields=['user', 'slug'],
+                condition=Q(parent__isnull=True),
+                name='unique_top_level_note_category_slug',
+            ),
+        ]
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.user.username})'
 
 
 class GoogleTask(models.Model):
@@ -129,6 +170,19 @@ class GoogleTask(models.Model):
         TaskLabel,
         blank=True,
         related_name='tasks'
+    )
+    is_note = models.BooleanField(
+        default=False,
+        help_text='Task carries a #notes marker — shown in the '
+                  'notes app, hidden from task views'
+    )
+    note_category = models.ForeignKey(
+        NoteCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notes',
+        help_text='Resolved #notes-<path> marker category (local-only)'
     )
 
     class Meta:

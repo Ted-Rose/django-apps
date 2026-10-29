@@ -10,6 +10,8 @@ import financeEn from '../finance/locales/en.json';
 import financeLv from '../finance/locales/lv.json';
 import gmailEn from '../gmail/locales/en.json';
 import gmailLv from '../gmail/locales/lv.json';
+import notesEn from '../notes/locales/en.json';
+import notesLv from '../notes/locales/lv.json';
 import tasksEn from '../tasks/locales/en.json';
 import tasksLv from '../tasks/locales/lv.json';
 
@@ -21,9 +23,11 @@ import tasksLv from '../tasks/locales/lv.json';
 // Latvian — always switch back to 'en' afterwards.
 const financeEnApp = splitServer(financeEn);
 const gmailEnApp = splitServer(gmailEn);
+const notesEnApp = splitServer(notesEn);
 const tasksEnApp = splitServer(tasksEn);
 const financeLvApp = splitServer(financeLv);
 const gmailLvApp = splitServer(gmailLv);
+const notesLvApp = splitServer(notesLv);
 const tasksLvApp = splitServer(tasksLv);
 i18n.use(initReactI18next).init({
   resources: {
@@ -31,9 +35,11 @@ i18n.use(initReactI18next).init({
       common: commonEn,
       finance: financeEnApp.app,
       gmail: gmailEnApp.app,
+      notes: notesEnApp.app,
       tasks: tasksEnApp.app,
       server: {
         ...tasksEnApp.server,
+        ...notesEnApp.server,
         ...financeEnApp.server,
         ...gmailEnApp.server,
       },
@@ -42,9 +48,11 @@ i18n.use(initReactI18next).init({
       common: commonLv,
       finance: financeLvApp.app,
       gmail: gmailLvApp.app,
+      notes: notesLvApp.app,
       tasks: tasksLvApp.app,
       server: {
         ...tasksLvApp.server,
+        ...notesLvApp.server,
         ...financeLvApp.server,
         ...gmailLvApp.server,
       },
@@ -52,7 +60,7 @@ i18n.use(initReactI18next).init({
   },
   lng: 'en',
   fallbackLng: 'en',
-  ns: ['common', 'finance', 'gmail', 'tasks', 'server'],
+  ns: ['common', 'finance', 'gmail', 'notes', 'tasks', 'server'],
   defaultNS: 'common',
   compatibilityJSON: 'v4',
   interpolation: { escapeValue: false },

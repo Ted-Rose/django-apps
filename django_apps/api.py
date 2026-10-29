@@ -84,7 +84,11 @@ def error_slug(status_code):
 # the /<app>/<sub> rewrite. The value is the exact SPA page path —
 # keep or omit the trailing slash to match that app's URLconf
 # (single_pages mounts at root: /twister has no slash).
-SPA_BASES = {'gmail': '/gmail/', 'single_pages': '/twister'}
+SPA_BASES = {
+    'gmail': '/gmail/',
+    'single_pages': '/twister',
+    'notes': '/notes/',
+}
 
 
 def spa_url_for(request):

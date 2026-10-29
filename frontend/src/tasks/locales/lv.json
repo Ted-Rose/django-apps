@@ -47,7 +47,8 @@
     "syncNow": "Sinhronizēt",
     "syncing": "Sinhronizē…",
     "loginGoogle": "Pieslēgties ar Google",
-    "searchTasks": "Meklēt uzdevumus"
+    "searchTasks": "Meklēt uzdevumus",
+    "notes": "Piezīmes"
   },
   "task": {
     "complete": "Pabeigt",

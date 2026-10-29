@@ -47,7 +47,8 @@
     "syncNow": "Sync Now",
     "syncing": "Syncing…",
     "loginGoogle": "Login with Google",
-    "searchTasks": "Search tasks"
+    "searchTasks": "Search tasks",
+    "notes": "Notes"
   },
   "task": {
     "complete": "Complete",
