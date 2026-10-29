@@ -4,7 +4,13 @@
 12. Quick notes: tasks carrying a `#notes-<path>` marker now file
     into an auto-created two-level category tree under a new
     `/notes/` app — hidden from the task views, with rename/merge/
-    delete of categories rewriting the marker in member notes
+    delete of categories rewriting the marker in member notes.
+    The `/notes/` React app mirrors the tasks UI: a dark navbar
+    with a category-tree dropdown and search, note cards with a
+    marker-hidden title and a collapsible completed section, a
+    full-page editor with a category picker (incl. a "not a note"
+    escape back to a plain task), and a `/notes/categories`
+    management page for add/rename/merge/delete
 11. The three per-task Cloud Run jobs and the balance-alerts
     scheduler are gone — the single `all-jobs` job now runs on
     one `all-jobs-daily` 03:00 UTC Cloud Scheduler trigger;

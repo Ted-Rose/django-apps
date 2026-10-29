@@ -1,0 +1,135 @@
+{
+  "nav": {
+    "title": "Notes"
+  },
+  "views": {
+    "allNotes": "All notes",
+    "inbox": "Inbox",
+    "manageCategories": "Manage categories"
+  },
+  "order": {
+    "newest": "Newest first",
+    "oldest": "Oldest first",
+    "orderAsc": "Order Asc",
+    "orderDesc": "Order Desc",
+    "dueAsc": "Due Asc",
+    "dueDesc": "Due Desc"
+  },
+  "menu": {
+    "syncNow": "Sync Now",
+    "syncing": "Syncing…",
+    "loginGoogle": "Login with Google",
+    "searchNotes": "Search notes",
+    "manageCategories": "Manage categories",
+    "tasks": "Tasks"
+  },
+  "note": {
+    "actions": "Note actions",
+    "edit": "Edit",
+    "moveToCategory": "Move to category",
+    "delete": "Delete",
+    "deleteTitle": "Delete Note",
+    "deleteConfirm": "Move this note to trash?",
+    "pendingSync": "Pending sync to Google",
+    "uncategorized": "Uncategorized",
+    "notANote": "Not a note — convert to task",
+    "googleList": "Google task list"
+  },
+  "form": {
+    "createTitle": "New Note",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Note title",
+    "bodyLabel": "Body",
+    "bodyPlaceholder": "Write the note…",
+    "categoryLabel": "Category",
+    "createSubmit": "Create note",
+    "titleRequired": "Please enter a note title"
+  },
+  "detail": {
+    "editNote": "Edit note",
+    "back": "Back to notes",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Note title",
+    "bodyLabel": "Body",
+    "bodyPlaceholder": "Write the note…",
+    "categoryLabel": "Category",
+    "lastUpdated": "Last updated: {{datetime}}",
+    "save": "Save Changes",
+    "saved": "Note saved!",
+    "titleEmpty": "Title cannot be empty",
+    "missing": "Note not found."
+  },
+  "picker": {
+    "title": "Move to category",
+    "apply": "Move",
+    "uncategorized": "Uncategorized (Inbox)",
+    "notANote": "Not a note",
+    "notANoteHint": "Strips the #notes marker — the note becomes a plain task again."
+  },
+  "completed": {
+    "header": "Completed notes ({{count}})",
+    "markNotCompleted": "Mark as not completed",
+    "modalTitle": "Mark as Not Completed",
+    "confirm": "Mark this note as not completed?"
+  },
+  "list": {
+    "loading": "Loading notes",
+    "errorTitle": "Couldn't load notes",
+    "authTitle": "Google Authentication Required",
+    "authBody": "You need to authenticate with Google to access your notes.",
+    "noNotes": "No notes yet",
+    "emptyHint": "Notes are tasks carrying a #notes marker — dictate one or create it here.",
+    "createNote": "Create new note",
+    "searchPlaceholder": "Search notes…",
+    "searchEmpty": "No notes match \"{{q}}\""
+  },
+  "categoriesPage": {
+    "title": "Categories",
+    "back": "Back to notes",
+    "name": "Category",
+    "notes": "Notes",
+    "actions": "Actions",
+    "add": "Add category",
+    "addPlaceholder": "New category name",
+    "parent": "Inside group (optional)",
+    "rename": "Rename",
+    "merge": "Merge",
+    "delete": "Delete",
+    "renameTitle": "Rename Category",
+    "renamePrompt": "Renaming rewrites the #notes marker in member notes and pushes them to Google.",
+    "newName": "New name",
+    "mergeTitle": "Merge Category",
+    "mergePrompt": "Members are retagged to the target and the source category is removed.",
+    "mergeInto": "Merge into",
+    "deleteTitle": "Delete Category",
+    "deletePrompt": "Member notes are retagged to the chosen target; the category is removed.",
+    "deleteTarget": "Move notes to",
+    "uncategorized": "Uncategorized (Inbox)",
+    "empty": "No categories yet — they appear when a #notes-<path> marker files a note.",
+    "retagged": "{{count}} notes retagged",
+    "topLevel": "Top level"
+  },
+  "toasts": {
+    "createFailed": "Failed to create note: {{detail}}",
+    "updateFailed": "Failed to update note: {{detail}}",
+    "deleteFailed": "Failed to delete note: {{detail}}",
+    "uncompleteFailed": "Failed to uncomplete note: {{detail}}",
+    "syncFailed": "Sync failed: {{detail}}",
+    "categoryFailed": "Failed to update categories: {{detail}}",
+    "categorySaved": "Category saved — {{count}} notes retagged",
+    "categoriesMerged": "Categories merged — {{count}} notes retagged",
+    "categoryDeleted": "Category deleted — {{count}} notes retagged"
+  },
+  "server": {
+    "invalidCategoryName": "Invalid category name",
+    "categoryExists": "Category already exists",
+    "categoryTooDeep": "Categories are two levels deep",
+    "invalidCategoryTarget": "Target cannot be inside the source subtree",
+    "invalidDeleteTarget": "Invalid delete target",
+    "emptyTitle": "Title cannot be empty",
+    "invalidJson": "Invalid JSON",
+    "noCredentials": "No credentials found",
+    "taskCreateFailed": "Could not create task: {{detail}}",
+    "createFailed": "Failed to create task in Google Tasks"
+  }
+}

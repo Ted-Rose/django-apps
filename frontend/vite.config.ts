@@ -14,6 +14,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         tasks: 'src/tasks/main.tsx',
+        notes: 'src/notes/main.tsx',
         finance: 'src/finance/main.tsx',
         gmail: 'src/gmail/main.tsx',
         single_pages: 'src/single_pages/main.tsx',

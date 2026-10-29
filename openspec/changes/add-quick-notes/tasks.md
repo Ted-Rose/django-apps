@@ -54,42 +54,42 @@
 
 ## 3. Frontend — `notes` SPA
 
-- [ ] 3.1 both: Wire the `notes` slug all four legs —
+- [x] 3.1 both: Wire the `notes` slug all four legs —
   `frontend/src/notes/` folder, vite `input.notes`,
   `/api/notes/` mount (2.2), and `/notes/` pages via
   `react_app(entry='notes')` + `<path:subpath>` catch-all +
   `SPA_BASES['notes']`; verify GET `/notes/` and a deep link
   return the shell and `/api/notes/` 401s map back to the SPA
-- [ ] 3.2 frontend: Scaffold the entry — `main.tsx`
+- [x] 3.2 frontend: Scaffold the entry — `main.tsx`
   (initSentry, initI18n('notes'), QueryClientProvider,
   BrowserRouter basename `/notes`, ErrorBoundary), `App.tsx`
   routes (`/`, `/category/:id`, `/note/:id`, `/categories`,
   `*` → `/`), `locales/en|lv.json`; verify `npm run dev`
   renders the shell and `i18n:check` passes
-- [ ] 3.3 frontend: Notes list page — category-tree dropdown
+- [x] 3.3 frontend: Notes list page — category-tree dropdown
   navbar, `NoteCard` (marker-hidden title via
   `stripNoteMarker`, ~40-word body preview, category chip,
   ⋮ menu, no complete/star controls), completed-notes
   collapsible, `['notes']`-rooted query hooks + `api.ts`
   fetchers; verify vitest for `stripNoteMarker` and card
   rendering
-- [ ] 3.4 frontend: Note editor `/note/:id` (auto-resizing
+- [x] 3.4 frontend: Note editor `/note/:id` (auto-resizing
   title/body, `CategoryPicker` incl. uncategorized + "not a
   note" escape) and create flow via floating `+`; verify
   vitest save/category-change flows and that markers never
   appear in inputs
-- [ ] 3.5 frontend: Categories manage page — tree with counts,
+- [x] 3.5 frontend: Categories manage page — tree with counts,
   add/rename/merge/delete with `ConfirmModal`, toasts on
   retag results; verify vitest plus a manual check that a
   renamed `praer` category rewrites member markers
-- [ ] 3.6 frontend: Reuse shared auth/undo patterns — verify
+- [x] 3.6 frontend: Reuse shared auth/undo patterns — verify
   dead Google creds on a notes call navigate to OAuth via the
   shared client, and `npm run lint`, `format:check`,
   `typecheck`, and `npm test` pass for the new files
 
 ## 4. Integration
 
-- [ ] 4.1 both: Add a `notes` link to the home page and burger
+- [x] 4.1 both: Add a `notes` link to the home page and burger
   menu items; verify it renders and navigates to `/notes/`
 - [ ] 4.2 both: End-to-end classification check — create a
   task titled `x #notes-god-prayer`, run processing, verify

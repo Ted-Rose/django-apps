@@ -1,0 +1,36 @@
+/* Notes SPA styles — reuses the tasks dashboard stylesheet (task
+   cards, floating + button, completed section, undo controls) and
+   adds notes-only tweaks on top. The navbar deliberately differs
+   (bg-dark via class, not a rule) so the app never reads as tasks. */
+@import '../tasks/dashboard.css';
+
+/* Category chip on a NoteCard — a soft badge that stays readable
+   next to the muted preview text. */
+.note-category-chip {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Category-picker list rows (editor + move modal) — full-width
+   clickable rows with the leaf level indented one step. */
+.category-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: none;
+  text-align: left;
+}
+.category-picker-option:hover {
+  background-color: var(--bs-light);
+}
+.category-picker-option.selected {
+  border-color: var(--bs-primary);
+  background-color: rgba(var(--bs-primary-rgb), 0.08);
+}
+.category-picker-option.leaf {
+  padding-left: 1.75rem;
+}
