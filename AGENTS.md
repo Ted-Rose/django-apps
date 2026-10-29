@@ -239,6 +239,43 @@ Code conventions:
   `unittest.mock.patch`. Frontend: Vitest `*.test.ts(x)` colocated
   in `frontend/src/`.
 
+## OpenSpec
+
+`openspec/` at the repo root is the spec-driven planning layer
+(npm `@fission-ai/openspec`, v1.14.x). It covers BOTH layers of
+this repo by design: the contracts that matter (the `/api/`
+error envelope, SPA shell mounts, per-user isolation, sync
+upserts) span Django and React, so specs live at the system
+level.
+
+- **Run `openspec` commands only from the repo root** — a fixed
+  convention, not upward root-resolution.
+- The CLI is a global npm install — it lives in
+  `/opt/homebrew/bin` next to `node`/`npm`/`gh`, which is not on
+  agent shells' PATH; prefix exec calls with
+  `export PATH="/opt/homebrew/bin:$PATH"`.
+- `openspec/specs/` holds capability specs (current behavior as
+  source of truth): `api-contract`, `spa-shell`,
+  `data-isolation`, `external-sync` — grow as real changes touch
+  new areas. Code wins when a spec and the code disagree; fix
+  the spec.
+- `openspec/config.yaml` carries project context; change
+  `tasks.md` items MUST be prefixed `backend:` / `frontend:` /
+  `both:` to name the layer they touch.
+- Workflow: `openspec-propose` → implement via
+  `openspec-apply-change` → `openspec-archive-change`. The
+  skills live in `.devin/skills/openspec-*` (copies — the
+  upstream frontmatter in `.agents/skills/openspec-*/` has
+  extra fields that break Devin discovery, so keep the `.devin`
+  copies stripped to `name`/`description` and re-copy+re-strip
+  if `openspec update` refreshes the originals).
+- `openspec/changes/archive/` is committed like all other
+  planning history.
+- **`docs/plans/` is frozen for new feature plans** — new
+  feature work goes through `openspec changes`. Existing
+  `docs/plans/*` stay as history, and investigation/report docs
+  (non-feature) still belong there per convention 11.
+
 ## Known gaps (do NOT "fix" without asking)
 
 - google_tasks trash advertises "auto-purged after 30 days" in UI

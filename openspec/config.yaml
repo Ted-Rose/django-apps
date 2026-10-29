@@ -1,0 +1,68 @@
+schema: spec-driven
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+context: |
+  django-apps is ONE repo with two layers:
+  - Backend: Django 4.2 monolith (apps: google_api, gmail,
+    google_tasks, finance, single_pages) plus one shared
+    django-ninja `NinjaAPI` mounted at `/api/` in
+    `django_apps/api.py` + `django_apps/urls.py`.
+  - Frontend: React 19 + TS + Vite 5 workspace in `frontend/`,
+    one entry per app under `frontend/src/<entry>/`, shared
+    client code in `frontend/src/shared/`.
+
+  Specs in `openspec/specs/` describe CURRENT behavior — the code
+  is the source of truth. When a doc (AGENTS.md, README,
+  docs/plans/*) disagrees with the code, the code wins; several
+  docs predate the React SPA cutover.
+
+  Project conventions that artifacts must respect:
+  - Max 79 chars per line in EVERY file type, including Python
+    (verify: `awk 'length > 79 {print FILENAME":"NR}' <file>`).
+  - Commit format `Type: Capitalized message` (Feat/Fix/Docs/
+    Refactor/Test/Chore); feature branches only, never main.
+  - Agents NEVER run `manage.py migrate`/`makemigrations` or any
+    DB-applying command, `terraform apply`, `gcloud run deploy`,
+    `vercel` deploys, or `git push` to main — write the change and
+    hand the command to the user.
+  - Every ORM query is per-user scoped (`user=request.user`;
+    finance uses `for_user()` managers that include shared
+    accounts). Never introduce an unscoped `objects.all()` read.
+  - Frontend CI gates: lint, format:check, typecheck, vitest, plus
+    `frontend/openapi.json` and `src/*/api-types.ts` drift checks —
+    regenerate both when any `*/api.py` changes.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+rules:
+  tasks:
+    - >-
+      Prefix every tasks.md item with `backend:`, `frontend:`, or
+      `both:` to name the layer it touches — changes routinely span
+      the Django API and the React SPA
+    - Keep lines at or under 79 chars
+  proposal:
+    - Keep lines at or under 79 chars
+  design:
+    - Keep lines at or under 79 chars
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+operations:
+  apply:
+    guidance:
+      - >-
+        Run scoped tests only: `python manage.py test <app>` or a
+        single Vitest file — never the whole suite
+      - >-
+        Never run migrations or other DB-applying commands; hand
+        the command to the user instead
+  archive:
+    guidance:
+      - >-
+        Before archiving, verify implemented behavior still matches
+        the delta spec; code wins when docs disagree
