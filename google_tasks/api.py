@@ -19,7 +19,12 @@ from pydantic import Field
 
 from django_apps.api import GoogleReauthRequired, _adapt, _reauth_url
 from google_tasks import views
-from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
+from google_tasks.models import (
+    GoogleTask,
+    GoogleTaskList,
+    NoteCategory,
+    TaskLabel,
+)
 
 router = Router()
 
@@ -51,6 +56,13 @@ class TaskListOut(TaskListRef):
     updated: Optional[datetime] = None
 
 
+class NoteCategoryRef(Schema):
+    id: int
+    name: str
+    slug: str
+    parent_id: Optional[int] = None
+
+
 class TaskOut(Schema):
     """One task as the SPA consumes it — local-only fields included
     (needs_push lets the UI show pending vs synced state)."""
@@ -72,6 +84,8 @@ class TaskOut(Schema):
     is_deleted: bool
     deleted_at: Optional[datetime] = None
     needs_push: bool
+    is_note: bool
+    note_category: Optional[NoteCategoryRef] = None
 
     @staticmethod
     def resolve_due(obj):
@@ -303,7 +317,9 @@ def _list_response(request, creds, tasks, completed, labels,
 def _task_queryset(user):
     return GoogleTask.objects.filter(
         user=user
-    ).select_related('task_list').prefetch_related('labels')
+    ).select_related(
+        'task_list', 'note_category'
+    ).prefetch_related('labels')
 
 
 def _stats_buckets(qs, trunc, starts):
@@ -354,7 +370,7 @@ def dashboard(request,
               order: str = 'order_asc'):
     creds = _creds_or_reauth(request)
     tasks = _task_queryset(request.user).filter(
-        is_archived=False, is_deleted=False
+        is_archived=False, is_deleted=False, is_note=False
     )
     if list:
         tasks = tasks.filter(task_list__list_id=list)
@@ -365,7 +381,8 @@ def dashboard(request,
         # Mirror the dashboard view: label counts only when a label
         # filter is active (secondary_label stays client-side).
         base = _task_queryset(request.user).filter(
-            is_archived=False, is_deleted=False, status='needsAction'
+            is_archived=False, is_deleted=False, is_note=False,
+            status='needsAction'
         )
         if list:
             base = base.filter(task_list__list_id=list)
@@ -384,7 +401,8 @@ def starred(request,
             order: str = 'order_asc'):
     creds = _creds_or_reauth(request)
     tasks = _task_queryset(request.user).filter(
-        is_starred=True, is_archived=False, is_deleted=False
+        is_starred=True, is_archived=False, is_deleted=False,
+        is_note=False
     )
     if label:
         tasks = tasks.filter(labels__name=label)
@@ -405,7 +423,7 @@ def overdue(request,
             order: str = 'order_asc'):
     creds = _creds_or_reauth(request)
     tasks = _task_queryset(request.user).filter(
-        is_archived=False, is_deleted=False,
+        is_archived=False, is_deleted=False, is_note=False,
         due_date__lt=timezone.now().date()
     )
     if label:
@@ -494,7 +512,8 @@ def labels(request):
     _creds_or_reauth(request)
     user_labels = TaskLabel.objects.filter(user=request.user)
     base = _task_queryset(request.user).filter(
-        is_archived=False, is_deleted=False, status='needsAction'
+        is_archived=False, is_deleted=False, is_note=False,
+        status='needsAction'
     )
     _label_task_counts(user_labels, base)
     return {'labels': user_labels}
@@ -510,7 +529,7 @@ def search(request, q: str = Query('', max_length=200)):
     if not q:
         return {'tasks': [], 'total_results': 0}
     tasks = _task_queryset(request.user).filter(
-        is_deleted=False
+        is_deleted=False, is_note=False
     ).filter(
         Q(title__icontains=q) | Q(notes__icontains=q)
     ).order_by('-updated')
@@ -530,7 +549,7 @@ def stats(request,
     _creds_or_reauth(request)
     qs = GoogleTask.objects.filter(
         user=request.user, status='completed',
-        is_deleted=False, is_divider=False,
+        is_deleted=False, is_divider=False, is_note=False,
     )
     if list:
         qs = qs.filter(task_list__list_id=list)
