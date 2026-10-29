@@ -11,6 +11,8 @@ ca.pem
 data/
 staticfiles
 config.yaml
+# OpenSpec's tracked project config is NOT a secrets file
+!openspec/config.yaml
 private_settings.json
 .env
 
