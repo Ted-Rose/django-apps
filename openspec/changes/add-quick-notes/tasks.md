@@ -91,7 +91,7 @@
 
 - [x] 4.1 both: Add a `notes` link to the home page and burger
   menu items; verify it renders and navigates to `/notes/`
-- [ ] 4.2 both: End-to-end classification check — create a
+- [x] 4.2 both: End-to-end classification check — create a
   task titled `x #notes-god-prayer`, run processing, verify
   it appears under `god/prayer` in `/notes/` and is absent
   from `/tasks/`; run `manage.py test google_tasks` and the
