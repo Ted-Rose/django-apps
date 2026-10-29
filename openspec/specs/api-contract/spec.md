@@ -79,9 +79,10 @@ with `detail` as the English fallback.
 The API SHALL signal two distinct 401 auth failures the SPA
 navigates on itself: `unauthenticated` (session) with a
 `login_url`, and `google_reauth` (dead Google credentials) with
-an `authorization_url`. Both URLs MUST carry an SPA page (via
-`spa_url_for`) as their `next` target — never a raw `/api/`
-JSON URL.
+an `authorization_url`. Auth navigation MUST return the user to
+an SPA page — carried in the `/login/` `next` param (built via
+`spa_url_for`) or `session['oauth_redirect_url']` — never a
+raw `/api/` JSON URL.
 
 #### Scenario: Expired session yields login_url 401
 
@@ -97,6 +98,17 @@ JSON URL.
   `{'error': 'No credentials found'}` payloads
 - **THEN** the API responds 401 with `{error: 'google_reauth',
   authorization_url}` pointing into the OAuth flow
+
+#### Scenario: Google consent URL returns via the session
+
+- **WHEN** `_adapt()` passes through a payload
+  `authorization_url` — a Google consent URL built by
+  `flow.authorization_url`, carrying `state`/`redirect_uri`
+  but no `next`
+- **THEN** the SPA page the user returns to lives in
+  `session['oauth_redirect_url']` (a `spa_url_for` path or an
+  SPA URL name like `google_tasks:dashboard`), not an `/api/`
+  URL
 
 #### Scenario: Legacy view failure payload is adapted
 
