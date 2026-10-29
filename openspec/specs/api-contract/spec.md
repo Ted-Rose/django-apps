@@ -80,7 +80,7 @@ The API SHALL signal two distinct 401 auth failures the SPA
 navigates on itself: `unauthenticated` (session) with a
 `login_url`, and `google_reauth` (dead Google credentials) with
 an `authorization_url`. Auth navigation MUST return the user to
-an SPA page — carried in the `/login/` `next` param (built via
+an SPA page — carried in a login URL's `next` param (built via
 `spa_url_for`) or `session['oauth_redirect_url']` — never a
 raw `/api/` JSON URL.
 
@@ -106,9 +106,9 @@ raw `/api/` JSON URL.
   `flow.authorization_url`, carrying `state`/`redirect_uri`
   but no `next`
 - **THEN** the SPA page the user returns to lives in
-  `session['oauth_redirect_url']` (a `spa_url_for` path or an
-  SPA URL name like `google_tasks:dashboard`), not an `/api/`
-  URL
+  `session['oauth_redirect_url']` (an SPA URL name like
+  `google_tasks:dashboard`, a Referer-derived page URL, or a
+  `spa_url_for` path), not an `/api/` URL
 
 #### Scenario: Legacy view failure payload is adapted
 
