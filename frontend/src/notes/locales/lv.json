@@ -57,14 +57,15 @@
     "save": "Saglabāt izmaiņas",
     "saved": "Piezīme saglabāta!",
     "titleEmpty": "Virsraksts nedrīkst būt tukšs",
-    "missing": "Piezīme nav atrasta."
+    "missing": "Piezīme nav atrasta.",
+    "notANote": "Šis uzdevums nav piezīme."
   },
   "picker": {
     "title": "Pārvietot uz kategoriju",
     "apply": "Pārvietot",
     "uncategorized": "Bez kategorijas (ienākošās)",
     "notANote": "Nav piezīme",
-    "notANoteHint": "Noņem #notes marķieri — piezīme atkal kļūst par parastu uzdevumu."
+    "notANoteHint": "Noņem marķieri — kļūst parastu uzdevumu."
   },
   "completed": {
     "header": "Pabeigtās piezīmes ({{count}})",
@@ -78,7 +79,7 @@
     "authTitle": "Nepieciešama Google autentifikācija",
     "authBody": "Tev jāautentificējas ar Google, lai piekļūtu piezīmēm.",
     "noNotes": "Vēl nav piezīmju",
-    "emptyHint": "Piezīmes ir uzdevumi ar #notes marķieri — izdikte vienreiz vai izveido šeit.",
+    "emptyHint": "Piezīmes ir uzdevumi ar #notes marķieri.",
     "createNote": "Izveidot jaunu piezīmi",
     "searchPlaceholder": "Meklēt piezīmes…",
     "searchEmpty": "Neviena piezīme neatbilst \"{{q}}\""
@@ -96,16 +97,16 @@
     "merge": "Apvienot",
     "delete": "Dzēst",
     "renameTitle": "Pārsaukt kategoriju",
-    "renamePrompt": "Pārsaukšana pārraksta #notes marķieri dalībnieku piezīmēs un nosūta tās uz Google.",
+    "renamePrompt": "Pārsaukšana pārraksta marķierus un sūta uz Google.",
     "newName": "Jaunais nosaukums",
     "mergeTitle": "Apvienot kategoriju",
-    "mergePrompt": "Dalībnieki tiek pārmarķēti uz mērķi un avota kategorija tiek dzēsta.",
+    "mergePrompt": "Dalībnieki pārmarķējas; avots tiek dzēsts.",
     "mergeInto": "Apvienot ar",
     "deleteTitle": "Dzēst kategoriju",
-    "deletePrompt": "Dalībnieku piezīmes tiek pārmarķētas uz izvēlēto mērķi; kategorija tiek dzēsta.",
+    "deletePrompt": "Piezīmes pārmarķējas uz mērķi; kategorija dzēsta.",
     "deleteTarget": "Pārvietot piezīmes uz",
     "uncategorized": "Bez kategorijas (ienākošās)",
-    "empty": "Vēl nav kategoriju — tās parādās, kad #notes-<ceļš> marķieris sašķiro piezīmi.",
+    "empty": "Vēl nav kategoriju — tās veido #notes-<ceļš> marķieris.",
     "retagged": "Pārmarķētas {{count}} piezīmes",
     "topLevel": "Augšējā līmenī"
   },
@@ -113,20 +114,21 @@
     "createFailed": "Neizdevās izveidot piezīmi: {{detail}}",
     "updateFailed": "Neizdevās atjaunināt piezīmi: {{detail}}",
     "deleteFailed": "Neizdevās dzēst piezīmi: {{detail}}",
-    "uncompleteFailed": "Neizdevās atzīmēt piezīmi kā nepabeigtu: {{detail}}",
+    "uncompleteFailed": "Neizdevās atzīmēt kā nepabeigtu: {{detail}}",
     "syncFailed": "Sinhronizācija neizdevās: {{detail}}",
     "categoryFailed": "Neizdevās atjaunināt kategorijas: {{detail}}",
-    "categorySaved": "Kategorija saglabāta — pārmarķētas {{count}} piezīmes",
-    "categoriesMerged": "Kategorijas apvienotas — pārmarķētas {{count}} piezīmes",
-    "categoryDeleted": "Kategorija dzēsta — pārmarķētas {{count}} piezīmes"
+    "categorySaved": "Saglabāta — pārmarķētas {{count}} piezīmes",
+    "categoriesMerged": "Apvienotas — pārmarķētas {{count}} piezīmes",
+    "categoryDeleted": "Dzēsta — pārmarķētas {{count}} piezīmes"
   },
   "server": {
     "invalidCategoryName": "Nederīgs kategorijas nosaukums",
     "categoryExists": "Kategorija jau pastāv",
     "categoryTooDeep": "Kategorijas ir divus līmeņus dziļas",
-    "invalidCategoryTarget": "Mērķis nedrīkst būt avota apakškoku iekšpusē",
+    "invalidCategoryTarget": "Mērķis nedrīkst būt avota apakškokā",
     "invalidDeleteTarget": "Nederīgs dzēšanas mērķis",
     "emptyTitle": "Virsraksts nedrīkst būt tukšs",
+    "titleTooLong": "Virsraksts nedrīkst pārsniegt 500 rakstzīmes",
     "invalidJson": "Nederīgs JSON",
     "noCredentials": "Akreditācijas dati nav atrasti",
     "taskCreateFailed": "Neizdevās izveidot uzdevumu: {{detail}}",

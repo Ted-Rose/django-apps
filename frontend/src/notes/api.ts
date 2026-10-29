@@ -18,15 +18,12 @@ export type CategoryRenameIn = components['schemas']['CategoryRenameIn'];
 export type CategoryMergeIn = components['schemas']['CategoryMergeIn'];
 
 /**
- * Response of POST/PATCH /api/notes/categories/… — the OpenAPI
- * `CategoryOut` component name collides with finance's same-named
- * schema (the generated api-types.ts resolves it to the finance
- * shape), so the notes `{category, retagged}` body is typed here.
+ * Response of POST/PATCH /api/notes/categories/… — the generated
+ * `{category, retagged}` schema (named NoteCategoryMutationOut
+ * server-side so it cannot collide with finance's CategoryOut).
  */
-export interface NoteCategoryResult {
-  category: NoteCategoryOut;
-  retagged: number;
-}
+export type NoteCategoryResult =
+  components['schemas']['NoteCategoryMutationOut'];
 
 /** Shape returned by the task views the API delegates to. */
 export interface MutationResult {

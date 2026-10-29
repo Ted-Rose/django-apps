@@ -198,7 +198,14 @@ export default function NoteDetail() {
         {data && !task && (
           <div className="alert alert-info">{t('detail.missing')}</div>
         )}
-        {data && task && (
+        {data && task && !task.is_note && (
+          // The task detail endpoint doesn't exclude non-notes —
+          // a plain task id must not open a working note editor.
+          <div className="alert alert-info mt-3">
+            <i className="bi bi-info-circle" /> {t('detail.notANote')}
+          </div>
+        )}
+        {data && task && task.is_note && (
           <>
             <div className="d-flex align-items-center mb-3 header-section">
               <Link
@@ -313,9 +320,10 @@ export default function NoteDetail() {
             <div id="alert-container" className="mt-3">
               {alert && (
                 <div
-                  className={
-                    `alert alert-${alert.kind} alert-dismissible ` + 'fade show'
-                  }
+                  className={[
+                    `alert alert-${alert.kind}`,
+                    'alert-dismissible fade show',
+                  ].join(' ')}
                   role="alert"
                 >
                   <i

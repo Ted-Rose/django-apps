@@ -1051,7 +1051,12 @@ def remove_starred_hashtags(notes):
 # unmatched-tag warnings, list moves, or star keywords — which is
 # also what keeps notes in their original Google list.
 NOTE_TAG_RE = re.compile(
-    r'#notes(?:-[a-z0-9_]+)*(?![a-z0-9_-])',
+    # Segments may be empty (`*`, not `+`) so separators still match
+    # — '#notes--x', '#notes-abc-', '#notes-' parse like their
+    # canonical spellings and the segment parser drops the empties.
+    # The lookahead still rejects '#notebook-x'/'#notesx', and a
+    # trailing dash is part of the match so stripping removes it.
+    r'#notes(?:-[a-z0-9_]*)*(?![a-z0-9_-])',
     re.IGNORECASE,
 )
 
@@ -1154,8 +1159,18 @@ def resolve_note_category(user, segments, index=None):
 
 
 def _collapse_marker_whitespace(text):
-    """Collapse the whitespace a stripped marker leaves behind."""
-    return re.sub(r'\s+', ' ', text).strip()
+    """Collapse the whitespace a stripped marker leaves behind.
+
+    Only HORIZONTAL whitespace collapses — `[ \t]+` runs fold to a
+    single space and each line is stripped. Newlines are paragraph
+    breaks in note bodies and must survive; collapsing all `\s+`
+    flattened multi-paragraph bodies into one line on every retag.
+    """
+    lines = (
+        re.sub(r'[ \t]+', ' ', line).strip(' \t')
+        for line in text.split('\n')
+    )
+    return '\n'.join(lines).strip()
 
 
 def strip_note_marker(title, notes):
@@ -1227,9 +1242,13 @@ def retag_notes(user, group_slug, leaf_slug, marker_for):
                 len(segments) == 1
                 or '-'.join(segments[1:]) != leaf_slug):
             continue
+        # Only real rewrites count as retagged — a marker already
+        # carrying the target text (e.g. a name-only rename whose
+        # slug did not move) must not inflate the count or get
+        # flagged for a no-op push.
         if rewrite_note_marker(note, marker_for(segments)):
             note.needs_push = True
-        retagged.append(note)
+            retagged.append(note)
     return retagged
 
 
@@ -1255,18 +1274,21 @@ def rename_note_category(category, new_slug, new_name):
         marker_for = lambda segs: (  # noqa: E731
             f'#notes-{group_slug}-{new_slug}'
         )
-    category.slug = new_slug
-    category.name = new_name
-    category.save(update_fields=['slug', 'name'])
-    retagged = retag_notes(
-        category.user, group_slug, leaf_slug, marker_for
-    )
-    if retagged:
-        GoogleTask.objects.bulk_update(
-            retagged,
-            ['title', 'notes', 'needs_push'],
-            batch_size=500,
+    # One transaction: a mid-retag failure must not leave the
+    # category renamed while its members keep the old markers.
+    with transaction.atomic():
+        category.slug = new_slug
+        category.name = new_name
+        category.save(update_fields=['slug', 'name'])
+        retagged = retag_notes(
+            category.user, group_slug, leaf_slug, marker_for
         )
+        if retagged:
+            GoogleTask.objects.bulk_update(
+                retagged,
+                ['title', 'notes', 'needs_push'],
+                batch_size=500,
+            )
     return len(retagged)
 
 
@@ -1284,18 +1306,22 @@ def retarget_note_category(user, source, target):
     else:
         group_slug = source.parent.slug
         leaf_slug = source.slug
-    retagged = retag_notes(
-        user, group_slug, leaf_slug, lambda segs: marker
-    )
-    for note in retagged:
-        note.note_category = target
-    if retagged:
-        GoogleTask.objects.bulk_update(
-            retagged,
-            ['title', 'notes', 'needs_push', 'note_category'],
-            batch_size=500,
+    # One transaction: a mid-retag failure must not leave member
+    # markers half-rewritten or the source deleted with stale
+    # markers still pointing at it.
+    with transaction.atomic():
+        retagged = retag_notes(
+            user, group_slug, leaf_slug, lambda segs: marker
         )
-    source.delete()
+        for note in retagged:
+            note.note_category = target
+        if retagged:
+            GoogleTask.objects.bulk_update(
+                retagged,
+                ['title', 'notes', 'needs_push', 'note_category'],
+                batch_size=500,
+            )
+        source.delete()
     return len(retagged)
 
 

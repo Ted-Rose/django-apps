@@ -82,18 +82,28 @@ export function truncateWords(text: string, count: number): string {
 /**
  * The marker pattern — verbatim port of services.py NOTE_TAG_RE:
  * `#notes` optionally followed by `-<seg>` runs where a segment is
- * `[a-z0-9_]+`; the lookahead stops `#notebook-x`/`#notesx` matching.
- * Case-insensitive; `g` flag so every occurrence strips.
+ * `[a-z0-9_]*` (empties allowed, so `#notes--x`/`#notes-` still
+ * match and their full span strips); the lookahead stops
+ * `#notebook-x`/`#notesx` matching. Case-insensitive; `g` flag so
+ * every occurrence strips.
  */
-const NOTE_TAG_RE = /#notes(?:-[a-z0-9_]+)*(?![a-z0-9_-])/gi;
+const NOTE_TAG_RE = /#notes(?:-[a-z0-9_]*)*(?![a-z0-9_-])/gi;
 
 /**
  * Remove every `#notes…` marker occurrence from `text` and collapse
  * the whitespace a stripped marker leaves behind — same semantics
- * as services.py strip_note_marker/_collapse_marker_whitespace.
+ * as services.py strip_note_marker/_collapse_marker_whitespace:
+ * only HORIZONTAL whitespace collapses (per-line `[ \t]+` → one
+ * space, lines trimmed), so newlines in multi-paragraph bodies
+ * survive a save round-trip.
  */
 export function stripNoteMarker(text?: string | null): string {
-  return (text ?? '').replace(NOTE_TAG_RE, '').replace(/\s+/g, ' ').trim();
+  return (text ?? '')
+    .replace(NOTE_TAG_RE, '')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .trim();
 }
 
 /** BrowserRouter basename from main.tsx. */

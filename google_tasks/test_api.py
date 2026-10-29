@@ -859,6 +859,63 @@ class NotesApiTests(TestCase):
         self.assertEqual(note.title, 'pray')
         self.assertEqual(note.notes, 'text\n\n#notes-god')
 
+    def test_update_preserves_multiline_body(self):
+        # A multi-paragraph body must keep its \n\n breaks — the
+        # marker strip only collapses horizontal whitespace.
+        note = self.make_note(
+            'n1', notes='first\n\nsecond #notes-god',
+        )
+        resp = self.patch_json(f'/{note.task_id}/', {})
+        self.assertEqual(resp.status_code, 200)
+        note.refresh_from_db()
+        self.assertEqual(
+            note.notes, 'first\n\nsecond\n\n#notes-god'
+        )
+
+    def test_update_marker_only_title_keeps_marker(self):
+        # A title that IS just the marker must not 400 on an
+        # unrelated PATCH — the recomposed marker stands in as the
+        # title and no duplicate lands in the body.
+        category = self.make_category('god')
+        note = self.make_note(
+            'n1', title='#notes-god', category=category,
+        )
+        resp = self.patch_json(f'/{note.task_id}/', {
+            'body': 'text',
+        })
+        self.assertEqual(resp.status_code, 200)
+        note.refresh_from_db()
+        self.assertEqual(note.title, '#notes-god')
+        self.assertEqual(note.notes, 'text')
+
+    def test_update_marker_only_supplied_title_400s(self):
+        # Explicitly sending a marker-only title still 400s — that
+        # input genuinely leaves no title.
+        note = self.make_note('n1', notes='#notes-god')
+        resp = self.patch_json(f'/{note.task_id}/', {
+            'title': '#notes-god',
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'emptyTitle')
+
+    def test_update_oversized_title_400s(self):
+        note = self.make_note('n1', notes='#notes-god')
+        resp = self.patch_json(f'/{note.task_id}/', {
+            'title': 'x' * 501,
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['code'], 'titleTooLong')
+
+    def test_update_bumps_updated_at(self):
+        note = self.make_note('n1', notes='#notes-god')
+        old = note.updated_at
+        resp = self.patch_json(f'/{note.task_id}/', {
+            'body': 'fresh',
+        })
+        self.assertEqual(resp.status_code, 200)
+        note.refresh_from_db()
+        self.assertGreater(note.updated_at, old)
+
     def test_un_note_strips_marker(self):
         cat = self.make_category('god')
         note = self.make_note(
@@ -938,6 +995,40 @@ class NotesApiTests(TestCase):
         self.assertEqual(deep.notes, 'x #notes-prayer-morning')
         self.assertTrue(note.needs_push)
         self.assertTrue(deep.needs_push)
+
+    def test_rename_retag_preserves_paragraph_breaks(self):
+        # The retag's whitespace cleanup must not flatten \n\n.
+        category = self.make_category('praer')
+        note = self.make_note(
+            'n1', notes='first\n\nsecond #notes-praer',
+            category=category,
+        )
+        resp = self.patch_json(
+            f'/categories/{category.id}/', {'name': 'Prayer'}
+        )
+        self.assertEqual(resp.status_code, 200)
+        note.refresh_from_db()
+        self.assertEqual(
+            note.notes, 'first\n\nsecond #notes-prayer'
+        )
+
+    def test_retag_count_skips_unchanged_markers(self):
+        # A rename landing on the same slug rewrites nothing —
+        # members are not counted and get no no-op needs_push.
+        category = self.make_category('god')
+        note = self.make_note(
+            'n1', notes='x #notes-god', category=category,
+        )
+        resp = self.patch_json(
+            f'/categories/{category.id}/', {'name': 'GOD'}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['retagged'], 0)
+        note.refresh_from_db()
+        category.refresh_from_db()
+        self.assertEqual(note.notes, 'x #notes-god')
+        self.assertFalse(note.needs_push)
+        self.assertEqual(category.name, 'GOD')
 
     def test_merge_folds_source_into_target(self):
         projects = self.make_category('projects')

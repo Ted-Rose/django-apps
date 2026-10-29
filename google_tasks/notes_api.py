@@ -100,7 +100,9 @@ class RetagOut(Schema):
     retagged: int
 
 
-class CategoryOut(Schema):
+class NoteCategoryMutationOut(Schema):
+    # Named distinctly from finance/api.py's CategoryOut — shared
+    # component names collide in the generated OpenAPI schema.
     category: NoteCategoryOut
     retagged: int = 0
 
@@ -171,6 +173,10 @@ def notes_dashboard(request,
             note_category_id__in=_subtree_ids(request.user, node)
         )
     if q:
+        # Deliberately matches against the stored title/body —
+        # marker text included, so `?q=god` also finds notes filed
+        # under #notes-god-… paths. Searching BY category is the
+        # feature here, not a leak.
         notes = notes.filter(
             Q(title__icontains=q) | Q(notes__icontains=q)
         )
@@ -265,7 +271,7 @@ def _category_out(category):
     }
 
 
-@router.post('/categories/', response=CategoryOut)
+@router.post('/categories/', response=NoteCategoryMutationOut)
 def create_category(request, payload: CategoryCreateIn):
     parent = None
     if payload.parent_id is not None:
@@ -317,7 +323,10 @@ def merge_categories(request, payload: CategoryMergeIn):
     return {'success': True, 'retagged': retagged}
 
 
-@router.patch('/categories/{category_id}/', response=CategoryOut)
+@router.patch(
+    '/categories/{category_id}/',
+    response=NoteCategoryMutationOut,
+)
 def rename_category(request, category_id: int,
                     payload: CategoryRenameIn):
     category = _user_category(request, category_id)
@@ -402,10 +411,24 @@ def update_note(request, task_id: str, payload: NoteUpdateIn):
     # sit in the title.
     clean_title, clean_body = strip_note_marker(title, body)
     if not clean_title:
+        if 'title' in fields or un_note:
+            # A supplied marker-only title — or an un-note
+            # conversion of one — genuinely leaves no title.
+            raise ApiHttpError(
+                400, 'Title cannot be empty', code='emptyTitle'
+            )
+        # The stored title was marker-only: the recomposed marker
+        # stands in as the whole title, so no marker appends to
+        # the body below.
+        clean_title = marker
+    max_title = GoogleTask._meta.get_field('title').max_length
+    if len(clean_title) > max_title:
         raise ApiHttpError(
-            400, 'Title cannot be empty', code='emptyTitle'
+            400,
+            f'Title cannot exceed {max_title} characters',
+            code='titleTooLong',
         )
-    if un_note:
+    if un_note or clean_title == marker:
         notes_field = clean_body
     else:
         notes_field = (
@@ -416,7 +439,10 @@ def update_note(request, task_id: str, payload: NoteUpdateIn):
     # itself is @require_POST and can't serve this PATCH.)
     notes_field = notes_field or None
     update_fields = [
-        'title', 'notes', 'needs_push', 'is_note', 'note_category'
+        'title', 'notes', 'needs_push', 'is_note', 'note_category',
+        # auto_now fields only stamp when listed in update_fields
+        # — without it a PATCH would not move updated_at.
+        'updated_at',
     ]
     if (clean_title != task.title
             or notes_field != (task.notes or None)):

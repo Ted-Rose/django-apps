@@ -317,6 +317,12 @@ export function TaskListPage({ view }: { view: ListView }) {
       icon: 'house',
       btn_class: 'btn-light',
     },
+    {
+      label: t('menu.notes'),
+      url: '/notes/',
+      icon: 'journal-text',
+      btn_class: 'btn-light',
+    },
   ];
   if (hasCredentials) {
     burgerItems.push(

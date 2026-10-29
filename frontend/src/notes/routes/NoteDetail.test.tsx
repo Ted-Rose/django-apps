@@ -129,6 +129,24 @@ describe('NoteDetail', () => {
     expect((body as HTMLTextAreaElement).value).not.toContain('#notes');
   });
 
+  it('shows a notice instead of the editor for a plain task', async () => {
+    mockedApiGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/tasks/task/')) {
+        return Promise.resolve({
+          ...DETAIL,
+          task: makeNote({ is_note: false }),
+        });
+      }
+      if (url.startsWith('/api/notes/')) {
+        return Promise.resolve(DASHBOARD);
+      }
+      return Promise.reject(new Error(`unexpected GET ${url}`));
+    });
+    renderEditor();
+    await screen.findByText(/not a note/i);
+    expect(screen.queryByLabelText(/Title/)).not.toBeInTheDocument();
+  });
+
   it('sends only title/body when the category is unchanged', async () => {
     mockedApiPatch.mockResolvedValue({ success: true, task_id: 'note-1' });
     renderEditor();

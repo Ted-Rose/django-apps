@@ -2,7 +2,7 @@ import time
 
 from django.conf import settings
 from django.db import models
-from django.db.models import F
+from django.db.models import F, Q
 
 
 def get_unix_timestamp():
@@ -73,6 +73,16 @@ class NoteCategory(models.Model):
 
     class Meta:
         unique_together = ['user', 'parent', 'slug']
+        constraints = [
+            # unique_together treats parent=NULL rows as distinct
+            # (NULL != NULL), so top-level slugs need their own
+            # conditional constraint to stay unique per user.
+            models.UniqueConstraint(
+                fields=['user', 'slug'],
+                condition=Q(parent__isnull=True),
+                name='unique_top_level_note_category_slug',
+            ),
+        ]
         ordering = ['name']
 
     def __str__(self):

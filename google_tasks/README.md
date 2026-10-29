@@ -217,12 +217,16 @@ separate surface.
 - `#notes-x-y-…` → group `x` containing leaf `y-…` (remaining
   segments rejoined): `#notes-projects-django-apps` ≡
   `#notes-projects-django_apps` → `projects / django-apps`
-- Slugs lowercase with separators canonicalized; missing categories
+- Slugs lowercase with separators canonicalized and empties
+  collapsed — `#notes--x` ≡ `#notes-x`, `#notes-abc-` ≡
+  `#notes-abc`, `#notes-` ≡ `#notes`; missing categories
   auto-create `NoteCategory` rows per user
 - With several markers, the first wins; marker text is stripped
   before hashtag processing so fragments can't trigger label
   matches, list moves, or star keywords — other hashtags on the
-  same task still process normally
+  same task still process normally. Stripping collapses only
+  horizontal whitespace per line, so multi-paragraph bodies keep
+  their `\n\n` breaks through PATCHes and retags
 
 **Marker Is the Source of Truth**:
 - Classification recomputes every run; the marker stays in the

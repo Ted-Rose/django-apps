@@ -130,8 +130,9 @@ export function useSync() {
 
 /**
  * Category ops — create/rename/merge/delete all respond with
- * CategoryOut or RetagOut carrying `retagged`; a success toast
- * reports the retag count like the spec's rename/merge scenarios.
+ * NoteCategoryMutationOut or RetagOut carrying `retagged`; a
+ * success toast reports the retag count like the spec's
+ * rename/merge scenarios.
  */
 export function useCreateCategory() {
   const { t } = useTranslation('notes');

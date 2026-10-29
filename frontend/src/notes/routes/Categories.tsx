@@ -20,6 +20,9 @@ import {
 } from '../mutations';
 import { ErrorState, LoadingSkeleton } from './NotesPage';
 
+/** Merge picker value — a category id or the uncategorized bucket. */
+type MergeTarget = number | 'uncategorized' | '';
+
 /**
  * Category management (`/categories`) — the two-level tree with
  * note counts plus add/rename/merge/delete. Rename/merge/delete
@@ -45,7 +48,7 @@ export default function Categories() {
   const [renaming, setRenaming] = useState<NoteCategoryOut | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [merging, setMerging] = useState<NoteCategoryOut | null>(null);
-  const [mergeTarget, setMergeTarget] = useState<number | ''>('');
+  const [mergeTarget, setMergeTarget] = useState<MergeTarget>('');
   const [deleting, setDeleting] = useState<NoteCategoryOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | 'uncategorized'>(
     'uncategorized',
@@ -55,6 +58,9 @@ export default function Categories() {
   const renameCategory = useRenameCategory();
   const mergeCategories = useMergeCategories();
   const deleteCategory = useDeleteCategory();
+
+  // Shared by the row button and the merge modal's confirm label.
+  const mergeLabel = t('categoriesPage.merge');
 
   /** Targets a category may fold/move members into — never itself
    *  and never inside its own subtree (the API 400s on that). */
@@ -140,7 +146,7 @@ export default function Categories() {
             className="btn btn-outline-secondary"
             onClick={() => openMerge(category)}
           >
-            <i className="bi bi-arrow-left-right" /> {t('categoriesPage.merge')}
+            <i className="bi bi-arrow-left-right" /> {mergeLabel}
           </button>
           <button
             type="button"
@@ -326,15 +332,19 @@ export default function Categories() {
       <ConfirmModal
         show={merging !== null}
         title={t('categoriesPage.mergeTitle')}
-        confirmLabel={t('categoriesPage.merge')}
+        confirmLabel={mergeLabel}
         confirmIcon="arrow-left-right"
         confirmClassName="btn-primary"
         busy={mergeCategories.isPending}
         onClose={() => setMerging(null)}
         onConfirm={() => {
           if (merging && mergeTarget !== '') {
+            // 'uncategorized' → null: the API folds members into
+            // the bare-#notes bucket.
+            const targetId =
+              mergeTarget === 'uncategorized' ? null : mergeTarget;
             mergeCategories.mutate(
-              { source_id: merging.id, target_id: mergeTarget },
+              { source_id: merging.id, target_id: targetId },
               { onSuccess: () => setMerging(null) },
             );
           }
@@ -353,12 +363,19 @@ export default function Categories() {
               value={mergeTarget}
               onChange={(event) =>
                 setMergeTarget(
-                  event.target.value === '' ? '' : Number(event.target.value),
+                  event.target.value === 'uncategorized'
+                    ? 'uncategorized'
+                    : event.target.value === ''
+                      ? ''
+                      : Number(event.target.value),
                 )
               }
             >
               <option value="" disabled>
                 {t('categoriesPage.mergeInto')}
+              </option>
+              <option value="uncategorized">
+                {t('categoriesPage.uncategorized')}
               </option>
               {validTargets(merging).map((target) => (
                 <option key={target.id} value={target.id}>

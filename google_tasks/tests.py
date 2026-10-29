@@ -1396,6 +1396,21 @@ class NoteMarkerUnitTests(TestCase):
         self.assertIsNone(find_note_marker('#notesx', None))
         self.assertIsNone(find_note_marker('#notes2', None))
 
+    def test_empty_segments_still_match_and_collapse(self):
+        # Separator-only segments match the marker and drop out of
+        # the parsed path — '#notes--x' ≡ '#notes-x', '#notes-abc-'
+        # ≡ '#notes-abc', '#notes-' ≡ bare '#notes'.
+        match = find_note_marker('x #notes--god', None)
+        self.assertEqual(
+            note_marker_segments(match.group(0)), ['god']
+        )
+        match = find_note_marker('x #notes-abc-', None)
+        self.assertEqual(
+            note_marker_segments(match.group(0)), ['abc']
+        )
+        match = find_note_marker('x #notes- y', None)
+        self.assertEqual(note_marker_segments(match.group(0)), [])
+
     def test_title_marker_wins_over_notes_marker(self):
         match = find_note_marker('t #notes-aaa', 'b #notes-bbb')
         self.assertEqual(note_marker_segments(match.group(0)),
@@ -1425,6 +1440,22 @@ class NoteMarkerUnitTests(TestCase):
         )
         self.assertEqual(title, 'pray')
         self.assertEqual(notes, 'body')
+
+    def test_strip_removes_empty_segment_markers(self):
+        # Trailing-dash/empty-segment markers strip their whole
+        # span too — 'notes' must not leak into hashtag matching.
+        title, _ = strip_note_marker('a #notes--x b', '')
+        self.assertEqual(title, 'a b')
+        title, _ = strip_note_marker('a #notes- b', '')
+        self.assertEqual(title, 'a b')
+
+    def test_strip_preserves_paragraph_breaks(self):
+        # Only horizontal whitespace collapses — a multi-paragraph
+        # body must keep its newlines after marker removal.
+        _, notes = strip_note_marker(
+            '', 'first\n\nsecond #notes-god'
+        )
+        self.assertEqual(notes, 'first\n\nsecond')
 
     def test_marker_for_group_leaf_and_uncategorized(self):
         self.assertEqual(note_marker_for(None), '#notes')
@@ -1482,6 +1513,17 @@ class ProcessTaskLabelsNoteTests(TestCase):
         task.refresh_from_db()
         self.assertTrue(task.is_note)
         self.assertIsNone(task.note_category)
+
+    def test_empty_segment_markers_classify(self):
+        # '#notes--god' ≡ '#notes-god'; '#notes-' ≡ bare '#notes'.
+        task = self.make_task('a', 'x #notes--god')
+        loose = self.make_task('b', 'y #notes-')
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        loose.refresh_from_db()
+        self.assertEqual(task.note_category.slug, 'god')
+        self.assertTrue(loose.is_note)
+        self.assertIsNone(loose.note_category)
 
     def test_removing_marker_unclassifies(self):
         task = self.make_task('a', 'x #notes-god')

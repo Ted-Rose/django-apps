@@ -51,7 +51,8 @@ export function NotesNavBar({ data, burgerItems }: NotesNavBarProps) {
 
   const selectedCategory = searchParams.get('category');
   const q = searchParams.get('q') ?? '';
-  const orderBy = searchParams.get('order') ?? data?.order_by ?? 'created_desc';
+  const orderParam = searchParams.get('order');
+  const orderBy = orderParam ?? data?.order_by ?? 'created_desc';
   const categories = data?.categories ?? [];
 
   const [searchOpen, setSearchOpen] = useState(Boolean(q));

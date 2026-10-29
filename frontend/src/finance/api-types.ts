@@ -1744,19 +1744,14 @@ export interface components {
             /** Task List Id */
             task_list_id?: string | null;
         };
-        /** CategoryOut */
-        CategoryOut: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Color */
-            color: string;
+        /** NoteCategoryMutationOut */
+        NoteCategoryMutationOut: {
+            category: components["schemas"]["NoteCategoryOut"];
             /**
-             * Is Excluded
-             * @default false
+             * Retagged
+             * @default 0
              */
-            is_excluded: boolean;
+            retagged: number;
         };
         /** CategoryCreateIn */
         CategoryCreateIn: {
@@ -1876,6 +1871,20 @@ export interface components {
             iban?: string | null;
             /** Currency */
             currency: string;
+        };
+        /** CategoryOut */
+        CategoryOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Color */
+            color: string;
+            /**
+             * Is Excluded
+             * @default false
+             */
+            is_excluded: boolean;
         };
         /** TransactionOut */
         TransactionOut: {
@@ -3530,7 +3539,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CategoryOut"];
+                    "application/json": components["schemas"]["NoteCategoryMutationOut"];
                 };
             };
         };
@@ -3604,7 +3613,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CategoryOut"];
+                    "application/json": components["schemas"]["NoteCategoryMutationOut"];
                 };
             };
         };

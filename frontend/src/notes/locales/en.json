@@ -57,14 +57,15 @@
     "save": "Save Changes",
     "saved": "Note saved!",
     "titleEmpty": "Title cannot be empty",
-    "missing": "Note not found."
+    "missing": "Note not found.",
+    "notANote": "This task is not a note."
   },
   "picker": {
     "title": "Move to category",
     "apply": "Move",
     "uncategorized": "Uncategorized (Inbox)",
     "notANote": "Not a note",
-    "notANoteHint": "Strips the #notes marker — the note becomes a plain task again."
+    "notANoteHint": "Strips the marker — the note becomes a plain task."
   },
   "completed": {
     "header": "Completed notes ({{count}})",
@@ -78,7 +79,7 @@
     "authTitle": "Google Authentication Required",
     "authBody": "You need to authenticate with Google to access your notes.",
     "noNotes": "No notes yet",
-    "emptyHint": "Notes are tasks carrying a #notes marker — dictate one or create it here.",
+    "emptyHint": "Notes are tasks with a #notes marker — add one here.",
     "createNote": "Create new note",
     "searchPlaceholder": "Search notes…",
     "searchEmpty": "No notes match \"{{q}}\""
@@ -96,16 +97,16 @@
     "merge": "Merge",
     "delete": "Delete",
     "renameTitle": "Rename Category",
-    "renamePrompt": "Renaming rewrites the #notes marker in member notes and pushes them to Google.",
+    "renamePrompt": "Renaming rewrites member markers and pushes to Google.",
     "newName": "New name",
     "mergeTitle": "Merge Category",
-    "mergePrompt": "Members are retagged to the target and the source category is removed.",
+    "mergePrompt": "Members retag to the target; the source is removed.",
     "mergeInto": "Merge into",
     "deleteTitle": "Delete Category",
-    "deletePrompt": "Member notes are retagged to the chosen target; the category is removed.",
+    "deletePrompt": "Notes retag to the target; the category is removed.",
     "deleteTarget": "Move notes to",
     "uncategorized": "Uncategorized (Inbox)",
-    "empty": "No categories yet — they appear when a #notes-<path> marker files a note.",
+    "empty": "No categories yet — a #notes-<path> marker creates them.",
     "retagged": "{{count}} notes retagged",
     "topLevel": "Top level"
   },
@@ -127,6 +128,7 @@
     "invalidCategoryTarget": "Target cannot be inside the source subtree",
     "invalidDeleteTarget": "Invalid delete target",
     "emptyTitle": "Title cannot be empty",
+    "titleTooLong": "Title cannot exceed 500 characters",
     "invalidJson": "Invalid JSON",
     "noCredentials": "No credentials found",
     "taskCreateFailed": "Could not create task: {{detail}}",

@@ -27,7 +27,8 @@ describe('stripNoteMarker', () => {
   });
 
   it('strips every occurrence and collapses leftover whitespace', () => {
-    expect(stripNoteMarker('a #notes-god b #notes-god-prayer c')).toBe('a b c');
+    const stripped = stripNoteMarker('a #notes-god b #notes-god-prayer c');
+    expect(stripped).toBe('a b c');
     expect(stripNoteMarker('a   #notes   b')).toBe('a b');
   });
 
@@ -36,9 +37,18 @@ describe('stripNoteMarker', () => {
     expect(stripNoteMarker('fix #notesx')).toBe('fix #notesx');
   });
 
-  it('does not strip a trailing-dash fragment', () => {
-    // `#notes-` matches nothing — the lookahead rejects the marker.
-    expect(stripNoteMarker('a #notes- b')).toBe('a #notes- b');
+  it('strips empty-segment markers like #notes- and #notes--x', () => {
+    // Separators still match — the trailing dash is part of the
+    // matched span, so nothing leaks into the displayed text.
+    expect(stripNoteMarker('a #notes- b')).toBe('a b');
+    expect(stripNoteMarker('a #notes--x b')).toBe('a b');
+    expect(stripNoteMarker('a #notes-abc- b')).toBe('a b');
+  });
+
+  it('preserves newlines in multi-paragraph bodies', () => {
+    expect(stripNoteMarker('first\n\nsecond #notes-god')).toBe(
+      'first\n\nsecond',
+    );
   });
 
   it('handles null/undefined input', () => {

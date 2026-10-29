@@ -98,16 +98,23 @@ keep sync query counts flat, not per-item or per-list.
   segments rejoined, so `-` and `_` are equivalent in leaves).
   `_` joins words inside a segment; `#notes-bible_research` is
   one multi-word dir. Slugs lowercase, separators canonicalized,
-  empties collapsed; unseen paths auto-create `NoteCategory`
-  rows (unique `(user, parent, slug)`), resolved via ONE
-  prefetched `(parent_id, slug)` index — creates are rare.
+  empties collapsed — the regex's segments are `*` not `+`, so
+  `#notes--x`/`#notes-abc-`/`#notes-` still match and fold to
+  their canonical paths. Unseen paths auto-create `NoteCategory`
+  rows (unique `(user, parent, slug)` plus a conditional
+  `(user, slug)` constraint for top-level rows — NULL parents
+  never equal under the tuple), resolved via ONE prefetched
+  `(parent_id, slug)` index — creates are rare.
 - The marker is the source of truth: it stays in the stored
   title/body (app-composed writes put it in the body), and
   classification recomputes every run. Category rename/merge/
   delete therefore REWRITES markers in member notes
   (`rename_note_category` / `retarget_note_category` /
-  `retag_notes`) and flags them `needs_push` — a typo category
-  collapses permanently, in Google too.
+  `retag_notes`, each wrapped in `transaction.atomic`) and flags
+  them `needs_push` — a typo category collapses permanently, in
+  Google too. `_collapse_marker_whitespace` only folds HORIZONTAL
+  whitespace per line — a `\s+` collapse would flatten
+  multi-paragraph bodies on every retag/PATCH.
 - `/api/notes/` (`notes_api.py`): dashboard (`?category&q&order`),
   note create (delegates to `create_task_view` with a composed
   marker appended to the body via a `request._body` swap) and

@@ -106,10 +106,8 @@ describe('NoteCard', () => {
     const preview = screen.getByText(/w0/);
     expect(preview.textContent).toContain('…');
     expect(preview.textContent).not.toContain('#notes');
-    expect(screen.getByRole('link', { name: /God \/ Prayer/ })).toHaveAttribute(
-      'href',
-      '/category/2',
-    );
+    const chip = screen.getByRole('link', { name: /God \/ Prayer/ });
+    expect(chip).toHaveAttribute('href', '/category/2');
     expect(screen.getByText('Oct 5, 2026')).toBeInTheDocument();
   });
 
