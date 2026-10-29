@@ -93,6 +93,10 @@ All data goes through the django-ninja API under `/api/tasks/` (see
 JSON handlers in `views.py`). Non-GET/HEAD requests under `/tasks/`
 404 — the retired template-UI mutation URLs no longer exist.
 
+Quick notes (see "Quick Notes" below) live in their own SPA at
+`/notes/` with the `/api/notes/` API — the same data model, but a
+separate surface.
+
 ## Behavior Details
 
 ### Authentication & Authorization
@@ -196,6 +200,56 @@ JSON handlers in `views.py`). Non-GET/HEAD requests under `/tasks/`
 - No matching list: Skips task, logs for review
 - Multiple hashtags: Uses first matched hashtag
 
+### Quick Notes
+**Marker Convention** (`#notes-<path>`):
+- A `#notes` marker anywhere in the task title or body classifies
+  it as a note — voice-dictated notes created as Google Tasks land
+  in the notes app instead of the task views
+- Detected by a dedicated hyphen-aware pattern (`NOTE_TAG_RE`), NOT
+  the shared hashtag regex (which splits on hyphens); `#notebook-x`
+  and `#notesx` do NOT match
+- Path spelling: `-` separates the two category levels, `_` joins
+  words inside a segment; in leaf names `-` and `_` are equivalent
+
+**Path Resolution**:
+- `#notes` → uncategorized
+- `#notes-x` → top-level category `x`
+- `#notes-x-y-…` → group `x` containing leaf `y-…` (remaining
+  segments rejoined): `#notes-projects-django-apps` ≡
+  `#notes-projects-django_apps` → `projects / django-apps`
+- Slugs lowercase with separators canonicalized; missing categories
+  auto-create `NoteCategory` rows per user
+- With several markers, the first wins; marker text is stripped
+  before hashtag processing so fragments can't trigger label
+  matches, list moves, or star keywords — other hashtags on the
+  same task still process normally
+
+**Marker Is the Source of Truth**:
+- Classification recomputes every run; the marker stays in the
+  stored title/body (app-created notes keep it in the body so
+  Google-side titles stay clean)
+- Category rename/merge/delete rewrites the marker in every member
+  note and flags `needs_push` — a typo like `praer` merged into
+  `prayer` is repaired permanently, in Google too
+- Notes stay ordinary synced tasks in their original Google list —
+  classification never moves them; a remote pull never clears the
+  note flag or category
+
+**Notes Surface** (`/notes/` SPA, `/api/notes/` API):
+- Dashboard: `GET /api/notes/?category=<id>&q=<text>&order=` —
+  open notes, completed notes, the category tree with counts
+- `POST /api/notes/` create (`title`, `body`, `category_id?` —
+  the server composes the marker), `PATCH /api/notes/{task_id}/`
+  update (category change rewrites the marker; `is_note: false`
+  strips it and converts the note back to a plain task)
+- `POST /api/notes/categories/` create,
+  `PATCH /api/notes/categories/{id}/` rename,
+  `POST /api/notes/categories/merge/` `{source_id, target_id}`,
+  `DELETE /api/notes/categories/{id}/?to=<id|uncategorized>`
+- Task views (dashboard, starred, overdue, search, stats) exclude
+  notes; archive and trash stay unified — a trashed note is still
+  restorable from the shared trash
+
 ### Task Dividers
 **Visual Organization**:
 - Add horizontal dividers (dashed lines) between tasks
@@ -286,7 +340,8 @@ JSON handlers in `views.py`). Non-GET/HEAD requests under `/tasks/`
 - No synchronization between browser tabs
 - Subject to browser localStorage quota (~5-10MB)
 
-**See Also**: `UNDO_REDO_IMPLEMENTATION.md` for detailed technical documentation
+**See Also**: `UNDO_REDO_IMPLEMENTATION.md` for detailed technical
+documentation
 
 ### UI/UX Features
 **Dashboard**:
@@ -401,25 +456,37 @@ All required dependencies are already in the main `requirements.txt`:
 ## Google Tasks API Limitations
 
 ### Reminders Not Supported
-**Important**: The Google Tasks API does **not** expose reminder functionality, even though reminders are available in the official Google Tasks mobile and web applications.
+**Important**: The Google Tasks API does **not** expose reminder
+functionality, even though reminders are available in the official
+Google Tasks mobile and web applications.
 
 **What this means**:
 - ❌ Cannot read task reminders via the API
 - ❌ Cannot set task reminders via the API
-- ❌ Reminders set in Google Tasks apps will not sync to this application
+- ❌ Reminders set in Google Tasks apps will not sync to this
+  application
 - ❌ Cannot trigger notifications based on Google Tasks reminders
 
 **Why this limitation exists**:
-- Google Tasks API only exposes these fields: `title`, `notes`, `status`, `due`, `completed`, `deleted`, `hidden`, `links`, `assignmentInfo`
-- The `reminder` field exists in Google's backend but is not available in the public API
-- See [official API documentation](https://developers.google.com/tasks/reference/rest/v1/tasks)
+- Google Tasks API only exposes these fields: `title`, `notes`,
+  `status`, `due`, `completed`, `deleted`, `hidden`, `links`,
+  `assignmentInfo`
+- The `reminder` field exists in Google's backend but is not
+  available in the public API
+- See [official API documentation](
+  https://developers.google.com/tasks/reference/rest/v1/tasks)
 
 **Workarounds**:
 - Use the `due_date` field for basic deadline tracking
-- Set reminders directly in Google Tasks mobile/web apps (they work there, just won't sync via API)
-- Build a custom local notification system if needed (would require additional implementation)
+- Set reminders directly in Google Tasks mobile/web apps (they work
+  there, just won't sync via API)
+- Build a custom local notification system if needed (would require
+  additional implementation)
 
 ### Other API Limitations
-- **Due Date Time**: The `due` field only records date information; the time portion is discarded by the API
-- **Task Movement**: No direct "move" operation between lists; requires create + delete workflow
-- **Batch Operations**: Limited batch operation support; most actions require individual API calls
+- **Due Date Time**: The `due` field only records date information;
+  the time portion is discarded by the API
+- **Task Movement**: No direct "move" operation between lists;
+  requires create + delete workflow
+- **Batch Operations**: Limited batch operation support; most
+  actions require individual API calls

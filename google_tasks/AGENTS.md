@@ -46,7 +46,8 @@ keep sync query counts flat, not per-item or per-list.
 ## Local-only fields on GoogleTask — never send to Google
 
 `is_starred`, `is_divider`, `task_order`, `starred_order`,
-`is_archived`, `is_deleted`, `deleted_at`, `labels` (M2M `TaskLabel`).
+`is_archived`, `is_deleted`, `deleted_at`, `labels` (M2M
+`TaskLabel`), `is_note`, `note_category` (FK `NoteCategory`).
 
 - Dividers are `GoogleTask` rows with `is_divider=True` and
   `task_id='divider_{uuid}'`; excluded from sync and label processing.
@@ -81,6 +82,48 @@ keep sync query counts flat, not per-item or per-list.
   so periodic reprocessing doesn't re-star.
 - The API's sync op auto-runs `process_task_labels` after sync;
   unexpected errors are logged, never surfaced to the sync response.
+
+## Quick notes (`#notes-<path>` markers → `NoteCategory`)
+
+- A `#notes` marker in title or body classifies a task as a note:
+  `NOTE_TAG_RE` (hyphen-aware, case-insensitive, trailing
+  `(?![a-z0-9_-])` lookahead so `#notebook-x`/`#notesx` don't
+  match) runs as a pre-pass inside `process_task_labels`, sets
+  `is_note` + `note_category`, and strips the marker text BEFORE
+  `extract_hashtags` runs — marker fragments can never reach
+  `match_label`, `match_task_list`, or star keywords, which is
+  what keeps notes in their original Google list.
+- Path rule: `#notes` → uncategorized; `#notes-x` → top-level
+  `x`; `#notes-x-y-…` → group `x` + leaf `y-…` (remaining
+  segments rejoined, so `-` and `_` are equivalent in leaves).
+  `_` joins words inside a segment; `#notes-bible_research` is
+  one multi-word dir. Slugs lowercase, separators canonicalized,
+  empties collapsed; unseen paths auto-create `NoteCategory`
+  rows (unique `(user, parent, slug)`), resolved via ONE
+  prefetched `(parent_id, slug)` index — creates are rare.
+- The marker is the source of truth: it stays in the stored
+  title/body (app-composed writes put it in the body), and
+  classification recomputes every run. Category rename/merge/
+  delete therefore REWRITES markers in member notes
+  (`rename_note_category` / `retarget_note_category` /
+  `retag_notes`) and flags them `needs_push` — a typo category
+  collapses permanently, in Google too.
+- `/api/notes/` (`notes_api.py`): dashboard (`?category&q&order`),
+  note create (delegates to `create_task_view` with a composed
+  marker appended to the body via a `request._body` swap) and
+  PATCH update (marker rewrite + `needs_push`, implemented
+  inline — the delegated view is `@require_POST` and can't serve
+  PATCH). Category create/rename/merge/delete routes live BEFORE
+  `/{task_id}/` — ninja matches in registration order and
+  `categories` would bind as a task id. Star/complete/delete/
+  archive/restore on a note reuse the `/api/tasks/task/{id}/…`
+  endpoints; archive/trash views stay unified.
+- Task views exclude notes: `is_note=False` on dashboard,
+  starred, overdue, search, stats (and their label-count bases).
+- The notes SPA mounts at root-level `/notes/` in
+  `django_apps/urls.py` (`react_app(entry='notes')` + catch-all),
+  `SPA_BASES['notes']` covers `/api/notes/*` → `/notes/` for the
+  post-auth `next` map.
 
 ## Views & API (post-cutover)
 

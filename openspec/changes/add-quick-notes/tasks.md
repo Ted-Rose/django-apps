@@ -2,14 +2,14 @@
 
 ## 1. Backend — model and classification
 
-- [ ] 1.1 backend: Add `NoteCategory` model (user FK, name,
+- [x] 1.1 backend: Add `NoteCategory` model (user FK, name,
   slug, parent self-FK, unique `(user, parent, slug)`) and
   `is_note` + `note_category` (FK, null, SET_NULL) local-only
   fields to `GoogleTask`; run `makemigrations google_tasks`
   and verify the migration file + `manage.py check` pass —
   hand `python manage.py migrate` to the user (agents must
   not run it)
-- [ ] 1.2 backend: Add `NOTE_TAG_RE` + helpers in services.py —
+- [x] 1.2 backend: Add `NOTE_TAG_RE` + helpers in services.py —
   marker find/strip, path resolution (`#notes` → none,
   `#notes-x` → top, `#notes-x-y…` → group+joined leaf, `_`
   joins words inside a segment and equals `-` in leaves),
@@ -18,7 +18,7 @@
   `#notes-bible_research-genesis`,
   `#notes-projects-django_apps` ≡ `…-django-apps`,
   case-insensitivity, and `#notebook-x`/`#notesx` rejection
-- [ ] 1.3 backend: Wire the notes pre-pass into
+- [x] 1.3 backend: Wire the notes pre-pass into
   `process_task_labels` — apply marker → set/clear `is_note` +
   `note_category` → strip marker text before
   `extract_hashtags` — keeping query count flat (one category
@@ -29,11 +29,11 @@
 
 ## 2. Backend — view separation and `/api/notes/`
 
-- [ ] 2.1 backend: Add `is_note=False` filters to the
+- [x] 2.1 backend: Add `is_note=False` filters to the
   dashboard, starred, overdue, search, and stats querysets;
   verify a note row is absent from `GET /api/tasks/dashboard/`
   via a new API test while archived/trash still return it
-- [ ] 2.2 backend: Create `google_tasks/notes_api.py` — `GET
+- [x] 2.2 backend: Create `google_tasks/notes_api.py` — `GET
   /api/notes/` dashboard (notes, completed, category tree,
   filters), `POST /api/notes/` create (server appends marker
   to body, delegates to the create-task path, then per-task
@@ -41,13 +41,13 @@
   rewrite + `needs_push`); mount via
   `api.add_router('/notes/', …)` in `django_apps/urls.py`;
   verify with endpoint tests incl. 404 cross-user scoping
-- [ ] 2.3 backend: Category endpoints — `POST/PATCH/DELETE
+- [x] 2.3 backend: Category endpoints — `POST/PATCH/DELETE
   /api/notes/categories/` + `POST …/merge/` — with marker
   retag helpers rewriting `#notes-…` in member titles/bodies
   (subtree-aware for groups) and setting `needs_push`; verify
   rename/merge/delete tests show retagged titles and dropped
   source categories
-- [ ] 2.4 both: Regenerate `frontend/openapi.json`
+- [x] 2.4 both: Regenerate `frontend/openapi.json`
   (`export_openapi_schema`) and `src/notes/api-types.ts`
   (`npm run gen:types`); verify both drift-check commands
   produce no diff
