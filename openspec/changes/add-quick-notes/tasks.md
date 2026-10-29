@@ -96,7 +96,7 @@
   it appears under `god/prayer` in `/notes/` and is absent
   from `/tasks/`; run `manage.py test google_tasks` and the
   notes vitest files
-- [ ] 4.3 both: Update `google_tasks/AGENTS.md`, the hashtag
+- [x] 4.3 both: Update `google_tasks/AGENTS.md`, the hashtag
   section of `google_tasks/README.md`, and
   `docs/changelog.md`; verify every touched file stays ≤79
   chars via `awk 'length > 79 {print FILENAME":"NR}'`
