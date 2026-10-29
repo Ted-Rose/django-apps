@@ -28,6 +28,7 @@ function makeTask(overrides: Partial<TaskOut> = {}): TaskOut {
     is_archived: false,
     is_deleted: true,
     needs_push: false,
+    is_note: false,
     deleted_at: '2026-09-20T10:00:00Z',
     ...overrides,
   };

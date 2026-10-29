@@ -27,6 +27,7 @@ function makeTask(id: string, taskOrder: number | null = null): TaskOut {
     is_archived: false,
     is_deleted: false,
     needs_push: false,
+    is_note: false,
     task_order: taskOrder,
   } as TaskOut;
 }

@@ -593,6 +593,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Notes Dashboard */
+        get: operations["google_tasks_notes_api_notes_dashboard"];
+        put?: never;
+        /** Create Note */
+        post: operations["google_tasks_notes_api_create_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/categories/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Category */
+        post: operations["google_tasks_notes_api_create_category"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/categories/merge/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merge Categories */
+        post: operations["google_tasks_notes_api_merge_categories"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/categories/{category_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Category */
+        delete: operations["google_tasks_notes_api_delete_category"];
+        options?: never;
+        head?: never;
+        /** Rename Category */
+        patch: operations["google_tasks_notes_api_rename_category"];
+        trace?: never;
+    };
+    "/api/notes/{task_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Note */
+        patch: operations["google_tasks_notes_api_update_note"];
+        trace?: never;
+    };
     "/api/finance/accounts/": {
         parameters: {
             query?: never;
@@ -1391,6 +1478,17 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** NoteCategoryRef */
+        NoteCategoryRef: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
         /** TaskListOut */
         TaskListOut: {
             /** List Id */
@@ -1451,6 +1549,9 @@ export interface components {
             deleted_at?: string | null;
             /** Needs Push */
             needs_push: boolean;
+            /** Is Note */
+            is_note: boolean;
+            note_category?: components["schemas"]["NoteCategoryRef"] | null;
         };
         /** TaskDetailOut */
         TaskDetailOut: {
@@ -1602,6 +1703,98 @@ export interface components {
             /** Color */
             color: string;
         };
+        /** NoteCategoryOut */
+        NoteCategoryOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Parent Id */
+            parent_id?: number | null;
+            /**
+             * Note Count
+             * @default 0
+             */
+            note_count: number;
+        };
+        /** NotesDashboardOut */
+        NotesDashboardOut: {
+            /** Notes */
+            notes: components["schemas"]["TaskOut"][];
+            /** Completed */
+            completed: components["schemas"]["TaskOut"][];
+            /** Categories */
+            categories: components["schemas"]["NoteCategoryOut"][];
+            /** Selected Category */
+            selected_category?: number | null;
+            /** Order By */
+            order_by: string;
+            flags: components["schemas"]["FlagsOut"];
+        };
+        /** NoteCreateIn */
+        NoteCreateIn: {
+            /** Title */
+            title: string;
+            /** Body */
+            body?: string | null;
+            /** Category Id */
+            category_id?: number | null;
+            /** Task List Id */
+            task_list_id?: string | null;
+        };
+        /** CategoryOut */
+        CategoryOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Color */
+            color: string;
+            /**
+             * Is Excluded
+             * @default false
+             */
+            is_excluded: boolean;
+        };
+        /** CategoryCreateIn */
+        CategoryCreateIn: {
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /** RetagOut */
+        RetagOut: {
+            /** Success */
+            success: boolean;
+            /** Retagged */
+            retagged: number;
+        };
+        /** CategoryMergeIn */
+        CategoryMergeIn: {
+            /** Source Id */
+            source_id: number;
+            /** Target Id */
+            target_id?: number | null;
+        };
+        /** CategoryRenameIn */
+        CategoryRenameIn: {
+            /** Name */
+            name: string;
+        };
+        /** NoteUpdateIn */
+        NoteUpdateIn: {
+            /** Title */
+            title?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Category Id */
+            category_id?: number | null;
+            /** Is Note */
+            is_note?: boolean | null;
+        };
         /** AccountOut */
         AccountOut: {
             /** Id */
@@ -1683,20 +1876,6 @@ export interface components {
             iban?: string | null;
             /** Currency */
             currency: string;
-        };
-        /** CategoryOut */
-        CategoryOut: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Color */
-            color: string;
-            /**
-             * Is Excluded
-             * @default false
-             */
-            is_excluded: boolean;
         };
         /** TransactionOut */
         TransactionOut: {
@@ -3274,6 +3453,174 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LabelUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    google_tasks_notes_api_notes_dashboard: {
+        parameters: {
+            query?: {
+                category?: number | null;
+                q?: string | null;
+                order?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotesDashboardOut"];
+                };
+            };
+        };
+    };
+    google_tasks_notes_api_create_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCreateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    google_tasks_notes_api_create_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryCreateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryOut"];
+                };
+            };
+        };
+    };
+    google_tasks_notes_api_merge_categories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryMergeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetagOut"];
+                };
+            };
+        };
+    };
+    google_tasks_notes_api_delete_category: {
+        parameters: {
+            query?: {
+                to?: string | null;
+            };
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetagOut"];
+                };
+            };
+        };
+    };
+    google_tasks_notes_api_rename_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryRenameIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryOut"];
+                };
+            };
+        };
+    };
+    google_tasks_notes_api_update_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteUpdateIn"];
             };
         };
         responses: {
