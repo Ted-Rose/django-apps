@@ -51,8 +51,9 @@ class GoogleTaskList(models.Model):
 class NoteCategory(models.Model):
     """One node of a user's quick-notes category tree.
 
-    Two levels: parent=None rows are groups, children are leaves
-    (the #notes-<group>-<leaf> marker path). Auto-created by label
+    Arbitrary depth: every '-' segment of the #notes-<a>-<b>-…
+    marker path is one level under its parent ('_' is the only
+    word-joiner inside a segment). Auto-created by label
     processing when a marker names an unseen path; rename/merge/
     delete rewrites the markers in member notes (services.py).
     """

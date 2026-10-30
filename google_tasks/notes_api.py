@@ -124,14 +124,19 @@ def _user_category(request, category_id):
 
 
 def _subtree_ids(user, category):
-    """The category's id plus its direct children's — two levels
-    means one extra lookup covers the whole subtree."""
+    """The category's id plus every descendant's at any depth —
+    the category filter and subtree counts both cover the whole
+    subtree. One query builds the children map; the walk is
+    in-memory."""
+    children = {}
+    for cat in NoteCategory.objects.filter(user=user):
+        children.setdefault(cat.parent_id, []).append(cat.pk)
     ids = [category.pk]
-    ids += list(
-        NoteCategory.objects.filter(
-            user=user, parent=category
-        ).values_list('pk', flat=True)
-    )
+    stack = [category.pk]
+    while stack:
+        for child_id in children.get(stack.pop(), ()):
+            ids.append(child_id)
+            stack.append(child_id)
     return ids
 
 
@@ -180,7 +185,7 @@ def notes_dashboard(request,
         notes = notes.filter(
             Q(title__icontains=q) | Q(notes__icontains=q)
         )
-    counts = {
+    direct_counts = {
         row['note_category_id']: row['n']
         for row in GoogleTask.objects.filter(
             user=request.user, is_note=True,
@@ -188,15 +193,34 @@ def notes_dashboard(request,
             status='needsAction',
         ).values('note_category_id').annotate(n=Count('pk'))
     }
+    all_categories = list(
+        NoteCategory.objects.filter(user=request.user)
+    )
+    # note_count is the SUBTREE total — a folder shows every note
+    # beneath it, matching the subtree-aware ?category= filter.
+    # Each category's direct count accumulates onto all of its
+    # ancestors (O(categories × depth), in-memory).
+    by_id = {cat.id: cat for cat in all_categories}
+    subtree_counts = {cat.id: 0 for cat in all_categories}
+    for cat in all_categories:
+        direct = direct_counts.get(cat.id, 0)
+        if not direct:
+            continue
+        node = cat
+        seen = set()
+        while node is not None and node.id not in seen:
+            seen.add(node.id)
+            subtree_counts[node.id] += direct
+            node = by_id.get(node.parent_id)
     categories = [
         {
             'id': cat.id,
             'name': cat.name,
             'slug': cat.slug,
             'parent_id': cat.parent_id,
-            'note_count': counts.get(cat.id, 0),
+            'note_count': subtree_counts[cat.id],
         }
-        for cat in NoteCategory.objects.filter(user=request.user)
+        for cat in all_categories
     ]
     return {
         'notes': _order_active(
@@ -276,11 +300,6 @@ def create_category(request, payload: CategoryCreateIn):
     parent = None
     if payload.parent_id is not None:
         parent = _user_category(request, payload.parent_id)
-        if parent.parent_id is not None:
-            raise ApiHttpError(
-                400, 'Categories are two levels deep',
-                code='categoryTooDeep',
-            )
     slug = _slug_or_400(payload.name)
     _check_slug_free(request, slug, payload.parent_id)
     category = NoteCategory.objects.create(
@@ -294,21 +313,19 @@ def create_category(request, payload: CategoryCreateIn):
 
 def _target_or_none(request, target_id, source):
     """Resolve a merge/delete target — must exist, belong to the
-    user, and sit outside the source subtree (a group cannot fold
-    into itself or its own leaf)."""
+    user, and sit outside the source subtree (a category cannot
+    fold into itself or any of its descendants, at any depth)."""
     if target_id is None:
         return None
     target = _user_category(request, target_id)
-    inside = (
-        target.pk == source.pk
-        or (source.parent_id is None
-            and target.parent_id == source.pk)
-    )
-    if inside:
-        raise ApiHttpError(
-            400, 'Target cannot be inside the source subtree',
-            code='invalidCategoryTarget',
-        )
+    node = target
+    while node is not None:
+        if node.pk == source.pk:
+            raise ApiHttpError(
+                400, 'Target cannot be inside the source subtree',
+                code='invalidCategoryTarget',
+            )
+        node = node.parent
     return target
 
 

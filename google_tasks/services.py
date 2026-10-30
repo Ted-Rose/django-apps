@@ -1039,17 +1039,18 @@ def remove_starred_hashtags(notes):
 # --- Quick notes (#notes-<path> markers) ---
 #
 # A `#notes` marker anywhere in the title or body turns a task into
-# a note filed under an auto-created two-level category tree. The
-# dedicated hyphen-aware pattern below owns marker detection — the
-# shared extract_hashtags regex splits on hyphens and must stay
-# untouched, or '#notes-projects-django-apps' would extract as four
-# unrelated tags. Spelling convention: '-' separates the two path
-# levels, '_' joins words inside a segment; in leaf names '-' and
-# '_' are equivalent because the leaf rejoins every remaining
-# segment. Classification strips matched text BEFORE hashtag
-# extraction, so marker fragments can never reach label matching,
-# unmatched-tag warnings, list moves, or star keywords — which is
-# also what keeps notes in their original Google list.
+# a note filed under an auto-created category tree of arbitrary
+# depth. The dedicated hyphen-aware pattern below owns marker
+# detection — the shared extract_hashtags regex splits on hyphens
+# and must stay untouched, or '#notes-projects-django-apps' would
+# extract as four unrelated tags. Spelling convention: EVERY '-'
+# separates one category level ('#notes-a-b-c' → a → b → c), and
+# '_' is the ONLY word-joiner inside a segment — multi-word names
+# MUST spell 'django_apps', since 'django-apps' nests deeper.
+# Classification strips matched text BEFORE hashtag extraction, so
+# marker fragments can never reach label matching, unmatched-tag
+# warnings, list moves, or star keywords — which is also what
+# keeps notes in their original Google list.
 NOTE_TAG_RE = re.compile(
     # Segments may be empty (`*`, not `+`) so separators still match
     # — '#notes--x', '#notes-abc-', '#notes-' parse like their
@@ -1070,42 +1071,63 @@ def find_note_marker(title, notes):
 
 
 def note_marker_segments(marker_text):
-    """'#notes-bible_research-gen-1' → ['bible-research', 'gen-1'].
+    """'#notes-bible_research-gen-1' → ['bible_research', 'gen', '1'].
 
-    Segments are lowercased, separators canonicalized ('_' and
-    repeated '-' collapse to a single '-'), empties dropped.
+    Every '-' separates ONE category level — the returned list is
+    the category path. Segments are lowercased and KEEP their
+    underscores ('_' is the only in-segment word-joiner, so a
+    composed marker re-parses to the identical chain); repeated
+    '_' collapse and edge '_' trim; empties drop out
+    ('#notes--x' ≡ '#notes-x').
     """
     tail = marker_text[len('#notes'):]
     segments = []
     for segment in tail.split('-'):
-        slug = re.sub(r'[-_]+', '-', segment.lower()).strip('-')
+        slug = re.sub(r'_+', '_', segment.lower()).strip('_')
         if slug:
             segments.append(slug)
     return segments
 
 
 def slugify_note_segment(name):
-    """'Bible Research!' → 'bible-research' — the canonical slug a
-    user-typed category name folds to (same rules as marker
-    parsing)."""
-    return re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+    """'Bible Research!' → 'bible_research' — the canonical slug a
+    user-typed category name folds to. Word runs join with '_' so
+    the composed marker re-parses as ONE segment ('-' would mean
+    another level)."""
+    return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
 
 
 def note_display_name(slug):
-    """'bible-research' → 'Bible Research' — display name for
+    """'bible_research' → 'Bible Research' — display name for
     auto-created categories."""
-    return slug.replace('-', ' ').title()
+    return slug.replace('_', ' ').title()
+
+
+def note_category_path(category):
+    """The slug chain from the tree root down to `category` —
+    ['projects', 'world_of_bible', 'easter_eggs']; [] for the
+    uncategorized bucket (None). Each ancestor dereference is one
+    lazy query, fine at category-manage call sites."""
+    slugs = []
+    node = category
+    while node is not None:
+        slugs.append(node.slug)
+        node = getattr(node, 'parent', None)
+    slugs.reverse()
+    return slugs
+
+
+def _marker_for_segments(segments):
+    """'#notes-a-b' for ['a', 'b']; bare '#notes' for []."""
+    if not segments:
+        return '#notes'
+    return '#notes-' + '-'.join(segments)
 
 
 def note_marker_for(category):
     """Canonical '#notes-<path>' marker text for a category; the
     bare '#notes' marker for the uncategorized bucket (None)."""
-    if category is None:
-        return '#notes'
-    parent = getattr(category, 'parent', None)
-    if parent is None:
-        return f'#notes-{category.slug}'
-    return f'#notes-{parent.slug}-{category.slug}'
+    return _marker_for_segments(note_category_path(category))
 
 
 def note_category_index(user):
@@ -1122,40 +1144,30 @@ def resolve_note_category(user, segments, index=None):
     missing nodes for `user`.
 
     [] → None (uncategorized); ['x'] → top-level x;
-    ['x', 'y', …] → group x containing leaf 'y-…' (remaining
-    segments rejoined, so deeper tails fold into the leaf slug).
-    `index` is an optional note_category_index() dict — pass it in
-    hot loops so the user's categories are prefetched once instead
-    of re-queried per task.
+    ['x', 'y', 'z', …] → the nested chain x → y → z — one
+    NoteCategory per segment, the last is returned. `index` is an
+    optional note_category_index() dict — pass it in hot loops so
+    the user's categories are prefetched once instead of
+    re-queried per task.
     """
     if not segments:
         return None
     if index is None:
         index = note_category_index(user)
-    group_slug = segments[0]
-    leaf_slug = (
-        '-'.join(segments[1:]) if len(segments) > 1 else None
-    )
-    group = index.get((None, group_slug))
-    if group is None:
-        group = NoteCategory.objects.create(
-            user=user,
-            slug=group_slug,
-            name=note_display_name(group_slug),
-        )
-        index[(None, group_slug)] = group
-    if leaf_slug is None:
-        return group
-    leaf = index.get((group.pk, leaf_slug))
-    if leaf is None:
-        leaf = NoteCategory.objects.create(
-            user=user,
-            slug=leaf_slug,
-            name=note_display_name(leaf_slug),
-            parent=group,
-        )
-        index[(group.pk, leaf_slug)] = leaf
-    return leaf
+    parent = None
+    for slug in segments:
+        key = (parent.pk if parent is not None else None, slug)
+        node = index.get(key)
+        if node is None:
+            node = NoteCategory.objects.create(
+                user=user,
+                slug=slug,
+                name=note_display_name(slug),
+                parent=parent,
+            )
+            index[key] = node
+        parent = node
+    return parent
 
 
 def _collapse_marker_whitespace(text):
@@ -1217,38 +1229,38 @@ def rewrite_note_marker(task, new_marker):
     return changed
 
 
-def retag_notes(user, group_slug, leaf_slug, marker_for):
+def retag_notes(user, source_path, path_for):
     """Rewrite the first #notes marker in each of `user`'s notes
-    filed under the matched subtree.
+    filed under `source_path`'s subtree.
 
-    (group_slug, None) matches the group's whole subtree — notes
-    filed directly under it AND under any of its leaves;
-    (group_slug, leaf_slug) matches one leaf. `marker_for` maps the
-    note's current path segments to the new marker text. Notes
-    whose text changed are flagged needs_push; the caller flushes
+    A note matches when its marker's leading segments equal
+    `source_path` — so a mid-chain path like
+    ['projects', 'world_of_bible'] covers both the direct members
+    and the deeper '#notes-projects-world_of_bible-easter_eggs'
+    descendants. `path_for` maps the note's current segment list
+    to its new segment list ([] → the bare '#notes' marker).
+    Returns [(note, new_segments)] for rows whose text actually
+    changed — a marker already carrying the target text (e.g. a
+    name-only rename whose slug did not move) must not inflate the
+    count or get flagged for a no-op push. The caller flushes
     title/notes/needs_push (plus note_category when it also
     repoints notes) via bulk_update.
     """
     retagged = []
+    prefix = list(source_path)
     notes = GoogleTask.objects.filter(user=user, is_note=True)
     for note in notes:
         match = find_note_marker(note.title, note.notes)
         if match is None:
             continue
         segments = note_marker_segments(match.group(0))
-        if not segments or segments[0] != group_slug:
+        if segments[:len(prefix)] != prefix:
             continue
-        if leaf_slug is not None and (
-                len(segments) == 1
-                or '-'.join(segments[1:]) != leaf_slug):
-            continue
-        # Only real rewrites count as retagged — a marker already
-        # carrying the target text (e.g. a name-only rename whose
-        # slug did not move) must not inflate the count or get
-        # flagged for a no-op push.
-        if rewrite_note_marker(note, marker_for(segments)):
+        new_segments = path_for(segments)
+        if rewrite_note_marker(
+                note, _marker_for_segments(new_segments)):
             note.needs_push = True
-            retagged.append(note)
+            retagged.append((note, new_segments))
     return retagged
 
 
@@ -1258,34 +1270,27 @@ def rename_note_category(category, new_slug, new_name):
     The marker is the source of truth the next processing run
     reclassifies from, so every note filed under the old path gets
     its marker rewritten (and flagged for push) — a typo category
-    collapses permanently, in Google too. Returns the number of
-    notes retagged.
+    collapses permanently, in Google too. Members keep their
+    depth: renaming 'projects/world_of_bible' to 'bible' retags
+    '…-world_of_bible-easter_eggs' → '…-bible-easter_eggs'.
+    Returns the number of notes retagged.
     """
-    if category.parent_id is None:
-        old_slug = category.slug
-        group_slug, leaf_slug = old_slug, None
-        marker_for = lambda segs: (  # noqa: E731
-            f'#notes-{new_slug}'
-            + ('-' + '-'.join(segs[1:]) if len(segs) > 1 else '')
-        )
-    else:
-        group_slug = category.parent.slug
-        leaf_slug = category.slug
-        marker_for = lambda segs: (  # noqa: E731
-            f'#notes-{group_slug}-{new_slug}'
-        )
+    old_path = note_category_path(category)
+    new_path = old_path[:-1] + [new_slug]
+
+    def path_for(segs):
+        return new_path + segs[len(old_path):]
+
     # One transaction: a mid-retag failure must not leave the
     # category renamed while its members keep the old markers.
     with transaction.atomic():
         category.slug = new_slug
         category.name = new_name
         category.save(update_fields=['slug', 'name'])
-        retagged = retag_notes(
-            category.user, group_slug, leaf_slug, marker_for
-        )
+        retagged = retag_notes(category.user, old_path, path_for)
         if retagged:
             GoogleTask.objects.bulk_update(
-                retagged,
+                [note for note, _ in retagged],
                 ['title', 'notes', 'needs_push'],
                 batch_size=500,
             )
@@ -1294,30 +1299,35 @@ def rename_note_category(category, new_slug, new_name):
 
 def retarget_note_category(user, source, target):
     """Fold `source`'s whole subtree into `target` (None →
-    uncategorized): member markers are retagged to the target path
-    (or collapse to bare '#notes'), note_category is repointed, and
-    the source plus its descendant categories are deleted. Backs
-    both category merge and category delete — the marker stays
-    accurate either way. Returns the number of notes retagged.
+    uncategorized): member markers are retagged to the target
+    path, KEEPING the tail below the source ('x-src-a-b' merges
+    into 'tgt' as 'tgt-a-b', or 'a-b' at the top level when the
+    target is uncategorized). note_category is repointed —
+    resolving the new path so deeper members land on recreated
+    tail categories — and the source plus its descendant
+    categories are deleted. Backs both category merge and category
+    delete — the marker stays accurate either way. Returns the
+    number of notes retagged.
     """
-    marker = note_marker_for(target)
-    if source.parent_id is None:
-        group_slug, leaf_slug = source.slug, None
-    else:
-        group_slug = source.parent.slug
-        leaf_slug = source.slug
+    source_path = note_category_path(source)
+    target_path = note_category_path(target)
+
+    def path_for(segs):
+        return target_path + segs[len(source_path):]
+
     # One transaction: a mid-retag failure must not leave member
     # markers half-rewritten or the source deleted with stale
     # markers still pointing at it.
     with transaction.atomic():
-        retagged = retag_notes(
-            user, group_slug, leaf_slug, lambda segs: marker
-        )
-        for note in retagged:
-            note.note_category = target
+        retagged = retag_notes(user, source_path, path_for)
+        category_index = note_category_index(user)
+        for note, new_segments in retagged:
+            note.note_category = resolve_note_category(
+                user, new_segments, index=category_index
+            )
         if retagged:
             GoogleTask.objects.bulk_update(
-                retagged,
+                [note for note, _ in retagged],
                 ['title', 'notes', 'needs_push', 'note_category'],
                 batch_size=500,
             )
