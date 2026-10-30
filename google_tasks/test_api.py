@@ -703,6 +703,8 @@ class NotesApiTests(TestCase):
     def test_dashboard_category_filter_covers_subtree(self):
         group = self.make_category('god')
         leaf = self.make_category('prayer', parent=group)
+        deep = self.make_category('morning', parent=leaf)
+        self.make_note('in-deep', category=deep)
         self.make_note('in-leaf', category=leaf)
         self.make_note('in-group', category=group)
         other = self.make_category('other')
@@ -711,13 +713,16 @@ class NotesApiTests(TestCase):
         body = resp.json()
         self.assertEqual(
             sorted(t['task_id'] for t in body['notes']),
-            ['in-group', 'in-leaf'],
+            ['in-deep', 'in-group', 'in-leaf'],
         )
         self.assertEqual(body['selected_category'], group.id)
+        # note_count is the subtree total at every level.
         counts = {c['slug']: c['note_count']
                   for c in body['categories']}
-        self.assertEqual(counts['god'], 1)
-        self.assertEqual(counts['prayer'], 1)
+        self.assertEqual(counts['god'], 3)
+        self.assertEqual(counts['prayer'], 2)
+        self.assertEqual(counts['morning'], 1)
+        self.assertEqual(counts['other'], 1)
 
     def test_dashboard_search_and_foreign_category(self):
         self.make_note('n1', title='prayer list')
@@ -956,22 +961,35 @@ class NotesApiTests(TestCase):
         })
         self.assertEqual(resp.status_code, 200)
         category = resp.json()['category']
-        self.assertEqual(category['slug'], 'bible-research')
+        # Multi-word names slug with '_' — '-' would parse as a
+        # level boundary when the marker re-parses.
+        self.assertEqual(category['slug'], 'bible_research')
         resp = self.post_json('/categories/', {
             'name': 'Genesis', 'parent_id': category['id'],
         })
         self.assertEqual(resp.status_code, 200)
-        # A leaf cannot parent a third level.
+        # Depth is user-bounded — a leaf can parent another level.
         leaf_id = resp.json()['category']['id']
         resp = self.post_json('/categories/', {
-            'name': 'x', 'parent_id': leaf_id,
+            'name': 'Chapter One', 'parent_id': leaf_id,
         })
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.json()['category']['slug'], 'chapter_one'
+        )
+        self.assertEqual(
+            resp.json()['category']['parent_id'], leaf_id
+        )
         # Duplicate slug under the same parent → 409.
         resp = self.post_json('/categories/', {
-            'name': 'bible-research',
+            'name': 'bible_research',
         })
         self.assertEqual(resp.status_code, 409)
+        # The same slug is free under a different parent.
+        resp = self.post_json('/categories/', {
+            'name': 'bible_research', 'parent_id': leaf_id,
+        })
+        self.assertEqual(resp.status_code, 200)
 
     def test_rename_category_retags_members(self):
         category = self.make_category('praer')
@@ -995,6 +1013,36 @@ class NotesApiTests(TestCase):
         self.assertEqual(deep.notes, 'x #notes-prayer-morning')
         self.assertTrue(note.needs_push)
         self.assertTrue(deep.needs_push)
+
+    def test_rename_mid_chain_retags_deep_paths(self):
+        # Renaming 'projects/world_of_bible' → 'bible' must retag
+        # the depth-3 member to '…-bible-easter_eggs', keeping
+        # the tail below the renamed node intact.
+        projects = self.make_category('projects')
+        mid = self.make_category(
+            'world_of_bible', parent=projects
+        )
+        leaf = self.make_category('easter_eggs', parent=mid)
+        note = self.make_note(
+            'n1',
+            notes='x #notes-projects-world_of_bible-easter_eggs',
+            category=leaf,
+        )
+        resp = self.patch_json(
+            f'/categories/{mid.id}/', {'name': 'Bible'}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['retagged'], 1)
+        note.refresh_from_db()
+        self.assertEqual(
+            note.notes, 'x #notes-projects-bible-easter_eggs'
+        )
+        self.assertTrue(note.needs_push)
+        mid.refresh_from_db()
+        self.assertEqual(mid.slug, 'bible')
+        # The child category rode along under the renamed node.
+        leaf.refresh_from_db()
+        self.assertEqual(leaf.parent, mid)
 
     def test_rename_retag_preserves_paragraph_breaks(self):
         # The retag's whitespace cleanup must not flatten \n\n.
@@ -1032,10 +1080,10 @@ class NotesApiTests(TestCase):
 
     def test_merge_folds_source_into_target(self):
         projects = self.make_category('projects')
-        source = self.make_category('django-app', parent=projects)
-        target = self.make_category('django-apps', parent=projects)
+        source = self.make_category('django_app', parent=projects)
+        target = self.make_category('django_apps', parent=projects)
         note = self.make_note(
-            'n1', notes='x #notes-projects-django-app',
+            'n1', notes='x #notes-projects-django_app',
             category=source,
         )
         resp = self.post_json('/categories/merge/', {
@@ -1045,7 +1093,7 @@ class NotesApiTests(TestCase):
         self.assertEqual(resp.json()['retagged'], 1)
         note.refresh_from_db()
         self.assertEqual(
-            note.notes, 'x #notes-projects-django-apps'
+            note.notes, 'x #notes-projects-django_apps'
         )
         self.assertEqual(note.note_category, target)
         self.assertTrue(note.needs_push)
@@ -1068,7 +1116,11 @@ class NotesApiTests(TestCase):
         n1.refresh_from_db()
         n2.refresh_from_db()
         self.assertEqual(n1.notes, '#notes-prayer')
-        self.assertEqual(n2.notes, '#notes-prayer')
+        # The tail below the source rides along — 'morning'
+        # re-homes under 'prayer' instead of flattening away.
+        self.assertEqual(n2.notes, '#notes-prayer-morning')
+        self.assertEqual(n2.note_category.slug, 'morning')
+        self.assertEqual(n2.note_category.parent, target)
         self.assertFalse(
             NoteCategory.objects.filter(
                 pk__in=[source.pk, child.pk]
@@ -1078,10 +1130,22 @@ class NotesApiTests(TestCase):
     def test_merge_rejects_target_inside_source(self):
         source = self.make_category('god')
         child = self.make_category('prayer', parent=source)
+        grandchild = self.make_category('morning', parent=child)
         resp = self.post_json('/categories/merge/', {
             'source_id': source.id, 'target_id': child.id,
         })
         self.assertEqual(resp.status_code, 400)
+        # A deeper descendant is inside the subtree too.
+        resp = self.post_json('/categories/merge/', {
+            'source_id': source.id, 'target_id': grandchild.id,
+        })
+        self.assertEqual(resp.status_code, 400)
+        # Folding into a sibling branch stays legal.
+        sibling = self.make_category('faith')
+        resp = self.post_json('/categories/merge/', {
+            'source_id': source.id, 'target_id': sibling.id,
+        })
+        self.assertEqual(resp.status_code, 200)
 
     def test_delete_to_uncategorized_collapses_marker(self):
         category = self.make_category('god')
@@ -1114,6 +1178,34 @@ class NotesApiTests(TestCase):
         note.refresh_from_db()
         self.assertEqual(note.notes, '#notes-new')
         self.assertEqual(note.note_category, target)
+
+    def test_delete_mid_chain_rehomes_descendant_paths(self):
+        # Deleting 'projects/world_of_bible' to uncategorized
+        # floats its tail to the top level: the depth-3 member
+        # becomes '#notes-easter_eggs' and re-categorizes onto a
+        # fresh top-level 'easter_eggs'.
+        projects = self.make_category('projects')
+        mid = self.make_category(
+            'world_of_bible', parent=projects
+        )
+        leaf = self.make_category('easter_eggs', parent=mid)
+        note = self.make_note(
+            'n1',
+            notes='x #notes-projects-world_of_bible-easter_eggs',
+            category=leaf,
+        )
+        resp = self.client.delete(
+            f'{self.API}/categories/{mid.id}/?to=uncategorized'
+        )
+        self.assertEqual(resp.status_code, 200)
+        note.refresh_from_db()
+        self.assertEqual(note.notes, 'x #notes-easter_eggs')
+        self.assertEqual(note.note_category.slug, 'easter_eggs')
+        self.assertIsNone(note.note_category.parent_id)
+        self.assertTrue(note.needs_push)
+        self.assertFalse(
+            NoteCategory.objects.filter(pk=mid.pk).exists()
+        )
 
     def test_category_ops_scoped_to_user(self):
         foreign = self.make_category('x', user=self.other_user)
