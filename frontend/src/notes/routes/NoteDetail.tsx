@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import {
-  BurgerMenu,
-  type BurgerMenuItem,
-} from '../../shared/components/BurgerMenu';
+import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
+import EmptyState from '../../shared/components/EmptyState';
+import ErrorState from '../../shared/components/ErrorState';
+import ListSkeleton from '../../shared/components/ListSkeleton';
+import PageNavBar from '../../shared/components/PageNavBar';
 import Toasts from '../../shared/components/Toasts';
 import { errorDetail } from '../../shared/api/errors';
 import useBootstrap from '../../shared/hooks/useBootstrap';
@@ -21,7 +22,6 @@ import {
   spaPathFromStoredUrl,
   stripNoteMarker,
 } from '../utils';
-import { ErrorState, LoadingSkeleton } from './NotesPage';
 
 /**
  * The note editor (`/note/:id`) — a TaskDetail-style page with
@@ -166,44 +166,33 @@ export default function NoteDetail() {
     <>
       {/* Dark like the list navbar — never bg-primary, so the page
           still reads as notes. */}
-      <nav
-        className="navbar navbar-expand-lg navbar-dark bg-dark"
-        style={{ padding: '0.1rem 0', minHeight: 'auto' }}
-      >
-        <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
-          <div className="d-flex align-items-center gap-1 flex-wrap">
-            <Link
-              to={backTarget}
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.15rem 0.4rem' }}
-            >
-              <i className="bi bi-arrow-left" /> {t('detail.back')}
-            </Link>
-            <Link
-              className="navbar-brand mb-0"
-              to="/"
-              style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}
-            >
-              <i className="bi bi-journal-text" /> {t('nav.title')}
-            </Link>
-          </div>
-          <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <BurgerMenu items={burgerItems} />
-          </div>
-        </div>
-      </nav>
+      <PageNavBar variant="dark" burgerItems={burgerItems}>
+        <Link
+          to={backTarget}
+          className="btn btn-outline-light btn-sm ui-nav-toggle"
+        >
+          <i className="bi bi-arrow-left" /> {t('detail.back')}
+        </Link>
+        <Link className="navbar-brand mb-0" to="/">
+          <i className="bi bi-journal-text" /> {t('nav.title')}
+        </Link>
+      </PageNavBar>
       <div className="container-fluid task-detail-container">
-        {isPending && <LoadingSkeleton />}
-        {isError && <ErrorState error={error} onRetry={() => refetch()} />}
+        {isPending && <ListSkeleton label={t('list.loading')} />}
+        {isError && (
+          <ErrorState
+            title={t('list.errorTitle')}
+            detail={errorDetail(error)}
+            onRetry={() => refetch()}
+          />
+        )}
         {data && !task && (
-          <div className="alert alert-info">{t('detail.missing')}</div>
+          <EmptyState icon="journal-x" title={t('detail.missing')} />
         )}
         {data && task && !task.is_note && (
           // The task detail endpoint doesn't exclude non-notes —
           // a plain task id must not open a working note editor.
-          <div className="alert alert-info mt-3">
-            <i className="bi bi-info-circle" /> {t('detail.notANote')}
-          </div>
+          <EmptyState icon="info-circle" title={t('detail.notANote')} />
         )}
         {data && task && task.is_note && (
           <>

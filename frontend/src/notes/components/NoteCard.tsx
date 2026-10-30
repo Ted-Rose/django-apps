@@ -16,7 +16,7 @@ import CategoryPicker, {
   NOT_A_NOTE,
   type CategorySelection,
 } from './CategoryPicker';
-import ConfirmModal from './ConfirmModal';
+import ConfirmModal from '../../shared/components/ConfirmModal';
 
 /**
  * A note row — the tasks TaskCard counterpart with the task
@@ -119,10 +119,7 @@ export function NoteCard({
                 {note.note_category ? (
                   <Link
                     to={`/category/${note.note_category.id}`}
-                    className={
-                      'badge bg-light text-dark border ' +
-                      'note-category-chip me-2'
-                    }
+                    className="note-category-chip me-2"
                   >
                     <i className="bi bi-folder" />{' '}
                     {categoryPathLabel(categories, note.note_category.id) ||
@@ -131,8 +128,7 @@ export function NoteCard({
                 ) : (
                   <span
                     className={
-                      'badge bg-light text-muted border ' +
-                      'note-category-chip me-2'
+                      'note-category-chip ' + 'note-category-chip--muted me-2'
                     }
                   >
                     <i className="bi bi-inbox" /> {t('note.uncategorized')}
@@ -148,7 +144,7 @@ export function NoteCard({
             <div className="ms-2">
               <Dropdown
                 label={<i className="bi bi-three-dots-vertical" />}
-                buttonClassName="btn btn-sm btn-link text-muted"
+                buttonClassName="btn btn-sm ui-ghost-btn"
                 ariaLabel={t('note.actions')}
                 menuClassName="dropdown-menu-end"
               >

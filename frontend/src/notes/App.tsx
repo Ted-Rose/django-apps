@@ -15,12 +15,16 @@ import NotesPage from './routes/NotesPage';
  */
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<NotesPage />} />
-      <Route path="/category/:id" element={<CategoryRedirect />} />
-      <Route path="/note/:id" element={<NoteDetail />} />
-      <Route path="/categories" element={<Categories />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    // .app-ui carries the shared design tokens + gray canvas from
+    // shared/ui.css (imported via dashboard.css).
+    <div className="app-ui">
+      <Routes>
+        <Route path="/" element={<NotesPage />} />
+        <Route path="/category/:id" element={<CategoryRedirect />} />
+        <Route path="/note/:id" element={<NoteDetail />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
   );
 }
