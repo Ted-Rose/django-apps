@@ -41,7 +41,9 @@ approach:
 **Non-Goals:**
 
 - No dedicated "Notes" list in Google Tasks, no auto-move.
-- Deeper than two levels (`#notes-a-b-c` → leaf `b-c` joined).
+- Depth is user-bounded, not schema-bounded — categories nest
+  arbitrarily deep via `-` segments; `_` is the only way to
+  keep a name atomic.
 - No fuzzy category matching — fluid creation plus explicit
   merge is simpler and predictable (user's call).
 - No note pinning/starring, markdown rendering, or per-notes
@@ -56,14 +58,17 @@ approach:
 `NOTE_TAG_RE` (roughly `#notes(?:-<seg>)*` where
 `<seg> = [a-z0-9_]+`, with a trailing `(?![a-z0-9_-])`
 lookahead, case-insensitive) is applied to the raw title/body.
-Spelling convention: `-` is the folder boundary, `_` joins
-words inside a segment (`#notes-bible_research-genesis` →
-"Bible Research" → genesis); only the first segment is the
-top-level dir and the leaf rejoins the rest, so `-`/`_` are
-equivalent inside leaf names and both render as spaces — the
-voice habit `#notes-projects-django-apps` needs no
-underscores. Segments are lowercased, separators
-canonicalized, and empties collapsed. Matched text is stripped
+Spelling convention (revised after real usage): `-` is the
+level boundary at ARBITRARY depth — every segment is one
+directory (`#notes-projects-World_of_Bible-Easter_eggs` →
+projects → "World Of Bible" → "Easter Eggs"). `_` is the ONLY
+word-joiner inside a segment — `#notes-projects-django-apps`
+nests `django` → `apps`, so multi-word names MUST use
+underscores (`django_apps`). Segments are lowercased and
+empties collapsed; a segment's slug KEEPS its underscores so
+a composed marker (`#notes-x-world_of_bible`) re-parses to
+the same chain — canonicalizing `_`→`-` would corrupt
+round-trips. Display names render `_` as space. Matched text is stripped
 BEFORE `extract_hashtags` runs, so fragments can never reach
 `match_label` / `match_task_list` / star keywords — which is
 also what makes "stay in original list" work: a list whose name
