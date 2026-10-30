@@ -1,4 +1,4 @@
-Status: in progress
+Status: implemented
 
 # Tasks + Notes SPA UI polish plan
 
