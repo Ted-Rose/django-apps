@@ -108,16 +108,16 @@ pure level boundary at arbitrary depth and `_` is the only
 word-joiner (`#notes-projects-World_of_Bible-Easter_eggs` →
 projects → World Of Bible → Easter Eggs).
 
-- [ ] 5.1 backend: Change path resolution + marker compose to
+- [x] 5.1 backend: Change path resolution + marker compose to
   N-level (segment slugs keep underscores so markers
   round-trip), update existing 2-level test expectations, add
   tests for deep nesting, `_` vs `-` distinction, and retag
   on deep paths; verify `manage.py test google_tasks` passes
-- [ ] 5.2 frontend: Make category tree UI depth-agnostic
+- [x] 5.2 frontend: Make category tree UI depth-agnostic
   (nav dropdown, CategoryPicker, manage page, subtree
   `note_count` rollup) and update vitest expectations; verify
   lint/typecheck/test pass
-- [ ] 5.3 both: Update `google_tasks/AGENTS.md`/`README.md`
+- [x] 5.3 both: Update `google_tasks/AGENTS.md`/`README.md`
   hashtag docs to the N-level rule and note that stale
   categories created under the 2-level rule can be deleted
   via the manage page after reclassification
