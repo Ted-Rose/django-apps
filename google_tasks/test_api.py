@@ -790,6 +790,39 @@ class NotesApiTests(TestCase):
         self.assertTrue(task.is_note)
         self.assertEqual(task.note_category, category)
 
+    def test_create_strips_client_markers(self):
+        # A marker the client typed into the title or body must not
+        # hijack filing — the server composes the ONLY marker, from
+        # the requested category.
+        category = self.make_category('god')
+        with patch('google_tasks.views.get_creds_dict',
+                   return_value={'token': 't'}), \
+                patch('google_tasks.views.create_task',
+                      return_value={
+                          'id': 'remote-1',
+                          'title': 'pray',
+                          'status': 'needsAction',
+                          'notes': 'x\n\n#notes-god',
+                      }) as create:
+            resp = self.post_json('/', {
+                'title': 'pray #notes-evil',
+                'body': 'x #notes-hijack',
+                'category_id': category.id,
+            })
+        self.assertEqual(resp.status_code, 200)
+        # What reached create_task: stripped title, body carrying
+        # only the server-composed marker.
+        self.assertEqual(create.call_args.args[2], 'pray')
+        self.assertEqual(
+            create.call_args.kwargs['notes'], 'x\n\n#notes-god'
+        )
+        task = GoogleTask.objects.get(task_id='remote-1')
+        self.assertEqual(task.note_category, category)
+        self.assertFalse(
+            NoteCategory.objects.filter(slug__in=['evil', 'hijack'])
+            .exists()
+        )
+
     def test_create_uncategorized_note_gets_bare_marker(self):
         with patch('google_tasks.views.get_creds_dict',
                    return_value={'token': 't'}), \
@@ -935,6 +968,25 @@ class NotesApiTests(TestCase):
         self.assertIsNone(note.note_category)
         self.assertEqual(note.notes, 'body')
 
+    def test_un_note_creates_no_stray_categories(self):
+        # Un-noting must not resolve the marker path — a
+        # never-before-seen chain would otherwise auto-create
+        # stray categories the note abandons.
+        note = self.make_note(
+            'n1', notes='body #notes-stray-deep',
+        )
+        resp = self.patch_json(f'/{note.task_id}/', {
+            'is_note': False,
+        })
+        self.assertEqual(resp.status_code, 200)
+        note.refresh_from_db()
+        self.assertFalse(note.is_note)
+        self.assertIsNone(note.note_category)
+        self.assertEqual(note.notes, 'body')
+        self.assertFalse(
+            NoteCategory.objects.filter(user=self.user).exists()
+        )
+
     def test_update_foreign_note_and_category_404(self):
         foreign_note = self.make_note(
             'fn', user=self.other_user,
@@ -990,6 +1042,20 @@ class NotesApiTests(TestCase):
             'name': 'bible_research', 'parent_id': leaf_id,
         })
         self.assertEqual(resp.status_code, 200)
+
+    def test_category_name_over_max_is_validation_error(self):
+        # NoteCategory.name is max_length=255 — an over-long name
+        # must 422 as a validation_error, not 500 at the insert.
+        resp = self.post_json('/categories/', {
+            'name': 'x' * 256,
+        })
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.json()['error'], 'validation_error')
+        category = self.make_category('god')
+        resp = self.patch_json(
+            f'/categories/{category.id}/', {'name': 'x' * 256}
+        )
+        self.assertEqual(resp.status_code, 422)
 
     def test_rename_category_retags_members(self):
         category = self.make_category('praer')
@@ -1205,6 +1271,28 @@ class NotesApiTests(TestCase):
         self.assertTrue(note.needs_push)
         self.assertFalse(
             NoteCategory.objects.filter(pk=mid.pk).exists()
+        )
+
+    def test_delete_legacy_hyphen_slug_category(self):
+        # Slugs containing '-' predate the nested-tree scheme —
+        # no marker can express such a path (it re-parses as
+        # extra levels), so deleting the row is a retag no-op:
+        # member-looking markers stay untouched and the row just
+        # drops (note_category SET_NULLs).
+        legacy = self.make_category('django-app')
+        note = self.make_note(
+            'n1', notes='x #notes-django-app', category=legacy,
+        )
+        resp = self.client.delete(
+            f'{self.API}/categories/{legacy.id}/?to=uncategorized'
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['retagged'], 0)
+        note.refresh_from_db()
+        self.assertEqual(note.notes, 'x #notes-django-app')
+        self.assertIsNone(note.note_category)
+        self.assertFalse(
+            NoteCategory.objects.filter(pk=legacy.pk).exists()
         )
 
     def test_category_ops_scoped_to_user(self):

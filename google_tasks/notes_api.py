@@ -17,8 +17,13 @@ from typing import List, Optional
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from ninja import Query, Router, Schema
+from pydantic import Field
 
-from django_apps.api import ApiHttpError, _adapt
+from django_apps.api import (
+    ApiHttpError,
+    GoogleReauthRequired,
+    _adapt,
+)
 from google_tasks import views
 from google_tasks.api import (
     FlagsOut,
@@ -81,12 +86,14 @@ class NoteUpdateIn(Schema):
 
 
 class CategoryCreateIn(Schema):
-    name: str
+    # Bounded like NoteCategory.name — an over-long name must be a
+    # validation error, not a 500 from the database.
+    name: str = Field(max_length=255)
     parent_id: Optional[int] = None
 
 
 class CategoryRenameIn(Schema):
-    name: str
+    name: str = Field(max_length=255)
 
 
 class CategoryMergeIn(Schema):
@@ -132,19 +139,27 @@ def _subtree_ids(user, category):
     for cat in NoteCategory.objects.filter(user=user):
         children.setdefault(cat.parent_id, []).append(cat.pk)
     ids = [category.pk]
+    # A corrupted parent cycle would loop forever — the seen set
+    # truncates it (mirrors the frontend tree builders).
+    seen = {category.pk}
     stack = [category.pk]
     while stack:
         for child_id in children.get(stack.pop(), ()):
-            ids.append(child_id)
-            stack.append(child_id)
+            if child_id not in seen:
+                seen.add(child_id)
+                ids.append(child_id)
+                stack.append(child_id)
     return ids
 
 
 def _process_one_note(request, task_id):
     """Run label processing for one freshly written note so the
-    marker classifies/categorizes immediately. A failure must not
-    break the create/update response — the next run retries the
-    classification anyway (the marker is already stored)."""
+    marker classifies/categorizes immediately. An unexpected
+    failure must not break the create/update response — the next
+    run retries the classification anyway (the marker is already
+    stored). Dead credentials are different: GoogleReauthRequired
+    propagates so the response carries the 401 google_reauth
+    envelope the SPA navigates on."""
     try:
         creds = _creds_or_reauth(request)
         result = process_task_labels(
@@ -155,6 +170,8 @@ def _process_one_note(request, task_id):
             logger.warning(
                 f'Reauth needed processing note {task_id}'
             )
+    except GoogleReauthRequired:
+        raise
     except Exception:
         logger.exception(
             f'Post-write note processing failed for {task_id}'
@@ -244,14 +261,20 @@ def create_note(request, payload: NoteCreateIn):
     if payload.category_id is not None:
         category = _user_category(request, payload.category_id)
     marker = note_marker_for(category)
-    body = (payload.body or '').rstrip()
+    # Strip any #notes… marker the client typed — the server
+    # composes the only marker, so a stray one in the title/body
+    # can't hijack filing (find_note_marker prefers the title).
+    clean_title, body = strip_note_marker(
+        payload.title, payload.body or ''
+    )
+    body = body.rstrip()
     notes_field = f'{body}\n\n{marker}' if body else marker
     # The create view re-parses request.body itself, so swap in a
     # task-create payload carrying the composed marker — same
     # Google insert → local row path, same reauth/error contract
     # through _adapt.
     request._body = json.dumps({
-        'title': payload.title,
+        'title': clean_title,
         'notes': notes_field,
         'task_list_id': payload.task_list_id,
     }).encode()
@@ -285,13 +308,22 @@ def _check_slug_free(request, slug, parent_id, exclude_pk=None):
         )
 
 
-def _category_out(category):
+def _category_out(user, category):
+    """Serialize a category for mutation responses — note_count is
+    the same active-notes subtree total the dashboard emits, so a
+    rename/create response doesn't lie about emptied members."""
+    count = GoogleTask.objects.filter(
+        user=user, is_note=True,
+        is_archived=False, is_deleted=False,
+        status='needsAction',
+        note_category_id__in=_subtree_ids(user, category),
+    ).count()
     return {
         'id': category.id,
         'name': category.name,
         'slug': category.slug,
         'parent_id': category.parent_id,
-        'note_count': 0,
+        'note_count': count,
     }
 
 
@@ -308,7 +340,10 @@ def create_category(request, payload: CategoryCreateIn):
         slug=slug,
         parent=parent,
     )
-    return {'category': _category_out(category), 'retagged': 0}
+    return {
+        'category': _category_out(request.user, category),
+        'retagged': 0,
+    }
 
 
 def _target_or_none(request, target_id, source):
@@ -319,12 +354,15 @@ def _target_or_none(request, target_id, source):
         return None
     target = _user_category(request, target_id)
     node = target
-    while node is not None:
+    # The seen set keeps a corrupted parent cycle from looping.
+    seen = set()
+    while node is not None and node.pk not in seen:
         if node.pk == source.pk:
             raise ApiHttpError(
                 400, 'Target cannot be inside the source subtree',
                 code='invalidCategoryTarget',
             )
+        seen.add(node.pk)
         node = node.parent
     return target
 
@@ -357,7 +395,7 @@ def rename_category(request, category_id: int,
         payload.name.strip() or note_display_name(slug),
     )
     return {
-        'category': _category_out(category),
+        'category': _category_out(request.user, category),
         'retagged': retagged,
     }
 
@@ -422,7 +460,13 @@ def update_note(request, task_id: str, payload: NoteUpdateIn):
             '#notes' if not segments
             else '#notes-' + '-'.join(segments)
         )
-        category = resolve_note_category(request.user, segments)
+        # Un-noting strips the marker outright — resolving its
+        # path here would only auto-create stray categories for a
+        # chain the note abandons.
+        category = (
+            None if un_note
+            else resolve_note_category(request.user, segments)
+        )
     # Strip existing markers (wherever they live) and append the
     # freshly composed one to the body — app-composed markers never
     # sit in the title.

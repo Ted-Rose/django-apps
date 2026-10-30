@@ -1110,7 +1110,15 @@ def note_category_path(category):
     lazy query, fine at category-manage call sites."""
     slugs = []
     node = category
+    # A corrupted parent cycle would loop forever — the seen set
+    # truncates it (mirrors the frontend tree builders). Unsaved
+    # instances have pk=None and are keyed by identity instead.
+    seen = set()
     while node is not None:
+        key = node.pk if node.pk is not None else ('obj', id(node))
+        if key in seen:
+            break
+        seen.add(key)
         slugs.append(node.slug)
         node = getattr(node, 'parent', None)
     slugs.reverse()

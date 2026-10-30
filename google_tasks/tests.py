@@ -1635,6 +1635,38 @@ class ProcessTaskLabelsNoteTests(TestCase):
         self.assertEqual(mid.name, 'World Of Bible')
         self.assertEqual(mid.parent.slug, 'projects')
 
+    def test_depth_four_marker_resolves_the_full_chain(self):
+        # No depth cap — a four-segment path auto-creates all
+        # four levels and files on the leaf.
+        task = self.make_task(
+            'a', 'x #notes-faith-bible-genesis-one'
+        )
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        node = task.note_category
+        chain = []
+        while node is not None:
+            chain.append(node.slug)
+            node = node.parent
+        self.assertEqual(
+            chain, ['one', 'genesis', 'bible', 'faith']
+        )
+
+    def test_digit_segment_is_a_valid_level(self):
+        # '#notes-bible_research-gen-1' — a wholly numeric
+        # segment still names a category level ('1' slugifies
+        # to itself, displays as '1').
+        task = self.make_task(
+            'a', 'x #notes-bible_research-gen-1'
+        )
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        leaf = task.note_category
+        self.assertEqual(leaf.slug, '1')
+        self.assertEqual(leaf.name, '1')
+        self.assertEqual(leaf.parent.slug, 'gen')
+        self.assertEqual(leaf.parent.parent.slug, 'bible_research')
+
     def test_underscore_makes_a_multi_word_segment(self):
         # '#notes-projects-django_apps' is ONE leaf under
         # projects; the hyphen spelling nests a level deeper.
