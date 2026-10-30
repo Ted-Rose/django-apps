@@ -4,11 +4,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import NavBar from '../../shared/components/NavBar';
+import RichTextEditor from '../../shared/components/RichTextEditor';
+import { isTiptapDocString } from '../../shared/tiptapContent';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchTaskDetail } from '../api';
 import Toasts from '../../shared/components/Toasts';
 import { errorDetail, useToggleStar, useUpdateTask } from '../mutations';
-import { formatDateTime, formatFullDate, spaPathFromStoredUrl } from '../utils';
+import { formatDateTime } from '../utils';
+import { formatFullDate, spaPathFromStoredUrl } from '../utils';
 import { ErrorState, LoadingSkeleton } from './TaskListPage';
 
 /**
@@ -50,9 +53,9 @@ export default function TaskDetail() {
   } | null>(null);
 
   const titleRef = useRef<HTMLTextAreaElement>(null);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
 
-  // The template auto-resizes both textareas to their content.
+  // The template auto-resizes the title textarea to its content;
+  // the notes editor grows itself (ProseMirror max-height).
   const autoResize = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
     el.style.height = 'auto';
@@ -63,7 +66,9 @@ export default function TaskDetail() {
   useEffect(() => {
     if (task) {
       setTitle(task.title);
-      setNotes(task.notes ?? '');
+      // The rich doc mirrors `notes`; legacy rows load their
+      // markdown body and the editor re-emits doc-JSON on edit.
+      setNotes(task.notes_doc ?? task.notes ?? '');
       setLabelIds(task.labels.map((l) => l.id));
       setTaskOrder(task.task_order != null ? String(task.task_order) : '');
       setStarredOrder(
@@ -74,8 +79,7 @@ export default function TaskDetail() {
 
   useEffect(() => {
     autoResize(titleRef.current);
-    autoResize(notesRef.current);
-  }, [title, notes]);
+  }, [title]);
 
   const updateTask = useUpdateTask();
   const toggleStar = useToggleStar();
@@ -117,8 +121,12 @@ export default function TaskDetail() {
         taskId,
         payload: {
           title: trimmed,
-          // The view calls notes.strip() — string, never null.
-          notes: notes.trim(),
+          // An untouched legacy body stays plain text; once the
+          // editor emits doc-JSON the server derives the synced
+          // markdown projection (empty doc clears the notes).
+          ...(isTiptapDocString(notes)
+            ? { notes_doc: notes }
+            : { notes: notes.trim() }),
           label_ids: labelIds,
           starred_order: parsedStarred,
           ...(parsedOrder !== undefined ? { task_order: parsedOrder } : {}),
@@ -288,18 +296,15 @@ export default function TaskDetail() {
               </div>
 
               <div className="mb-4">
-                <label htmlFor="task-notes" className="form-label fw-bold">
+                <label className="form-label fw-bold">
                   <i className="bi bi-journal-text" /> {t('detail.notesLabel')}
                 </label>
-                <textarea
-                  className="form-control"
+                <RichTextEditor
                   id="task-notes"
-                  name="notes"
-                  rows={3}
                   placeholder={t('detail.notesPlaceholder')}
-                  ref={notesRef}
+                  ariaLabel={t('detail.notesLabel')}
                   value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
+                  onChange={setNotes}
                 />
                 <div className="form-text">{t('detail.notesHint')}</div>
               </div>

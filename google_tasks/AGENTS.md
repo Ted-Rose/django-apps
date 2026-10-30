@@ -47,7 +47,21 @@ keep sync query counts flat, not per-item or per-list.
 
 `is_starred`, `is_divider`, `task_order`, `starred_order`,
 `is_archived`, `is_deleted`, `deleted_at`, `labels` (M2M
-`TaskLabel`), `is_note`, `note_category` (FK `NoteCategory`).
+`TaskLabel`), `is_note`, `note_category` (FK `NoteCategory`),
+`notes_doc`.
+
+- `notes_doc` is the rich description as TipTap doc-JSON —
+  `notes` stays the synced text field and carries the doc's
+  **markdown projection** (Google-side notes are hand-written
+  markdown sometimes, so the projection round-trips cleanly).
+  `google_tasks/tiptap_doc.py` validates (`is_tiptap_doc`) and
+  serializes (`doc_to_markdown`). Writes come in as `notes_doc`
+  (tasks create/update) or `body_doc` (notes create/PATCH —
+  marker-free body doc; the `#notes` marker lives only in
+  `notes`); a plain `notes`/`body` write invalidates the doc,
+  and `_write_remote_tasks` clears it when pulled remote text
+  differs from the stored body. Never include it in
+  `task_body['notes']` pushes or Google-bound payloads.
 
 - Dividers are `GoogleTask` rows with `is_divider=True` and
   `task_id='divider_{uuid}'`; excluded from sync and label processing.

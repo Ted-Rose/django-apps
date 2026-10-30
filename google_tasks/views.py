@@ -34,6 +34,7 @@ from google_tasks.services import (
     get_tasks_service
 )
 from google_api.utils import get_user_credentials
+from google_tasks.tiptap_doc import doc_to_markdown, is_tiptap_doc
 
 # Maximum number of position updates accepted by a single reorder
 # request (task lists exceed bible's 100-note scale).
@@ -224,6 +225,8 @@ def toggle_star(request, task_id):
                     f'Removing starred hashtags from task {task_id}'
                 )
                 task.notes = cleaned_notes
+                # The stored doc no longer mirrors the body.
+                task.notes_doc = None
                 task.needs_push = True
 
                 # Update notes in Google Tasks API
@@ -750,6 +753,32 @@ def permanent_delete_task_view(request, task_id):
     })
 
 
+def _resolve_notes_payload(data):
+    """Resolve (notes, notes_doc) for a create/update payload.
+
+    'notes_doc' must be a serialized TipTap doc when present and
+    truthy — returns None on invalid input (caller maps to 400).
+    A caller-supplied 'notes' wins over the doc's markdown
+    projection: notes_api composes the #notes marker into the
+    stored text itself, so the verbatim pair is kept. Absent
+    'notes_doc' keeps the old plain-text semantics (doc cleared
+    by the caller when the body changes).
+    """
+    if 'notes_doc' in data:
+        doc = data.get('notes_doc')
+        if doc:
+            if not is_tiptap_doc(doc):
+                return None
+            notes = data.get('notes')
+            notes = (doc_to_markdown(doc)
+                     if notes is None else notes.strip())
+            return notes, doc
+        notes = data.get('notes')
+        return (notes.strip() if notes else ''), None
+    notes_raw = data.get('notes')
+    return (notes_raw.strip() if notes_raw else ''), None
+
+
 @login_required
 @require_POST
 def create_task_view(request):
@@ -773,8 +802,14 @@ def create_task_view(request):
     try:
         data = json.loads(request.body)
         title = data.get('title', '').strip()
-        notes_raw = data.get('notes')
-        notes = notes_raw.strip() if notes_raw else ''
+        resolved = _resolve_notes_payload(data)
+        if resolved is None:
+            return JsonResponse({
+                'success': False,
+                'error': 'notes_doc is not a valid TipTap doc',
+                'code': 'invalidNotesDoc',
+            }, status=400)
+        notes, notes_doc = resolved
         is_starred = data.get('is_starred', False)
         task_list_id = data.get('task_list_id')
         label_ids = data.get('label_ids', [])
@@ -873,6 +908,7 @@ def create_task_view(request):
             task_list=task_list,
             title=result.get('title', title),
             notes=result.get('notes'),
+            notes_doc=notes_doc,
             status=result.get('status', 'needsAction'),
             is_starred=is_starred,
             starred_order=starred_order,
@@ -974,7 +1010,6 @@ def update_task_view(request, task_id):
     try:
         data = json.loads(request.body)
         title = data.get('title', '').strip()
-        notes = data.get('notes', '').strip()
         label_ids = data.get('label_ids', None)
 
         # task_order/starred_order are local-only float positions —
@@ -1004,11 +1039,25 @@ def update_task_view(request, task_id):
                 'code': 'emptyTitle',
             }, status=400)
 
+        resolved = _resolve_notes_payload(data)
+        if resolved is None:
+            return JsonResponse({
+                'success': False,
+                'error': 'notes_doc is not a valid TipTap doc',
+                'code': 'invalidNotesDoc',
+            }, status=400)
+        notes, notes_doc = resolved
+        # A plain-notes update that doesn't change the stored body
+        # keeps the rich doc — anything else invalidates it.
+        if 'notes_doc' not in data and notes == (task.notes or ''):
+            notes_doc = task.notes_doc
+
         new_notes = notes if notes else None
         if title != task.title or new_notes != task.notes:
             task.needs_push = True
         task.title = title
         task.notes = new_notes
+        task.notes_doc = notes_doc
         for field, value in order_updates.items():
             setattr(task, field, value)
 

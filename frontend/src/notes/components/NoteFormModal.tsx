@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../shared/components/Modal';
+import RichTextEditor from '../../shared/components/RichTextEditor';
+import { isTiptapDocString } from '../../shared/tiptapContent';
 import type { NoteCategoryOut } from '../api';
 import { useCreateNote } from '../mutations';
 import CategoryPicker from './CategoryPicker';
@@ -55,7 +57,12 @@ export function NoteFormModal({
     createNote.mutate(
       {
         title: trimmed,
-        body: body.trim() || null,
+        // Empty state stays a plain empty body; an edited body
+        // is doc-JSON and the server derives the markdown
+        // projection that syncs to Google.
+        ...(isTiptapDocString(body)
+          ? { body_doc: body }
+          : { body: body.trim() || null }),
         category_id: categoryId,
       },
       { onSuccess: () => onClose() },
@@ -108,16 +115,14 @@ export function NoteFormModal({
         />
       </div>
       <div className="mb-3">
-        <label htmlFor="note-body" className="form-label fw-bold">
-          {t('form.bodyLabel')}
-        </label>
-        <textarea
-          className="form-control"
+        <label className="form-label fw-bold">{t('form.bodyLabel')}</label>
+        <RichTextEditor
           id="note-body"
-          rows={4}
+          variant="compact"
           placeholder={t('form.bodyPlaceholder')}
+          ariaLabel={t('form.bodyLabel')}
           value={body}
-          onChange={(event) => setBody(event.target.value)}
+          onChange={setBody}
         />
       </div>
       <div className="mb-2">

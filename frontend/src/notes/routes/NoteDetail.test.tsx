@@ -13,6 +13,10 @@ import type {
   TaskOut,
 } from '../api';
 
+vi.mock('../../shared/components/RichTextEditor', async () => ({
+  default: (await import('../../test/RichTextEditorStub')).default,
+}));
+
 vi.mock('../../shared/api/client', () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),

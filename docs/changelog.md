@@ -1,6 +1,16 @@
 # google_api
 
 ## Changelog
+14. Task notes and note bodies are rich text: the description
+    fields in the tasks and notes apps are now a TipTap editor —
+    markdown shortcuts convert live while typing (`#`, `-`, `>`,
+    `**bold**`), pasted markdown (plain text or inside an HTML
+    clipboard) becomes real structure, and invisible Unicode from
+    Word/Docs/mobile keyboards is normalized on paste. Content
+    stores as doc-JSON in the new local-only `notes_doc` field;
+    `notes` keeps the markdown projection that syncs to Google,
+    so Google-side edits still reconcile and existing markdown
+    bodies render formatted on load
 13. Quick-notes categories nest arbitrarily deep: every `-` in a
     `#notes-<path>` marker is now one level (`#notes-projects-
     World_of_Bible-Easter_eggs` → projects → World Of Bible →

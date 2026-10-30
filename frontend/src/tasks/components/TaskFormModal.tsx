@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../shared/components/Modal';
+import RichTextEditor from '../../shared/components/RichTextEditor';
+import { isTiptapDocString } from '../../shared/tiptapContent';
 import type { LabelOut, TaskOut } from '../api';
 import { errorDetail, useCreateTask, useUpdateTask } from '../mutations';
 
@@ -49,7 +51,9 @@ export function TaskFormModal({
   useEffect(() => {
     if (show) {
       setTitle(task?.title ?? '');
-      setNotes(task?.notes ?? '');
+      // The rich doc mirrors `notes`; legacy rows load their
+      // markdown body and the editor re-emits doc-JSON on edit.
+      setNotes(task?.notes_doc ?? task?.notes ?? '');
       setStarred(false);
       setLabelIds(task?.labels.map((label) => label.id) ?? []);
       setValidationError(null);
@@ -74,11 +78,17 @@ export function TaskFormModal({
       return;
     }
     setValidationError(null);
+    // An untouched legacy body stays plain text (no silent
+    // rewrite); once the editor emits doc-JSON the server derives
+    // the synced markdown projection from it.
+    const notesPayload = isTiptapDocString(notes)
+      ? { notes_doc: notes }
+      : { notes: notes.trim() || null };
     if (mode === 'create') {
       createTask.mutate(
         {
           title: trimmedTitle,
-          notes: notes.trim() || null,
+          ...notesPayload,
           is_starred: starred,
           // Only send when set, like create_task.js.
           ...(taskListId ? { task_list_id: taskListId } : {}),
@@ -92,9 +102,8 @@ export function TaskFormModal({
           taskId: task.task_id,
           payload: {
             title: trimmedTitle,
-            // The view calls notes.strip() — send a string, never
-            // null (empty string clears the notes).
-            notes: notes.trim(),
+            // Empty string clears the notes; the view strips.
+            ...notesPayload,
             label_ids: labelIds,
           },
         },
@@ -164,16 +173,14 @@ export function TaskFormModal({
           />
         </div>
         <div className="mb-3">
-          <label htmlFor="taskFormNotes" className="form-label">
-            {t('form.notesLabel')}
-          </label>
-          <textarea
-            className="form-control"
+          <label className="form-label">{t('form.notesLabel')}</label>
+          <RichTextEditor
             id="taskFormNotes"
-            rows={4}
+            variant="compact"
             placeholder={t('form.notesPlaceholder')}
+            ariaLabel={t('form.notesLabel')}
             value={notes}
-            onChange={(event) => setNotes(event.target.value)}
+            onChange={setNotes}
           />
         </div>
         {labels.length > 0 && (

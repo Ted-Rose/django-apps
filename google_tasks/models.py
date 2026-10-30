@@ -110,6 +110,12 @@ class GoogleTask(models.Model):
     )
     title = models.CharField(max_length=500)
     notes = models.TextField(blank=True, null=True)
+    notes_doc = models.TextField(
+        blank=True,
+        null=True,
+        help_text='Rich description as TipTap doc-JSON (local-only; '
+                  'notes carries its markdown projection for sync)'
+    )
     due_date = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=20,

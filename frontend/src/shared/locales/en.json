@@ -49,5 +49,22 @@
     "network": "Could not reach the server. Check your connection.",
     "requestFailed": "Request failed: {{status}} {{statusText}}",
     "loadFailed": "Couldn't load {{label}}"
+  },
+  "editor": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strike": "Strikethrough",
+    "heading1": "Heading 1",
+    "heading2": "Heading 2",
+    "heading3": "Heading 3",
+    "bulletList": "Bullet list",
+    "orderedList": "Numbered list",
+    "blockquote": "Quote",
+    "codeBlock": "Code block",
+    "link": "Add link",
+    "unlink": "Remove link",
+    "clearFormatting": "Clear formatting",
+    "linkPrompt": "Link URL"
   }
 }
