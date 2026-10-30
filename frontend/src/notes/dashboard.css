@@ -12,7 +12,8 @@
 }
 
 /* Category-picker list rows (editor + move modal) — full-width
-   clickable rows with the leaf level indented one step. */
+   clickable rows; nesting depth indents inline per row since the
+   tree is arbitrarily deep. */
 .category-picker-option {
   display: flex;
   align-items: center;
@@ -30,7 +31,4 @@
 .category-picker-option.selected {
   border-color: var(--bs-primary);
   background-color: rgba(var(--bs-primary-rgb), 0.08);
-}
-.category-picker-option.leaf {
-  padding-left: 1.75rem;
 }

@@ -7,14 +7,14 @@ import {
 } from '../../shared/components/BurgerMenu';
 import Dropdown from '../../shared/components/Dropdown';
 import type { NotesDashboardOut } from '../api';
-import { buildCategoryTree, subtreeNoteCount } from '../categories';
+import { flattenCategoryTree } from '../categories';
 
 /**
  * The notes navbar — deliberately `navbar-dark bg-dark` (never
  * bg-primary) so the user always knows they're in notes, not tasks.
- * Holds the category-tree dropdown (All notes · Inbox · groups with
- * indented leaves + counts · manage link), an ordering dropdown, a
- * search affordance and the burger menu.
+ * Holds the category-tree dropdown (All notes · Inbox · the tree
+ * depth-indented with subtree counts · manage link), an ordering
+ * dropdown, a search affordance and the burger menu.
  *
  * Filter behavior mirrors the tasks navbar: the URL is the source
  * of truth — `?category=<id>` drives the API's subtree filter, the
@@ -114,7 +114,7 @@ export function NotesNavBar({ data, burgerItems }: NotesNavBarProps) {
     </>
   );
 
-  const tree = buildCategoryTree(categories);
+  const rows = flattenCategoryTree(categories);
 
   return (
     <nav
@@ -153,50 +153,35 @@ export function NotesNavBar({ data, burgerItems }: NotesNavBarProps) {
                   <i className="bi bi-inbox" /> {t('views.inbox')}
                 </a>
               </li>
-              {tree.length > 0 && (
+              {rows.length > 0 && (
                 <li>
                   <hr className="dropdown-divider" />
                 </li>
               )}
-              {tree.map((node) => (
-                <Fragment key={node.category.id}>
-                  <li>
-                    <a
-                      className={activeClass(
-                        selectedCategory === String(node.category.id),
-                      )}
-                      href="#"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        selectCategory(String(node.category.id));
-                      }}
-                    >
-                      <i className="bi bi-folder" /> {node.category.name}{' '}
-                      <span className="text-muted">
-                        ({subtreeNoteCount(categories, node.category.id)})
-                      </span>
-                    </a>
-                  </li>
-                  {node.children.map((child) => (
-                    <li key={child.id}>
-                      <a
-                        className={`${activeClass(
-                          selectedCategory === String(child.id),
-                        )} ps-4`}
-                        href="#"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          selectCategory(String(child.id));
-                        }}
-                      >
-                        <i className="bi bi-tag" /> {child.name}{' '}
-                        <span className="text-muted">
-                          ({child.note_count ?? 0})
-                        </span>
-                      </a>
-                    </li>
-                  ))}
-                </Fragment>
+              {rows.map(({ category, depth, hasChildren }) => (
+                <li key={category.id}>
+                  <a
+                    className={activeClass(
+                      selectedCategory === String(category.id),
+                    )}
+                    style={{ paddingLeft: `${1 + depth * 1.25}rem` }}
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      selectCategory(String(category.id));
+                    }}
+                  >
+                    <i
+                      className={`bi ${
+                        hasChildren || depth === 0 ? 'bi-folder' : 'bi-tag'
+                      }`}
+                    />{' '}
+                    {category.name}{' '}
+                    <span className="text-muted">
+                      ({category.note_count ?? 0})
+                    </span>
+                  </a>
+                </li>
               ))}
               <li>
                 <hr className="dropdown-divider" />

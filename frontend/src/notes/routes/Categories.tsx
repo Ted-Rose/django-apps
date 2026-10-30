@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,11 @@ import Modal from '../../shared/components/Modal';
 import Toasts from '../../shared/components/Toasts';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchNotes, type NoteCategoryOut } from '../api';
-import { buildCategoryTree, subtreeNoteCount } from '../categories';
+import {
+  categoryPathLabel,
+  descendantIds,
+  flattenCategoryTree,
+} from '../categories';
 import ConfirmModal from '../components/ConfirmModal';
 import {
   useCreateCategory,
@@ -24,11 +28,12 @@ import { ErrorState, LoadingSkeleton } from './NotesPage';
 type MergeTarget = number | 'uncategorized' | '';
 
 /**
- * Category management (`/categories`) — the two-level tree with
- * note counts plus add/rename/merge/delete. Rename/merge/delete
- * retag member notes' `#notes…` markers server-side; the success
- * toasts report the retagged counts. Destructive ops go through a
- * confirm modal, delete additionally asks where members move to.
+ * Category management (`/categories`) — the tree at arbitrary
+ * depth with subtree note counts plus add/rename/merge/delete.
+ * Rename/merge/delete retag member notes' `#notes…` markers
+ * server-side; the success toasts report the retagged counts.
+ * Destructive ops go through a confirm modal, delete additionally
+ * asks where members move to.
  */
 export default function Categories() {
   const { t } = useTranslation('notes');
@@ -41,7 +46,7 @@ export default function Categories() {
     queryFn: () => fetchNotes({}),
   });
   const categories = data?.categories ?? [];
-  const groups = categories.filter((c) => c.parent_id == null);
+  const rows = flattenCategoryTree(categories);
 
   const [newName, setNewName] = useState('');
   const [newParent, setNewParent] = useState<number | ''>('');
@@ -63,12 +68,13 @@ export default function Categories() {
   const mergeLabel = t('categoriesPage.merge');
 
   /** Targets a category may fold/move members into — never itself
-   *  and never inside its own subtree (the API 400s on that). */
+   *  and never inside its own subtree at any depth (the API
+   *  400s on that). Options show the full path so same-named
+   *  leaves under different branches stay distinguishable. */
   const validTargets = (source: NoteCategoryOut) => {
-    const childIds = new Set(
-      categories.filter((c) => c.parent_id === source.id).map((c) => c.id),
-    );
-    return categories.filter((c) => c.id !== source.id && !childIds.has(c.id));
+    const excluded = descendantIds(categories, source.id);
+    excluded.add(source.id);
+    return categories.filter((c) => !excluded.has(c.id));
   };
 
   const openRename = (category: NoteCategoryOut) => {
@@ -121,17 +127,21 @@ export default function Categories() {
     },
   ];
 
-  const renderRow = (category: NoteCategoryOut, depth: 0 | 1) => (
+  const renderRow = (
+    category: NoteCategoryOut,
+    depth: number,
+    hasChildren: boolean,
+  ) => (
     <tr key={category.id}>
-      <td className={depth === 1 ? 'ps-4' : ''}>
-        <i className={`bi ${depth === 0 ? 'bi-folder' : 'bi-tag'}`} />{' '}
+      <td style={{ paddingLeft: `${0.5 + depth * 1.5}rem` }}>
+        <i
+          className={`bi ${
+            hasChildren || depth === 0 ? 'bi-folder' : 'bi-tag'
+          }`}
+        />{' '}
         {category.name}
       </td>
-      <td className="text-end">
-        {depth === 0
-          ? subtreeNoteCount(categories, category.id)
-          : (category.note_count ?? 0)}
-      </td>
+      <td className="text-end">{category.note_count ?? 0}</td>
       <td className="text-end">
         <div className="btn-group btn-group-sm">
           <button
@@ -227,9 +237,10 @@ export default function Categories() {
                   }
                 >
                   <option value="">{t('categoriesPage.topLevel')}</option>
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
+                  {rows.map(({ category, depth }) => (
+                    <option key={category.id} value={category.id}>
+                      {'  '.repeat(depth)}
+                      {category.name}
                     </option>
                   ))}
                 </select>
@@ -263,12 +274,9 @@ export default function Categories() {
                       </tr>
                     </thead>
                     <tbody>
-                      {buildCategoryTree(categories).map((node) => (
-                        <Fragment key={node.category.id}>
-                          {renderRow(node.category, 0)}
-                          {node.children.map((child) => renderRow(child, 1))}
-                        </Fragment>
-                      ))}
+                      {rows.map(({ category, depth, hasChildren }) =>
+                        renderRow(category, depth, hasChildren),
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -379,7 +387,7 @@ export default function Categories() {
               </option>
               {validTargets(merging).map((target) => (
                 <option key={target.id} value={target.id}>
-                  {target.name}
+                  {categoryPathLabel(categories, target.id)}
                 </option>
               ))}
             </select>
@@ -429,7 +437,7 @@ export default function Categories() {
               </option>
               {validTargets(deleting).map((target) => (
                 <option key={target.id} value={target.id}>
-                  {target.name}
+                  {categoryPathLabel(categories, target.id)}
                 </option>
               ))}
             </select>
