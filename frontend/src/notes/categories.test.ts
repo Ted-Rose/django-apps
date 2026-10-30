@@ -5,6 +5,7 @@ import {
   categoryPathLabel,
   descendantIds,
   flattenCategoryTree,
+  isMarkerSafeCategory,
 } from './categories';
 
 function makeCategory(
@@ -116,6 +117,36 @@ describe('descendantIds', () => {
     expect([...descendantIds(TREE, 1)].sort()).toEqual([2, 3]);
     expect([...descendantIds(TREE, 4)].sort()).toEqual([5, 6]);
     expect([...descendantIds(TREE, 6)]).toEqual([]);
+  });
+});
+
+describe('isMarkerSafeCategory', () => {
+  // '-'-slug categories predate the nested tree — no marker can
+  // express their path, so they're unselectable as note targets.
+  const LEGACY: NoteCategoryOut[] = [
+    makeCategory({ id: 1, name: 'Django App', slug: 'django-app' }),
+    makeCategory({
+      id: 2,
+      name: 'Child',
+      slug: 'child',
+      parent_id: 1,
+    }),
+    makeCategory({ id: 3, name: 'Safe', slug: 'safe' }),
+  ];
+
+  it('rejects a slug containing a hyphen', () => {
+    expect(isMarkerSafeCategory(LEGACY, 1)).toBe(false);
+  });
+
+  it('rejects descendants of a hyphen-slug ancestor', () => {
+    // The child's own slug is fine, but its composed marker path
+    // still carries the parent's '-' segment.
+    expect(isMarkerSafeCategory(LEGACY, 2)).toBe(false);
+  });
+
+  it('accepts normal categories at any depth', () => {
+    expect(isMarkerSafeCategory(LEGACY, 3)).toBe(true);
+    expect(isMarkerSafeCategory(TREE, 6)).toBe(true);
   });
 });
 

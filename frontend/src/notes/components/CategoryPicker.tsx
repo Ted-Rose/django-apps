@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { NoteCategoryOut } from '../api';
-import { flattenCategoryTree } from '../categories';
+import { flattenCategoryTree, isMarkerSafeCategory } from '../categories';
 
 /**
  * The category tree picker — a button-list of the tree flattened
@@ -34,7 +34,11 @@ export function CategoryPicker({
   onChange,
 }: CategoryPickerProps) {
   const { t } = useTranslation('notes');
-  const rows = flattenCategoryTree(categories);
+  // Legacy '-'-slug categories can't be expressed as a marker
+  // path — picking one would silently misfile the note.
+  const rows = flattenCategoryTree(categories).filter(({ category }) =>
+    isMarkerSafeCategory(categories, category.id),
+  );
 
   const optionClass = (selected: boolean) =>
     `category-picker-option${selected ? ' selected' : ''}`;

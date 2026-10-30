@@ -26,7 +26,7 @@ import { ErrorState, LoadingSkeleton } from './NotesPage';
 /**
  * The note editor (`/note/:id`) — a TaskDetail-style page with
  * auto-resizing title/body textareas and a CategoryPicker
- * (Uncategorized + the two-level tree + a "Not a note" escape that
+ * (Uncategorized + the tree at any depth + a "Not a note" escape
  * sends is_note: false and converts the note into a plain task).
  * Saves via PATCH /api/notes/{id}/ — the server recomposes the
  * `#notes…` marker, so the inputs always show marker-stripped text.

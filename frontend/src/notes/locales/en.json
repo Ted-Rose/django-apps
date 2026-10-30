@@ -92,7 +92,7 @@
     "actions": "Actions",
     "add": "Add category",
     "addPlaceholder": "New category name",
-    "parent": "Inside group (optional)",
+    "parent": "Parent category (optional)",
     "rename": "Rename",
     "merge": "Merge",
     "delete": "Delete",
@@ -108,7 +108,8 @@
     "uncategorized": "Uncategorized (Inbox)",
     "empty": "No categories yet — a #notes-<path> marker creates them.",
     "retagged": "{{count}} notes retagged",
-    "topLevel": "Top level"
+    "topLevel": "Top level",
+    "unsafeSlug": "Legacy name — can't be filed into; rename or delete it"
   },
   "toasts": {
     "createFailed": "Failed to create note: {{detail}}",
@@ -124,7 +125,6 @@
   "server": {
     "invalidCategoryName": "Invalid category name",
     "categoryExists": "Category already exists",
-    "categoryTooDeep": "Categories are two levels deep",
     "invalidCategoryTarget": "Target cannot be inside the source subtree",
     "invalidDeleteTarget": "Invalid delete target",
     "emptyTitle": "Title cannot be empty",

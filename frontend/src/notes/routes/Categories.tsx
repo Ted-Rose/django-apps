@@ -14,6 +14,7 @@ import {
   categoryPathLabel,
   descendantIds,
   flattenCategoryTree,
+  isMarkerSafeCategory,
 } from '../categories';
 import ConfirmModal from '../components/ConfirmModal';
 import {
@@ -69,12 +70,17 @@ export default function Categories() {
 
   /** Targets a category may fold/move members into — never itself
    *  and never inside its own subtree at any depth (the API
-   *  400s on that). Options show the full path so same-named
-   *  leaves under different branches stay distinguishable. */
+   *  400s on that). Legacy '-'-slug categories are excluded too:
+   *  their path can't be expressed as a marker, so retagging into
+   *  one would silently misfile members. Options show the full
+   *  path so same-named leaves under different branches stay
+   *  distinguishable. */
   const validTargets = (source: NoteCategoryOut) => {
     const excluded = descendantIds(categories, source.id);
     excluded.add(source.id);
-    return categories.filter((c) => !excluded.has(c.id));
+    return categories.filter(
+      (c) => !excluded.has(c.id) && isMarkerSafeCategory(categories, c.id),
+    );
   };
 
   const openRename = (category: NoteCategoryOut) => {
@@ -141,7 +147,15 @@ export default function Categories() {
         />{' '}
         {category.name}
       </td>
-      <td className="text-end">{category.note_count ?? 0}</td>
+      <td className="text-end">
+        {!isMarkerSafeCategory(categories, category.id) && (
+          <i
+            className="bi bi-exclamation-triangle text-warning me-1"
+            title={t('categoriesPage.unsafeSlug')}
+          />
+        )}
+        {category.note_count ?? 0}
+      </td>
       <td className="text-end">
         <div className="btn-group btn-group-sm">
           <button
@@ -237,12 +251,19 @@ export default function Categories() {
                   }
                 >
                   <option value="">{t('categoriesPage.topLevel')}</option>
-                  {rows.map(({ category, depth }) => (
-                    <option key={category.id} value={category.id}>
-                      {'  '.repeat(depth)}
-                      {category.name}
-                    </option>
-                  ))}
+                  {rows
+                    // '-'-slug categories are unexpressible as
+                    // marker paths — a child under one could never
+                    // be filed into, so they're not parent options.
+                    .filter(({ category }) =>
+                      isMarkerSafeCategory(categories, category.id),
+                    )
+                    .map(({ category, depth }) => (
+                      <option key={category.id} value={category.id}>
+                        {'  '.repeat(depth)}
+                        {category.name}
+                      </option>
+                    ))}
                 </select>
                 <button
                   type="submit"
@@ -343,6 +364,7 @@ export default function Categories() {
         confirmLabel={mergeLabel}
         confirmIcon="arrow-left-right"
         confirmClassName="btn-primary"
+        confirmDisabled={mergeTarget === ''}
         busy={mergeCategories.isPending}
         onClose={() => setMerging(null)}
         onConfirm={() => {

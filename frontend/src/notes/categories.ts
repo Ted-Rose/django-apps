@@ -125,6 +125,35 @@ export function descendantIds(
 }
 
 /**
+ * Whether a category's path can be expressed as a `#notes-…`
+ * marker — every '-' joins TWO levels, so a slug containing '-'
+ * (a legacy artifact from before the nested-tree scheme)
+ * re-parses to a different chain and would silently misfile any
+ * note moved onto it — or onto any of its descendants, whose
+ * composed path includes the bad segment. Such categories stay
+ * visible/manageable on the Categories page (rename fixes the
+ * slug; delete drops the row) but must not be selectable as
+ * note/move/merge/parent targets.
+ */
+export function isMarkerSafeCategory(
+  categories: NoteCategoryOut[],
+  categoryId: number,
+): boolean {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const seen = new Set<number>();
+  let current = byId.get(categoryId);
+  while (current && !seen.has(current.id)) {
+    if (current.slug.includes('-')) {
+      return false;
+    }
+    seen.add(current.id);
+    current =
+      current.parent_id != null ? byId.get(current.parent_id) : undefined;
+  }
+  return true;
+}
+
+/**
  * Display path for a category — 'Projects / World Of Bible /
  * Easter Eggs' at depth 3. Walks ancestors via the id map; a
  * missing parent just truncates the path (orphans show their own
