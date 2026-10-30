@@ -4,6 +4,9 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { errorDetail } from '../../shared/api/errors';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
+import EmptyState from '../../shared/components/EmptyState';
+import ErrorState from '../../shared/components/ErrorState';
+import ListSkeleton from '../../shared/components/ListSkeleton';
 import Toasts from '../../shared/components/Toasts';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchNotes, type NotesDashboardOut, type TaskOut } from '../api';
@@ -111,8 +114,20 @@ export function NotesPage() {
     <>
       <NotesNavBar data={data} burgerItems={burgerItems} />
       <div className="container-fluid px-2 py-4">
-        {isPending && <LoadingSkeleton />}
-        {isError && <ErrorState error={error} onRetry={() => refetch()} />}
+        {isPending && (
+          // #note-list stays on our own wrapper — ListSkeleton
+          // intentionally doesn't emit it (list hook for tests/e2e).
+          <div id="note-list">
+            <ListSkeleton label={t('list.loading')} />
+          </div>
+        )}
+        {isError && (
+          <ErrorState
+            title={t('list.errorTitle')}
+            detail={errorDetail(error)}
+            onRetry={() => refetch()}
+          />
+        )}
         {data && (
           <>
             {notes.length > 0 ? (
@@ -126,12 +141,12 @@ export function NotesPage() {
                 ))}
               </div>
             ) : (
-              completed.length === 0 && <EmptyState data={data} q={q} />
+              completed.length === 0 && <NotesEmptyState data={data} q={q} />
             )}
             {completed.length > 0 && (
               <div className="mt-2">
                 <button
-                  className="btn btn-link text-muted text-decoration-none ps-0"
+                  className="ui-ghost-btn px-0 py-1"
                   type="button"
                   aria-expanded={completedOpen}
                   onClick={() => setCompletedOpen((prev) => !prev)}
@@ -185,52 +200,11 @@ export function NotesPage() {
   );
 }
 
-export function LoadingSkeleton() {
-  const { t } = useTranslation('notes');
-  return (
-    <div id="note-list" aria-busy="true" aria-label={t('list.loading')}>
-      {[0, 1, 2].map((i) => (
-        <div className="task-container d-flex mb-2" key={i}>
-          <div className="card task-card flex-grow-1 task-content">
-            <div className="card-body placeholder-glow">
-              <span className="placeholder col-5" />
-              <p className="card-text mb-0 mt-2">
-                <span className="placeholder col-8" />
-              </p>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function ErrorState({
-  error,
-  onRetry,
-}: {
-  error: unknown;
-  onRetry: () => void;
-}) {
-  const { t } = useTranslation('notes');
-  return (
-    <div className="alert alert-danger text-center py-5" role="alert">
-      <i className="bi bi-exclamation-circle fs-1 d-block mb-3" />
-      <h5>{t('list.errorTitle')}</h5>
-      <p className="mb-3">{errorDetail(error)}</p>
-      <button
-        type="button"
-        className="btn btn-outline-danger"
-        onClick={onRetry}
-      >
-        <i className="bi bi-arrow-repeat" /> {t('common:common.retry')}
-      </button>
-    </div>
-  );
-}
-
-/** Empty state: auth prompt, search-no-hit, or the zero-notes hint. */
-export function EmptyState({
+/**
+ * Empty state on the shared presentational EmptyState: auth prompt,
+ * search-no-hit, or the zero-notes hint.
+ */
+function NotesEmptyState({
   data,
   q,
 }: {
@@ -243,22 +217,21 @@ export function EmptyState({
       window.location.pathname + window.location.search,
     )}`;
     return (
-      <div className="alert alert-info text-center py-5">
-        <i className="bi bi-shield-lock fs-1 d-block mb-3 text-warning" />
-        <h5>{t('list.authTitle')}</h5>
+      <EmptyState icon="shield-lock" title={t('list.authTitle')}>
         <p className="mb-3">{t('list.authBody')}</p>
-        <a href={loginUrl} className="btn btn-warning btn-lg">
+        <a href={loginUrl} className="btn btn-warning">
           <i className="bi bi-google" /> {t('menu.loginGoogle')}
         </a>
-      </div>
+      </EmptyState>
     );
   }
   return (
-    <div className="alert alert-info text-center py-5">
-      <i className="bi bi-info-circle fs-1 d-block mb-3" />
-      <h5>{q ? t('list.searchEmpty', { q }) : t('list.noNotes')}</h5>
-      {!q && <p className="mb-0">{t('list.emptyHint')}</p>}
-    </div>
+    <EmptyState
+      icon={q ? 'search' : 'journal-text'}
+      title={q ? t('list.searchEmpty', { q }) : t('list.noNotes')}
+    >
+      {!q && t('list.emptyHint')}
+    </EmptyState>
   );
 }
 

@@ -22,8 +22,6 @@ import { flattenCategoryTree } from '../categories';
  * client-side (the API has no uncategorized-id), `?q=` goes to the
  * API's title/body search, `?order=` picks the ordering.
  */
-const TOGGLE_STYLE = { padding: '0.15rem 0.4rem' };
-
 export const INBOX_FILTER = 'inbox';
 
 const ORDER_OPTIONS: { key: string; icon: string; labelKey: string }[] = [
@@ -116,19 +114,21 @@ export function NotesNavBar({ data, burgerItems }: NotesNavBarProps) {
 
   const rows = flattenCategoryTree(categories);
 
+  const toggleClass = 'btn btn-outline-light btn-sm ui-nav-toggle';
+
   return (
-    <nav
-      className="navbar navbar-expand-lg navbar-dark bg-dark"
-      style={{ padding: '0.1rem 0', minHeight: 'auto' }}
-    >
-      <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
+    <nav className="app-navbar navbar navbar-expand-lg navbar-dark bg-dark">
+      <div className="container-fluid">
         {data && (
           <div
             className="d-flex align-items-center gap-1 flex-wrap
               flex-grow-1"
           >
             {/* Category dropdown: All notes · Inbox · tree · manage */}
-            <Dropdown label={viewLabel} buttonStyle={TOGGLE_STYLE}>
+            <Dropdown
+              label={viewLabel}
+              buttonClassName={`${toggleClass} dropdown-toggle`}
+            >
               <li>
                 <a
                   className={activeClass(!selectedCategory)}
@@ -206,7 +206,7 @@ export function NotesNavBar({ data, burgerItems }: NotesNavBarProps) {
                   )}
                 </>
               }
-              buttonStyle={TOGGLE_STYLE}
+              buttonClassName={`${toggleClass} dropdown-toggle`}
             >
               {ORDER_OPTIONS.map((option, index) => (
                 <Fragment key={option.key}>
@@ -243,8 +243,7 @@ export function NotesNavBar({ data, burgerItems }: NotesNavBarProps) {
               >
                 <input
                   type="search"
-                  className="form-control form-control-sm"
-                  style={{ width: '10rem' }}
+                  className="form-control form-control-sm notes-search-input"
                   placeholder={t('list.searchPlaceholder')}
                   value={searchDraft}
                   onChange={(event) => setSearchDraft(event.target.value)}
@@ -257,8 +256,7 @@ export function NotesNavBar({ data, burgerItems }: NotesNavBarProps) {
         <div className="ms-auto d-flex flex-row align-items-center gap-2">
           <button
             type="button"
-            className="btn btn-outline-light btn-sm"
-            style={{ padding: '0.25rem 0.5rem' }}
+            className={toggleClass}
             title={t('menu.searchNotes')}
             onClick={() => {
               if (searchOpen && searchDraft) {

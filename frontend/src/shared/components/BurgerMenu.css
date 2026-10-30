@@ -14,10 +14,15 @@
   padding: 0.5rem;
 }
 
+/* Wide menus (tasks has 8+ items) wrap to a second row instead of
+   overflowing — same fix finance.css applied to its own copy. */
 .burger-menu-items {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.5rem;
+  row-gap: 0.25rem;
 }
 
 /* Desktop shows items inline — no divider between them and the
@@ -37,8 +42,12 @@
     top: 100%;
     right: 0;
     background: white;
-    border-radius: 0.25rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    /* --ui-radius resolves on .app-ui pages; the fallback keeps the
+       old look everywhere else (finance doesn't import ui.css). */
+    border-radius: var(--ui-radius, 0.5rem);
+    box-shadow:
+      0 8px 24px rgba(16, 24, 40, 0.12),
+      0 2px 6px rgba(16, 24, 40, 0.08);
     padding: 0.5rem;
     flex-direction: column;
     align-items: stretch;

@@ -27,6 +27,10 @@
     "allLabels": "Visas birkas",
     "filterByLabel": "Filtrēt pēc birkas"
   },
+  "filters": {
+    "active": "Filtri",
+    "remove": "Noņemt filtru"
+  },
   "labelsPage": {
     "title": "Birkas",
     "manage": "Pārvaldīt birkas",

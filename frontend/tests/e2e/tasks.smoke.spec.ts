@@ -76,7 +76,9 @@ test.describe('authenticated smoke', () => {
     // React mounted: navbar + either the task list or an
     // empty/auth-state alert (never the raw "Loading React app…").
     await expect(page.locator('nav.navbar').first()).toBeVisible();
-    await expect(page.locator('#task-list, .alert').first()).toBeVisible();
+    await expect(
+      page.locator('#task-list, .alert, .ui-empty').first(),
+    ).toBeVisible();
     await expect(page.locator('#root')).not.toContainText('Loading React app');
   });
 

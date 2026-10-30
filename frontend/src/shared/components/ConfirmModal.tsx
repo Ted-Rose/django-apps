@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import Modal from '../../shared/components/Modal';
+import Modal from './Modal';
 
 /**
- * Shared confirm dialog matching modals.html's complete/uncomplete
- * pattern (title + question + bold subject + Cancel/Confirm). Used
- * for the destructive/irreversible-ish actions the template gated
- * behind confirm() or a Bootstrap modal: complete, uncomplete,
- * delete task, delete divider.
+ * Shared confirm dialog — merged superset of the (now deleted)
+ * per-app copies in src/tasks and src/notes: title + question +
+ * Cancel/Confirm for destructive-ish actions (delete, uncomplete,
+ * category rename/merge). `confirmDisabled` covers the notes
+ * variant's extra gate (e.g. no target picked); Cancel comes from
+ * `common:common.cancel` like the app versions.
  */
 interface ConfirmModalProps {
   show: boolean;
@@ -16,6 +17,8 @@ interface ConfirmModalProps {
   confirmIcon?: string;
   /** Bootstrap button class for the confirm action. */
   confirmClassName?: string;
+  /** Extra disable for the confirm button (e.g. no target picked). */
+  confirmDisabled?: boolean;
   busy?: boolean;
   onConfirm: () => void;
   onClose: () => void;
@@ -28,6 +31,7 @@ export function ConfirmModal({
   confirmLabel,
   confirmIcon,
   confirmClassName = 'btn-primary',
+  confirmDisabled = false,
   busy = false,
   onConfirm,
   onClose,
@@ -53,7 +57,7 @@ export function ConfirmModal({
             type="button"
             className={`btn ${confirmClassName}`}
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
           >
             {busy ? (
               <span className="spinner-border spinner-border-sm me-1" />

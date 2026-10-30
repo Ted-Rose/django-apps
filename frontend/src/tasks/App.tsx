@@ -20,17 +20,21 @@ import Trash from './routes/Trash';
  */
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/starred" element={<Starred />} />
-      <Route path="/overdue" element={<Overdue />} />
-      <Route path="/archived" element={<Archived />} />
-      <Route path="/trash" element={<Trash />} />
-      <Route path="/search" element={<Search />} />
-      <Route path="/stats" element={<Stats />} />
-      <Route path="/labels" element={<Labels />} />
-      <Route path="/task/:taskId" element={<TaskDetail />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    // .app-ui carries the shared design tokens + gray canvas
+    // (shared/ui.css via dashboard.css) for every route.
+    <div className="app-ui">
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/starred" element={<Starred />} />
+        <Route path="/overdue" element={<Overdue />} />
+        <Route path="/archived" element={<Archived />} />
+        <Route path="/trash" element={<Trash />} />
+        <Route path="/search" element={<Search />} />
+        <Route path="/stats" element={<Stats />} />
+        <Route path="/labels" element={<Labels />} />
+        <Route path="/task/:taskId" element={<TaskDetail />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
   );
 }

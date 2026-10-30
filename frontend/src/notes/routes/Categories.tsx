@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import {
-  BurgerMenu,
-  type BurgerMenuItem,
-} from '../../shared/components/BurgerMenu';
+import { errorDetail } from '../../shared/api/errors';
+import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
+import ConfirmModal from '../../shared/components/ConfirmModal';
+import EmptyState from '../../shared/components/EmptyState';
+import ErrorState from '../../shared/components/ErrorState';
+import ListSkeleton from '../../shared/components/ListSkeleton';
 import Modal from '../../shared/components/Modal';
+import PageNavBar from '../../shared/components/PageNavBar';
 import Toasts from '../../shared/components/Toasts';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchNotes, type NoteCategoryOut } from '../api';
@@ -16,14 +19,12 @@ import {
   flattenCategoryTree,
   isMarkerSafeCategory,
 } from '../categories';
-import ConfirmModal from '../components/ConfirmModal';
 import {
   useCreateCategory,
   useDeleteCategory,
   useMergeCategories,
   useRenameCategory,
 } from '../mutations';
-import { ErrorState, LoadingSkeleton } from './NotesPage';
 
 /** Merge picker value — a category id or the uncategorized bucket. */
 type MergeTarget = number | 'uncategorized' | '';
@@ -157,27 +158,39 @@ export default function Categories() {
         {category.note_count ?? 0}
       </td>
       <td className="text-end">
+        {/* Labels hide under `sm` — icons stay visible at 360px and
+            the `title` keeps the action discoverable. */}
         <div className="btn-group btn-group-sm">
           <button
             type="button"
             className="btn btn-outline-secondary"
+            title={t('categoriesPage.rename')}
             onClick={() => openRename(category)}
           >
-            <i className="bi bi-pencil" /> {t('categoriesPage.rename')}
+            <i className="bi bi-pencil" />
+            <span className="d-none d-sm-inline ms-1">
+              {t('categoriesPage.rename')}
+            </span>
           </button>
           <button
             type="button"
             className="btn btn-outline-secondary"
+            title={mergeLabel}
             onClick={() => openMerge(category)}
           >
-            <i className="bi bi-arrow-left-right" /> {mergeLabel}
+            <i className="bi bi-arrow-left-right" />
+            <span className="d-none d-sm-inline ms-1">{mergeLabel}</span>
           </button>
           <button
             type="button"
             className="btn btn-outline-danger"
+            title={t('categoriesPage.delete')}
             onClick={() => openDelete(category)}
           >
-            <i className="bi bi-trash" /> {t('categoriesPage.delete')}
+            <i className="bi bi-trash" />
+            <span className="d-none d-sm-inline ms-1">
+              {t('categoriesPage.delete')}
+            </span>
           </button>
         </div>
       </td>
@@ -186,41 +199,32 @@ export default function Categories() {
 
   return (
     <>
-      <nav
-        className="navbar navbar-expand-lg navbar-dark bg-dark"
-        style={{ padding: '0.1rem 0', minHeight: 'auto' }}
-      >
-        <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
-          <div className="d-flex align-items-center gap-1 flex-wrap">
-            <Link
-              to="/"
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.15rem 0.4rem' }}
-              id="back-to-notes-btn"
-            >
-              <i className="bi bi-arrow-left" /> {t('categoriesPage.back')}
-            </Link>
-            <Link
-              className="navbar-brand mb-0"
-              to="/categories"
-              style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}
-            >
-              <i className="bi bi-tags" /> {t('categoriesPage.title')}
-            </Link>
-          </div>
-          <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <BurgerMenu items={burgerItems} />
-          </div>
-        </div>
-      </nav>
+      <PageNavBar variant="dark" burgerItems={burgerItems}>
+        <Link
+          to="/"
+          className="btn btn-outline-light btn-sm ui-nav-toggle"
+          id="back-to-notes-btn"
+        >
+          <i className="bi bi-arrow-left" /> {t('categoriesPage.back')}
+        </Link>
+        <Link className="navbar-brand mb-0" to="/categories">
+          <i className="bi bi-tags" /> {t('categoriesPage.title')}
+        </Link>
+      </PageNavBar>
 
       <div className="container-fluid px-2 py-4">
-        {isPending && <LoadingSkeleton />}
-        {isError && <ErrorState error={error} onRetry={() => refetch()} />}
+        {isPending && <ListSkeleton />}
+        {isError && (
+          <ErrorState
+            title={t('list.errorTitle')}
+            detail={errorDetail(error)}
+            onRetry={() => refetch()}
+          />
+        )}
         {data && (
           <>
             <form
-              className="card mb-3"
+              className="card ui-card mb-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 submitCreate();
@@ -276,11 +280,9 @@ export default function Categories() {
             </form>
 
             {categories.length === 0 ? (
-              <div className="alert alert-info">
-                <i className="bi bi-info-circle" /> {t('categoriesPage.empty')}
-              </div>
+              <EmptyState icon="tags" title={t('categoriesPage.empty')} />
             ) : (
-              <div className="card">
+              <div className="card ui-card">
                 <div className="card-body py-2 px-3">
                   <table className="table table-sm align-middle mb-0">
                     <thead>

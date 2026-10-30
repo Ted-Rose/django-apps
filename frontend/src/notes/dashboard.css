@@ -1,19 +1,55 @@
-/* Notes SPA styles — reuses the tasks dashboard stylesheet (task
-   cards, floating + button, completed section, undo controls) and
-   adds notes-only tweaks on top. The navbar deliberately differs
-   (bg-dark via class, not a rule) so the app never reads as tasks. */
+/* Notes SPA styles — the shared ui.css token layer first, then the
+   tasks dashboard stylesheet (task cards, floating + button,
+   completed section, undo controls) and finally notes-only tweaks.
+   The navbar deliberately stays bg-dark (class, not a rule) so the
+   app never reads as tasks. */
+@import '../shared/ui.css';
 @import '../tasks/dashboard.css';
 
-/* Category chip on a NoteCard — a soft badge that stays readable
-   next to the muted preview text. */
-.note-category-chip {
+/* Notes accent — the chrome is bg-dark on purpose, so the accent
+   token follows the dark identity instead of the tasks blue: focus
+   rings, form-focus rings, chip hovers and picker selection all echo
+   it. On the dark navbar itself the accent would be invisible, so
+   :focus-visible there flips to a light outline below. */
+.app-ui {
+  --ui-accent: var(--bs-dark);
+  --ui-focus-ring: rgba(33, 37, 41, 0.25);
+  --notes-accent-soft: rgba(33, 37, 41, 0.08);
+}
+.app-ui .navbar-dark :is(a, button, input):focus-visible,
+.app-ui .navbar-dark [role='button']:focus-visible {
+  outline-color: var(--bs-light);
+}
+
+/* Category chip on a NoteCard — pill on the ui tokens; the link
+   variant picks up the dark accent on hover. */
+.app-ui .note-category-chip {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
   font-size: 0.75rem;
   font-weight: 500;
+  line-height: 1.2;
+  color: var(--bs-body-color);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 2rem;
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+.app-ui a.note-category-chip:hover {
+  color: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+.app-ui .note-category-chip--muted {
+  color: var(--bs-secondary-color);
 }
 
 /* Category-picker list rows (editor + move modal) — full-width
    clickable rows; nesting depth indents inline per row since the
-   tree is arbitrarily deep. */
+   tree is arbitrarily deep. Hover/selected/focus all sit on the
+   notes accent tokens. */
 .category-picker-option {
   display: flex;
   align-items: center;
@@ -21,14 +57,25 @@
   width: 100%;
   padding: 0.35rem 0.5rem;
   border: 1px solid transparent;
-  border-radius: 0.375rem;
+  border-radius: var(--ui-radius-sm);
   background: none;
   text-align: left;
 }
 .category-picker-option:hover {
-  background-color: var(--bs-light);
+  background-color: var(--ui-bg);
+}
+.app-ui .category-picker-option:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
 }
 .category-picker-option.selected {
-  border-color: var(--bs-primary);
-  background-color: rgba(var(--bs-primary-rgb), 0.08);
+  border-color: var(--ui-accent);
+  background-color: var(--notes-accent-soft);
+}
+
+/* Navbar search input — replaces the inline `width: 10rem` so it can
+   shrink on narrow screens. */
+.notes-search-input {
+  width: 10rem;
+  max-width: 40vw;
 }

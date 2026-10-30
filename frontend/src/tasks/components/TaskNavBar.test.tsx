@@ -44,7 +44,7 @@ const search = () => screen.getByTestId('loc').textContent ?? '';
 describe('TaskNavBar filters', () => {
   it('sets ?list= and clears label/secondary_label (filters.js selectList)', () => {
     renderNav('?label=work&secondary_label=home&order=created_desc');
-    fireEvent.click(screen.getByRole('button', { name: /work/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'work' }));
     fireEvent.click(screen.getByRole('link', { name: /Groceries/ }));
     const params = new URLSearchParams(search());
     expect(params.get('list')).toBe('list-1');

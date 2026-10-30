@@ -11,9 +11,9 @@ import { ErrorBoundary } from '../shared/ErrorBoundary';
 import queryClient from '../shared/queryClient';
 import en from './locales/en.json';
 import lv from './locales/lv.json';
-// Ported from google_tasks/static/google_tasks/css/dashboard.css for
-// visual parity (the original was deleted in Stage 6). Also provides
-// the fixed navbar offset (`body { padding-top: 60px }`).
+// Restyled on the shared .ui-* design tokens (shared/ui.css is
+// @imported at the top of dashboard.css). Provides the fixed-navbar
+// offset via .app-ui padding (App.tsx wraps Routes in .app-ui).
 import './dashboard.css';
 
 // Before everything else, so even a failing i18n/module init is

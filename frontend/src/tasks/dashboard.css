@@ -1,69 +1,85 @@
 /*
- * Temporary copy of google_tasks/static/google_tasks/css/dashboard.css
- * so the React dashboard matches the template UI. Stage 6 deletes the
- * original together with the templates — keep this file until then.
+ * Tasks SPA styles, rebuilt on the shared .ui-* design tokens
+ * (frontend/src/shared/ui.css — the generalized finance.css
+ * pattern). The .app-ui wrapper in App.tsx supplies the gray canvas
+ * and tokens; every rule below restyles the DOM hooks the tests and
+ * dnd logic rely on — do not rename them. Colors come from tokens
+ * or var(--bs-*) only (the old file carried Bootstrap-4 hexes like
+ * #28a745/#007bff).
+ *
+ * notes/dashboard.css @imports this file — the hooks also style the
+ * notes SPA's task-shaped markup (note cards, floating controls).
  */
+@import '../shared/ui.css';
+
+/* --- Canvas --------------------------------------------------------
+   The old `body { padding-top/bottom }` + `position: fixed
+   !important` navbar hacks, scoped to the SPA root instead. 60px
+   clears the fixed navbar, 100px clears the floating controls. */
+.app-ui {
+  padding-top: 60px;
+  padding-bottom: 100px;
+}
+.app-ui .navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1030;
+}
+
+/* --- Task cards -----------------------------------------------------
+   Elevated white card on the gray canvas: token border/radius/
+   shadow plus a gentle hover lift. The grab cursor is honest now —
+   it only applies under .task-list-drag (TaskListPage adds it when
+   the manual-position order modes make dnd real). */
 .task-card {
-  transition: all 0.2s ease;
-  cursor: grab;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 .task-card:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  box-shadow: var(--ui-shadow-hover);
 }
-.task-card:active {
+.task-list-drag .task-card {
+  cursor: grab;
+}
+.task-list-drag .task-card:active {
   cursor: grabbing;
+}
+/* Divider cards stay flat chrome strips even while draggable —
+   only their .divider-drag-handle grip shows the grab cursor. */
+.task-list-drag .divider-card,
+.task-list-drag .divider-card:active {
+  cursor: default;
 }
 .task-card.sortable-ghost {
   opacity: 0.4;
-  background: #e9ecef;
+  background: var(--ui-bg);
 }
 .task-card.sortable-chosen {
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--ui-shadow-hover);
 }
 .task-card .card-body {
   padding: 0.55rem 1rem;
 }
+/* Completed rows (border-0 bg-light) stay flat — a lighter look
+   under the active cards. */
+.task-card.bg-light {
+  box-shadow: none;
+}
+.task-card.bg-light:hover {
+  transform: none;
+  box-shadow: var(--ui-shadow);
+}
 
-#save-indicator {
-  display: none;
-  position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  z-index: 1000;
-}
-.star-btn {
-  cursor: pointer;
-  font-size: 1.2rem;
-}
-.star-btn.starred {
-  color: #ffc107;
-}
-.filter-bar {
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-}
-.dropdown-item.active {
-  background-color: #0d6efd;
-  color: #fff;
-}
-.complete-btn {
-  cursor: pointer;
-  font-size: 1.2rem;
-  color: #6c757d;
-  transition: color 0.2s ease;
-}
-.complete-btn:hover {
-  color: #28a745;
-}
-.uncomplete-btn {
-  cursor: pointer;
-  font-size: 1rem;
-  color: #6c757d;
-  transition: color 0.2s ease;
-}
-.uncomplete-btn:hover {
-  color: #007bff;
-}
+/* Real hierarchy: title ~0.95rem/600, notes ~0.85rem, meta small
+   muted (the port had shrunk everything to 0.8em). */
 .card-title,
 .card-text,
 .text-muted {
@@ -72,8 +88,19 @@
   word-break: break-word;
 }
 .task-card .card-title {
-  font-size: 0.8em;
+  font-size: 0.95rem;
+  font-weight: 600;
   margin-bottom: 0.35rem;
+}
+.task-card .card-text {
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+.task-card small {
+  font-size: 0.8rem;
+}
+.task-card p:last-child {
+  margin-bottom: 0;
 }
 .task-title-link {
   color: inherit;
@@ -86,32 +113,56 @@
   display: inline;
 }
 .task-title-link:hover {
-  color: #0d6efd;
+  color: var(--bs-primary);
   text-decoration: underline;
-}
-.task-card .card-text {
-  font-size: 0.8em;
-  margin-bottom: 0.35rem;
-}
-.task-card small {
-  font-size: 0.8em;
-}
-.task-card p:last-child {
-  margin-bottom: 0;
 }
 .task-container {
   align-items: stretch;
 }
 .task-content {
-  cursor: grab;
-  margin-bottom: 0 !important;
+  margin-bottom: 0;
 }
-.task-content:active {
-  cursor: grabbing;
+
+/* --- Icon buttons ---------------------------------------------------
+   .star-btn/.complete-btn/.uncomplete-btn are real <button>s with
+   .ui-ghost-btn chrome (borderless, hover/focus bg). Font sizes and
+   the accent hover colors live here; the shared class supplies the
+   reset, cursor, radius and disabled state. */
+.star-btn,
+.complete-btn,
+.uncomplete-btn {
+  padding: 0.125rem 0.25rem;
+  line-height: 1;
 }
+.star-btn {
+  font-size: 1.2rem;
+}
+.star-btn.starred {
+  color: var(--bs-warning);
+}
+.complete-btn {
+  font-size: 1.2rem;
+  color: var(--bs-secondary-color);
+  transition: color 0.2s ease;
+}
+.complete-btn:hover,
+.complete-btn:focus-visible {
+  color: var(--bs-success);
+}
+.uncomplete-btn {
+  font-size: 1rem;
+  color: var(--bs-secondary-color);
+  transition: color 0.2s ease;
+}
+.uncomplete-btn:hover,
+.uncomplete-btn:focus-visible {
+  color: var(--bs-primary);
+}
+
 /* Order badge: a borderless right-edge strip inside .task-card (no
    divider between card and badge). The '#' marks it as a priority
-   rank; the click opens the preset-rank dropdown. */
+   rank; the click opens the preset-rank dropdown. Softer look —
+   muted chip with a hairline left edge. */
 .task-order-badge,
 .task-order-badge .dropdown {
   display: flex;
@@ -119,12 +170,12 @@
 .task-order-badge .order-btn {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #6c757d;
+  color: var(--bs-secondary-color);
   padding: 0.25rem 0.5rem;
   min-width: 40px;
   border: none;
-  border-radius: 0 var(--bs-card-border-radius, 0.375rem)
-    var(--bs-card-border-radius, 0.375rem) 0;
+  border-left: 1px solid var(--ui-border);
+  border-radius: 0 var(--ui-radius) var(--ui-radius) 0;
   background: transparent;
 }
 .task-order-badge .order-btn::before {
@@ -134,46 +185,69 @@
   opacity: 0.5;
 }
 .task-order-badge .order-btn:hover {
-  color: #0d6efd;
-  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--bs-primary);
+  background-color: var(--ui-bg);
 }
+
+/* --- Dividers ------------------------------------------------------- */
 .divider-card {
   background-color: transparent;
   border: none;
+  box-shadow: none;
   cursor: default;
 }
+.divider-card:hover {
+  transform: none;
+}
 .divider-drag-handle {
-  cursor: grab;
   padding: 0.25rem;
 }
-.divider-drag-handle:active {
+.task-list-drag .divider-drag-handle {
+  cursor: grab;
+}
+.task-list-drag .divider-drag-handle:active {
   cursor: grabbing;
 }
 .divider-body {
   padding: 0.25rem 1rem;
 }
 .divider-card hr {
-  border-top: 2px dashed #dee2e6;
-  opacity: 0.5;
+  border-top: 2px dashed var(--ui-border);
+  opacity: 1;
 }
-.divider-card:hover hr {
-  border-color: #0d6efd;
-  opacity: 0.8;
+.divider-card:hover hr,
+.divider-card:focus-within hr {
+  border-color: var(--bs-primary);
 }
+/* The delete affordance was hover-only — invisible to keyboard and
+   touch. Show on :focus-within too, and keep it faintly visible on
+   touch devices (hover: none) so it is discoverable at all. */
 .delete-divider-btn {
   opacity: 0;
   transition: opacity 0.2s;
   padding: 0.25rem 0.5rem;
 }
-.divider-card:hover .delete-divider-btn {
+.divider-card:hover .delete-divider-btn,
+.divider-card:focus-within .delete-divider-btn,
+.delete-divider-btn:focus-visible {
   opacity: 1;
+}
+@media (hover: none) {
+  .delete-divider-btn {
+    opacity: 0.45;
+  }
+  .divider-card:hover .delete-divider-btn,
+  .divider-card:focus-within .delete-divider-btn,
+  .delete-divider-btn:focus-visible {
+    opacity: 1;
+  }
 }
 .divider-text {
   border: none;
   background: transparent;
   outline: none;
-  font-size: 0.75em;
-  color: #6c757d;
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
   opacity: 0.7;
   padding: 0 0.5rem;
   width: auto;
@@ -183,18 +257,33 @@
 }
 .divider-text:focus {
   opacity: 1;
-  color: #495057;
-  background: rgba(13, 110, 253, 0.05);
-  border-radius: 3px;
+  color: var(--bs-body-color);
+  background: var(--ui-bg);
+  border-radius: var(--ui-radius-sm);
 }
 .divider-text:hover:not(:focus) {
   opacity: 0.9;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 3px;
+  background: var(--ui-bg);
+  border-radius: var(--ui-radius-sm);
 }
 .divider-text::placeholder {
-  color: #adb5bd;
+  color: var(--bs-secondary-color);
   opacity: 0.5;
+}
+
+/* --- Floating controls ---------------------------------------------- */
+#save-indicator {
+  display: none;
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+}
+#save-indicator.show {
+  display: block;
+}
+#save-indicator .badge {
+  box-shadow: var(--ui-shadow-hover);
 }
 .undo-redo-controls {
   position: fixed;
@@ -211,12 +300,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.2s ease;
+  box-shadow: var(--ui-shadow-hover);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 .undo-redo-controls button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 .undo-redo-controls button:disabled {
   opacity: 0.4;
@@ -231,50 +321,53 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background-color: #0d6efd;
-  color: white;
+  background-color: var(--ui-accent);
+  color: #fff;
   border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--ui-shadow-hover);
   font-size: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition:
+    filter 0.2s ease,
+    transform 0.2s ease;
   z-index: 999;
 }
 .floating-add-btn:hover {
-  background-color: #0b5ed7;
-  transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  filter: brightness(0.92);
+  transform: scale(1.08);
 }
 .floating-add-btn:active {
   transform: scale(0.95);
 }
-.task-hidden {
-  display: none !important;
-}
-.navbar {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  width: 100% !important;
-  z-index: 1030 !important;
-}
-body {
-  padding-top: 60px;
-  padding-bottom: 100px;
+.dropdown-item.active {
+  background-color: var(--bs-primary);
+  color: #fff;
 }
 
-/*
- * Styles ported from the inline <style> blocks of the secondary-page
- * templates (search.html, task_detail.html) — dashboard.css itself
- * only covered the dashboard-shaped pages.
- */
+/* --- Active-filter chips (TaskNavBar) --------------------------------
+   A chips row inside the navbar's filter group: one .ui-chip.active
+   per applied ?list=/?label=/?secondary_label= param, each with an
+   × that clears it. */
+.filter-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-left: 0.25rem;
+}
+
+/* --- Secondary-page surfaces ------------------------------------------
+   Ported from the inline <style> blocks of the secondary-page
+   templates (search.html, task_detail.html), now on token surfaces
+   — white cards on the gray canvas. */
 .search-form {
-  background-color: #f8f9fa;
-  border-radius: 0.5rem;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
   padding: 1.5rem;
   margin-bottom: 2rem;
 }
@@ -283,8 +376,10 @@ body {
   margin: 2rem auto;
 }
 .task-meta {
-  background-color: #f8f9fa;
-  border-radius: 0.5rem;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
   padding: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -297,35 +392,91 @@ body {
 .header-section h5 {
   font-size: 1rem;
 }
-/* task_detail.html #task-title — borderless title textarea. */
+
+/* task_detail.html #task-title — borderless title textarea with a
+   subtle bottom-border affordance (idle: transparent, hover:
+   hairline, focus: accent) so the field reads as editable. */
 #task-title {
   border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
   overflow-wrap: break-word;
   word-wrap: break-word;
   white-space: pre-wrap;
   resize: none;
   min-height: 2.5rem;
 }
+#task-title:hover:not(:focus) {
+  border-bottom-color: var(--ui-border);
+}
 #task-title:focus {
-  border: none;
+  border-bottom-color: var(--ui-accent);
   box-shadow: none;
 }
-/* task_detail.html #label-selector — badge-shaped toggles, dimmed
-   when unchecked. */
+
+/* --- Label pickers -----------------------------------------------------
+   Badge-toggle chips shared by task_detail.html's #label-selector
+   and TaskFormModal's picker: a hidden-but-focusable checkbox plus
+   a .label-chip label, dimmed when unchecked. Keep .label-checkbox
+   on the input (test hook). */
+.label-checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+.label-chip {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.9rem;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.label-chip:hover {
+  opacity: 0.85;
+}
+.label-checkbox:checked + .label-chip {
+  opacity: 1;
+}
+.label-checkbox:focus-visible + .label-chip {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+/* Back-compat: the old rules keyed on #label-selector's plain
+   form-check markup — the container id stays as a DOM hook. */
 #label-selector .form-check {
   margin-bottom: 0;
 }
-#label-selector .form-check-input {
-  display: none;
+/* TaskFormModal's scrollable chip list (was maxHeight inline). */
+.label-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-height: 150px;
+  overflow-y: auto;
 }
-#label-selector .form-check-label {
-  padding: 0.375rem 0.75rem;
-  opacity: 0.6;
-  transition: opacity 0.2s;
+
+/* --- Labels page inputs (was inline style) --------------------------- */
+.label-color-input {
+  width: 2.5rem;
 }
-#label-selector .form-check-input:checked + .form-check-label {
-  opacity: 1;
+.label-hex-input {
+  width: 5.5rem;
+  font-family: var(--bs-font-monospace);
 }
-#label-selector .form-check-label:hover {
-  opacity: 0.8;
+
+/* --- Stats page -------------------------------------------------------
+   .stats-bar-segment was rendered but never styled — naked divs.
+   Rounded top on the first segment of each column, a subtle
+   transition, and the small axis labels. */
+.stats-bar-segment {
+  width: 100%;
+  transition: height 0.2s ease;
+}
+.stats-bar-segment:first-child {
+  border-radius: 2px 2px 0 0;
+}
+.stats-bucket-label {
+  font-size: 0.6rem;
 }

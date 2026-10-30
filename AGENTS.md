@@ -367,6 +367,52 @@ level.
   goal: stay in the GCP free tier — prefer free-tier-friendly
   infra choices.
 
+## Database backups (Aiven Postgres)
+
+The Aiven service hosts several databases on one Postgres 15
+cluster (`SELECT datname FROM pg_database`). Besides the app's
+`django_apps` there are Aiven-internal `defaultdb`/`_aiven` and
+possibly stale per-project DBs — check `pg_stat_database` and
+`max()` of write-timestamp columns (`fetched_at`, `last_seen_at`,
+`last_sync_at`, `started_at`, …) to see when writes last happened
+before deciding one is dead.
+
+No automated local backups are configured. Verified workflow
+(2026-10-30 — used to dump every DB before dropping the dead
+`nibrastube`):
+
+- Credentials come from `.env` `DATABASE_URL` — run from the
+  repo root so `sslrootcert=ca.pem` resolves. `psql`/`pg_dump`
+  are Homebrew kegs, not on PATH by default.
+- Use a `pg_dump` matching the server major version
+  (`postgresql@15` for the PG 15 server); a v14 `pg_dump`
+  refuses a v15 server. `psql` itself can be any version.
+
+```bash
+export PATH="/opt/homebrew/bin:$PATH"
+eval "$(grep '^DATABASE_URL=' .env)"   # loads DATABASE_URL
+BASE=$(echo "$DATABASE_URL" | sed 's|/django_apps?|/DBNAME?|')
+for db in django_apps test_django_apps defaultdb; do
+  url=$(echo "$BASE" | sed "s|/DBNAME?|/$db?|")
+  /opt/homebrew/opt/postgresql@15/bin/pg_dump "$url" \
+    --format=custom --compress=6 \
+    --file="data/db_backups/$(date +%F)/${db}.dump"
+done
+```
+
+- Dumps go under `data/db_backups/<date>/` — `data/` is
+  gitignored, so dumps can never leak into git.
+- Verify: `pg_restore --list <file>.dump | grep -cv '^;'` counts
+  TOC entries (an empty DB legitimately shows 0).
+- Restore: `pg_restore --clean --if-exists -d <db> <file>.dump`.
+- Skip `_aiven` (Aiven-internal, inaccessible) and
+  `pg_dumpall -g` — Aiven manages roles and `avnadmin` cannot
+  read them all.
+- Drop a dead DB only after a verified dump:
+  `psql "$DATABASE_URL" -c "DROP DATABASE <name>;"` — must run
+  connected to a different DB; append `WITH (FORCE)` only if
+  lingering connections block it.
+
 ## Sentry event streams
 
 Org `django-apps-ted` (EU, de.sentry.io); projects
