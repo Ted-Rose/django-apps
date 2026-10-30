@@ -94,17 +94,23 @@ keep sync query counts flat, not per-item or per-list.
   `match_label`, `match_task_list`, or star keywords, which is
   what keeps notes in their original Google list.
 - Path rule: `#notes` → uncategorized; `#notes-x` → top-level
-  `x`; `#notes-x-y-…` → group `x` + leaf `y-…` (remaining
-  segments rejoined, so `-` and `_` are equivalent in leaves).
-  `_` joins words inside a segment; `#notes-bible_research` is
-  one multi-word dir. Slugs lowercase, separators canonicalized,
-  empties collapsed — the regex's segments are `*` not `+`, so
-  `#notes--x`/`#notes-abc-`/`#notes-` still match and fold to
-  their canonical paths. Unseen paths auto-create `NoteCategory`
-  rows (unique `(user, parent, slug)` plus a conditional
-  `(user, slug)` constraint for top-level rows — NULL parents
-  never equal under the tuple), resolved via ONE prefetched
-  `(parent_id, slug)` index — creates are rare.
+  `x`; `#notes-x-y-z-…` → the nested chain `x` → `y` → `z` —
+  EVERY `-` is one level at arbitrary depth, and `_` is the ONLY
+  word-joiner inside a segment (`#notes-projects-django-apps`
+  nests `django` → `apps`; `#notes-projects-django_apps` is one
+  "Django Apps" leaf). Slugs lowercase and KEEP `_` (so a
+  composed marker re-parses to the identical chain), separators
+  canonicalized, empties collapsed — the regex's segments are
+  `*` not `+`, so `#notes--x`/`#notes-abc-`/`#notes-` still
+  match and fold to their canonical paths. Unseen paths
+  auto-create `NoteCategory` rows (unique `(user, parent, slug)`
+  plus a conditional `(user, slug)` constraint for top-level
+  rows — NULL parents never equal under the tuple), resolved via
+  ONE prefetched `(parent_id, slug)` index — creates are rare.
+  Categories created under the old two-level rule (leaves whose
+  slug contains `-`, e.g. `django-apps`) can never match a
+  marker under this rule — they become orphans to delete from
+  the manage page once notes reclassify onto the deeper path.
 - The marker is the source of truth: it stays in the stored
   title/body (app-composed writes put it in the body), and
   classification recomputes every run. Category rename/merge/
