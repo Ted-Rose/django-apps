@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import { BurgerMenu } from '../../shared/components/BurgerMenu';
+import EmptyStateView from '../../shared/components/EmptyState';
+import PageNavBar from '../../shared/components/PageNavBar';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import { fetchSearchTasks, type TaskOut } from '../api';
@@ -127,26 +128,15 @@ export default function Search() {
 
   return (
     <>
-      <nav
-        className="navbar navbar-expand-lg navbar-dark bg-primary"
-        style={{ padding: '0.1rem 0', minHeight: 'auto' }}
-      >
-        <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
-          <div className="d-flex align-items-center gap-1 flex-wrap flex-grow-1">
-            <Link
-              to={backTarget}
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.15rem 0.4rem' }}
-              id="back-to-dashboard-btn"
-            >
-              <i className="bi bi-arrow-left" /> {t('search.back')}
-            </Link>
-          </div>
-          <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <BurgerMenu items={burgerItems} />
-          </div>
-        </div>
-      </nav>
+      <PageNavBar variant="primary" burgerItems={burgerItems}>
+        <Link
+          to={backTarget}
+          className="btn btn-outline-light btn-sm ui-nav-toggle"
+          id="back-to-dashboard-btn"
+        >
+          <i className="bi bi-arrow-left" /> {t('search.back')}
+        </Link>
+      </PageNavBar>
 
       <div className="container mt-4">
         <div className="search-form">
@@ -177,6 +167,7 @@ export default function Search() {
                   name="q"
                   value={draft}
                   placeholder={t('search.placeholder')}
+                  autoFocus
                   onChange={(event) => onInput(event.target.value)}
                 />
               </div>
@@ -194,11 +185,9 @@ export default function Search() {
 
         {isError && <ErrorState error={error} onRetry={() => refetch()} />}
         {!trimmedQ ? (
-          <div className="alert alert-info text-center py-5">
-            <i className="bi bi-info-circle fs-1 d-block mb-3" />
-            <h5>{t('search.enterTitle')}</h5>
-            <p className="mb-0">{t('search.enterHint')}</p>
-          </div>
+          <EmptyStateView icon="search" title={t('search.enterTitle')}>
+            {t('search.enterHint')}
+          </EmptyStateView>
         ) : data ? (
           data.total_results > 0 ? (
             <>
@@ -211,11 +200,12 @@ export default function Search() {
               ))}
             </>
           ) : (
-            <div className="alert alert-warning text-center py-5">
-              <i className="bi bi-exclamation-triangle fs-1 d-block mb-3" />
-              <h5>{t('search.emptyTitle')}</h5>
-              <p className="mb-0">{t('search.emptyHint')}</p>
-            </div>
+            <EmptyStateView
+              icon="exclamation-triangle"
+              title={t('search.emptyTitle')}
+            >
+              {t('search.emptyHint')}
+            </EmptyStateView>
           )
         ) : null}
       </div>
@@ -237,9 +227,11 @@ function SearchResultCard({ task }: { task: TaskOut }) {
           <div className="d-flex align-items-start flex-grow-1">
             <div className="flex-grow-1">
               <h5 className="card-title">
-                <span
-                  className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
-                  role="button"
+                <button
+                  type="button"
+                  className={`star-btn ui-ghost-btn me-1${
+                    task.is_starred ? ' starred' : ''
+                  }`}
                   title={task.is_starred ? t('task.unstar') : t('task.star')}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -263,7 +255,7 @@ function SearchResultCard({ task }: { task: TaskOut }) {
                       task.is_starred ? 'bi-star-fill' : 'bi-star'
                     }`}
                   />
-                </span>
+                </button>
                 <Link to={`/task/${task.task_id}`} className="task-title-link">
                   {task.title}
                 </Link>

@@ -179,29 +179,24 @@ export function TaskFormModal({
         {labels.length > 0 && (
           <div className="mb-3">
             <label className="form-label">{t('form.labelsLabel')}</label>
-            <div
-              className="border rounded p-2"
-              style={{ maxHeight: '150px', overflowY: 'auto' }}
-            >
+            {/* Badge-toggle chips — the same .label-chip idiom the
+                task detail label selector uses. */}
+            <div className="label-chip-list border rounded p-2">
               {labels.map((label) => (
-                <div className="form-check" key={label.id}>
+                <div className="form-check mb-0" key={label.id}>
                   <input
-                    className="form-check-input"
+                    className="form-check-input label-checkbox"
                     type="checkbox"
                     id={`taskFormLabel_${label.id}`}
                     checked={labelIds.includes(label.id)}
                     onChange={() => toggleLabel(label.id)}
                   />
                   <label
-                    className="form-check-label"
+                    className="form-check-label badge label-chip"
                     htmlFor={`taskFormLabel_${label.id}`}
+                    style={{ backgroundColor: label.color }}
                   >
-                    <span
-                      className="badge"
-                      style={{ backgroundColor: label.color }}
-                    >
-                      {label.name}
-                    </span>
+                    {label.name}
                   </label>
                 </div>
               ))}

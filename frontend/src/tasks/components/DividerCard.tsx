@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { actionHistory } from '../actionHistory';
 import type { TaskOut } from '../api';
 import { useDeleteDivider, useUpdateDivider } from '../mutations';
-import ConfirmModal from './ConfirmModal';
+import ConfirmModal from '../../shared/components/ConfirmModal';
 
 /**
  * React port of components/dashboard/divider_card.html.
@@ -72,7 +72,9 @@ export function DividerCard({
   return (
     <div
       ref={setNodeRef}
-      className={`card task-card divider-card mb-2${isDragging ? ' sortable-chosen' : ''}`}
+      className={`card task-card divider-card mb-2${
+        isDragging ? ' sortable-chosen' : ''
+      }`}
       data-task-id={task.task_id}
       data-position={orderValue ?? ''}
       style={{

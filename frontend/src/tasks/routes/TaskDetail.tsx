@@ -24,6 +24,11 @@ import { ErrorState, LoadingSkeleton } from './TaskListPage';
  */
 const SAVED_REDIRECT_MS = 1500;
 
+/** task_detail.html's dismissible save/error alert classes. */
+function alertClass(kind: 'success' | 'danger'): string {
+  return `alert alert-${kind} alert-dismissible fade show`;
+}
+
 export default function TaskDetail() {
   const { t } = useTranslation('tasks');
   const { taskId = '' } = useParams();
@@ -205,18 +210,22 @@ export default function TaskDetail() {
                 <i className="bi bi-arrow-left" /> {t('detail.back')}
               </Link>
               <h5 className="mb-0">{t('detail.editTask')}</h5>
-              <span
-                className={`star-btn ms-auto${task.is_starred ? ' starred' : ''}`}
+              <button
+                type="button"
+                className={`star-btn ui-ghost-btn ms-auto${
+                  task.is_starred ? ' starred' : ''
+                }`}
                 id="star-btn"
-                role="button"
                 title={task.is_starred ? t('task.unstar') : t('task.star')}
                 onClick={flipStar}
               >
                 <i
-                  className={`bi ${task.is_starred ? 'bi-star-fill' : 'bi-star'}`}
+                  className={`bi ${
+                    task.is_starred ? 'bi-star-fill' : 'bi-star'
+                  }`}
                   id="star-icon"
                 />
-              </span>
+              </button>
             </div>
 
             <div className="task-meta">
@@ -327,13 +336,9 @@ export default function TaskDetail() {
                           }
                         />
                         <label
-                          className="form-check-label badge"
+                          className="form-check-label badge label-chip"
                           htmlFor={`label-${label.id}`}
-                          style={{
-                            backgroundColor: label.color,
-                            cursor: 'pointer',
-                            fontSize: '0.9rem',
-                          }}
+                          style={{ backgroundColor: label.color }}
                         >
                           {label.name}
                         </label>
@@ -403,10 +408,7 @@ export default function TaskDetail() {
 
             <div id="alert-container" className="mt-3">
               {alert && (
-                <div
-                  className={`alert alert-${alert.kind} alert-dismissible fade show`}
-                  role="alert"
-                >
+                <div className={alertClass(alert.kind)} role="alert">
                   <i
                     className={`bi bi-${
                       alert.kind === 'success'

@@ -3,10 +3,11 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import { BurgerMenu } from '../../shared/components/BurgerMenu';
+import EmptyStateView from '../../shared/components/EmptyState';
+import PageNavBar from '../../shared/components/PageNavBar';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchTrash, type TaskOut } from '../api';
-import ConfirmModal from '../components/ConfirmModal';
+import ConfirmModal from '../../shared/components/ConfirmModal';
 import SecondaryLabelDropdown from '../components/SecondaryLabelDropdown';
 import Toasts from '../../shared/components/Toasts';
 import { usePermanentDeleteTask, useRestoreTask } from '../mutations';
@@ -104,39 +105,29 @@ export default function Trash() {
 
   return (
     <>
-      <nav
-        className="navbar navbar-expand-lg navbar-dark bg-danger"
-        style={{ padding: '0.1rem 0', minHeight: 'auto' }}
+      <PageNavBar
+        variant="danger"
+        burgerItems={burgerItems}
+        actions={
+          <Link
+            to="/search"
+            className="btn btn-outline-light btn-sm ui-nav-toggle"
+            title={t('menu.searchTasks')}
+          >
+            <i className="bi bi-search" />
+          </Link>
+        }
       >
-        <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
-          <div className="d-flex align-items-center gap-1 flex-wrap flex-grow-1">
-            <Link
-              className="navbar-brand mb-0"
-              to="/trash"
-              style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}
-            >
-              <i className="bi bi-trash" /> {t('trash.title')}
-            </Link>
-            {data && (
-              <SecondaryLabelDropdown
-                labels={data.labels}
-                secondaryLabel={secondaryLabel}
-              />
-            )}
-          </div>
-          <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <Link
-              to="/search"
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.25rem 0.5rem' }}
-              title={t('menu.searchTasks')}
-            >
-              <i className="bi bi-search" />
-            </Link>
-            <BurgerMenu items={burgerItems} />
-          </div>
-        </div>
-      </nav>
+        <Link className="navbar-brand mb-0" to="/trash">
+          <i className="bi bi-trash" /> {t('trash.title')}
+        </Link>
+        {data && (
+          <SecondaryLabelDropdown
+            labels={data.labels}
+            secondaryLabel={secondaryLabel}
+          />
+        )}
+      </PageNavBar>
 
       <div className="container-fluid px-2 py-4">
         <div className="alert alert-warning">
@@ -158,9 +149,7 @@ export default function Trash() {
               ))}
             </div>
           ) : (
-            <div className="alert alert-info">
-              <i className="bi bi-info-circle" /> {t('trash.empty')}
-            </div>
+            <EmptyStateView icon="trash" title={t('trash.empty')} />
           ))}
       </div>
       <Toasts />

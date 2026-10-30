@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
 import Dropdown from '../../shared/components/Dropdown';
+import ConfirmModal from '../../shared/components/ConfirmModal';
 import { actionHistory } from '../actionHistory';
 import type { LabelOut, LabelRef, TaskOut } from '../api';
 import {
@@ -14,7 +15,6 @@ import {
 } from '../mutations';
 import { noteCardPressStart, shouldSuppressTaskClick } from '../reorder';
 import { formatFullDate, truncateWords } from '../utils';
-import ConfirmModal from './ConfirmModal';
 import TaskFormModal from './TaskFormModal';
 
 /** task_card.html's preset ranks for the order-badge dropdown. */
@@ -42,6 +42,8 @@ interface TaskCardProps {
   labels?: LabelOut[];
   /** Position field depends on the view (dashboard vs starred). */
   starredView?: boolean;
+  /** Overdue view — the due badge renders text-danger. */
+  overdueView?: boolean;
   /** Drag-to-reorder is active (manual order modes only). */
   draggable?: boolean;
   /** Order-badge preset click (task_actions.js setTaskOrder). */
@@ -71,6 +73,7 @@ export function TaskCard({
   labelColors,
   labels = [],
   starredView = false,
+  overdueView = false,
   draggable = false,
   onSetRank,
 }: TaskCardProps) {
@@ -100,7 +103,9 @@ export function TaskCard({
   return (
     <div
       ref={setNodeRef}
-      className={`task-container d-flex mb-2${isDragging ? ' sortable-chosen' : ''}`}
+      className={`task-container d-flex mb-2${
+        isDragging ? ' sortable-chosen' : ''
+      }`}
       data-task-id={task.task_id}
       data-position={orderValue ?? ''}
       style={{
@@ -120,9 +125,9 @@ export function TaskCard({
           <div className="d-flex justify-content-between align-items-start">
             <div className="flex-grow-1">
               <h5 className="card-title">
-                <span
-                  className="complete-btn me-1"
-                  role="button"
+                <button
+                  type="button"
+                  className="complete-btn ui-ghost-btn me-1"
                   title={t('task.complete')}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -130,10 +135,12 @@ export function TaskCard({
                   }}
                 >
                   <i className="bi bi-check-circle" />
-                </span>
-                <span
-                  className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
-                  role="button"
+                </button>
+                <button
+                  type="button"
+                  className={`star-btn ui-ghost-btn me-1${
+                    task.is_starred ? ' starred' : ''
+                  }`}
                   title={task.is_starred ? t('task.unstar') : t('task.star')}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -151,7 +158,7 @@ export function TaskCard({
                       task.is_starred ? 'bi-star-fill' : 'bi-star'
                     }`}
                   />
-                </span>
+                </button>
                 <Link
                   to={`/task/${task.task_id}`}
                   className="task-title-link"
@@ -200,10 +207,10 @@ export function TaskCard({
               {(due || task.task_list) && (
                 <small className="text-muted">
                   {due && (
-                    <>
+                    <span className={overdueView ? 'text-danger' : undefined}>
                       <i className="bi bi-calendar" />{' '}
                       {t('task.due', { date: due })}
-                    </>
+                    </span>
                   )}
                   {task.task_list && (
                     <span
@@ -219,7 +226,7 @@ export function TaskCard({
             <div className="ms-2">
               <Dropdown
                 label={<i className="bi bi-three-dots-vertical" />}
-                buttonClassName="btn btn-sm btn-link text-muted"
+                buttonClassName="btn btn-sm ui-ghost-btn ui-nav-toggle"
                 ariaLabel={t('task.actions')}
                 menuClassName="dropdown-menu-end"
               >

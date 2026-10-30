@@ -13,18 +13,19 @@ import type { LabelOut } from '../api';
 interface SecondaryLabelDropdownProps {
   labels: LabelOut[];
   secondaryLabel: string;
-  /** Toggle padding — navbar.html uses '0.15rem 0.4rem'. */
-  buttonStyle?: React.CSSProperties;
 }
 
 function activeClass(active: boolean): string {
   return `dropdown-item${active ? ' active' : ''}`;
 }
 
+/** navbar.html toggle look + the shared compact .ui-nav-toggle. */
+const TOGGLE_CLASS =
+  'btn btn-outline-light btn-sm dropdown-toggle ui-nav-toggle';
+
 export function SecondaryLabelDropdown({
   labels,
   secondaryLabel,
-  buttonStyle = { padding: '0.15rem 0.4rem' },
 }: SecondaryLabelDropdownProps) {
   const { t } = useTranslation('tasks');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -46,7 +47,7 @@ export function SecondaryLabelDropdown({
           <i className="bi bi-funnel" /> {secondaryLabel || t('labels.all')}
         </>
       }
-      buttonStyle={buttonStyle}
+      buttonClassName={TOGGLE_CLASS}
     >
       <li>
         <a

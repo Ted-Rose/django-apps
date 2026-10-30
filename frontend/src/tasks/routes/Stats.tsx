@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import { BurgerMenu } from '../../shared/components/BurgerMenu';
+import EmptyStateView from '../../shared/components/EmptyState';
+import PageNavBar from '../../shared/components/PageNavBar';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchStats, type StatsBucketOut, type StatsOut } from '../api';
 import Toasts from '../../shared/components/Toasts';
@@ -112,50 +113,37 @@ export default function Stats() {
 
   return (
     <>
-      <nav
-        className="navbar navbar-expand-lg navbar-dark bg-primary"
-        style={{ padding: '0.1rem 0', minHeight: 'auto' }}
+      <PageNavBar
+        variant="primary"
+        burgerItems={burgerItems}
+        actions={
+          <Link
+            to="/search"
+            className="btn btn-outline-light btn-sm ui-nav-toggle"
+            title={t('menu.searchTasks')}
+          >
+            <i className="bi bi-search" />
+          </Link>
+        }
       >
-        <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
-          <div className="d-flex align-items-center gap-1 flex-wrap flex-grow-1">
-            <Link
-              to={backTarget}
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.15rem 0.4rem' }}
-              id="back-to-dashboard-btn"
-            >
-              <i className="bi bi-arrow-left" /> {t('stats.back')}
-            </Link>
-            <Link
-              className="navbar-brand mb-0"
-              to="/stats"
-              style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}
-            >
-              <i className="bi bi-bar-chart" /> {t('stats.title')}
-            </Link>
-          </div>
-          <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <Link
-              to="/search"
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.25rem 0.5rem' }}
-              title={t('menu.searchTasks')}
-            >
-              <i className="bi bi-search" />
-            </Link>
-            <BurgerMenu items={burgerItems} />
-          </div>
-        </div>
-      </nav>
+        <Link
+          to={backTarget}
+          className="btn btn-outline-light btn-sm ui-nav-toggle"
+          id="back-to-dashboard-btn"
+        >
+          <i className="bi bi-arrow-left" /> {t('stats.back')}
+        </Link>
+        <Link className="navbar-brand mb-0" to="/stats">
+          <i className="bi bi-bar-chart" /> {t('stats.title')}
+        </Link>
+      </PageNavBar>
 
       <div className="container-fluid px-2 py-4">
         {isPending && <LoadingSkeleton />}
         {isError && <ErrorState error={error} onRetry={() => refetch()} />}
         {data &&
           (data.summary.all_time === 0 ? (
-            <div className="alert alert-info">
-              <i className="bi bi-info-circle" /> {t('stats.empty')}
-            </div>
+            <EmptyStateView icon="bar-chart" title={t('stats.empty')} />
           ) : (
             <StatsBody data={data} labelColors={labelColors} />
           ))}
@@ -236,16 +224,19 @@ function SummaryCard({
   delta?: number;
   footnote?: string;
 }) {
+  const deltaIcon = `bi bi-arrow-${
+    delta !== undefined && delta > 0 ? 'up' : 'down'
+  }`;
   return (
     <div className="col">
-      <div className="card h-100">
+      <div className="card ui-card h-100">
         <div className="card-body py-2 px-3">
           <div className="text-muted small text-truncate">{label}</div>
           <div className="d-flex align-items-baseline gap-2">
             <span className="fs-3 fw-semibold">{value}</span>
             {delta !== undefined && delta !== 0 && (
               <small className={delta > 0 ? 'text-success' : 'text-danger'}>
-                {delta > 0 ? `+${delta}` : delta}
+                <i className={deltaIcon} /> {delta > 0 ? `+${delta}` : delta}
               </small>
             )}
           </div>
@@ -279,7 +270,7 @@ function BucketChart({
   const max = Math.max(1, ...buckets.map((b) => b.total));
   const lastIndex = buckets.length - 1;
   return (
-    <div className="card mb-3">
+    <div className="card ui-card mb-3">
       <div className="card-header py-1 fw-semibold">{title}</div>
       <div className="card-body py-2 px-2">
         <div className="d-flex align-items-stretch gap-1">
@@ -331,12 +322,11 @@ function BucketChart({
                   ))}
                 </div>
                 <div
-                  className={`text-center text-truncate${
+                  className={`stats-bucket-label text-center text-truncate${
                     index === lastIndex
                       ? ' fw-bold text-primary'
                       : ' text-muted'
                   }`}
-                  style={{ fontSize: '0.6rem' }}
                 >
                   {formatStart(bucket.start)}
                 </div>
@@ -401,7 +391,7 @@ function LabelBreakdown({
   }, [data, labelColors, t]);
 
   return (
-    <div className="card h-100">
+    <div className="card ui-card h-100">
       <div className="card-header py-1 fw-semibold">{t('stats.byLabel')}</div>
       <div className="card-body py-2 px-3">
         <table className="table table-sm mb-1">
@@ -465,7 +455,7 @@ function ListBreakdown({ data }: { data: StatsOut }) {
   }, [data, t]);
 
   return (
-    <div className="card h-100">
+    <div className="card ui-card h-100">
       <div className="card-header py-1 fw-semibold">{t('stats.byList')}</div>
       <div className="card-body py-2 px-3">
         <table className="table table-sm mb-0">

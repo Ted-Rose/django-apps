@@ -21,8 +21,17 @@ import SecondaryLabelDropdown from './SecondaryLabelDropdown';
  * - `selectSecondaryLabel` stays CLIENT-SIDE: it only updates the
  *   `secondary_label` search param (shareable URL); no extra API
  *   param is sent — Dashboard filters the arrays in memory.
+ *
+ * Below the dropdowns a `.filter-chips` row shows one .ui-chip per
+ * active ?list=/?label=/?secondary_label= param with an × clearing
+ * it — the URL stays the source of truth.
  */
-const TOGGLE_STYLE = { padding: '0.15rem 0.4rem' };
+const TOGGLE_CLASS =
+  'btn btn-outline-light btn-sm dropdown-toggle ui-nav-toggle';
+
+/** Left group: wraps the filter dropdowns + chips on narrow widths. */
+const FILTER_GROUP_CLASS =
+  'd-flex align-items-center gap-1 flex-wrap flex-grow-1';
 
 const ORDER_OPTIONS: { key: string; icon: string; labelKey: string }[] = [
   { key: 'order_desc', icon: 'sort-numeric-down', labelKey: 'orderDesc' },
@@ -131,6 +140,27 @@ export function TaskNavBar({
     setSearchParams(params);
   };
 
+  /** Filter chip × — clears just that one param, keeps the rest. */
+  const clearFilter = (key: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.delete(key);
+    setSearchParams(params);
+  };
+
+  const filterChips: { key: string; label: string }[] = [];
+  if (selectedList) {
+    filterChips.push({
+      key: 'list',
+      label: selectedListTitle ?? t('views.list'),
+    });
+  }
+  if (selectedLabel) {
+    filterChips.push({ key: 'label', label: selectedLabel });
+  }
+  if (secondaryLabel) {
+    filterChips.push({ key: 'secondary_label', label: secondaryLabel });
+  }
+
   const viewLabel = flags?.is_starred_view ? (
     <>
       <i className="bi bi-star-fill text-warning" /> {t('views.starred')}
@@ -165,15 +195,12 @@ export function TaskNavBar({
   const isDashboardDefault = !selectedList && !selectedLabel && !isSpecialView;
 
   return (
-    <nav
-      className="navbar navbar-expand-lg navbar-dark bg-primary"
-      style={{ padding: '0.1rem 0', minHeight: 'auto' }}
-    >
-      <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
+    <nav className="app-navbar navbar navbar-expand-lg navbar-dark bg-primary">
+      <div className="container-fluid">
         {data && hasCredentials && (
-          <div className="d-flex align-items-center gap-1 flex-wrap flex-grow-1">
+          <div className={FILTER_GROUP_CLASS}>
             {/* View dropdown: All Tasks + special views + labels + lists */}
-            <Dropdown label={viewLabel} buttonStyle={TOGGLE_STYLE}>
+            <Dropdown label={viewLabel} buttonClassName={TOGGLE_CLASS}>
               <li>
                 <Link className={activeClass(isDashboardDefault)} to="/">
                   <i className="bi bi-list-task" /> {t('views.allTasks')}
@@ -286,7 +313,6 @@ export function TaskNavBar({
               <SecondaryLabelDropdown
                 labels={data.labels}
                 secondaryLabel={secondaryLabel}
-                buttonStyle={TOGGLE_STYLE}
               />
             )}
 
@@ -303,7 +329,7 @@ export function TaskNavBar({
                   )}
                 </>
               }
-              buttonStyle={TOGGLE_STYLE}
+              buttonClassName={TOGGLE_CLASS}
             >
               {ORDER_OPTIONS.map((option, index) => (
                 <Fragment key={option.key}>
@@ -328,13 +354,35 @@ export function TaskNavBar({
                 </Fragment>
               ))}
             </Dropdown>
+
+            {/* Active-filter chips — one .ui-chip per set param, ×
+                clears just that param (URL stays source of truth). */}
+            {filterChips.length > 0 && (
+              <div
+                className="filter-chips"
+                role="group"
+                aria-label={t('filters.active')}
+              >
+                {filterChips.map((chip) => (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    className="ui-chip active"
+                    title={t('filters.remove')}
+                    aria-label={t('filters.remove')}
+                    onClick={() => clearFilter(chip.key)}
+                  >
+                    {chip.label} <i className="bi bi-x-lg" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div className="ms-auto d-flex flex-row align-items-center gap-2">
           <Link
             to="/search"
-            className="btn btn-outline-light btn-sm"
-            style={{ padding: '0.25rem 0.5rem' }}
+            className="btn btn-outline-light btn-sm ui-nav-toggle"
             title={t('menu.searchTasks')}
           >
             <i className="bi bi-search" />

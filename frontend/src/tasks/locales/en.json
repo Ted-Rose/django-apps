@@ -27,6 +27,10 @@
     "allLabels": "All Labels",
     "filterByLabel": "Filter by Label"
   },
+  "filters": {
+    "active": "Filters",
+    "remove": "Remove filter"
+  },
   "labelsPage": {
     "title": "Labels",
     "manage": "Manage Labels",

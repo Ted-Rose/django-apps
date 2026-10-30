@@ -19,6 +19,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { errorDetail } from '../../shared/api/errors';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
+import EmptyStateView from '../../shared/components/EmptyState';
+import ErrorStateView from '../../shared/components/ErrorState';
+import ListSkeleton from '../../shared/components/ListSkeleton';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import {
@@ -119,6 +122,7 @@ export function TaskListPage({ view }: { view: ListView }) {
   const [creatingTask, setCreatingTask] = useState(false);
 
   const starredView = data?.flags.is_starred_view ?? false;
+  const overdueView = data?.flags.is_overdue_view ?? false;
   const field = positionField(starredView);
 
   const { undo, redo, canUndo, canRedo } = useUndoRedo({
@@ -412,7 +416,10 @@ export function TaskListPage({ view }: { view: ListView }) {
                   items={visibleIds}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div id="task-list">
+                  <div
+                    id="task-list"
+                    className={dragEnabled ? 'task-list-drag' : undefined}
+                  >
                     {visibleTasks.map((task) =>
                       task.is_divider ? (
                         <DividerCard
@@ -429,6 +436,7 @@ export function TaskListPage({ view }: { view: ListView }) {
                           labelColors={labelColors}
                           labels={data.labels}
                           starredView={starredView}
+                          overdueView={overdueView}
                           draggable={dragEnabled}
                           onSetRank={(rank) =>
                             handleSetRank(task.task_id, rank)
@@ -499,11 +507,8 @@ export function TaskListPage({ view }: { view: ListView }) {
       )}
 
       {/* floating_controls.html save indicator — CSS keeps it hidden
-          by default, so visibility is toggled inline. */}
-      <div
-        id="save-indicator"
-        style={{ display: orderSaved ? 'block' : 'none' }}
-      >
+          by default; the .show class reveals the floating pill. */}
+      <div id="save-indicator" className={orderSaved ? 'show' : undefined}>
         <span className="badge bg-success fs-6 px-3 py-2">
           <i className="bi bi-check-circle" /> {t('list.orderSaved')}
         </span>
@@ -514,26 +519,24 @@ export function TaskListPage({ view }: { view: ListView }) {
   );
 }
 
+/**
+ * Shared shimmer skeleton (shared/components/ListSkeleton) wrapped
+ * in the #task-list hook every list page renders. Re-exported under
+ * the old name so the sibling route files keep their import.
+ */
 export function LoadingSkeleton() {
   const { t } = useTranslation('tasks');
   return (
-    <div id="task-list" aria-busy="true" aria-label={t('list.loading')}>
-      {[0, 1, 2].map((i) => (
-        <div className="task-container d-flex mb-2" key={i}>
-          <div className="card task-card flex-grow-1 task-content">
-            <div className="card-body placeholder-glow">
-              <span className="placeholder col-5" />
-              <p className="card-text mb-0 mt-2">
-                <span className="placeholder col-8" />
-              </p>
-            </div>
-          </div>
-        </div>
-      ))}
+    <div id="task-list">
+      <ListSkeleton label={t('list.loading')} />
     </div>
   );
 }
 
+/**
+ * Shared centered error state — same props shape the local version
+ * took (raw error + retry), so the sibling routes keep working.
+ */
 export function ErrorState({
   error,
   onRetry,
@@ -543,18 +546,11 @@ export function ErrorState({
 }) {
   const { t } = useTranslation('tasks');
   return (
-    <div className="alert alert-danger text-center py-5" role="alert">
-      <i className="bi bi-exclamation-circle fs-1 d-block mb-3" />
-      <h5>{t('list.errorTitle')}</h5>
-      <p className="mb-3">{errorDetail(error)}</p>
-      <button
-        type="button"
-        className="btn btn-outline-danger"
-        onClick={onRetry}
-      >
-        <i className="bi bi-arrow-repeat" /> {t('common:common.retry')}
-      </button>
-    </div>
+    <ErrorStateView
+      title={t('list.errorTitle')}
+      detail={errorDetail(error)}
+      onRetry={onRetry}
+    />
   );
 }
 
@@ -566,25 +562,22 @@ export function EmptyState({ data }: { data: DashboardOut }) {
       window.location.pathname + window.location.search,
     )}`;
     return (
-      <div className="alert alert-info text-center py-5">
-        <i className="bi bi-shield-lock fs-1 d-block mb-3 text-warning" />
-        <h5>{t('list.authTitle')}</h5>
+      <EmptyStateView icon="shield-lock" title={t('list.authTitle')}>
         <p className="mb-3">{t('list.authBody')}</p>
         <a href={loginUrl} className="btn btn-warning btn-lg">
           <i className="bi bi-google" /> {t('menu.loginGoogle')}
         </a>
-      </div>
+      </EmptyStateView>
     );
   }
   const starred = data.flags.is_starred_view;
   return (
-    <div className="alert alert-info text-center py-5">
-      <i className="bi bi-info-circle fs-1 d-block mb-3" />
-      <h5>{starred ? t('list.noStarred') : t('list.noTasks')}</h5>
-      <p className="mb-0">
-        {starred ? t('list.starHint') : t('list.syncHint')}
-      </p>
-    </div>
+    <EmptyStateView
+      icon={starred ? 'star' : 'info-circle'}
+      title={starred ? t('list.noStarred') : t('list.noTasks')}
+    >
+      {starred ? t('list.starHint') : t('list.syncHint')}
+    </EmptyStateView>
   );
 }
 

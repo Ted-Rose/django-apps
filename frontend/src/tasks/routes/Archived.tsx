@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import { BurgerMenu } from '../../shared/components/BurgerMenu';
+import EmptyStateView from '../../shared/components/EmptyState';
+import PageNavBar from '../../shared/components/PageNavBar';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { actionHistory } from '../actionHistory';
 import { fetchArchived, type TaskOut } from '../api';
@@ -27,6 +28,9 @@ import { ErrorState, LoadingSkeleton } from './TaskListPage';
  * secondary filter matches completed rows (archived.html's
  * selectSecondaryLabel).
  */
+/** Centered row: struck title left, Unarchive button right. */
+const FLEX_BETWEEN_CLASS = 'd-flex justify-content-between align-items-center';
+
 export default function Archived() {
   const { t } = useTranslation('tasks');
   const [searchParams] = useSearchParams();
@@ -114,39 +118,29 @@ export default function Archived() {
 
   return (
     <>
-      <nav
-        className="navbar navbar-expand-lg navbar-dark bg-primary"
-        style={{ padding: '0.1rem 0', minHeight: 'auto' }}
+      <PageNavBar
+        variant="primary"
+        burgerItems={burgerItems}
+        actions={
+          <Link
+            to="/search"
+            className="btn btn-outline-light btn-sm ui-nav-toggle"
+            title={t('menu.searchTasks')}
+          >
+            <i className="bi bi-search" />
+          </Link>
+        }
       >
-        <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
-          <div className="d-flex align-items-center gap-1 flex-wrap flex-grow-1">
-            <Link
-              className="navbar-brand mb-0"
-              to="/archived"
-              style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}
-            >
-              <i className="bi bi-archive" /> {t('archived.title')}
-            </Link>
-            {data && (
-              <SecondaryLabelDropdown
-                labels={data.labels}
-                secondaryLabel={secondaryLabel}
-              />
-            )}
-          </div>
-          <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <Link
-              to="/search"
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.25rem 0.5rem' }}
-              title={t('menu.searchTasks')}
-            >
-              <i className="bi bi-search" />
-            </Link>
-            <BurgerMenu items={burgerItems} />
-          </div>
-        </div>
-      </nav>
+        <Link className="navbar-brand mb-0" to="/archived">
+          <i className="bi bi-archive" /> {t('archived.title')}
+        </Link>
+        {data && (
+          <SecondaryLabelDropdown
+            labels={data.labels}
+            secondaryLabel={secondaryLabel}
+          />
+        )}
+      </PageNavBar>
 
       <div className="container-fluid px-2 py-4">
         {isPending && <LoadingSkeleton />}
@@ -165,9 +159,7 @@ export default function Archived() {
               </div>
             ) : (
               data.completed.length === 0 && (
-                <div className="alert alert-info">
-                  <i className="bi bi-info-circle" /> {t('archived.empty')}
-                </div>
+                <EmptyStateView icon="archive" title={t('archived.empty')} />
               )
             )}
             {data.completed.length > 0 && (
@@ -223,9 +215,11 @@ function ArchivedTaskCard({
           <div className="d-flex align-items-start flex-grow-1">
             <div className="flex-grow-1">
               <h5 className="card-title">
-                <span
-                  className={`star-btn me-1${task.is_starred ? ' starred' : ''}`}
-                  role="button"
+                <button
+                  type="button"
+                  className={`star-btn ui-ghost-btn me-1${
+                    task.is_starred ? ' starred' : ''
+                  }`}
                   title={task.is_starred ? t('task.unstar') : t('task.star')}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -242,7 +236,7 @@ function ArchivedTaskCard({
                       task.is_starred ? 'bi-star-fill' : 'bi-star'
                     }`}
                   />
-                </span>
+                </button>
                 {task.title}
               </h5>
               {task.labels.length > 0 && (
@@ -326,7 +320,7 @@ function ArchivedCompletedSection({
               key={task.task_id}
             >
               <div className="card-body py-1">
-                <div className="d-flex justify-content-between align-items-center">
+                <div className={FLEX_BETWEEN_CLASS}>
                   <div className="flex-grow-1">
                     <span className="text-decoration-line-through text-muted">
                       {task.title}

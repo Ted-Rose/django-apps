@@ -5,7 +5,7 @@ import { actionHistory } from '../actionHistory';
 import type { TaskOut } from '../api';
 import { useToggleStar, useUncompleteTask } from '../mutations';
 import { formatShortDate } from '../utils';
-import ConfirmModal from './ConfirmModal';
+import ConfirmModal from '../../shared/components/ConfirmModal';
 
 /**
  * React port of components/dashboard/completed_tasks.html.
@@ -19,6 +19,10 @@ import ConfirmModal from './ConfirmModal';
  * `autoOpen` mirrors filters.js: selecting a secondary_label that
  * matches completed tasks expands the section automatically.
  */
+/** Struck-through muted title link on completed rows (test hook). */
+const DONE_LINK_CLASS =
+  'task-title-link text-decoration-line-through text-muted';
+
 interface CompletedSectionProps {
   tasks: TaskOut[];
   /** Header count — the template shows the total completed count even
@@ -88,6 +92,7 @@ function CompletedTaskCard({
 }) {
   const { t } = useTranslation('tasks');
   const completed = formatShortDate(task.completed);
+  const starIcon = task.is_starred ? 'bi-star-fill' : 'bi-star';
   const [confirming, setConfirming] = useState(false);
   const toggleStar = useToggleStar();
   const uncompleteTask = useUncompleteTask();
@@ -100,10 +105,7 @@ function CompletedTaskCard({
       <div className="card-body py-1">
         <div className="d-flex justify-content-between align-items-center">
           <div className="flex-grow-1">
-            <Link
-              to={`/task/${task.task_id}`}
-              className="task-title-link text-decoration-line-through text-muted"
-            >
+            <Link to={`/task/${task.task_id}`} className={DONE_LINK_CLASS}>
               {task.title}
             </Link>
             {task.labels.map((label) => (
@@ -122,9 +124,11 @@ function CompletedTaskCard({
             )}
           </div>
           <div className="d-flex align-items-center gap-2">
-            <span
-              className={`star-btn${task.is_starred ? ' starred' : ''}`}
-              role="button"
+            <button
+              type="button"
+              className={`star-btn ui-ghost-btn${
+                task.is_starred ? ' starred' : ''
+              }`}
               title={task.is_starred ? t('task.unstar') : t('task.star')}
               onClick={(event) => {
                 event.stopPropagation();
@@ -136,13 +140,11 @@ function CompletedTaskCard({
                 toggleStar.mutate(task.task_id);
               }}
             >
-              <i
-                className={`bi ${task.is_starred ? 'bi-star-fill' : 'bi-star'}`}
-              />
-            </span>
-            <span
-              className="uncomplete-btn"
-              role="button"
+              <i className={`bi ${starIcon}`} />
+            </button>
+            <button
+              type="button"
+              className="uncomplete-btn ui-ghost-btn"
               title={t('completed.markNotCompleted')}
               onClick={(event) => {
                 event.stopPropagation();
@@ -150,7 +152,7 @@ function CompletedTaskCard({
               }}
             >
               <i className="bi bi-arrow-counterclockwise" />
-            </span>
+            </button>
           </div>
         </div>
       </div>

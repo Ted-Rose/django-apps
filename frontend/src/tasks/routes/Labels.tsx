@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import { BurgerMenu } from '../../shared/components/BurgerMenu';
+import EmptyStateView from '../../shared/components/EmptyState';
+import PageNavBar from '../../shared/components/PageNavBar';
 import useBootstrap from '../../shared/hooks/useBootstrap';
 import { fetchLabels, type LabelOut } from '../api';
 import { useUpdateLabel } from '../mutations';
@@ -94,52 +95,39 @@ export default function Labels() {
 
   return (
     <>
-      <nav
-        className="navbar navbar-expand-lg navbar-dark bg-primary"
-        style={{ padding: '0.1rem 0', minHeight: 'auto' }}
+      <PageNavBar
+        variant="primary"
+        burgerItems={burgerItems}
+        actions={
+          <Link
+            to="/search"
+            className="btn btn-outline-light btn-sm ui-nav-toggle"
+            title={t('menu.searchTasks')}
+          >
+            <i className="bi bi-search" />
+          </Link>
+        }
       >
-        <div className="container-fluid" style={{ padding: '0 0.5rem' }}>
-          <div className="d-flex align-items-center gap-1 flex-wrap">
-            <Link
-              to={backTarget}
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.15rem 0.4rem' }}
-              id="back-to-dashboard-btn"
-            >
-              <i className="bi bi-arrow-left" /> {t('labelsPage.back')}
-            </Link>
-            <Link
-              className="navbar-brand mb-0"
-              to="/labels"
-              style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}
-            >
-              <i className="bi bi-tags" /> {t('labelsPage.title')}
-            </Link>
-          </div>
-          <div className="ms-auto d-flex flex-row align-items-center gap-2">
-            <Link
-              to="/search"
-              className="btn btn-outline-light btn-sm"
-              style={{ padding: '0.25rem 0.5rem' }}
-              title={t('menu.searchTasks')}
-            >
-              <i className="bi bi-search" />
-            </Link>
-            <BurgerMenu items={burgerItems} />
-          </div>
-        </div>
-      </nav>
+        <Link
+          to={backTarget}
+          className="btn btn-outline-light btn-sm ui-nav-toggle"
+          id="back-to-dashboard-btn"
+        >
+          <i className="bi bi-arrow-left" /> {t('labelsPage.back')}
+        </Link>
+        <Link className="navbar-brand mb-0" to="/labels">
+          <i className="bi bi-tags" /> {t('labelsPage.title')}
+        </Link>
+      </PageNavBar>
 
       <div className="container-fluid px-2 py-4">
         {isPending && <LoadingSkeleton />}
         {isError && <ErrorState error={error} onRetry={() => refetch()} />}
         {data &&
           (data.labels.length === 0 ? (
-            <div className="alert alert-info">
-              <i className="bi bi-info-circle" /> {t('labelsPage.empty')}
-            </div>
+            <EmptyStateView icon="tags" title={t('labelsPage.empty')} />
           ) : (
-            <div className="card">
+            <div className="card ui-card">
               <div className="card-header py-1 fw-semibold">
                 {t('labelsPage.title')}
               </div>
@@ -195,18 +183,16 @@ function LabelRow({ label }: { label: LabelOut }) {
         <div className="d-flex align-items-center gap-2">
           <input
             type="color"
-            className="form-control form-control-color"
-            style={{ width: '2.5rem' }}
+            className="form-control form-control-color label-color-input"
             value={valid ? draft : label.color}
             onChange={(event) => setDraft(event.target.value)}
             title={t('labelsPage.color')}
           />
           <input
             type="text"
-            className={`form-control form-control-sm${
+            className={`form-control form-control-sm label-hex-input${
               valid ? '' : ' is-invalid'
             }`}
-            style={{ width: '5.5rem', fontFamily: 'monospace' }}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             aria-label={t('labelsPage.hexColor')}
