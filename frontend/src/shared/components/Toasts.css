@@ -14,3 +14,15 @@
   opacity: 1;
   transform: translateY(0);
 }
+
+/* Polish: token radius/shadow + slightly tighter horizontal padding
+   (vertical stays at the py-2 utility). --ui-radius resolves inside
+   .app-ui; the fallback keeps the old look elsewhere. */
+.action-toast .alert {
+  border-radius: var(--ui-radius, 0.5rem);
+  box-shadow:
+    0 8px 24px rgba(16, 24, 40, 0.12),
+    0 2px 6px rgba(16, 24, 40, 0.08);
+  padding-left: 0.875rem;
+  padding-right: 0.75rem;
+}
