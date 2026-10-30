@@ -369,7 +369,8 @@ def push_local_changes(user, creds):
 # (harmless) and set on merges; updated_at is stamped in memory since
 # auto_now is not bumped by bulk_update.
 TASK_BULK_UPDATE_FIELDS = [
-    'task_id', 'task_list', 'title', 'notes', 'due_date', 'status',
+    'task_id', 'task_list', 'title', 'notes', 'notes_doc',
+    'due_date', 'status',
     'completed', 'updated', 'last_synced_at', 'created', 'updated_at',
 ]
 
@@ -446,8 +447,15 @@ def _write_remote_tasks(user, pulls, remote_ids):
             if task is None:
                 task = pending.get(task_id)
             if task is not None:
+                previous_notes = task.notes
                 for field, value in defaults.items():
                     setattr(task, field, value)
+                # A body rewritten on the Google side clears the
+                # rich-text mirror — notes_doc is the doc for the
+                # notes text we last synced, not for new remote
+                # text. Matching remote text keeps the doc.
+                if defaults['notes'] != (previous_notes or ''):
+                    task.notes_doc = None
                 task.updated_at = sync_time
                 # A repeated remote id mutates the already-queued row
                 # in place (last wins) instead of appending a second
@@ -469,8 +477,11 @@ def _write_remote_tasks(user, pulls, remote_ids):
                 del by_task_id[old_id]
                 task.task_id = task_id
                 by_task_id[task_id] = task
+                previous_notes = task.notes
                 for field, value in defaults.items():
                     setattr(task, field, value)
+                if defaults['notes'] != (previous_notes or ''):
+                    task.notes_doc = None
                 task.created = sync_time
                 task.updated_at = sync_time
                 to_update.append(task)

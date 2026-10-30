@@ -49,5 +49,22 @@
     "network": "Neizdevās sazināties ar serveri. Pārbaudi interneta savienojumu.",
     "requestFailed": "Pieprasījums neizdevās: {{status}} {{statusText}}",
     "loadFailed": "Neizdevās ielādēt {{label}}"
+  },
+  "editor": {
+    "bold": "Treknraksts",
+    "italic": "Slīpraksts",
+    "underline": "Pasvītrot",
+    "strike": "Pārsvītrot",
+    "heading1": "Virsraksts 1",
+    "heading2": "Virsraksts 2",
+    "heading3": "Virsraksts 3",
+    "bulletList": "Aizzīmju saraksts",
+    "orderedList": "Numurēts saraksts",
+    "blockquote": "Citāts",
+    "codeBlock": "Koda bloks",
+    "link": "Pievienot saiti",
+    "unlink": "Noņemt saiti",
+    "clearFormatting": "Notīrīt formatējumu",
+    "linkPrompt": "Saites URL"
   }
 }

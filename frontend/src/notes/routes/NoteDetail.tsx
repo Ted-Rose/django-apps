@@ -9,6 +9,8 @@ import {
 import Toasts from '../../shared/components/Toasts';
 import { errorDetail } from '../../shared/api/errors';
 import useBootstrap from '../../shared/hooks/useBootstrap';
+import RichTextEditor from '../../shared/components/RichTextEditor';
+import { isTiptapDocString } from '../../shared/tiptapContent';
 import { fetchNoteDetail, fetchNotes } from '../api';
 import CategoryPicker, {
   NOT_A_NOTE,
@@ -65,9 +67,9 @@ export default function NoteDetail() {
   } | null>(null);
 
   const titleRef = useRef<HTMLTextAreaElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
-  // The template auto-resizes both textareas to their content.
+  // The template auto-resizes the title textarea to its content;
+  // the body editor grows itself (ProseMirror max-height).
   const autoResize = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
     el.style.height = 'auto';
@@ -75,19 +77,20 @@ export default function NoteDetail() {
   };
 
   // Populate the form when the note arrives — marker-stripped so
-  // the #notes tag never shows inside the inputs.
+  // the #notes tag never shows inside the inputs. The rich doc
+  // is marker-free by contract; legacy notes markdown-parse on
+  // load inside the editor.
   useEffect(() => {
     if (task) {
       setTitle(stripNoteMarker(task.title));
-      setBody(stripNoteMarker(task.notes));
+      setBody(task.notes_doc ?? stripNoteMarker(task.notes));
       setCategory(task.note_category?.id ?? null);
     }
   }, [task]);
 
   useEffect(() => {
     autoResize(titleRef.current);
-    autoResize(bodyRef.current);
-  }, [title, body]);
+  }, [title]);
 
   const updateNote = useUpdateNote();
 
@@ -109,12 +112,19 @@ export default function NoteDetail() {
       return;
     }
     setAlert(null);
+    // An untouched legacy body stays plain text; once the
+    // editor emits doc-JSON the server derives the synced
+    // markdown projection (empty doc clears the body).
+    const bodyField = isTiptapDocString(body)
+      ? { body_doc: body }
+      : { body: body.trim() };
     const payload: {
       title: string;
-      body: string;
+      body?: string;
+      body_doc?: string;
       category_id?: number | null;
       is_note?: boolean;
-    } = { title: trimmed, body: body.trim() };
+    } = { title: trimmed, ...bodyField };
     if (category === NOT_A_NOTE) {
       // The escape hatch — strips the marker server-side; the row
       // becomes a plain task and leaves the notes views.
@@ -271,18 +281,15 @@ export default function NoteDetail() {
               </div>
 
               <div className="mb-4">
-                <label htmlFor="note-body" className="form-label fw-bold">
+                <label className="form-label fw-bold">
                   <i className="bi bi-journal-text" /> {t('detail.bodyLabel')}
                 </label>
-                <textarea
-                  className="form-control"
+                <RichTextEditor
                   id="note-body"
-                  name="body"
-                  rows={6}
                   placeholder={t('detail.bodyPlaceholder')}
-                  ref={bodyRef}
+                  ariaLabel={t('detail.bodyLabel')}
                   value={body}
-                  onChange={(event) => setBody(event.target.value)}
+                  onChange={setBody}
                 />
               </div>
 

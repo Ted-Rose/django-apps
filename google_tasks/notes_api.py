@@ -34,6 +34,7 @@ from google_tasks.api import (
     _order_completed,
 )
 from google_tasks.models import GoogleTask, NoteCategory
+from google_tasks.tiptap_doc import doc_to_markdown, is_tiptap_doc
 from google_tasks.services import (
     find_note_marker,
     note_display_name,
@@ -73,6 +74,9 @@ class NoteCreateIn(Schema):
     # local 500 that leaves an orphan task in Google.
     title: str = Field(max_length=500)
     body: Optional[str] = None
+    # Rich body as TipTap doc-JSON — wins over `body` when both
+    # are sent; the stored body text is its markdown projection.
+    body_doc: Optional[str] = None
     category_id: Optional[int] = None
     task_list_id: Optional[str] = None
 
@@ -80,6 +84,9 @@ class NoteCreateIn(Schema):
 class NoteUpdateIn(Schema):
     title: Optional[str] = None
     body: Optional[str] = None
+    # Absent = unchanged; a doc-JSON body replaces it and stores
+    # the rich mirror, a plain body clears the mirror.
+    body_doc: Optional[str] = None
     # Absent = unchanged; explicit null = uncategorized. ninja sets
     # model_fields_set so the two cases stay distinguishable.
     category_id: Optional[int] = None
@@ -264,21 +271,31 @@ def create_note(request, payload: NoteCreateIn):
     if payload.category_id is not None:
         category = _user_category(request, payload.category_id)
     marker = note_marker_for(category)
+    body_source = payload.body or ''
+    if payload.body_doc:
+        if not is_tiptap_doc(payload.body_doc):
+            raise ApiHttpError(
+                400, 'body_doc is not a valid TipTap doc',
+                code='invalidBodyDoc',
+            )
+        body_source = doc_to_markdown(payload.body_doc)
     # Strip any #notes… marker the client typed — the server
     # composes the only marker, so a stray one in the title/body
     # can't hijack filing (find_note_marker prefers the title).
     clean_title, body = strip_note_marker(
-        payload.title, payload.body or ''
+        payload.title, body_source
     )
     body = body.rstrip()
     notes_field = f'{body}\n\n{marker}' if body else marker
     # The create view re-parses request.body itself, so swap in a
     # task-create payload carrying the composed marker — same
     # Google insert → local row path, same reauth/error contract
-    # through _adapt.
+    # through _adapt. notes_doc is the marker-free body doc; the
+    # view stores the verbatim pair.
     request._body = json.dumps({
         'title': clean_title,
         'notes': notes_field,
+        'notes_doc': payload.body_doc or None,
         'task_list_id': payload.task_list_id,
     }).encode()
     response = _adapt(request, views.create_task_view(request))
@@ -437,10 +454,27 @@ def update_note(request, task_id: str, payload: NoteUpdateIn):
     title = (
         payload.title if payload.title is not None else task.title
     )
-    body = (
-        payload.body if payload.body is not None
-        else task.notes or ''
-    )
+    notes_doc = task.notes_doc
+    if 'body_doc' in fields:
+        # A doc-JSON body is the rich source of truth: `body`
+        # becomes its markdown projection and the mirror stores
+        # the doc (marker-free — the marker lives in `notes`).
+        if payload.body_doc:
+            if not is_tiptap_doc(payload.body_doc):
+                raise ApiHttpError(
+                    400, 'body_doc is not a valid TipTap doc',
+                    code='invalidBodyDoc',
+                )
+            body = doc_to_markdown(payload.body_doc)
+        else:
+            body = ''
+        notes_doc = payload.body_doc or None
+    elif 'body' in fields:
+        # A plain body write invalidates the stored doc.
+        body = payload.body or ''
+        notes_doc = None
+    else:
+        body = task.notes or ''
     if 'category_id' in fields and not un_note:
         # Explicit category change (null = uncategorized) — the
         # marker recomposes from the category's path.
@@ -503,7 +537,8 @@ def update_note(request, task_id: str, payload: NoteUpdateIn):
     # itself is @require_POST and can't serve this PATCH.)
     notes_field = notes_field or None
     update_fields = [
-        'title', 'notes', 'needs_push', 'is_note', 'note_category',
+        'title', 'notes', 'notes_doc', 'needs_push', 'is_note',
+        'note_category',
         # auto_now fields only stamp when listed in update_fields
         # — without it a PATCH would not move updated_at.
         'updated_at',
@@ -513,6 +548,7 @@ def update_note(request, task_id: str, payload: NoteUpdateIn):
         task.needs_push = True
     task.title = clean_title
     task.notes = notes_field
+    task.notes_doc = notes_doc
     task.is_note = not un_note
     task.note_category = category if not un_note else None
     task.save(update_fields=update_fields)

@@ -1517,6 +1517,8 @@ export interface components {
             title: string;
             /** Notes */
             notes?: string | null;
+            /** Notes Doc */
+            notes_doc?: string | null;
             /** Status */
             status: string;
             /** Due */
@@ -1657,6 +1659,8 @@ export interface components {
             title: string;
             /** Notes */
             notes?: string | null;
+            /** Notes Doc */
+            notes_doc?: string | null;
             /**
              * Is Starred
              * @default false
@@ -1691,6 +1695,8 @@ export interface components {
             title: string;
             /** Notes */
             notes?: string | null;
+            /** Notes Doc */
+            notes_doc?: string | null;
             /** Label Ids */
             label_ids?: number[] | null;
             /** Task Order */
@@ -1739,6 +1745,8 @@ export interface components {
             title: string;
             /** Body */
             body?: string | null;
+            /** Body Doc */
+            body_doc?: string | null;
             /** Category Id */
             category_id?: number | null;
             /** Task List Id */
@@ -1785,6 +1793,8 @@ export interface components {
             title?: string | null;
             /** Body */
             body?: string | null;
+            /** Body Doc */
+            body_doc?: string | null;
             /** Category Id */
             category_id?: number | null;
             /** Is Note */

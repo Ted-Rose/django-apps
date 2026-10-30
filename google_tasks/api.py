@@ -69,6 +69,9 @@ class TaskOut(Schema):
     task_id: str
     title: str
     notes: Optional[str] = None
+    # Local-only TipTap doc-JSON mirror of notes — never synced
+    # to Google; the SPA falls back to markdown-parsing `notes`.
+    notes_doc: Optional[str] = None
     status: str
     due: Optional[datetime] = None
     completed: Optional[datetime] = None
@@ -156,6 +159,9 @@ class DividerUpdateIn(Schema):
 class TaskCreateIn(Schema):
     title: str
     notes: Optional[str] = None
+    # Rich description as TipTap doc-JSON — the stored `notes`
+    # becomes its markdown projection.
+    notes_doc: Optional[str] = None
     is_starred: bool = False
     task_list_id: Optional[str] = None
     label_ids: List[int] = Field(default_factory=list, max_length=50)
@@ -164,6 +170,7 @@ class TaskCreateIn(Schema):
 class TaskUpdateIn(Schema):
     title: str
     notes: Optional[str] = None
+    notes_doc: Optional[str] = None
     label_ids: Optional[List[int]] = Field(default=None, max_length=50)
     # Local-only float positions. Absent key = unchanged; the view
     # additionally accepts explicit null for starred_order (clears it).
