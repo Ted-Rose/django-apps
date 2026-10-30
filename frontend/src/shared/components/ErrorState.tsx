@@ -17,7 +17,10 @@ export function ErrorState({ title, detail, onRetry }: ErrorStateProps) {
   const { t } = useTranslation();
   return (
     <div className="ui-empty" role="alert">
-      <i className="bi bi-exclamation-circle text-danger" aria-hidden="true" />
+      <i
+        className="bi bi-exclamation-circle text-danger ui-empty-icon"
+        aria-hidden="true"
+      />
       <h2 className="h5 mb-1">{title}</h2>
       {detail && <div className="small mb-3">{detail}</div>}
       <button

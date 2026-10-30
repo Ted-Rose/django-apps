@@ -369,7 +369,7 @@ export function TaskNavBar({
                     type="button"
                     className="ui-chip active"
                     title={t('filters.remove')}
-                    aria-label={t('filters.remove')}
+                    aria-label={`${t('filters.remove')}: ${chip.label}`}
                     onClick={() => clearFilter(chip.key)}
                   >
                     {chip.label} <i className="bi bi-x-lg" />

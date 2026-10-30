@@ -19,7 +19,7 @@ export function EmptyState({
 }) {
   return (
     <div className="ui-empty">
-      <i className={`bi bi-${icon}`} aria-hidden="true" />
+      <i className={`bi bi-${icon} ui-empty-icon`} aria-hidden="true" />
       <h2 className="h5 mb-1">{title}</h2>
       {children && <div className="small">{children}</div>}
     </div>
