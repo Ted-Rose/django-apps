@@ -68,7 +68,10 @@ class NotesDashboardOut(Schema):
 
 
 class NoteCreateIn(Schema):
-    title: str
+    # Bounded like GoogleTask.title — an over-long title must be
+    # a validation error, not a remote insert followed by a
+    # local 500 that leaves an orphan task in Google.
+    title: str = Field(max_length=500)
     body: Optional[str] = None
     category_id: Optional[int] = None
     task_list_id: Optional[str] = None
@@ -438,7 +441,7 @@ def update_note(request, task_id: str, payload: NoteUpdateIn):
         payload.body if payload.body is not None
         else task.notes or ''
     )
-    if 'category_id' in fields:
+    if 'category_id' in fields and not un_note:
         # Explicit category change (null = uncategorized) — the
         # marker recomposes from the category's path.
         category = None
