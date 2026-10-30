@@ -1,6 +1,16 @@
 # google_api
 
 ## Changelog
+13. Quick-notes categories nest arbitrarily deep: every `-` in a
+    `#notes-<path>` marker is now one level (`#notes-projects-
+    World_of_Bible-Easter_eggs` → projects → World Of Bible →
+    Easter Eggs) and `_` is the only word-joiner inside a
+    segment, so multi-word names must spell `django_apps` —
+    `#notes-projects-django-apps` now nests `django` → `apps`.
+    The notes SPA renders the deeper tree everywhere (nav
+    dropdown, pickers, manage page) and shows subtree note
+    counts; categories created under the old two-level rule can
+    be deleted from `/notes/categories` after notes reclassify
 12. Quick notes: tasks carrying a `#notes-<path>` marker now file
     into an auto-created two-level category tree under a new
     `/notes/` app — hidden from the task views, with rename/merge/

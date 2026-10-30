@@ -21,6 +21,13 @@ describe('stripNoteMarker', () => {
     expect(stripNoteMarker('x #notes-bible_research-genesis y')).toBe('x y');
   });
 
+  it('strips deep-path markers regardless of depth', () => {
+    expect(
+      stripNoteMarker('egg hunt #notes-projects-World_of_Bible-Easter_eggs'),
+    ).toBe('egg hunt');
+    expect(stripNoteMarker('x #notes-a-b-c-d-e-f y')).toBe('x y');
+  });
+
   it('matches case-insensitively', () => {
     expect(stripNoteMarker('prayer #Notes-God-Prayer')).toBe('prayer');
     expect(stripNoteMarker('#NOTES')).toBe('');

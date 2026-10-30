@@ -28,10 +28,10 @@ should keep the two worlds separate.
   `extract_hashtags` regex which splits on hyphens) classifies a
   task as a note, resolves the category path
   (`#notes` → uncategorized, `#notes-x` → top-level `x`,
-  `#notes-x-y-…` → group `x` + leaf `y-…`; `-` separates the
-  two levels while `_` joins words inside a segment, so
-  `#notes-bible_research` is one multi-word dir),
-  auto-creates missing
+  `#notes-x-y-z-…` → a nested chain `x` → `y` → `z`; every `-`
+  segment is one level, `_` joins words inside a segment, so
+  `#notes-bible_research` is one multi-word dir), auto-creates
+  missing
   normal hashtag processing so its fragments (`notes`, `god`,
   `prayer`, …) cannot trigger label matches, unmatched
   warnings, or list moves.

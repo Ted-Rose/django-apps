@@ -1416,21 +1416,27 @@ class NoteMarkerUnitTests(TestCase):
         self.assertEqual(note_marker_segments(match.group(0)),
                          ['aaa'])
 
-    def test_underscore_canonicalizes_to_hyphen(self):
+    def test_underscore_stays_inside_a_segment(self):
+        # '_' is the ONLY word-joiner — it must survive slug
+        # normalization so a composed marker re-parses identically.
         match = find_note_marker('#notes-bible_research-genesis', '')
         self.assertEqual(
             note_marker_segments(match.group(0)),
-            ['bible-research', 'genesis'],
+            ['bible_research', 'genesis'],
         )
 
-    def test_leaf_separators_equivalent(self):
+    def test_hyphens_and_underscores_mean_different_things(self):
         hyphens = NOTE_TAG_RE.search(
             '#notes-projects-django-apps').group(0)
         underscores = NOTE_TAG_RE.search(
             '#notes-projects-django_apps').group(0)
         self.assertEqual(
-            '-'.join(note_marker_segments(hyphens)[1:]),
-            '-'.join(note_marker_segments(underscores)[1:]),
+            note_marker_segments(hyphens),
+            ['projects', 'django', 'apps'],
+        )
+        self.assertEqual(
+            note_marker_segments(underscores),
+            ['projects', 'django_apps'],
         )
 
     def test_strip_removes_all_markers(self):
@@ -1457,13 +1463,18 @@ class NoteMarkerUnitTests(TestCase):
         )
         self.assertEqual(notes, 'first\n\nsecond')
 
-    def test_marker_for_group_leaf_and_uncategorized(self):
+    def test_marker_for_walks_the_whole_chain(self):
         self.assertEqual(note_marker_for(None), '#notes')
-        group = NoteCategory(slug='god')
-        self.assertEqual(note_marker_for(group), '#notes-god')
-        leaf = NoteCategory(slug='pra-yer', parent=group)
+        top = NoteCategory(slug='god')
+        self.assertEqual(note_marker_for(top), '#notes-god')
+        mid = NoteCategory(slug='world_of_bible', parent=top)
         self.assertEqual(
-            note_marker_for(leaf), '#notes-god-pra-yer'
+            note_marker_for(mid), '#notes-god-world_of_bible'
+        )
+        leaf = NoteCategory(slug='easter_eggs', parent=mid)
+        self.assertEqual(
+            note_marker_for(leaf),
+            '#notes-god-world_of_bible-easter_eggs',
         )
 
 
@@ -1598,16 +1609,108 @@ class ProcessTaskLabelsNoteTests(TestCase):
 
     def test_existing_path_is_reused(self):
         one = self.make_task('a', 'x #notes-projects-django-apps')
-        two = self.make_task('b', 'y #notes-projects-django_apps')
+        two = self.make_task('b', 'y #notes-projects-Django-APPS')
         process_task_labels(self.user, creds=None)
         one.refresh_from_db()
         two.refresh_from_db()
-        # One group + one leaf — the underscore spelling folded
-        # into the same category.
+        # projects → django → apps, created once and reused —
+        # case folds into the same chain.
         self.assertEqual(
-            NoteCategory.objects.filter(user=self.user).count(), 2
+            NoteCategory.objects.filter(user=self.user).count(), 3
         )
         self.assertEqual(one.note_category, two.note_category)
+        self.assertEqual(one.note_category.slug, 'apps')
+
+    def test_deep_chain_creates_the_full_path(self):
+        task = self.make_task(
+            'a', 'x #notes-projects-World_of_Bible-Easter_eggs'
+        )
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        leaf = task.note_category
+        self.assertEqual(leaf.slug, 'easter_eggs')
+        self.assertEqual(leaf.name, 'Easter Eggs')
+        mid = leaf.parent
+        self.assertEqual(mid.slug, 'world_of_bible')
+        self.assertEqual(mid.name, 'World Of Bible')
+        self.assertEqual(mid.parent.slug, 'projects')
+
+    def test_depth_four_marker_resolves_the_full_chain(self):
+        # No depth cap — a four-segment path auto-creates all
+        # four levels and files on the leaf.
+        task = self.make_task(
+            'a', 'x #notes-faith-bible-genesis-one'
+        )
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        node = task.note_category
+        chain = []
+        while node is not None:
+            chain.append(node.slug)
+            node = node.parent
+        self.assertEqual(
+            chain, ['one', 'genesis', 'bible', 'faith']
+        )
+
+    def test_digit_segment_is_a_valid_level(self):
+        # '#notes-bible_research-gen-1' — a wholly numeric
+        # segment still names a category level ('1' slugifies
+        # to itself, displays as '1').
+        task = self.make_task(
+            'a', 'x #notes-bible_research-gen-1'
+        )
+        process_task_labels(self.user, creds=None)
+        task.refresh_from_db()
+        leaf = task.note_category
+        self.assertEqual(leaf.slug, '1')
+        self.assertEqual(leaf.name, '1')
+        self.assertEqual(leaf.parent.slug, 'gen')
+        self.assertEqual(leaf.parent.parent.slug, 'bible_research')
+
+    def test_underscore_makes_a_multi_word_segment(self):
+        # '#notes-projects-django_apps' is ONE leaf under
+        # projects; the hyphen spelling nests a level deeper.
+        underscored = self.make_task(
+            'a', 'x #notes-projects-django_apps'
+        )
+        hyphened = self.make_task(
+            'b', 'y #notes-projects-django-apps'
+        )
+        process_task_labels(self.user, creds=None)
+        underscored.refresh_from_db()
+        hyphened.refresh_from_db()
+        self.assertEqual(
+            underscored.note_category.slug, 'django_apps'
+        )
+        self.assertEqual(
+            underscored.note_category.name, 'Django Apps'
+        )
+        self.assertEqual(
+            underscored.note_category.parent.slug, 'projects'
+        )
+        self.assertEqual(hyphened.note_category.slug, 'apps')
+        self.assertEqual(
+            hyphened.note_category.parent.slug, 'django'
+        )
+
+    def test_composed_marker_reparses_to_the_same_chain(self):
+        # Marker compose → parse must round-trip at depth: '_'
+        # must survive in slugs or '#notes-x-world_of_bible'
+        # would resolve to a different tree.
+        leaf = resolve_note_category(
+            self.user, ['x', 'world_of_bible', 'easter_eggs']
+        )
+        marker = note_marker_for(leaf)
+        self.assertEqual(
+            marker, '#notes-x-world_of_bible-easter_eggs'
+        )
+        segments = note_marker_segments(marker)
+        self.assertEqual(
+            segments, ['x', 'world_of_bible', 'easter_eggs']
+        )
+        self.assertEqual(
+            resolve_note_category(self.user, segments), leaf
+        )
 
     def test_categories_are_per_user(self):
         other = get_user_model().objects.create_user(

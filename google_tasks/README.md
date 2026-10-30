@@ -208,19 +208,29 @@ separate surface.
 - Detected by a dedicated hyphen-aware pattern (`NOTE_TAG_RE`), NOT
   the shared hashtag regex (which splits on hyphens); `#notebook-x`
   and `#notesx` do NOT match
-- Path spelling: `-` separates the two category levels, `_` joins
-  words inside a segment; in leaf names `-` and `_` are equivalent
+- Path spelling: EVERY `-` is one category level at arbitrary
+  depth; `_` is the ONLY word-joiner inside a segment
 
 **Path Resolution**:
 - `#notes` → uncategorized
 - `#notes-x` → top-level category `x`
-- `#notes-x-y-…` → group `x` containing leaf `y-…` (remaining
-  segments rejoined): `#notes-projects-django-apps` ≡
-  `#notes-projects-django_apps` → `projects / django-apps`
-- Slugs lowercase with separators canonicalized and empties
-  collapsed — `#notes--x` ≡ `#notes-x`, `#notes-abc-` ≡
-  `#notes-abc`, `#notes-` ≡ `#notes`; missing categories
-  auto-create `NoteCategory` rows per user
+- `#notes-x-y-z-…` → the nested chain `x` → `y` → `z`:
+  `#notes-projects-World_of_Bible-Easter_eggs` → projects →
+  "World Of Bible" → "Easter Eggs" (3 levels)
+- `#notes-projects-django-apps` → `django` → `apps` under
+  `projects`; `#notes-projects-django_apps` → the single
+  "Django Apps" leaf — hyphens always mean more depth, so
+  multi-word names MUST use underscores
+- Slugs lowercase, KEEP `_` (a composed marker re-parses to the
+  same chain), separators canonicalized, empties collapsed —
+  `#notes--x` ≡ `#notes-x`, `#notes-abc-` ≡ `#notes-abc`,
+  `#notes-` ≡ `#notes`; missing categories auto-create
+  `NoteCategory` rows per user; display names render `_` as a
+  space titleized
+- Categories made under the old two-level rule (leaf slugs with
+  `-` like `django-apps`) can never match a marker now — they
+  become deletable orphans on the manage page once notes
+  reclassify onto the deeper path
 - With several markers, the first wins; marker text is stripped
   before hashtag processing so fragments can't trigger label
   matches, list moves, or star keywords — other hashtags on the

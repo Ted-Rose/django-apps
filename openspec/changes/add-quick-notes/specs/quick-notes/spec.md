@@ -67,23 +67,36 @@ normally.
   star keyword
 - **THEN** the task is not starred
 
-### Requirement: Category paths resolve to a two-level tree
+### Requirement: Category paths resolve to a nested tree
 
 The marker's path SHALL resolve as: `#notes` → uncategorized;
-`#notes-x` → top-level category `x`; `#notes-x-y-…` → group `x`
-containing leaf `y-…` (remaining segments rejoined). A hyphen
-separates the two levels; an underscore joins words inside a
-segment; in leaf names `-` and `_` are equivalent and render
-as spaces. Category names SHALL normalize to lowercase slugs
-with separators canonicalized and empties collapsed. Missing
-categories SHALL be auto-created for the owning user on first
-sight.
+`#notes-x` → top-level category `x`; `#notes-x-y-z-…` → a
+nested chain of arbitrary depth, one hyphen-separated segment
+per level. An underscore is the ONLY word-joiner inside a
+segment and renders as a space. Segment slugs SHALL be
+lowercase, keep underscores (so a composed marker re-parses
+identically), canonicalize separators, and collapse empties.
+Missing categories SHALL be auto-created for the owning user
+on first sight.
 
-#### Scenario: Multi-segment marker resolves group plus leaf
+#### Scenario: Multi-segment marker resolves nested dirs
+
+- **WHEN** a task carries
+  `#notes-projects-World_of_Bible-Easter_eggs`
+- **THEN** it is filed under `projects` → "World Of Bible" →
+  "Easter Eggs" (three levels)
+
+#### Scenario: Hyphens alone always mean more depth
 
 - **WHEN** a task carries `#notes-projects-django-apps`
-- **THEN** it is filed under group `projects`, leaf
-  `django-apps`
+- **THEN** it is filed under `projects` → `django` → `apps`
+
+#### Scenario: Underscore keeps a multi-word name atomic
+
+- **WHEN** one task carries `#notes-projects-django_apps` and
+  another `#notes-projects-django-apps`
+- **THEN** the first lands in a single `django_apps` leaf
+  ("Django Apps") while the second nests `django` → `apps`
 
 #### Scenario: Bare marker files as uncategorized
 
@@ -93,14 +106,8 @@ sight.
 #### Scenario: Underscore makes a multi-word top-level dir
 
 - **WHEN** a task carries `#notes-bible_research-genesis`
-- **THEN** it is filed under group `bible-research` (displayed
+- **THEN** it is filed under group `bible_research` (displayed
   "Bible Research"), leaf `genesis`
-
-#### Scenario: Leaf separators are equivalent
-
-- **WHEN** one task carries `#notes-projects-django-apps` and
-  another `#notes-projects-django_apps`
-- **THEN** both land in the same `django-apps` leaf
 
 #### Scenario: New path auto-creates categories
 

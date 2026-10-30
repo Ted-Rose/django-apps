@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import type { NoteCategoryOut } from '../api';
-import { flattenCategoryTree } from '../categories';
+import { flattenCategoryTree, isMarkerSafeCategory } from '../categories';
 
 /**
- * The category tree picker — a button-list of the two-level tree
- * (groups, then indented leaves) plus an Uncategorized row and,
- * for the editor, a "Not a note" escape that converts the note
- * back into a plain task (is_note: false on PATCH).
+ * The category tree picker — a button-list of the tree flattened
+ * to arbitrary depth (each level indents a step) plus an
+ * Uncategorized row and, for the editor, a "Not a note" escape
+ * that converts the note back into a plain task (is_note: false
+ * on PATCH).
  *
  * Selection values: `null` = Uncategorized (sent as category_id:
  * null), a category id, or the NOT_A_NOTE sentinel — kept as a
@@ -33,12 +34,14 @@ export function CategoryPicker({
   onChange,
 }: CategoryPickerProps) {
   const { t } = useTranslation('notes');
-  const rows = flattenCategoryTree(categories);
+  // Legacy '-'-slug categories can't be expressed as a marker
+  // path — picking one would silently misfile the note.
+  const rows = flattenCategoryTree(categories).filter(({ category }) =>
+    isMarkerSafeCategory(categories, category.id),
+  );
 
-  const optionClass = (selected: boolean, leaf: boolean) =>
-    `category-picker-option${leaf ? ' leaf' : ''}${
-      selected ? ' selected' : ''
-    }`;
+  const optionClass = (selected: boolean) =>
+    `category-picker-option${selected ? ' selected' : ''}`;
 
   return (
     <div role="listbox" aria-label={t('picker.title')}>
@@ -46,21 +49,26 @@ export function CategoryPicker({
         type="button"
         role="option"
         aria-selected={value === null}
-        className={optionClass(value === null, false)}
+        className={optionClass(value === null)}
         onClick={() => onChange(null)}
       >
         <i className="bi bi-inbox" /> {t('picker.uncategorized')}
       </button>
-      {rows.map(({ category, depth }) => (
+      {rows.map(({ category, depth, hasChildren }) => (
         <button
           key={category.id}
           type="button"
           role="option"
           aria-selected={value === category.id}
-          className={optionClass(value === category.id, depth === 1)}
+          className={optionClass(value === category.id)}
+          style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }}
           onClick={() => onChange(category.id)}
         >
-          <i className={`bi ${depth === 0 ? 'bi-folder' : 'bi-tag'}`} />{' '}
+          <i
+            className={`bi ${
+              hasChildren || depth === 0 ? 'bi-folder' : 'bi-tag'
+            }`}
+          />{' '}
           {category.name}
           {(category.note_count ?? 0) > 0 && (
             <span className="badge text-bg-secondary ms-auto">
@@ -76,10 +84,7 @@ export function CategoryPicker({
             type="button"
             role="option"
             aria-selected={value === NOT_A_NOTE}
-            className={`${optionClass(
-              value === NOT_A_NOTE,
-              false,
-            )} text-danger`}
+            className={`${optionClass(value === NOT_A_NOTE)} text-danger`}
             title={t('picker.notANoteHint')}
             onClick={() => onChange(NOT_A_NOTE)}
           >

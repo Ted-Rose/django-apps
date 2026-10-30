@@ -92,7 +92,7 @@
     "actions": "Darbības",
     "add": "Pievienot kategoriju",
     "addPlaceholder": "Jaunās kategorijas nosaukums",
-    "parent": "Grupas iekšpusē (neobligāti)",
+    "parent": "Vecākkategorija (neobligāti)",
     "rename": "Pārsaukt",
     "merge": "Apvienot",
     "delete": "Dzēst",
@@ -108,7 +108,8 @@
     "uncategorized": "Bez kategorijas (ienākošās)",
     "empty": "Vēl nav kategoriju — tās veido #notes-<ceļš> marķieris.",
     "retagged": "Pārmarķētas {{count}} piezīmes",
-    "topLevel": "Augšējā līmenī"
+    "topLevel": "Augšējā līmenī",
+    "unsafeSlug": "Vecs formāts — tajā ielikt nevar; pārsauc vai dzēs"
   },
   "toasts": {
     "createFailed": "Neizdevās izveidot piezīmi: {{detail}}",
@@ -124,7 +125,6 @@
   "server": {
     "invalidCategoryName": "Nederīgs kategorijas nosaukums",
     "categoryExists": "Kategorija jau pastāv",
-    "categoryTooDeep": "Kategorijas ir divus līmeņus dziļas",
     "invalidCategoryTarget": "Mērķis nedrīkst būt avota apakškokā",
     "invalidDeleteTarget": "Nederīgs dzēšanas mērķis",
     "emptyTitle": "Virsraksts nedrīkst būt tukšs",

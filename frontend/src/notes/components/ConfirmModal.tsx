@@ -15,6 +15,8 @@ interface ConfirmModalProps {
   confirmIcon?: string;
   /** Bootstrap button class for the confirm action. */
   confirmClassName?: string;
+  /** Extra disable for the confirm button (e.g. no target picked). */
+  confirmDisabled?: boolean;
   busy?: boolean;
   onConfirm: () => void;
   onClose: () => void;
@@ -27,6 +29,7 @@ export function ConfirmModal({
   confirmLabel,
   confirmIcon,
   confirmClassName = 'btn-primary',
+  confirmDisabled = false,
   busy = false,
   onConfirm,
   onClose,
@@ -52,7 +55,7 @@ export function ConfirmModal({
             type="button"
             className={`btn ${confirmClassName}`}
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
           >
             {busy ? (
               <span className="spinner-border spinner-border-sm me-1" />
