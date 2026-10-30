@@ -28,6 +28,21 @@ const mockedApiPatch = vi.mocked(apiPatch);
 const CATEGORIES: NoteCategoryOut[] = [
   { id: 1, name: 'God', slug: 'god', parent_id: null, note_count: 4 },
   { id: 2, name: 'Prayer', slug: 'prayer', parent_id: 1, note_count: 2 },
+  {
+    id: 3,
+    name: 'Projects',
+    slug: 'projects',
+    parent_id: null,
+    note_count: 3,
+  },
+  {
+    id: 4,
+    name: 'Django',
+    slug: 'django',
+    parent_id: 3,
+    note_count: 2,
+  },
+  { id: 5, name: 'Apps', slug: 'apps', parent_id: 4, note_count: 1 },
 ];
 
 function makeNote(overrides: Partial<TaskOut> = {}): TaskOut {
@@ -109,6 +124,23 @@ describe('NoteCard', () => {
     const chip = screen.getByRole('link', { name: /God \/ Prayer/ });
     expect(chip).toHaveAttribute('href', '/category/2');
     expect(screen.getByText('Oct 5, 2026')).toBeInTheDocument();
+  });
+
+  it('renders the full ancestor path on a deep category chip', () => {
+    renderCard(
+      makeNote({
+        note_category: {
+          id: 5,
+          name: 'Apps',
+          slug: 'apps',
+          parent_id: 4,
+        },
+      }),
+    );
+    const chip = screen.getByRole('link', {
+      name: /Projects \/ Django \/ Apps/,
+    });
+    expect(chip).toHaveAttribute('href', '/category/5');
   });
 
   it('renders an Inbox chip for uncategorized notes', () => {
