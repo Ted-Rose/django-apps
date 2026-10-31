@@ -35,8 +35,17 @@ def send_limit_alert(user, title, body, url):
         )
         return
 
+    subscriptions = list(user.push_subscriptions.all())
+    if not subscriptions:
+        logger.info(
+            'Push alert skipped for user=%s: no push '
+            'subscriptions', user.username,
+        )
+        return
+
     payload = json.dumps({'title': title, 'body': body, 'url': url})
-    for subscription in user.push_subscriptions.all():
+    sent = 0
+    for subscription in subscriptions:
         try:
             webpush(
                 subscription_info={
@@ -55,6 +64,7 @@ def send_limit_alert(user, title, body, url):
                 ttl=12 * 60 * 60,
                 headers={'Urgency': 'high'},
             )
+            sent += 1
         except WebPushException as exc:
             status = (
                 exc.response.status_code if exc.response is not None
@@ -83,3 +93,7 @@ def send_limit_alert(user, title, body, url):
                 'Push to subscription %s failed for user=%s',
                 subscription.pk, user.username,
             )
+    logger.info(
+        'Pushed alert to %s/%s subscriptions for user=%s',
+        sent, len(subscriptions), user.username,
+    )
