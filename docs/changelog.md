@@ -1,6 +1,15 @@
 # google_api
 
 ## Changelog
+19. Dead bank consents stop retrying: when GoCardless reports an
+    expired (401 AccessExpiredError) or suspended (409) consent,
+    the requisition is stamped EX/SU locally so every sync,
+    balance refresh and alert check skips it instead of
+    re-failing daily; sync reports "bank must be relinked" per
+    account. Relinking the bank now reconciles by IBAN — the
+    original account row is reattached in place, so transactions,
+    shares, limits, alerts and preferences survive the new
+    account ids instead of duplicating (issue #57)
 18. Fixed audio generation failing for emails over ~1900 chars —
     the 1 MB per-file cap assumed gTTS renders 24 kbps but it
     renders 64 kbps, so legitimate requests hit the cap and
