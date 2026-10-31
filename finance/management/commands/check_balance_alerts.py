@@ -11,6 +11,7 @@ from finance.models import BalanceAlert, Notification
 from finance.services.gocardless import GoCardlessClient
 from finance.services.money import fmt_money
 from finance.services.push import ALERT_REPEAT_AFTER, send_limit_alert
+from finance.services.requisitions import mark_requisition_dead
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         alerts = list(
-            BalanceAlert.objects.filter(is_active=True)
-            .select_related('account', 'user')
+            BalanceAlert.objects.filter(
+                is_active=True,
+                account__requisition__status='LN',
+            )
+            .select_related('account', 'account__requisition', 'user')
         )
         if not alerts:
             self.stdout.write('No active balance alerts.')
@@ -68,6 +72,9 @@ class Command(BaseCommand):
         for account in accounts.values():
             result = results.get(account.account_id, {})
             if not result.get('ok') or not result.get('balance'):
+                dead_status = result.get('dead_status')
+                if dead_status and not dry_run:
+                    mark_requisition_dead(account, dead_status)
                 logger.warning(
                     'Balance fetch failed for account %s — '
                     'skipping its alerts: %s',

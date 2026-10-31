@@ -1351,6 +1351,63 @@ class SyncAndBalancesApiTests(ApiTestCase):
         self.assertIn('429', detail['acc-2'])
         self.assertIn('EX', detail['acc-3'])
 
+    def test_sync_terminal_error_marks_requisition_dead(self):
+        """A 401 AccessExpiredError stamps the requisition EX and
+        reports relink-needed instead of operationFailed."""
+        client = MagicMock()
+        client.fetch_transactions.side_effect = GoCardlessError(
+            401, '{"summary": "AccessExpiredError"}'
+        )
+        with patch(
+            'finance.api.GoCardlessClient', return_value=client
+        ):
+            resp = self.post_json('/transactions/sync/')
+        body = resp.json()
+        entry = body['accounts'][0]
+        self.assertEqual(entry['status'], 'skipped')
+        self.assertEqual(entry['code'], 'requisitionNotLinked')
+        self.assertEqual(entry['params']['status'], 'EX')
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'EX')
+
+    def test_sync_dead_requisition_skips_sibling_fetches(self):
+        """One terminal error retires the requisition — remaining
+        same-requisition accounts report relink-needed without
+        another GoCardless call."""
+        make_account(self.user, self.req, account_id='acc-2')
+        client = MagicMock()
+        client.fetch_transactions.side_effect = GoCardlessError(
+            401, '{"summary": "AccessExpiredError"}'
+        )
+        with patch(
+            'finance.api.GoCardlessClient', return_value=client
+        ):
+            resp = self.post_json('/transactions/sync/')
+        client.fetch_transactions.assert_called_once()
+        body = resp.json()
+        self.assertEqual(len(body['accounts']), 2)
+        for entry in body['accounts']:
+            self.assertEqual(entry['status'], 'skipped')
+            self.assertEqual(entry['code'], 'requisitionNotLinked')
+            self.assertEqual(entry['params']['status'], 'EX')
+
+    def test_sync_transient_error_still_operation_failed(self):
+        client = MagicMock()
+        client.fetch_transactions.side_effect = GoCardlessError(
+            500, 'boom'
+        )
+        with patch(
+            'finance.api.GoCardlessClient', return_value=client
+        ):
+            resp = self.post_json('/transactions/sync/')
+        body = resp.json()
+        self.assertEqual(body['failed'], 1)
+        entry = body['accounts'][0]
+        self.assertEqual(entry['status'], 'failed')
+        self.assertEqual(entry['code'], 'operationFailed')
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'LN')
+
     def test_refresh_balances_without_included_accounts(self):
         resp = self.post_json('/balances/refresh/')
         self.assertEqual(resp.status_code, 200)

@@ -61,6 +61,7 @@ from finance.services.categories import (
 )
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
 from finance.services.limits import limit_window_stats
+from finance.services.requisitions import mark_requisition_dead
 from finance.services.rules import (
     active_rules_for,
     apply_rules,
@@ -118,6 +119,42 @@ def _balance_check_accounts(user):
         user_preferences__user=user,
         user_preferences__included_in_balance_check=True,
     )
+
+
+def _not_linked_entry(account, status):
+    """The 'bank must be relinked' per-account skipped entry — one
+    shape for pre-pass non-LN requisitions and consents that died
+    mid-run."""
+    return {
+        'account': str(account),
+        'status': 'skipped',
+        'created': 0,
+        'updated': 0,
+        'detail': (
+            f'Requisition status is {status} '
+            f'(not LN) — bank must be relinked.'
+        ),
+        'code': 'requisitionNotLinked',
+        'params': {'status': status},
+    }
+
+
+def _sync_failed_entry(account, exc):
+    """The per-account failed entry for non-terminal errors —
+    the code only says "the account failed"; detail stays
+    diagnostic English (exception text is never translated)."""
+    logger.exception(
+        'Transaction sync failed for account %s: %s',
+        account.account_id, exc,
+    )
+    return {
+        'account': str(account),
+        'status': 'failed',
+        'created': 0,
+        'updated': 0,
+        'detail': str(exc)[:200],
+        'code': 'operationFailed',
+    }
 
 
 def _account_payload(request, account, pref, alert=None):
@@ -1506,18 +1543,7 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
         a for a in visible if a.requisition.status == 'LN'
     ]
     skipped = [
-        {
-            'account': str(a),
-            'status': 'skipped',
-            'created': 0,
-            'updated': 0,
-            'detail': (
-                f'Requisition status is {a.requisition.status} '
-                f'(not LN) — bank must be relinked.'
-            ),
-            'code': 'requisitionNotLinked',
-            'params': {'status': a.requisition.status},
-        }
+        _not_linked_entry(a, a.requisition.status)
         for a in visible
         if a.requisition.status != 'LN'
     ]
@@ -1535,7 +1561,15 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
     client = GoCardlessClient()
     created = updated = failed = 0
     results = []
+    # Requisition pks whose consent died mid-run — remaining
+    # same-requisition accounts report relink-needed without
+    # another GoCardless call.
+    dead = {}
     for account in accounts:
+        dead_status = dead.get(account.requisition_id)
+        if dead_status:
+            skipped.append(_not_linked_entry(account, dead_status))
+            continue
         try:
             c, u = sync_account_transactions(client, account)
             created += c
@@ -1547,22 +1581,20 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
                 'updated': u,
                 'detail': '',
             })
+        except GoCardlessError as exc:
+            dead_status = exc.dead_requisition_status
+            if dead_status:
+                mark_requisition_dead(account, dead_status)
+                dead[account.requisition_id] = dead_status
+                skipped.append(
+                    _not_linked_entry(account, dead_status)
+                )
+                continue
+            failed += 1
+            results.append(_sync_failed_entry(account, exc))
         except Exception as exc:
             failed += 1
-            logger.exception(
-                'Transaction sync failed for account %s: %s',
-                account.account_id, exc,
-            )
-            results.append({
-                'account': str(account),
-                'status': 'failed',
-                'created': 0,
-                'updated': 0,
-                'detail': str(exc)[:200],
-                # Exception text is never translated — the code only
-                # says "the account failed"; detail stays diagnostic.
-                'code': 'operationFailed',
-            })
+            results.append(_sync_failed_entry(account, exc))
 
     if failed:
         message = (
@@ -1700,6 +1732,9 @@ def set_exclusion(request, tx_id: int, payload: ExclusionIn):
 @router.post('/balances/refresh/', response=RefreshOut)
 def refresh_balances(request):
     """Fetch the latest balances from GoCardless on demand."""
+    # The fetch set is LN-filtered here — ``_balance_check_accounts``
+    # stays unfiltered so GET /balances/ keeps listing dead
+    # accounts' stored balances.
     accounts = _balance_check_accounts(request.user)
     if not accounts.exists():
         return {
@@ -1713,12 +1748,35 @@ def refresh_balances(request):
             'failed': 0,
         }
 
+    live_accounts = list(
+        accounts.filter(requisition__status='LN')
+        .select_related('requisition')
+    )
+    if not live_accounts:
+        dead_status = (
+            accounts.exclude(requisition__status='LN')
+            .values_list('requisition__status', flat=True)
+            .first()
+        )
+        return {
+            'success': False,
+            'message': (
+                'Bank must be relinked — showing last stored '
+                'balance until then.'
+            ),
+            'code': 'requisitionNotLinked',
+            'params': {'status': dead_status},
+            'updated': 0,
+            'rate_limited': 0,
+            'failed': 0,
+        }
+
     client = GoCardlessClient()
     results = client.fetch_balances_parallel(
-        [a.account_id for a in accounts]
+        [a.account_id for a in live_accounts]
     )
     updated = rate_limited = failed = 0
-    for account in accounts:
+    for account in live_accounts:
         result = results.get(account.account_id, {})
         if result.get('ok') and result.get('balance'):
             account.last_balance = result['balance']
@@ -1731,6 +1789,11 @@ def refresh_balances(request):
             rate_limited += 1
         else:
             failed += 1
+            # A terminal consent error retires the requisition so
+            # future runs skip it — counted failed this run too.
+            dead_status = result.get('dead_status')
+            if dead_status:
+                mark_requisition_dead(account, dead_status)
             logger.warning(
                 'Balance fetch failed for account %s: %s',
                 account.account_id, result.get('error'),

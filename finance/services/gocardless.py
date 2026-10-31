@@ -1,3 +1,4 @@
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -17,6 +18,53 @@ class GoCardlessError(Exception):
         self.status_code = status_code
         self.body = body
         super().__init__(f'GoCardless API error {status_code}: {body}')
+
+    @property
+    def dead_requisition_status(self):
+        """GoCardless lifecycle status the local requisition must
+        take when this error means the consent is dead — ``'EX'``
+        (access expired), ``'SU'`` (suspended) or ``None``.
+
+        Requires BOTH the HTTP status and a body marker so a random
+        401/409 can never kill a consent:
+
+        - 401 whose body's ``summary``/``type`` is
+          ``AccessExpiredError`` → ``'EX'``. Falls back to a literal
+          substring scan of the raw body when the body is not JSON
+          or the fields are absent.
+        - 409 whose ``summary``/``detail`` mentions ``suspend``
+          (covers "Account suspended" and "consent suspended") →
+          ``'SU'``.
+        """
+        try:
+            payload = json.loads(self.body)
+            if not isinstance(payload, dict):
+                payload = None
+        except (TypeError, ValueError):
+            payload = None
+        body = payload or {}
+        summary = body.get('summary')
+        detail = body.get('detail')
+        error_type = body.get('type')
+
+        if self.status_code == 401:
+            if (
+                summary == 'AccessExpiredError'
+                or error_type == 'AccessExpiredError'
+            ):
+                return 'EX'
+            # Substring fallback: non-JSON body, or a JSON body
+            # carrying neither field.
+            if (
+                payload is None
+                or (summary is None and error_type is None)
+            ) and 'AccessExpiredError' in (self.body or ''):
+                return 'EX'
+        elif self.status_code == 409:
+            haystack = f'{summary or ""} {detail or ""}'
+            if payload is not None and 'suspend' in haystack.lower():
+                return 'SU'
+        return None
 
 
 class GoCardlessClient:
@@ -154,6 +202,7 @@ class GoCardlessClient:
                     'rate_limited': False,
                     'balance': self.fetch_account_balance(account_id),
                     'error': None,
+                    'dead_status': None,
                 }
             except requests.HTTPError as exc:
                 return account_id, {
@@ -161,6 +210,7 @@ class GoCardlessClient:
                     'rate_limited': False,
                     'balance': None,
                     'error': str(exc),
+                    'dead_status': None,
                 }
             except GoCardlessError as exc:
                 return account_id, {
@@ -168,6 +218,7 @@ class GoCardlessClient:
                     'rate_limited': exc.status_code == 429,
                     'balance': None,
                     'error': str(exc),
+                    'dead_status': exc.dead_requisition_status,
                 }
 
         with ThreadPoolExecutor(
