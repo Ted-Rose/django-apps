@@ -1,6 +1,12 @@
 # google_api
 
 ## Changelog
+18. Fixed audio generation failing for emails over ~1900 chars —
+    the 1 MB per-file cap assumed gTTS renders 24 kbps but it
+    renders 64 kbps, so legitimate requests hit the cap and
+    400'd; the cap is now 4 MB, covering the 5000-char input
+    limit. '[image: …]' placeholders and '*' emphasis marks are
+    also no longer read aloud
 17. The legacy public `/text-to-audio` endpoint is disabled (route
     commented out, code kept) — it was unauthenticated, so anyone
     could burn TTS/GCS operations; the SPAs only use the
