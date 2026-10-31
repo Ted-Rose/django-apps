@@ -82,11 +82,14 @@ GCS_STORAGE_SCOPES = [
 # GCP free tier alongside the 7-day lifecycle rule.
 AUDIO_FILE_LIMIT = 500
 
-# Per-file ceiling checked after gTTS renders — gTTS is ~24 kbps
-# mono, so 1 MB ≈ 5.7 min of speech. The 5000-char input cap sits
-# right at that boundary, so the byte check is the real guarantee
-# against oversized uploads (abuse or pathological input).
-AUDIO_FILE_MAX_BYTES = 1024 * 1024
+# Per-file ceiling checked after gTTS renders. gTTS actually
+# renders ~64 kbps mono (24 kHz) — ~8000 B/s — so 1 MiB ≈ 131 s
+# ≈ only ~1900 chars of English (~600 B/char measured). The old
+# 1 MiB cap rejected every render over ~1900 chars while 5000
+# chars stayed legal input. 4 MiB ≈ 8.7 min covers a 5000-char
+# render (~3 MiB) with headroom; the check remains the guard
+# against pathological renders.
+AUDIO_FILE_MAX_BYTES = 4 * 1024 * 1024
 
 
 def _enforce_audio_file_limit(bucket) -> None:
@@ -120,12 +123,25 @@ def _sanitize_text_for_audio(text: str) -> str:
     Returns:
         Sanitized text suitable for TTS
     """
+    # Drop Gmail's image placeholders — text/plain parts keep
+    # '[image: name.jpg]' / '[inline_image]' for inline images and
+    # gTTS read the bracketed label aloud. Runs before the URL
+    # sub below so '[image: http://x]' placeholders drop whole.
+    text = re.sub(
+        r'\[(?:image|inline_image)[^\]]*\]', ' ', text,
+        flags=re.IGNORECASE,
+    )
+
     # Replace URLs with the word "web link"
     text = re.sub(r'https?://\S+', 'web link', text)
 
-    # Remove divider runs — dashes, underscores, '=' and '~' (the
-    # e-klase footer is a '____' line gTTS would spell out)
-    text = re.sub(r'[-_~=*]{2,}', '', text)
+    # '*' reads as "asterisk" in *emphasis* and bullet lists —
+    # strip it to a space so adjacent tokens ('2*3' → '2 3')
+    # separate. '-', '_', '~' and '=' only in 2+ runs (divider
+    # lines like the e-klase '____' footer) so hyphenated words
+    # and 'a ~5 min' approximations survive.
+    text = re.sub(r'\*', ' ', text)
+    text = re.sub(r'[-_~=]{2,}', '', text)
 
     # Remove excessive whitespace
     text = re.sub(r'\s+', ' ', text).strip()

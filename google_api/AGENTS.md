@@ -42,7 +42,7 @@ utilities; `google_api` must never import them. Full docs:
     credentials. After each upload, `_enforce_audio_file_limit`
     caps `recordings/` at `AUDIO_FILE_LIMIT` (500) objects,
     deleting the oldest — best-effort, failures only log. Renders
-    over `AUDIO_FILE_MAX_BYTES` (1 MB) are rejected with
+    over `AUDIO_FILE_MAX_BYTES` (4 MB) are rejected with
     `ValueError` before upload.
 - `decorators.py` — `@google_auth_required(scopes=[...])`: redirects to
   `google_api:login` when unauthenticated, scopes missing, or stored
@@ -89,7 +89,7 @@ feature apps (that's why `_adapt`/`_reauth_url` were promoted to
   `OAUTHLIB_RELAX_TOKEN_SCOPE=1` is required because
   `include_granted_scopes='true'` returns extra granted scopes.
 - `AudioGenerationError` for pipeline failures, `ValueError` for bad
-  input (max 5000 chars, or a render over the 1 MB output
+  input (max 5000 chars, or a render over the 4 MB output
   cap). Language detection restricted to lv/en.
 - Signed URLs use the IAM `signBlob` path
   (`service_account_email` + `access_token`) on Cloud Run because the

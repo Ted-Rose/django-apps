@@ -185,6 +185,28 @@ class TextToAudioLanguageTests(TestCase):
             gtts.call_args.kwargs['text'], 'Teksts vēl teksts'
         )
 
+    def test_image_placeholders_not_read_aloud(self):
+        # Gmail text/plain parts keep '[image: name.jpg]' and
+        # '[inline_image]' for inline images — gTTS used to read
+        # the bracketed label aloud.
+        with audio_pipeline() as gtts:
+            text_to_audio(
+                'See [image: photo.jpg] and [inline_image] here',
+                lang='en',
+            )
+        self.assertEqual(
+            gtts.call_args.kwargs['text'], 'See and here'
+        )
+
+    def test_emphasis_asterisks_stripped(self):
+        # '*' in *emphasis* and '* bullet' lists reads aloud as
+        # "asterisk".
+        with audio_pipeline() as gtts:
+            text_to_audio('a *bold* and * item', lang='en')
+        self.assertEqual(
+            gtts.call_args.kwargs['text'], 'a bold and item'
+        )
+
 
 class TextToAudioSigningTests(TestCase):
     """Signed URLs are generated via IAM signBlob when ADC has no
@@ -356,10 +378,28 @@ class TextToAudioLimitTests(TestCase):
             url = text_to_audio('sveiki', lang='lv')
         self.assertEqual(url, 'https://signed/x.mp3')
 
+    def test_byte_cap_covers_max_input_at_real_bitrate(self):
+        # gTTS renders ~64 kbps ≈ ~600 B/char of English measured —
+        # the 1 MB cap silently rejected every render over ~1900
+        # chars while the 5000-char input cap stayed legal.
+        self.assertGreaterEqual(AUDIO_FILE_MAX_BYTES, 5000 * 600)
+
+    def test_full_length_gmail_render_uploads(self):
+        # The production failure: a 2333-char email rendered
+        # 1,413,696 B — over the old 1 MB cap, under the new one.
+        with self._pipeline() as bucket, \
+                patch('google_api.utils.os.path.getsize',
+                      return_value=1_413_696):
+            url = text_to_audio('x' * 2333, lang='en')
+        self.assertEqual(url, 'https://signed/x.mp3')
+        bucket.blob.return_value \
+            .upload_from_filename.assert_called_once()
+
     def test_oversized_render_rejected_before_upload(self):
         # A render over AUDIO_FILE_MAX_BYTES is a deterministic
-        # ValueError (→ API 400), never an upload — the guard
-        # against abuse via the public /text-to-audio endpoint.
+        # ValueError (→ API 400), never an upload — a backstop
+        # against pathological renders (the public /text-to-audio
+        # endpoint it originally guarded is commented out).
         with self._pipeline() as bucket, \
                 patch('google_api.utils.os.path.getsize',
                       return_value=AUDIO_FILE_MAX_BYTES + 1):

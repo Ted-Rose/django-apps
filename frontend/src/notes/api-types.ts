@@ -76,9 +76,9 @@ export interface paths {
         /**
          * Audio
          * @description Session-authenticated sibling of /text-to-audio (the legacy
-         *     endpoint is public but has no callers left). Same {audio_url}
-         *     shape; the legacy 500 maps to the API's 502 upstream_error
-         *     taxonomy.
+         *     public endpoint, whose route is now commented out). Same
+         *     {audio_url} shape; the legacy 500 maps to the API's 502
+         *     upstream_error taxonomy.
          */
         get: operations["gmail_api_audio"];
         put?: never;
