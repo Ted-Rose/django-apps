@@ -37,8 +37,13 @@ utilities; `google_api` must never import them. Full docs:
     `session['oauth_redirect_url']` (strips `sync` param to avoid an
     auth loop).
   - `text_to_audio(text, lang, filename)` — gTTS → upload to GCS
-    `recordings/` → v4 signed URL (7 days, matches bucket lifecycle).
-    Requires `GCS_AUDIO_BUCKET` env var + GCP credentials.
+    `recordings/` → v4 signed URL (7 days, matches bucket
+    lifecycle). Requires `GCS_AUDIO_BUCKET` env var + GCP
+    credentials. After each upload, `_enforce_audio_file_limit`
+    caps `recordings/` at `AUDIO_FILE_LIMIT` (500) objects,
+    deleting the oldest — best-effort, failures only log. Renders
+    over `AUDIO_FILE_MAX_BYTES` (1 MB) are rejected with
+    `ValueError` before upload.
 - `decorators.py` — `@google_auth_required(scopes=[...])`: redirects to
   `google_api:login` when unauthenticated, scopes missing, or stored
   credentials are unusable. **Currently unconsumed** — it lost its
@@ -47,14 +52,15 @@ utilities; `google_api` must never import them. Full docs:
 - `views.py` — `login_view` (unified auth entry — every feature's
   reauth bounce points at `google_api:login`, and it's the site's
   `LOGIN_URL`) and `audio` (`/text-to-audio` GET endpoint — legacy
-  **unauthenticated** TTS service; the single_pages rewrite removed
-  its last in-repo caller (twister.html) and the SPAs use the
-  session-authed `/api/gmail/audio/` + `/api/single_pages/tts/` ops,
-  so gating or deleting it is now a free decision — security finding
-  F3). `urls.py` routes `login/`, `google/callback` (the
-  `redirect_uri` registered in Google Cloud Console) and
-  `text-to-audio` — all plain Django views, never ninja ops, and
-  never behind a root-level catch-all.
+  **unauthenticated** TTS service, security finding F3). The route
+  is **commented out in `urls.py`** — an open TTS endpoint let
+  anyone burn gTTS/GCS operations, and no callers remained (the
+  SPAs use the session-authed `/api/gmail/audio/` +
+  `/api/single_pages/tts/` ops); the view code stays for possible
+  re-enable behind auth. `urls.py` routes `login/` and
+  `google/callback` (the `redirect_uri` registered in Google Cloud
+  Console) — all plain Django views, never ninja ops, and never
+  behind a root-level catch-all.
 
 ## Recipe: adding a new Google integration
 
@@ -83,7 +89,8 @@ feature apps (that's why `_adapt`/`_reauth_url` were promoted to
   `OAUTHLIB_RELAX_TOKEN_SCOPE=1` is required because
   `include_granted_scopes='true'` returns extra granted scopes.
 - `AudioGenerationError` for pipeline failures, `ValueError` for bad
-  input (max 5000 chars). Language detection restricted to lv/en.
+  input (max 5000 chars, or a render over the 1 MB output
+  cap). Language detection restricted to lv/en.
 - Signed URLs use the IAM `signBlob` path
   (`service_account_email` + `access_token`) on Cloud Run because the
   metadata-server creds have no private key; on Vercel,

@@ -84,6 +84,6 @@ and the 2300-char truncation — all deliberate parity ports.
 - `_gmail_reauth_response` reads `HTTP_REFERER` for the redirect
   (the SPA's fetches send `Referer: /gmail/…`); `'/gmail/'` is just
   the fallback.
-- `/text-to-audio` stays in `google_api` (legacy public endpoint,
-  no in-repo callers left) — the SPA only ever calls
-  `/api/gmail/audio/`.
+- `/text-to-audio` stays in `google_api` but its route is
+  commented out (was a public endpoint — abuse surface, F3) — the
+  SPA only ever calls `/api/gmail/audio/`.

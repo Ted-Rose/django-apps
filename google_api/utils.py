@@ -78,6 +78,37 @@ GCS_STORAGE_SCOPES = [
     'https://www.googleapis.com/auth/devstorage.read_write',
 ]
 
+# Hard cap on stored audio objects — keeps the bucket inside the
+# GCP free tier alongside the 7-day lifecycle rule.
+AUDIO_FILE_LIMIT = 500
+
+# Per-file ceiling checked after gTTS renders — gTTS is ~24 kbps
+# mono, so 1 MB ≈ 5.7 min of speech. The 5000-char input cap sits
+# right at that boundary, so the byte check is the real guarantee
+# against oversized uploads (abuse or pathological input).
+AUDIO_FILE_MAX_BYTES = 1024 * 1024
+
+
+def _enforce_audio_file_limit(bucket) -> None:
+    """Delete the oldest recordings/ objects beyond
+    AUDIO_FILE_LIMIT. Best-effort: a listing/deletion failure must
+    not fail audio generation that already succeeded — the next
+    upload retries the cleanup."""
+    try:
+        blobs = list(bucket.list_blobs(prefix='recordings/'))
+        excess = len(blobs) - AUDIO_FILE_LIMIT
+        if excess <= 0:
+            return
+        blobs.sort(
+            key=lambda b: b.time_created
+            or datetime.min.replace(tzinfo=dt_timezone.utc)
+        )
+        for blob in blobs[:excess]:
+            blob.delete()
+            logger.info(f'Deleted audio over limit: {blob.name}')
+    except Exception as e:
+        logger.warning(f'Audio file limit enforcement failed: {e}')
+
 
 def _sanitize_text_for_audio(text: str) -> str:
     """
@@ -198,6 +229,12 @@ def text_to_audio(
                 audio.save(tmp_path)
 
             try:
+                size = os.path.getsize(tmp_path)
+                if size > AUDIO_FILE_MAX_BYTES:
+                    raise ValueError(
+                        f'Generated audio too large: {size} bytes '
+                        f'(max {AUDIO_FILE_MAX_BYTES})'
+                    )
                 blob.upload_from_filename(
                     tmp_path,
                     content_type='audio/mpeg',
@@ -208,6 +245,8 @@ def text_to_audio(
                 )
             finally:
                 os.unlink(tmp_path)
+
+            _enforce_audio_file_limit(bucket)
 
         # Generate signed URL valid for 7 days. Service-account-key
         # creds (Vercel lambdas) carry a private key and sign locally;
@@ -229,6 +268,10 @@ def text_to_audio(
 
         return signed_url
 
+    # ValueError (oversized render) is deterministic — surface it
+    # as-is so the API maps it to 400, not a retryable 502.
+    except ValueError:
+        raise
     except Exception as e:
         logger.exception(f"Failed to generate audio: {e}")
         raise AudioGenerationError(f"Audio generation failed: {e}")

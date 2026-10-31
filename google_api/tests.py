@@ -1,5 +1,6 @@
 import os
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlparse
@@ -14,7 +15,11 @@ from oauthlib.oauth2.rfc6749.errors import (
 
 from google.oauth2 import service_account
 
-from google_api.utils import text_to_audio
+from google_api.utils import (
+    AUDIO_FILE_LIMIT,
+    AUDIO_FILE_MAX_BYTES,
+    text_to_audio,
+)
 
 CALLBACK_URL = '/google/callback'
 
@@ -274,3 +279,91 @@ class TextToAudioReuseTests(TestCase):
         self.assertEqual(names[0], names[1])
         self.assertNotEqual(names[0], names[2])
         self.assertIn('recordings/message_audio_', names[0])
+
+
+class TextToAudioLimitTests(TestCase):
+    """After each upload the recordings/ prefix is capped at
+    AUDIO_FILE_LIMIT objects — the oldest are deleted so the bucket
+    stays inside the GCP free tier. Cleanup is best-effort: its
+    failure must not break a generation that already succeeded."""
+
+    @staticmethod
+    def _blobs(count):
+        """list_blobs() stand-ins, oldest first."""
+        blobs = []
+        for i in range(count):
+            blob = Mock()
+            blob.name = f'recordings/a_{i}.mp3'
+            blob.time_created = datetime(
+                2024, 1, 1, tzinfo=timezone.utc
+            ) + timedelta(days=i)
+            blobs.append(blob)
+        return blobs
+
+    @contextmanager
+    def _pipeline(self):
+        """audio_pipeline() variant that yields the bucket mock so
+        list_blobs()/delete() can be stubbed and asserted on."""
+        with patch.dict(os.environ, {'GCS_AUDIO_BUCKET': 'bucket'}), \
+                patch('google.auth.default',
+                      return_value=(Mock(), 'project')), \
+                patch('google_api.utils.storage.Client') as cl, \
+                patch('google_api.utils.gTTS'):
+            bucket = cl.return_value.bucket.return_value
+            blob = bucket.blob.return_value
+            blob.exists.return_value = False
+            blob.generate_signed_url.return_value = \
+                'https://signed/x.mp3'
+            yield bucket
+
+    def test_oldest_deleted_when_limit_exceeded(self):
+        with self._pipeline() as bucket:
+            bucket.list_blobs.return_value = self._blobs(
+                AUDIO_FILE_LIMIT + 2
+            )
+            url = text_to_audio('sveiki', lang='lv')
+            deleted = [
+                b.name for b in bucket.list_blobs.return_value
+                if b.delete.called
+            ]
+        self.assertEqual(url, 'https://signed/x.mp3')
+        self.assertEqual(
+            deleted,
+            ['recordings/a_0.mp3', 'recordings/a_1.mp3'],
+        )
+
+    def test_no_deletion_at_or_under_limit(self):
+        with self._pipeline() as bucket:
+            bucket.list_blobs.return_value = self._blobs(
+                AUDIO_FILE_LIMIT
+            )
+            text_to_audio('sveiki', lang='lv')
+            for blob in bucket.list_blobs.return_value:
+                blob.delete.assert_not_called()
+
+    def test_limit_not_checked_on_dedup_hit(self):
+        # An existing object doesn't grow the bucket — skip the
+        # listing entirely.
+        with self._pipeline() as bucket:
+            bucket.blob.return_value.exists.return_value = True
+            url = text_to_audio('sveiki', lang='lv')
+            bucket.list_blobs.assert_not_called()
+        self.assertEqual(url, 'https://signed/x.mp3')
+
+    def test_cleanup_failure_still_returns_url(self):
+        with self._pipeline() as bucket:
+            bucket.list_blobs.side_effect = Exception('listing boom')
+            url = text_to_audio('sveiki', lang='lv')
+        self.assertEqual(url, 'https://signed/x.mp3')
+
+    def test_oversized_render_rejected_before_upload(self):
+        # A render over AUDIO_FILE_MAX_BYTES is a deterministic
+        # ValueError (→ API 400), never an upload — the guard
+        # against abuse via the public /text-to-audio endpoint.
+        with self._pipeline() as bucket, \
+                patch('google_api.utils.os.path.getsize',
+                      return_value=AUDIO_FILE_MAX_BYTES + 1):
+            with self.assertRaises(ValueError):
+                text_to_audio('sveiki', lang='lv')
+            bucket.blob.return_value \
+                .upload_from_filename.assert_not_called()

@@ -1,6 +1,22 @@
 # google_api
 
 ## Changelog
+17. The legacy public `/text-to-audio` endpoint is disabled (route
+    commented out, code kept) — it was unauthenticated, so anyone
+    could burn TTS/GCS operations; the SPAs only use the
+    session-authenticated `/api/gmail/audio/` +
+    `/api/single_pages/tts/` endpoints. The audio SAs also gained
+    objectAdmin on the recordings bucket so the 500-file cap can
+    delete old files
+16. Text-to-speech audio is capped per file too: generated files
+    over 1 MB are rejected before upload (a single file can no
+    longer exceed that size), complementing the 500-file bucket
+    cap — both guard against abuse and runaway storage growth
+15. Stored text-to-speech audio is now capped at 500 files: when a
+    new upload pushes the recordings bucket past the limit, the
+    oldest files are deleted automatically — a safety net on top
+    of the existing 7-day auto-deletion to keep storage inside
+    the GCP free tier
 14. Task notes and note bodies are rich text: the description
     fields in the tasks and notes apps are now a TipTap editor —
     markdown shortcuts convert live while typing (`#`, `-`, `>`,

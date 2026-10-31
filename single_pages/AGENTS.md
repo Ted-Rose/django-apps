@@ -14,9 +14,10 @@ lives in `services.py`.
 - `api.py` — ninja `Router` mounted at `/api/single_pages/`:
   - `GET tts/?text=&lang=&filename=` — session-authenticated wrapper
     over `google_api.utils.text_to_audio` (the typed replacement for
-    the legacy public `/text-to-audio`; same shape as
-    `/api/gmail/audio/`). `ValueError` → 400, `AudioGenerationError`
-    and other pipeline failures → 502 `upstream_error`.
+    the legacy public `/text-to-audio`, whose route is now
+    commented out; same shape as `/api/gmail/audio/`). `ValueError`
+    → 400, `AudioGenerationError` and other pipeline failures → 502
+    `upstream_error`.
   - `GET spoki/` — the article fetch + `nh3.clean` on the HTML.
     `RequestException` → 502. Sanitization is the F4 fix — the SPA
     renders `html` via `dangerouslySetInnerHTML`, so upstream

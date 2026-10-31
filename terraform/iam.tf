@@ -144,17 +144,13 @@ resource "google_service_account_iam_member" "github_deployer_act_as_cloudrun" {
   depends_on         = [google_project_service.enabled, google_service_account.github_deployer, google_service_account.cloudrun]
 }
 
-# Cloud Run SA can write audio files to bucket
-resource "google_storage_bucket_iam_member" "cloudrun_audio_object_creator" {
+# Cloud Run SA gets objectAdmin on the dedicated audio bucket:
+# create (uploads), get/list (blob.exists() dedup + the 500-file
+# cap's list_blobs) and delete (_enforce_audio_file_limit) —
+# objectCreator/objectViewer don't cover delete.
+resource "google_storage_bucket_iam_member" "cloudrun_audio_object_admin" {
   bucket = google_storage_bucket.audio_recordings.name
-  role   = "roles/storage.objectCreator"
-  member = "serviceAccount:${google_service_account.cloudrun.email}"
-}
-
-# Cloud Run SA can read audio files (for signed URL generation)
-resource "google_storage_bucket_iam_member" "cloudrun_audio_object_viewer" {
-  bucket = google_storage_bucket.audio_recordings.name
-  role   = "roles/storage.objectViewer"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.cloudrun.email}"
 }
 
@@ -182,19 +178,13 @@ resource "google_service_account" "vercel_audio" {
   depends_on = [google_project_service.enabled]
 }
 
-# Vercel SA can upload audio files; signed-URL reads need no IAM —
-# the URL signature itself authorizes the GET.
-resource "google_storage_bucket_iam_member" "vercel_audio_object_creator" {
+# Vercel SA gets objectAdmin on the dedicated audio bucket — same
+# reasoning as the Cloud Run binding above: uploads + dedup reads +
+# the 500-file cap's list/delete. Signed-URL reads still need no
+# IAM — the URL signature itself authorizes the GET.
+resource "google_storage_bucket_iam_member" "vercel_audio_object_admin" {
   bucket = google_storage_bucket.audio_recordings.name
-  role   = "roles/storage.objectCreator"
-  member = "serviceAccount:${google_service_account.vercel_audio.email}"
-}
-
-# objectViewer so blob.exists() can check whether the audio was
-# already generated (content-addressed dedup in text_to_audio).
-resource "google_storage_bucket_iam_member" "vercel_audio_object_viewer" {
-  bucket = google_storage_bucket.audio_recordings.name
-  role   = "roles/storage.objectViewer"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.vercel_audio.email}"
 }
 
