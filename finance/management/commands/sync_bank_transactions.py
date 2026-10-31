@@ -72,8 +72,9 @@ class Command(BaseCommand):
             except GoCardlessError as exc:
                 dead_status = exc.dead_requisition_status
                 if dead_status:
-                    mark_requisition_dead(account, dead_status)
                     dead[account.requisition_id] = dead_status
+                    if not dry_run:
+                        mark_requisition_dead(account, dead_status)
                     self.stderr.write(
                         f'Account {account.account_id}: bank must '
                         f'be relinked (requisition {dead_status})'
