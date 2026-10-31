@@ -3,7 +3,11 @@ import logging
 from django.core.management.base import BaseCommand
 
 from finance.models import Account
-from finance.services.gocardless import GoCardlessClient
+from finance.services.gocardless import (
+    GoCardlessClient,
+    GoCardlessError,
+)
+from finance.services.requisitions import mark_requisition_dead
 from finance.services.sync import (
     fetch_transactions_payload,
     iter_status_entries,
@@ -42,7 +46,19 @@ class Command(BaseCommand):
 
         total_created = 0
         total_updated = 0
+        # Requisition pks whose consent died mid-run — remaining
+        # same-requisition accounts are skipped without another
+        # GoCardless call.
+        dead = {}
         for account in accounts:
+            if account.requisition_id in dead:
+                logger.info(
+                    'Skipping account %s — requisition is dead '
+                    '(%s), bank must be relinked',
+                    account.account_id,
+                    dead[account.requisition_id],
+                )
+                continue
             try:
                 created, updated = self._sync_account(
                     client, account, dry_run
@@ -53,6 +69,24 @@ class Command(BaseCommand):
                 )
                 total_created += created
                 total_updated += updated
+            except GoCardlessError as exc:
+                dead_status = exc.dead_requisition_status
+                if dead_status:
+                    dead[account.requisition_id] = dead_status
+                    if not dry_run:
+                        mark_requisition_dead(account, dead_status)
+                    self.stderr.write(
+                        f'Account {account.account_id}: bank must '
+                        f'be relinked (requisition {dead_status})'
+                    )
+                    continue
+                logger.exception(
+                    'Transaction sync failed for account %s: %s',
+                    account.account_id, exc,
+                )
+                self.stderr.write(
+                    f'Account {account.account_id}: {exc}'
+                )
             except Exception as exc:
                 # Per-account failures (incl. 429 rate limits) must not
                 # stop the rest of the sync.

@@ -14,8 +14,19 @@ transactions, and get spending-limit alerts.
 - Failures raise `GoCardlessError(status_code, body)` — API ops map
   it to `502 {error: 'upstream_error'}`; `requisition_callback`
   still surfaces it via `messages.error`.
+- `GoCardlessError.dead_requisition_status` classifies terminal
+  consent errors — `'EX'` (401 + `AccessExpiredError` body marker)
+  or `'SU'` (409 + `suspend` in summary/detail), `None` otherwise.
+  Both the HTTP status AND the body marker are required so a random
+  401/409 can never kill a consent. Callers stamp
+  `Requisition.status` via `services/requisitions.mark_requisition_dead`
+  (idempotent, logs once) — every `status='LN'` filter then skips
+  the dead consent, and sync reports the existing
+  `requisitionNotLinked` outcome.
 - `fetch_balances_parallel` uses `ThreadPoolExecutor` (max 8 workers);
-  per-account failures are captured in results, not raised.
+  per-account failures are captured in results, not raised. Each
+  result carries `dead_status` (`None` for ok/HTTPError branches)
+  so callers can mark-and-skip without the exception object.
 - Credentials come from `settings.GOCARDLESS_SECRET_ID` /
   `GOCARDLESS_SECRET_KEY`.
 
@@ -32,10 +43,29 @@ transactions, and get spending-limit alerts.
 2. `requisition_callback` (`/finance/callback/`, the one remaining
    Django view in `views.py`): reads `session['requisition_id']`,
    refetches requisition, proceeds only when `status == 'LN'`
-   (linked). Creates `Account` rows for each returned account id +
-   fetches details (iban/name/currency) + creates a default
-   `UserAccountPreference`, then redirects to `finance:accounts`
-   (the SPA).
+   (linked). For each returned account id it fetches details
+   (iban/name/currency), then either creates an `Account` row or —
+   because GoCardless account ids are requisition-scoped and a
+   relink always returns NEW ids — **reattaches an existing row by
+   IBAN**: a normalized (spaces stripped, uppercased) IBAN matching
+   exactly one same-owner, same-institution `Account` under a
+   non-`LN` requisition rewrites `account_id`/`requisition` in
+   place, preserving transactions, shares, limits, alerts and
+   prefs (name/currency refresh, keeping stored values when the
+   payload omits them or says `XXX`). Zero/ambiguous matches and
+   missing IBANs create a new row (>1 logs a warning). A default
+   `UserAccountPreference` is ensured either way, then redirect to
+   `finance:accounts` (the SPA).
+
+Dead consents: `Requisition.status` mirrors GoCardless's lifecycle —
+`EX`/`SU` are terminal and stamped by `mark_requisition_dead` when
+any fetch path hits a terminal consent error. All fetch sets are
+LN-scoped (`sync_transactions`, `sync_bank_transactions`,
+`check_balance_alerts`, `refresh_balances`'s call-site filter — NOT
+`_balance_check_accounts`, which stays unfiltered so GET
+`/balances/` still lists stored balances), and each transaction
+sync keeps a per-run `dead` dict so sibling accounts under a
+just-dead requisition are skipped without another API call.
 
 ## Data model & access control
 
@@ -179,7 +209,10 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   rows as `date_from` (pending value dates can't push the cursor
   forward and skip real bookings); `update_or_create` on
   transaction id for every status group in the payload; per-account
-  failures are logged and don't abort the run. Synced rows are
+  failures are logged and don't abort the run. A terminal
+  `GoCardlessError` marks the requisition dead
+  (`mark_requisition_dead`) and remaining same-requisition
+  accounts are skipped that run. Synced rows are
   auto-categorized per viewer — one pass writes the
   owner's `UserTransactionCategory` row plus each sharer's via
   `categorize_transaction()`.
@@ -193,7 +226,9 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   `PushSubscription`s.
 - `check_balance_alerts` (`--dry-run`): fetches each alerted
   account's balance once (`fetch_balances_parallel`, deduped across
-  users of shared accounts), writes `Account.last_balance`/
+  users of shared accounts) — only `LN`-requisition accounts are
+  alerted on, and a `dead_status` fetch result marks the
+  requisition dead — writes `Account.last_balance`/
   `balance_updated_at` like `POST /api/finance/balances/refresh/`,
   then evaluates each `BalanceAlert` — below threshold with no
   `alerted_at` or one older than `ALERT_REPEAT_AFTER` creates the

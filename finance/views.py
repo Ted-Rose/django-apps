@@ -77,28 +77,17 @@ def requisition_callback(request):
         return redirect('finance:connect')
 
     for account_id in data.get('accounts', []):
-        account, created = Account.objects.get_or_create(
-            account_id=account_id,
-            defaults={
-                'requisition': requisition,
-                'owner': request.user,
-                'institution_id': requisition.institution_id,
-            },
-        )
-        if created:
+        account = Account.objects.filter(
+            account_id=account_id
+        ).first()
+        if account is None:
             try:
                 details = client.get_account_details(account_id)
             except GoCardlessError:
                 details = {}
-            account.iban = details.get('iban')
-            account.name = details.get('name', '')
-            # GoCardless reports ISO 4217 'XXX' when the bank does
-            # not supply a currency — treat it like a missing key.
-            currency = details.get('currency')
-            account.currency = (
-                currency if currency and currency != 'XXX' else 'EUR'
+            account = _link_account(
+                request.user, requisition, account_id, details
             )
-            account.save()
         UserAccountPreference.objects.get_or_create(
             user=request.user, account=account
         )
@@ -106,3 +95,69 @@ def requisition_callback(request):
     request.session.pop('requisition_id', None)
     messages.success(request, 'Bank account connected.')
     return redirect('finance:accounts')
+
+
+def _link_account(user, requisition, account_id, details):
+    """Return the ``Account`` row for a GoCardless ``account_id``
+    the user has not seen before — either an existing row
+    reattached by IBAN, or a new one.
+
+    GoCardless account ids are requisition-scoped, so a relink
+    always returns NEW ids. When exactly one same-owner,
+    same-institution ``Account`` under a dead (non-LN) requisition
+    shares the IBAN, that row is reattached in place — its pk,
+    transactions, category assignments, shares, limits, alerts
+    and preferences survive. Zero or ambiguous matches (and
+    missing IBANs) fall through to creating a new row.
+    """
+    # Stored IBANs predate normalization — compare both sides
+    # normalized (spaces stripped, uppercased) and store the
+    # normalized form.
+    iban = (details.get('iban') or '').replace(' ', '').upper()
+    if iban:
+        candidates = [
+            account
+            for account in Account.objects.filter(
+                owner=user,
+                institution_id=requisition.institution_id,
+            ).exclude(requisition__status='LN')
+            if (account.iban or '').replace(' ', '').upper() == iban
+        ]
+        if len(candidates) == 1:
+            account = candidates[0]
+            logger.info(
+                'Reattaching account pk %s to new account_id %s '
+                '(IBAN %s match under requisition %s)',
+                account.pk, account_id, iban,
+                requisition.requisition_id,
+            )
+            account.account_id = account_id
+            account.requisition = requisition
+            account.name = details.get('name') or account.name
+            # 'XXX' = the bank supplied no real currency — keep
+            # the stored one rather than downgrading it.
+            currency = details.get('currency')
+            if currency and currency != 'XXX':
+                account.currency = currency
+            account.save()
+            return account
+        if candidates:
+            logger.warning(
+                'Ambiguous IBAN %s — %d dead-requisition accounts '
+                'match; creating a new account row instead',
+                iban, len(candidates),
+            )
+    currency = details.get('currency')
+    return Account.objects.create(
+        account_id=account_id,
+        requisition=requisition,
+        owner=user,
+        institution_id=requisition.institution_id,
+        iban=iban or None,
+        name=details.get('name', ''),
+        # GoCardless reports ISO 4217 'XXX' when the bank does not
+        # supply a currency — treat it like a missing key.
+        currency=(
+            currency if currency and currency != 'XXX' else 'EUR'
+        ),
+    )

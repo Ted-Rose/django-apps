@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import requests
 from pywebpush import WebPushException
 
 from django.contrib.auth import get_user_model
@@ -31,6 +32,7 @@ from finance.services.gocardless import (
     GoCardlessError,
 )
 from finance.services.push import send_limit_alert
+from finance.services.requisitions import mark_requisition_dead
 from finance.forms import TransactionLimitForm
 from finance.services.categories import (
     annotate_counted_amount,
@@ -1257,6 +1259,41 @@ class SyncBankTransactionsTests(TestCase):
             kwargs['date_from'],
             timezone.now().date() - timezone.timedelta(days=1),
         )
+
+    def test_terminal_error_marks_requisition_and_skips_siblings(
+        self,
+    ):
+        """A 401 AccessExpiredError on the first account stamps the
+        requisition EX — the sibling under the same requisition is
+        never fetched."""
+        make_account(self.user, self.req, account_id='acc-2')
+        client = MagicMock()
+        client.fetch_transactions.side_effect = GoCardlessError(
+            401, '{"summary": "AccessExpiredError"}'
+        )
+        with patch(
+            'finance.management.commands'
+            '.sync_bank_transactions.GoCardlessClient',
+            return_value=client,
+        ):
+            call_command('sync_bank_transactions')
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'EX')
+        client.fetch_transactions.assert_called_once()
+
+    def test_transient_error_leaves_requisition_linked(self):
+        client = MagicMock()
+        client.fetch_transactions.side_effect = GoCardlessError(
+            500, 'boom'
+        )
+        with patch(
+            'finance.management.commands'
+            '.sync_bank_transactions.GoCardlessClient',
+            return_value=client,
+        ):
+            call_command('sync_bank_transactions')
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'LN')
 
 
 class RuleMatchingTests(TestCase):
@@ -2757,6 +2794,44 @@ class CheckBalanceAlertsTests(TestCase):
         mock_send.assert_not_called()
         self.assertFalse(Notification.objects.exists())
 
+    def test_dead_requisition_account_never_fetched(self):
+        """Alerts on a dead (non-LN) requisition's account produce
+        no balance fetch and no notification — the alerts queryset
+        excludes it entirely."""
+        self.req.status = 'EX'
+        self.req.save()
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, client = self.run_command()
+        client.fetch_balances_parallel.assert_not_called()
+        mock_send.assert_not_called()
+        self.assertFalse(Notification.objects.exists())
+
+    def test_dead_status_result_marks_requisition(self):
+        """A terminal consent error in the fetch result stamps the
+        requisition dead; the account's alerts stay skipped."""
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, _ = self.run_command(results={
+            'acc-1': {
+                'ok': False,
+                'rate_limited': False,
+                'balance': None,
+                'error': 'GoCardless API error 409: suspended',
+                'dead_status': 'SU',
+            },
+        })
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'SU')
+        mock_send.assert_not_called()
+        self.assertFalse(Notification.objects.exists())
+
 
 class PushSubscriptionEndpointTests(TestCase):
     """Push subscribe/unsubscribe API — /api/finance/push/*."""
@@ -2883,9 +2958,124 @@ class PushSubscriptionEndpointTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class DeadRequisitionStatusTests(SimpleTestCase):
+    """GoCardlessError.dead_requisition_status — terminal consent
+    errors need BOTH the HTTP status and a body marker."""
+
+    def status(self, code, body):
+        return GoCardlessError(code, body).dead_requisition_status
+
+    def test_401_access_expired_summary_marks_ex(self):
+        body = json.dumps({
+            'summary': 'AccessExpiredError',
+            'detail': 'The access has expired',
+        })
+        self.assertEqual(self.status(401, body), 'EX')
+
+    def test_401_access_expired_type_marks_ex(self):
+        body = json.dumps({'type': 'AccessExpiredError'})
+        self.assertEqual(self.status(401, body), 'EX')
+
+    def test_401_non_json_substring_fallback_marks_ex(self):
+        self.assertEqual(
+            self.status(401, 'AccessExpiredError raised'), 'EX'
+        )
+
+    def test_bare_401_without_marker_is_not_dead(self):
+        self.assertIsNone(
+            self.status(401, json.dumps({'detail': 'unauthorized'}))
+        )
+        self.assertIsNone(self.status(401, 'unauthorized'))
+
+    def test_409_suspended_marks_su(self):
+        body = json.dumps({
+            'summary': 'Account suspended',
+            'detail': (
+                'This account or its consent was suspended due '
+                'to numerous errors'
+            ),
+        })
+        self.assertEqual(self.status(409, body), 'SU')
+
+    def test_409_suspended_in_detail_only_marks_su(self):
+        body = json.dumps({'detail': 'consent suspended'})
+        self.assertEqual(self.status(409, body), 'SU')
+
+    def test_bare_409_without_marker_is_not_dead(self):
+        self.assertIsNone(
+            self.status(409, json.dumps({'summary': 'Conflict'}))
+        )
+
+    def test_marker_on_wrong_status_is_not_dead(self):
+        body = json.dumps({'summary': 'AccessExpiredError'})
+        self.assertIsNone(self.status(200, body))
+        self.assertIsNone(self.status(409, body))
+        self.assertIsNone(
+            self.status(429, json.dumps({'summary': 'suspended'}))
+        )
+
+    def test_non_json_body_is_not_dead(self):
+        self.assertIsNone(self.status(500, 'boom'))
+        self.assertIsNone(self.status(409, 'not json'))
+
+    def test_null_body_is_not_dead(self):
+        self.assertIsNone(self.status(401, None))
+
+
+class MarkRequisitionDeadTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+
+    def test_marks_status_once(self):
+        mark_requisition_dead(self.account, 'EX')
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'EX')
+
+    def test_same_status_is_noop(self):
+        self.req.status = 'SU'
+        self.req.save()
+        with self.assertNumQueries(0):
+            mark_requisition_dead(self.account, 'SU')
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'SU')
+
+
 class FetchBalancesParallelTests(TestCase):
     def make_client(self):
         return GoCardlessClient(secret_id='sid', secret_key='key')
+
+    def test_results_carry_dead_status_key(self):
+        """Every branch reports `dead_status` — None for ok and
+        non-GoCardless failures, the stamped status for terminal
+        consent errors."""
+        client = self.make_client()
+        with patch.object(
+            client,
+            'fetch_account_balance',
+            return_value={'balanceType': 'interimAvailable'},
+        ):
+            results = client.fetch_balances_parallel(['acc-1'])
+        self.assertIsNone(results['acc-1']['dead_status'])
+        with patch.object(
+            client,
+            'fetch_account_balance',
+            side_effect=requests.HTTPError('boom'),
+        ):
+            results = client.fetch_balances_parallel(['acc-1'])
+        self.assertIsNone(results['acc-1']['dead_status'])
+        with patch.object(
+            client,
+            'fetch_account_balance',
+            side_effect=GoCardlessError(
+                401, '{"summary": "AccessExpiredError"}'
+            ),
+        ):
+            results = client.fetch_balances_parallel(['acc-1'])
+        self.assertEqual(results['acc-1']['dead_status'], 'EX')
 
     def test_429_flags_result_as_rate_limited(self):
         client = self.make_client()
@@ -3077,6 +3267,78 @@ class RefreshBalancesViewTests(TestCase):
         self.assertFalse(body['success'])
         self.assertIn('No accounts are included', body['message'])
 
+    def test_all_accounts_dead_returns_relink_needed(self):
+        """Every balance-check account sits under a dead
+        requisition — nothing is fetched and the response asks
+        for a relink with the dead status in params."""
+        self.req.status = 'EX'
+        self.req.save()
+        with patch(
+            'finance.api.GoCardlessClient'
+        ) as client_cls:
+            response = self.client.post(
+                self.url,
+                data='{}',
+                content_type='application/json',
+            )
+        client_cls.assert_not_called()
+        body = response.json()
+        self.assertFalse(body['success'])
+        self.assertEqual(body['code'], 'requisitionNotLinked')
+        self.assertEqual(body['params']['status'], 'EX')
+        self.assertEqual(body['updated'], 0)
+
+    def test_mixed_dead_and_live_fetches_only_live(self):
+        """Dead-requisition accounts drop out of the fetch set but
+        live ones are still fetched."""
+        dead_req = make_requisition(
+            self.user, requisition_id='req-dead', status='EX'
+        )
+        dead_account = make_account(
+            self.user, dead_req, account_id='acc-dead'
+        )
+        UserAccountPreference.objects.create(
+            user=self.user, account=dead_account
+        )
+        client = MagicMock()
+        client.fetch_balances_parallel.return_value = (
+            self.ok_results()
+        )
+        with patch(
+            'finance.api.GoCardlessClient', return_value=client
+        ):
+            response = self.client.post(
+                self.url,
+                data='{}',
+                content_type='application/json',
+            )
+        client.fetch_balances_parallel.assert_called_once_with(
+            ['acc-1']
+        )
+        body = response.json()
+        self.assertTrue(body['success'])
+        self.assertEqual(body['updated'], 1)
+
+    def test_terminal_result_marks_requisition_dead(self):
+        """A terminal consent error in the fetch result stamps the
+        requisition — future runs LN-filter it out."""
+        response = self.post_refresh({
+            'acc-1': {
+                'ok': False,
+                'rate_limited': False,
+                'balance': None,
+                'error': (
+                    'GoCardless API error 401: AccessExpiredError'
+                ),
+                'dead_status': 'EX',
+            },
+        })
+        body = response.json()
+        self.assertFalse(body['success'])
+        self.assertEqual(body['failed'], 1)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'EX')
+
 
 class RequisitionCallbackCurrencyTests(TestCase):
     """Account currency fallback when the bank reports no real
@@ -3116,6 +3378,209 @@ class RequisitionCallbackCurrencyTests(TestCase):
     def test_real_currency_is_kept(self):
         account = self.link_account({'currency': 'USD'})
         self.assertEqual(account.currency, 'USD')
+
+
+class RequisitionCallbackRelinkTests(TestCase):
+    """Relink reconciliation by IBAN — GoCardless account ids are
+    requisition-scoped, so a relink returns fresh ids. A unique
+    IBAN match under a dead (non-LN) requisition reattaches the
+    original Account row instead of duplicating it."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.client.force_login(self.user)
+        # The dead consent the user is replacing.
+        self.old_req = make_requisition(
+            self.user, requisition_id='req-old', status='EX'
+        )
+        self.old_account = make_account(
+            self.user, self.old_req, account_id='acc-old'
+        )
+        self.old_account.iban = 'LV80BANK0000435195001'
+        self.old_account.name = 'Checking'
+        self.old_account.save()
+        # The new requisition coming back from the bank.
+        make_requisition(
+            self.user, requisition_id='req-new', status='LN'
+        )
+        session = self.client.session
+        session['requisition_id'] = 'req-new'
+        session.save()
+        self.details = {
+            'iban': 'LV80 BANK 0000 4351 9500 1',
+            'name': 'Everyday',
+            'currency': 'USD',
+        }
+
+    def run_callback(self, details=None, accounts=None):
+        client = MagicMock()
+        client.get_requisition_data.return_value = {
+            'status': 'LN',
+            'accounts': (
+                ['acc-new'] if accounts is None else accounts
+            ),
+        }
+        client.get_account_details.return_value = (
+            self.details if details is None else details
+        )
+        with patch(
+            'finance.views.GoCardlessClient', return_value=client
+        ):
+            self.client.get(reverse('finance:callback'))
+        return client
+
+    def test_iban_match_reattaches_existing_row(self):
+        """The original row keeps its pk — transactions, shares,
+        limits, alerts and prefs survive; account_id/requisition
+        are rewritten and name/currency refreshed."""
+        old_pk = self.old_account.pk
+        tx = make_transaction(self.old_account, 'tx-1', '-5.00')
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        share = AccountShare.objects.create(
+            account=self.old_account, shared_with=other
+        )
+        limit = make_limit(
+            user=self.user,
+            account=self.old_account,
+            limit_7_days=Decimal('100.00'),
+        )
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.old_account,
+            threshold=Decimal('10.00'),
+        )
+        pref = UserAccountPreference.objects.create(
+            user=self.user, account=self.old_account
+        )
+
+        self.run_callback()
+
+        self.assertEqual(Account.objects.count(), 1)
+        account = Account.objects.get(pk=old_pk)
+        self.assertEqual(account.account_id, 'acc-new')
+        self.assertEqual(
+            account.requisition.requisition_id, 'req-new'
+        )
+        self.assertEqual(account.name, 'Everyday')
+        self.assertEqual(account.currency, 'USD')
+        # Everything keyed to the pk survived.
+        self.assertEqual(tx.account_id, old_pk)
+        self.assertEqual(share.account_id, old_pk)
+        self.assertEqual(limit.accounts.get().pk, old_pk)
+        self.assertEqual(alert.account_id, old_pk)
+        self.assertEqual(pref.account_id, old_pk)
+
+    def test_reattach_keeps_name_and_currency_when_payload_omits(
+        self,
+    ):
+        self.details = {
+            'iban': 'LV80 BANK 0000 4351 9500 1',
+            'currency': 'XXX',
+        }
+        self.run_callback()
+        account = Account.objects.get(pk=self.old_account.pk)
+        self.assertEqual(account.account_id, 'acc-new')
+        self.assertEqual(account.name, 'Checking')
+        self.assertEqual(account.currency, 'EUR')
+
+    def test_no_iban_match_creates_new_row(self):
+        self.details = {
+            'iban': 'DE89370400440532013000',
+            'name': 'New',
+            'currency': 'EUR',
+        }
+        self.run_callback()
+        self.assertEqual(Account.objects.count(), 2)
+        new_account = Account.objects.get(account_id='acc-new')
+        self.assertEqual(
+            new_account.iban, 'DE89370400440532013000'
+        )
+        self.assertEqual(
+            new_account.requisition.requisition_id, 'req-new'
+        )
+
+    def test_missing_iban_creates_new_row(self):
+        self.details = {'name': 'No IBAN'}
+        self.run_callback()
+        self.assertEqual(Account.objects.count(), 2)
+        new_account = Account.objects.get(account_id='acc-new')
+        self.assertIsNone(new_account.iban)
+
+    def test_cross_owner_match_creates_new_row(self):
+        """An IBAN match on another user's account never
+        reattaches — ownership is part of the match."""
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign_req = make_requisition(
+            other, requisition_id='req-foreign', status='EX'
+        )
+        foreign = make_account(
+            other, foreign_req, account_id='acc-foreign'
+        )
+        foreign.iban = 'LV80BANK0000435195001'
+        foreign.save()
+        # No own dead account with that IBAN → create new.
+        self.old_account.iban = 'XX00OTHER0000000000'
+        self.old_account.save()
+        self.run_callback()
+        self.assertEqual(Account.objects.count(), 3)
+        self.assertTrue(
+            Account.objects.filter(account_id='acc-new').exists()
+        )
+        foreign.refresh_from_db()
+        self.assertEqual(foreign.account_id, 'acc-foreign')
+
+    def test_live_requisition_match_creates_new_row(self):
+        """Candidates must sit under a dead (non-LN) requisition —
+        a live one stays untouched."""
+        live_req = make_requisition(
+            self.user, requisition_id='req-live', status='LN'
+        )
+        live_account = make_account(
+            self.user, live_req, account_id='acc-live'
+        )
+        live_account.iban = 'LV80BANK0000435195001'
+        live_account.save()
+        # Remove the dead candidate so only the live one matches.
+        self.old_account.delete()
+        self.run_callback()
+        self.assertEqual(Account.objects.count(), 2)
+        live_account.refresh_from_db()
+        self.assertEqual(live_account.account_id, 'acc-live')
+
+    def test_ambiguous_match_creates_new_row(self):
+        """Two dead-requisition rows sharing the IBAN means no
+        reattach — a new row is created and a warning logged."""
+        twin_req = make_requisition(
+            self.user, requisition_id='req-twin', status='SU'
+        )
+        twin = make_account(
+            self.user, twin_req, account_id='acc-twin'
+        )
+        twin.iban = 'lv80 bank 0000 4351 9500 1'
+        twin.save()
+        with self.assertLogs('django', level='WARNING') as logs:
+            self.run_callback()
+        self.assertEqual(Account.objects.count(), 3)
+        self.assertTrue(
+            Account.objects.filter(account_id='acc-new').exists()
+        )
+        self.assertTrue(
+            any('Ambiguous IBAN' in line for line in logs.output)
+        )
+
+    def test_different_institution_creates_new_row(self):
+        self.old_account.institution_id = 'OTHER_BANK'
+        self.old_account.save()
+        self.run_callback()
+        self.assertEqual(Account.objects.count(), 2)
+        self.old_account.refresh_from_db()
+        self.assertEqual(self.old_account.account_id, 'acc-old')
 
 
 class EnsureExcludedCategoryTests(TestCase):
