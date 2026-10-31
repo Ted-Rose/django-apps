@@ -258,6 +258,10 @@ level.
   `/opt/homebrew/bin` next to `node`/`npm`/`gh`, which is not on
   agent shells' PATH; prefix exec calls with
   `export PATH="/opt/homebrew/bin:$PATH"`.
+- **Always run `openspec validate --all --strict` after
+  touching `openspec/`** — proposing, spec edits, sync,
+  archive. It must pass before committing; strict mode catches
+  >500-char requirement bodies and spec/delta drift.
 - `openspec/specs/` holds capability specs (current behavior as
   source of truth): `api-contract`, `spa-shell`,
   `data-isolation`, `external-sync` — grow as real changes touch
