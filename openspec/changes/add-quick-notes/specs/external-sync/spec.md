@@ -39,3 +39,12 @@ the pull merges remote state.
 - **WHEN** a remote pull rewrites a note task's title, notes,
   status, or list
 - **THEN** `is_note` and `note_category` are untouched
+
+#### Scenario: Bank relink preserves local metadata
+
+- **WHEN** a relinked bank account is reattached to an
+  existing `Account` row by IBAN match (the provider reissues
+  `account_id` per requisition)
+- **THEN** the row's `account_id` and `requisition` are
+  rewritten in place so transactions, category assignments,
+  shares, limits, alerts and preferences carry over
