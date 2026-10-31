@@ -225,9 +225,12 @@ resource "google_storage_bucket" "audio_recordings" {
 
 ### Text Sanitization
 **Performed by** `_sanitize_text_for_audio()`:
-1. Replace URLs with "web link" (prevents TTS from reading long URLs)
-2. Remove long dashes (improves audio quality)
-3. Normalize whitespace (removes excessive spaces/newlines)
+1. Drop `[image: …]` / `[inline_image]` image placeholders (gTTS
+   used to read the bracketed label aloud)
+2. Replace URLs with "web link" (prevents TTS from reading long URLs)
+3. Strip `*` emphasis/bullet marks (reads as "asterisk") and 2+
+   runs of `-_~=` divider lines like the e-klase footer
+4. Collapse whitespace to single spaces
 
 **Example**:
 ```python
