@@ -3614,7 +3614,8 @@ class RequisitionCallbackSameIdRelinkTests(TestCase):
             'currency': 'USD',
         }
 
-    def run_callback(self, accounts=None, details=None):
+    def run_callback(self, accounts=None, details=None,
+                     details_error=None):
         client = MagicMock()
         client.get_requisition_data.return_value = {
             'status': 'LN',
@@ -3622,9 +3623,12 @@ class RequisitionCallbackSameIdRelinkTests(TestCase):
                 ['acc-same'] if accounts is None else accounts
             ),
         }
-        client.get_account_details.return_value = (
-            self.details if details is None else details
-        )
+        if details_error is not None:
+            client.get_account_details.side_effect = details_error
+        else:
+            client.get_account_details.return_value = (
+                self.details if details is None else details
+            )
         with patch(
             'finance.views.GoCardlessClient', return_value=client
         ):
@@ -3677,6 +3681,17 @@ class RequisitionCallbackSameIdRelinkTests(TestCase):
     ):
         self.details = {'currency': 'XXX'}
         self.run_callback()
+        account = Account.objects.get(pk=self.account.pk)
+        self.assertEqual(account.requisition_id, self.new_req.pk)
+        self.assertEqual(account.name, 'Checking')
+        self.assertEqual(account.currency, 'EUR')
+
+    def test_reattach_survives_details_fetch_error(self):
+        """A GoCardlessError on the details fetch still repoints
+        the row — the stored name/currency are kept."""
+        self.run_callback(
+            details_error=GoCardlessError(500, 'x')
+        )
         account = Account.objects.get(pk=self.account.pk)
         self.assertEqual(account.requisition_id, self.new_req.pk)
         self.assertEqual(account.name, 'Checking')
@@ -3911,6 +3926,46 @@ class ReattachRelinkedAccountsTests(TestCase):
         self.account.refresh_from_db()
         self.assertEqual(
             self.account.requisition_id, self.live_req.pk
+        )
+
+    def test_fresh_non_ln_status_skips_and_stamps(self):
+        """A requisition locally LN but no longer linked upstream
+        is skipped — and the fresh status is stamped locally so
+        later runs leave it out of the LN queryset."""
+        self.run_command(payloads={
+            self.live_req.requisition_id: {
+                'status': 'EX',
+                'accounts': ['acc-1'],
+            },
+        })
+        self.live_req.refresh_from_db()
+        self.assertEqual(self.live_req.status, 'EX')
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.dead_req.pk
+        )
+
+    def test_terminal_error_marks_requisition_dead(self):
+        """A terminal consent error (401 AccessExpiredError)
+        stamps the requisition dead — via mark_requisition_dead
+        when a local account sits under it."""
+        make_account(self.user, self.live_req, 'acc-live')
+        client = MagicMock()
+        client.get_requisition_data.side_effect = GoCardlessError(
+            401, '{"summary": "AccessExpiredError"}'
+        )
+        with patch(
+            'finance.management.commands'
+            '.reattach_relinked_accounts.GoCardlessClient',
+            return_value=client,
+        ):
+            call_command('reattach_relinked_accounts')
+
+        self.live_req.refresh_from_db()
+        self.assertEqual(self.live_req.status, 'EX')
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.dead_req.pk
         )
 
 

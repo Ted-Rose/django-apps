@@ -143,7 +143,9 @@ def _reattach_account(client, user, requisition, account):
         currency = details.get('currency')
         if currency and currency != 'XXX':
             account.currency = currency
-        account.save()
+        account.save(
+            update_fields=['requisition', 'name', 'currency']
+        )
         return
     logger.warning(
         'Callback returned account_id %s which exists under '
@@ -198,7 +200,14 @@ def _link_account(user, requisition, account_id, details):
             currency = details.get('currency')
             if currency and currency != 'XXX':
                 account.currency = currency
-            account.save()
+            account.save(
+                update_fields=[
+                    'account_id',
+                    'requisition',
+                    'name',
+                    'currency',
+                ]
+            )
             return account
         if candidates:
             logger.warning(

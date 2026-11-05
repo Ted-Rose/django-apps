@@ -7,6 +7,7 @@ from finance.services.gocardless import (
     GoCardlessClient,
     GoCardlessError,
 )
+from finance.services.requisitions import mark_requisition_dead
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,22 @@ class Command(BaseCommand):
                     'skipping it',
                     requisition.requisition_id, exc,
                 )
+                dead = exc.dead_requisition_status
+                if dead is not None:
+                    self._stamp_status(requisition, dead, dry_run)
+                continue
+            status = data.get('status', requisition.status)
+            if status != 'LN':
+                # The local LN stamp is stale — the fresh fetch
+                # says the consent is dead. Persist it like
+                # ``requisition_callback`` does and skip.
+                logger.info(
+                    'Requisition %s is no longer linked '
+                    '(status %s) — skipping it%s',
+                    requisition.requisition_id, status,
+                    ' [dry-run]' if dry_run else '',
+                )
+                self._stamp_status(requisition, status, dry_run)
                 continue
             for account_id in data.get('accounts', []):
                 total += self._reattach(
@@ -66,6 +83,30 @@ class Command(BaseCommand):
             f'Reattach complete: {total} account(s) repointed'
             f'{" (dry run)" if dry_run else ""}'
         )
+
+    def _stamp_status(self, requisition, new_status, dry_run):
+        """Persist a fresh non-LN ``new_status`` on the local
+        row — the same stamp ``requisition_callback`` performs.
+        Routes through ``mark_requisition_dead`` when a local
+        account exists (it takes an account, not a
+        requisition); account-less requisitions are saved
+        directly."""
+        if dry_run or requisition.status == new_status:
+            return
+        account = requisition.accounts.first()
+        if account is not None:
+            mark_requisition_dead(account, new_status)
+        else:
+            requisition.status = new_status
+            requisition.save(
+                update_fields=['status', 'updated_at']
+            )
+            logger.warning(
+                'Requisition %s marked dead (%s) — bank must '
+                'be relinked',
+                requisition.requisition_id, new_status,
+            )
+        requisition.status = new_status
 
     def _reattach(self, requisition, account_id, dry_run):
         """Repoint one stranded row to ``requisition``; 1 when the

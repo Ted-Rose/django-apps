@@ -248,10 +248,14 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
 - `reattach_relinked_accounts` (`--dry-run`): one-off repair for
   rows stranded before the callback's same-id reattach existed —
   for each `status='LN'` requisition (newest first, so the newest
-  live consent wins when two list the same id) it refetches its
-  account ids and repoints local rows still under a different
-  non-`LN` requisition (same owner + institution required);
-  per-requisition `GoCardlessError`s are logged and skipped.
+  live consent wins when two list the same id) it refetches the
+  requisition and repoints local rows still under a different
+  non-`LN` requisition (same owner + institution required). The
+  fresh upstream `status` wins over the local stamp: a non-`LN`
+  response or a terminal `GoCardlessError` marks the requisition
+  dead (`mark_requisition_dead` via a local account when one
+  exists, else a direct status save) and skips it; other
+  `GoCardlessError`s are logged and skipped.
   Idempotent — run once post-deploy, safe to re-run.
 - Terraform (`terraform/cloud_run_jobs.tf`) runs these via one
   `all-jobs` Cloud Run job executing `run_all_jobs`
