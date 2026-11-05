@@ -1,0 +1,27 @@
+name: OpenSpec validate
+
+# Runs on every PR and every push to main (same triggers as
+# frontend.yml), so a spec or change delta that fails
+# `openspec validate --all --strict` can't reach main — strict
+# mode catches >500-char requirement bodies and spec/delta drift.
+# Runs from the repo root where openspec/ lives.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  openspec-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install openspec CLI
+        run: npm install -g @fission-ai/openspec@1.14.3
+
+      - name: Validate specs and changes
+        run: openspec validate --all --strict
