@@ -263,10 +263,11 @@ level.
   archive. It must pass before committing; strict mode catches
   >500-char requirement bodies and spec/delta drift.
 - `openspec/specs/` holds capability specs (current behavior as
-  source of truth): `api-contract`, `spa-shell`,
-  `data-isolation`, `external-sync` — grow as real changes touch
-  new areas. Code wins when a spec and the code disagree; fix
-  the spec.
+  source of truth): `api-contract`, `bank-consent`,
+  `data-isolation`, `external-sync`, `quick-notes`, `spa-shell`
+  — grow as real changes touch new areas (run
+  `openspec list --specs` for the current set). Code wins when a
+  spec and the code disagree; fix the spec.
 - `openspec/config.yaml` carries project context; change
   `tasks.md` items MUST be prefixed `backend:` / `frontend:` /
   `both:` to name the layer they touch.
@@ -279,6 +280,11 @@ level.
   if `openspec update` refreshes the originals).
 - `openspec/changes/archive/` is committed like all other
   planning history.
+- **Archive promptly**: `openspec archive` in the implementing
+  PR when feasible (specs + code + history land atomically);
+  otherwise archive immediately after merge in a follow-up PR —
+  never leave a merged change unarchived, since unsynced deltas
+  leave `specs/` stale.
 - **`docs/plans/` is frozen for new feature plans** — new
   feature work goes through `openspec changes`. Existing
   `docs/plans/*` stay as history, and investigation/report docs

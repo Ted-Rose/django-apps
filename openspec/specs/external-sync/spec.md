@@ -66,11 +66,11 @@ locally.
 Local-only fields and rows layered on mirrored objects SHALL
 NOT be overwritten or deleted by a remote pull: google_tasks
 `is_starred`, `is_divider`, ordering positions, `is_archived`,
-`is_deleted`, `deleted_at`, `labels`; finance
-`UserTransactionCategory` rows marked `is_manual`,
-`excluded_amount`, rules, limits, alerts. Local edits pending
-push (`needs_push=True`) SHALL be pushed before the pull
-merges remote state.
+`is_deleted`, `deleted_at`, `labels`, `is_note`, and
+`note_category`; finance `UserTransactionCategory` rows marked
+`is_manual`, `excluded_amount`, rules, limits, alerts. Local
+edits pending push (`needs_push=True`) SHALL be pushed before
+the pull merges remote state.
 
 #### Scenario: Manual category survives transaction sync
 
