@@ -10,18 +10,28 @@ on:
   push:
     branches: [main]
 
+# Least-privilege token: the job only reads the checkout, and
+# --ignore-scripts below keeps third-party npm code from running
+# with even that much access.
+permissions:
+  contents: read
+
 jobs:
   openspec-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
           node-version: 22
 
       - name: Install openspec CLI
-        run: npm install -g @fission-ai/openspec@1.14.3
+        run: >-
+          npm install -g --ignore-scripts --no-audit --no-fund
+          @fission-ai/openspec@1.14.3
 
       - name: Validate specs and changes
         run: openspec validate --all --strict
