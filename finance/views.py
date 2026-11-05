@@ -79,7 +79,7 @@ def requisition_callback(request):
     for account_id in data.get('accounts', []):
         account = Account.objects.filter(
             account_id=account_id
-        ).first()
+        ).select_related('requisition').first()
         if account is None:
             try:
                 details = client.get_account_details(account_id)
@@ -88,13 +88,70 @@ def requisition_callback(request):
             account = _link_account(
                 request.user, requisition, account_id, details
             )
-        UserAccountPreference.objects.get_or_create(
-            user=request.user, account=account
-        )
+        else:
+            _reattach_account(
+                client, request.user, requisition, account
+            )
+        if account.owner_id == request.user.pk:
+            UserAccountPreference.objects.get_or_create(
+                user=request.user, account=account
+            )
 
     request.session.pop('requisition_id', None)
     messages.success(request, 'Bank account connected.')
     return redirect('finance:accounts')
+
+
+def _reattach_account(client, user, requisition, account):
+    """Handle an ``account_id`` the callback already knows —
+    usually a stable-ID institution (e.g. Swedbank) returning
+    the same GoCardless ids across relinks.
+
+    When the row sits under a dead (non-``LN``) requisition and
+    belongs to the same owner + institution, repoint it to the
+    new live requisition in place — pk, transactions, shares,
+    limits, alerts and preferences survive — refreshing
+    ``name``/``currency`` with ``_link_account`` semantics.
+    Rows already under an ``LN`` requisition are left alone, as
+    are rows the caller must not touch (other owner's account or
+    an institution mismatch — the ``account_id`` unique
+    constraint means no duplicate can be created either).
+    """
+    if account.requisition.status == 'LN':
+        # Already live — nothing to repoint.
+        return
+    if (
+        account.owner_id == user.pk
+        and account.institution_id == requisition.institution_id
+    ):
+        try:
+            details = client.get_account_details(
+                account.account_id
+            )
+        except GoCardlessError:
+            details = {}
+        logger.info(
+            'Reattaching account pk %s to requisition %s — '
+            'relink returned the same account_id %s',
+            account.pk, requisition.requisition_id,
+            account.account_id,
+        )
+        account.requisition = requisition
+        account.name = details.get('name') or account.name
+        # 'XXX' = the bank supplied no real currency — keep
+        # the stored one rather than downgrading it.
+        currency = details.get('currency')
+        if currency and currency != 'XXX':
+            account.currency = currency
+        account.save()
+        return
+    logger.warning(
+        'Callback returned account_id %s which exists under '
+        'requisition %s (status %s) but cannot be reattached '
+        '(owner or institution mismatch) — leaving it untouched',
+        account.account_id, account.requisition.requisition_id,
+        account.requisition.status,
+    )
 
 
 def _link_account(user, requisition, account_id, details):
@@ -103,7 +160,9 @@ def _link_account(user, requisition, account_id, details):
     reattached by IBAN, or a new one.
 
     GoCardless account ids are requisition-scoped, so a relink
-    always returns NEW ids. When exactly one same-owner,
+    usually returns NEW ids (stable-ID institutions where the
+    same id comes back are handled by ``_reattach_account``
+    first). When exactly one same-owner,
     same-institution ``Account`` under a dead (non-LN) requisition
     shares the IBAN, that row is reattached in place — its pk,
     transactions, category assignments, shares, limits, alerts

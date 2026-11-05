@@ -1,6 +1,15 @@
 # google_api
 
 ## Changelog
+20. Fixed relinked bank accounts staying disconnected: some banks
+    (Swedbank) return the SAME GoCardless account ids on relink,
+    so the callback skipped the existing rows and they stayed
+    pointed at the dead consent — transactions, balances and
+    alerts never refreshed. The callback now repoints such rows
+    to the new live requisition in place (transactions, shares,
+    limits, alerts and preferences preserved); a new one-off
+    `reattach_relinked_accounts` command repairs rows already
+    stranded this way
 19. Dead bank consents stop retrying: when GoCardless reports an
     expired (401 AccessExpiredError) or suspended (409) consent,
     the requisition is stamped EX/SU locally so every sync,
