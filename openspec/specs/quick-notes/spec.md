@@ -10,8 +10,9 @@ and strict separation from the tasks UI.
 
 ### Requirement: Note classification via `#notes` markers
 
-A task SHALL be classified as a note when its title or notes
-field contains a `#notes` marker — `#notes` alone or followed by
+An open (`needsAction`) task SHALL be classified as a note when
+its title or notes field contains a `#notes` marker — `#notes`
+alone or followed by
 hyphen-separated path segments — matched case-insensitively by a
 dedicated hyphen-aware pattern (the shared hashtag regex splits
 on hyphens and MUST NOT be used for marker detection).
