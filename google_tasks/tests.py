@@ -1046,9 +1046,12 @@ class RecurringSeriesCollapseTests(TestCase):
         self.assertEqual(canonical.task_order, 5.0)
         self.assertFalse(canonical.is_recurrence_shadow)
         self.assertEqual(canonical.due_date.year, 2027)
-        # The superseded entity is tracked by the shadow row.
+        # The displaced row keeps the completed entity's binding —
+        # it stays visible as this occurrence's completion record.
         self.assertEqual(shadow.task_id, 'occ-2026')
-        self.assertTrue(shadow.is_recurrence_shadow)
+        self.assertFalse(shadow.is_recurrence_shadow)
+        self.assertEqual(shadow.status, 'completed')
+        self.assertFalse(shadow.is_starred)
         self.assertEqual(
             GoogleTask.objects.filter(title='Clean the roof').count(),
             3,
@@ -1088,6 +1091,40 @@ class RecurringSeriesCollapseTests(TestCase):
                 is_recurrence_shadow=True
             ).exists()
         )
+
+    def test_completed_occurrences_stay_visible_unstarred(self):
+        """Completed occurrences of the series are real history —
+        they are not shadowed, only unstarred, while the future open
+        occurrences still collapse."""
+        done = self.make_task(
+            'occ-2025', 'Clean the roof', notes='#physical #starred',
+            status='completed', is_starred=True, starred_order=3.0,
+        )
+        current = self.make_task(
+            'occ-2026', 'Clean the roof', notes='#physical #starred',
+            is_starred=True, starred_order=1.0,
+        )
+        self.run_sync(
+            [self.remote_item(
+                'occ-2025', 'Clean the roof',
+                notes='#physical #starred', status='completed',
+                due='2025-11-07T00:00:00.000Z',
+                completed='2025-11-06T10:00:00.000Z',
+            )] + self.series_items(3)
+        )
+        done.refresh_from_db()
+        current.refresh_from_db()
+        self.assertFalse(done.is_recurrence_shadow)
+        self.assertEqual(done.status, 'completed')
+        self.assertFalse(done.is_starred)
+        self.assertFalse(current.is_recurrence_shadow)
+        self.assertTrue(current.is_starred)
+        shadows = GoogleTask.objects.filter(
+            task_id__in=['occ-2027', 'occ-2028']
+        )
+        for shadow in shadows:
+            self.assertTrue(shadow.is_recurrence_shadow)
+            self.assertFalse(shadow.is_starred)
 
     def test_shadow_rows_skip_label_processing(self):
         """Shadow rows keep their '#starred' notes — label

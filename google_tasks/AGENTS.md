@@ -38,16 +38,19 @@ keep sync query counts flat, not per-item or per-list.
   ~6 future entities). `_collapse_recurring_series` runs inside
   `_write_remote_tasks` after classification: a (list, title, notes)
   group with 2+ OPEN items and a dated earliest-open item is one
-  series; ONE canonical row tracks the earliest open occurrence and
-  every other bound row is flagged `is_recurrence_shadow` + unstarred.
-  On succession the canonical row swaps remote ids with the shadow
-  bound to the new current entity (two-phase task_id write — Postgres
-  checks unique per row), so the same visible task reopens with the
-  new due date keeping stars/labels/order. Shadow rows sync normally
-  but are excluded from every view (`_task_queryset`/`_note_queryset`
-  + stats/counts), label processing, and star keywords. Detection is
-  deliberately fail-open: different-notes or undated groups are never
-  collapsed.
+  series; ONE canonical row tracks the earliest open occurrence,
+  other OPEN-bound rows are flagged `is_recurrence_shadow` +
+  unstarred, and COMPLETED-bound rows stay visible as ordinary
+  completed tasks (unstarred) — each occurrence's completion is real
+  history. On succession the canonical row swaps remote ids with the
+  shadow bound to the new current entity (two-phase task_id write —
+  Postgres checks unique per row), so the same visible task reopens
+  with the new due date keeping stars/labels/order while the
+  displaced row becomes the completed record. Shadow rows sync
+  normally but are excluded from every view (`_task_queryset`/
+  `_note_queryset` + stats/counts), label processing, and star
+  keywords. Detection is deliberately fail-open: different-notes or
+  undated groups are never collapsed.
 
 - Local edits set `needs_push=True`; push clears it and stamps
   `last_synced_at`.

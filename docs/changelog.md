@@ -7,8 +7,10 @@
     (and auto-starred) task — a yearly series showed ~6 identical
     starred rows spanning years ahead. Sync now collapses a series
     to one canonical row bound to the earliest open occurrence and
-    hides the rest; when the current occurrence completes, the same
-    task reopens onto the next year keeping its star and position
+    hides the future ones; when the current occurrence completes, the
+    same task reopens onto the next year keeping its star and
+    position, and the completed occurrence stays as its own completed
+    task so per-period history accumulates
 19. Dead bank consents stop retrying: when GoCardless reports an
     expired (401 AccessExpiredError) or suspended (409) consent,
     the requisition is stamped EX/SU locally so every sync,

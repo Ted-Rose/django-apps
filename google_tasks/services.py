@@ -433,9 +433,12 @@ def _collapse_recurring_series(pulls, all_rows, remote_ids, to_update,
     hashtag). A (list, title, notes) group with 2+ OPEN remote items
     whose earliest open item is dated is treated as one series: a
     single canonical local row tracks the earliest open occurrence
-    and every other row bound to the group is flagged
+    and every other row bound to an OPEN item is flagged
     is_recurrence_shadow (and unstarred so it leaves the starred
-    ordering scope).
+    ordering scope). Rows bound to COMPLETED items of the group stay
+    visible as ordinary completed tasks — each occurrence's
+    completion is real history — they are only unstarred so starred
+    views show the current occurrence alone.
 
     The canonical row KEEPS its identity — stars, labels, ordering,
     note classification and pending edits live on it. When the
@@ -443,9 +446,10 @@ def _collapse_recurring_series(pulls, all_rows, remote_ids, to_update,
     becomes canonical: if it is bound to a different local row the
     two rows swap remote ids (two-phase write — Postgres checks the
     unique task_id per row), reopening the same visible task with the
-    new due date even though it was completed. Shadow flags are
-    sticky: a row leaves the shadowed state only by becoming
-    canonical.
+    new due date even though it was completed. The displaced row
+    keeps the completed entity's binding — it becomes the visible
+    completion record. Shadow flags are sticky: an OPEN bound row
+    leaves the shadowed state only by becoming canonical.
 
     Returns (temp_id_rows, flag_rows): persisted rows that need a
     temporary task_id write before the final flush (id swaps), and
@@ -561,12 +565,15 @@ def _collapse_recurring_series(pulls, all_rows, remote_ids, to_update,
                             queued.add(row.pk)
 
             for row in bound_rows:
-                shadow = row is not canonical
+                item = item_by_id.get(row.task_id)
+                is_open_item = item is not None and \
+                    item.get('status', 'needsAction') == 'needsAction'
+                shadow = row is not canonical and is_open_item
                 if row.is_recurrence_shadow == shadow \
-                        and (not shadow or not row.is_starred):
+                        and (row is canonical or not row.is_starred):
                     continue
                 row.is_recurrence_shadow = shadow
-                if shadow:
+                if row is not canonical:
                     row.is_starred = False
                     row.starred_order = None
                 if row.pk is None:

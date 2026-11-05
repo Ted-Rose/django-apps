@@ -93,11 +93,12 @@ the pull merges remote state.
   title, and notes — a recurring series whose upcoming
   occurrences Google materializes as extra live entities
 - **THEN** exactly one canonical local row stays bound to the
-  earliest open occurrence and the rest are flagged
-  `is_recurrence_shadow` (hidden from views, unstarred); when
-  the current occurrence completes, the canonical row swaps
-  onto the next occurrence's remote id — reopening with stars
-  and ordering intact
+  earliest open occurrence and other open-bound rows are flagged
+  `is_recurrence_shadow` (hidden from views, unstarred) while
+  completed occurrences stay visible as ordinary completed
+  tasks; when the current occurrence completes, the canonical
+  row swaps onto the next occurrence's remote id — reopening
+  with stars and ordering intact
 
 #### Scenario: Outgoing edits flush before incoming merge
 
