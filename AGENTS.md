@@ -347,6 +347,8 @@ level.
   `env-file` — an entire .env file in the same schema as local
   `.env`. Cloud Run service + jobs mount it as the `DOTENV` env
   var; the deploy workflow's migrate step exports it the same way.
+  Never create another secret — append new credentials as
+  KEY=VALUE lines (each extra secret adds cost).
 - `deploy-pr-preview.yml` deploys a `django-apps-pr-<n>` Cloud Run
   service per PR to main (min 0 / max 1) sharing `env-file`.
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
