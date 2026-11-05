@@ -266,7 +266,7 @@ level.
   source of truth): `api-contract`, `bank-consent`,
   `data-isolation`, `external-sync`, `quick-notes`, `spa-shell`
   — grow as real changes touch new areas (run
-  `openspec spec list` for the current set). Code wins when a
+  `openspec list --specs` for the current set). Code wins when a
   spec and the code disagree; fix the spec.
 - `openspec/config.yaml` carries project context; change
   `tasks.md` items MUST be prefixed `backend:` / `frontend:` /
