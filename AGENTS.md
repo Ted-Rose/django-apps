@@ -90,10 +90,14 @@ URL routing (`django_apps/urls.py`): `google_api`, `gmail` and
    `DATABASES` to local sqlite `db.sqlite3` — `runserver`,
    `shell`, `migrate`, `test` all hit a throwaway dev DB. Setting
    `DEBUG=false` instead connects to
-   **production Postgres via the read-only `ai_agent` user**
-   (SELECT only — every write fails `permission denied`, which is
-   intended, not a bug). Use it for investigation only; never work
-   around it with admin credentials — ask the user first.
+   **production Postgres** — intended for read-only
+   investigation, but the DB user depends on the local `.env`
+   (`settings.DATABASES['default']['USER']` tells you: the owner's
+   `.env` has used BOTH the read-only `ai_agent` AND the
+   full-access `avnadmin`, under which `migrate`/ORM writes DO
+   reach prod). Always assume writes are possible: run
+   `manage.py migrate`, `shell` mutations and seeded simulations
+   only under `DEBUG=true` (sqlite) — never unprefixed.
 2. **Shared API contract.** One `NinjaAPI` in
    `django_apps/api.py`, mounted at `/api/`; apps register a
    `Router` in `<app>/api.py` via `api.add_router('/<entry>/', …)`

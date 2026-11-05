@@ -382,6 +382,201 @@ TASK_CREATE_UPSERT_FIELDS = [
     'completed', 'updated', 'last_synced_at', 'updated_at',
 ]
 
+# Fields written when the collapse pass flags/unflags shadow rows —
+# kept out of TASK_BULK_UPDATE_FIELDS so normal pulls never rewrite
+# star state.
+TASK_SHADOW_UPDATE_FIELDS = [
+    'is_recurrence_shadow', 'is_starred', 'starred_order',
+    'updated_at',
+]
+
+
+def _remote_defaults(task_list, task_data, sync_time):
+    """Remote-mirrored field values for one pulled task item."""
+    return {
+        'task_list': task_list,
+        'title': task_data.get('title', 'Untitled'),
+        'notes': task_data.get('notes', ''),
+        'due_date': parse_datetime(task_data.get('due')),
+        'status': task_data.get('status', 'needsAction'),
+        'completed': parse_datetime(task_data.get('completed')),
+        'updated': parse_datetime(task_data.get('updated')),
+        'last_synced_at': sync_time,
+    }
+
+
+def _apply_remote_defaults(task, defaults, sync_time):
+    """Write remote-mirrored fields onto a local row.
+
+    A body rewritten on the Google side clears the rich-text mirror —
+    notes_doc is the doc for the notes text we last synced, not for
+    new remote text. Matching remote text keeps the doc.
+    """
+    previous_notes = task.notes
+    for field, value in defaults.items():
+        setattr(task, field, value)
+    if defaults['notes'] != (previous_notes or ''):
+        task.notes_doc = None
+    task.updated_at = sync_time
+
+
+def _collapse_recurring_series(pulls, all_rows, remote_ids, to_update,
+                               queued, sync_time):
+    """Fold materialized future occurrences of recurring series into
+    shadow rows.
+
+    Google materializes every upcoming occurrence of a recurring
+    series as its own remote entity — all present in tasks().list,
+    all open, none suppressed — so the succession merge above cannot
+    fold them and each spawn used to accumulate as a visible
+    duplicate (auto-starred again when the series carries a #star
+    hashtag). A (list, title, notes) group with 2+ OPEN remote items
+    whose earliest open item is dated is treated as one series: a
+    single canonical local row tracks the earliest open occurrence
+    and every other row bound to the group is flagged
+    is_recurrence_shadow (and unstarred so it leaves the starred
+    ordering scope).
+
+    The canonical row KEEPS its identity — stars, labels, ordering,
+    note classification and pending edits live on it. When the
+    current occurrence completes, the next earliest open remote item
+    becomes canonical: if it is bound to a different local row the
+    two rows swap remote ids (two-phase write — Postgres checks the
+    unique task_id per row), reopening the same visible task with the
+    new due date even though it was completed. Shadow flags are
+    sticky: a row leaves the shadowed state only by becoming
+    canonical.
+
+    Returns (temp_id_rows, flag_rows): persisted rows that need a
+    temporary task_id write before the final flush (id swaps), and
+    persisted rows whose shadow/star fields changed.
+    """
+    temp_id_rows, flag_rows = [], []
+
+    for task_list, remote_items in pulls:
+        groups = {}
+        for item in remote_items:
+            key = (item.get('title', 'Untitled'),
+                   item.get('notes', ''))
+            groups.setdefault(key, []).append(item)
+
+        for (title, _notes), items in groups.items():
+            open_items = [
+                item for item in items
+                if item.get('status', 'needsAction') == 'needsAction'
+            ]
+            if len(open_items) < 2:
+                continue
+            dues = {
+                item['id']: parse_datetime(item.get('due'))
+                for item in open_items
+            }
+            canonical_item = min(
+                open_items,
+                key=lambda item: (
+                    dues[item['id']] is None,
+                    dues[item['id']].timestamp()
+                    if dues[item['id']] else 0,
+                    item['id'],
+                ),
+            )
+            if dues[canonical_item['id']] is None:
+                # Undated same-titled duplicates are not a series.
+                continue
+
+            item_by_id = {item['id']: item for item in items}
+            bound = {
+                row.task_id: row for row in all_rows
+                if row.task_list_id == task_list.pk
+                and row.title == title
+                and row.task_id in item_by_id
+            }
+            bound_rows = [
+                row for row in bound.values()
+                if not row.is_deleted and not row.is_divider
+            ]
+            if len(bound_rows) < 2:
+                continue
+            # Unbound rows (remote entity vanished from the pull) may
+            # still be the visible canonical — they are candidates
+            # for the swap but never shadow targets; ghost cleanup
+            # owns them.
+            unbound_rows = [
+                row for row in all_rows
+                if row.task_list_id == task_list.pk
+                and row.title == title
+                and not row.is_deleted
+                and not row.is_divider
+                and not row.is_recurrence_shadow
+                and row.task_id not in remote_ids
+            ]
+
+            canonical = next(
+                (row for row in bound_rows
+                 if row.task_id == canonical_item['id']),
+                None,
+            )
+            if canonical is None or canonical.is_recurrence_shadow:
+                visible = [
+                    row for row in bound_rows + unbound_rows
+                    if not row.is_recurrence_shadow
+                ]
+                if visible:
+                    canonical = min(
+                        visible,
+                        key=lambda row: row.created or sync_time,
+                    )
+                elif canonical is None:
+                    canonical = bound_rows[0]
+
+            if canonical.task_id != canonical_item['id']:
+                displaced = bound[canonical_item['id']]
+                old_id = canonical.task_id
+                old_item = item_by_id.get(old_id)
+                canonical.task_id = canonical_item['id']
+                _apply_remote_defaults(
+                    canonical,
+                    _remote_defaults(
+                        task_list, canonical_item, sync_time),
+                    sync_time,
+                )
+                displaced.task_id = old_id
+                if old_item is not None:
+                    _apply_remote_defaults(
+                        displaced,
+                        _remote_defaults(
+                            task_list, old_item, sync_time),
+                        sync_time,
+                    )
+                logger.info(
+                    f'Recurring series: rebound canonical '
+                    f'{old_id} -> {canonical_item["id"]} for '
+                    f'\'{title}\''
+                )
+                for row in (canonical, displaced):
+                    if row.pk is not None:
+                        temp_id_rows.append(row)
+                        if row.pk not in queued:
+                            to_update.append(row)
+                            queued.add(row.pk)
+
+            for row in bound_rows:
+                shadow = row is not canonical
+                if row.is_recurrence_shadow == shadow \
+                        and (not shadow or not row.is_starred):
+                    continue
+                row.is_recurrence_shadow = shadow
+                if shadow:
+                    row.is_starred = False
+                    row.starred_order = None
+                if row.pk is None:
+                    # Pending insert — flags land in the INSERT.
+                    continue
+                row.updated_at = sync_time
+                flag_rows.append(row)
+
+    return temp_id_rows, flag_rows
+
 
 def _write_remote_tasks(user, pulls, remote_ids):
     """
@@ -403,7 +598,11 @@ def _write_remote_tasks(user, pulls, remote_ids):
     pull, treat the remote task as the next occurrence of the series
     and merge into that row (rewriting task_id) so stars, labels,
     ordering and pending edits carry over. With zero or several
-    candidates the ambiguity resolves toward creating.
+    candidates the ambiguity resolves toward creating. Separately,
+    Google also materializes upcoming occurrences as extra live
+    remote entities — _collapse_recurring_series folds those into
+    hidden is_recurrence_shadow rows so only the current occurrence
+    stays visible.
 
     Returns the local task snapshot (post-merge task_ids), reused by
     the ghost-cleanup pass so it does not re-select the table.
@@ -431,32 +630,14 @@ def _write_remote_tasks(user, pulls, remote_ids):
 
     for task_list, remote_items in pulls:
         for task_data in remote_items:
-            defaults = {
-                'task_list': task_list,
-                'title': task_data.get('title', 'Untitled'),
-                'notes': task_data.get('notes', ''),
-                'due_date': parse_datetime(task_data.get('due')),
-                'status': task_data.get('status', 'needsAction'),
-                'completed': parse_datetime(task_data.get('completed')),
-                'updated': parse_datetime(task_data.get('updated')),
-                'last_synced_at': sync_time,
-            }
+            defaults = _remote_defaults(task_list, task_data, sync_time)
             task_id = task_data['id']
 
             task = by_task_id.get(task_id)
             if task is None:
                 task = pending.get(task_id)
             if task is not None:
-                previous_notes = task.notes
-                for field, value in defaults.items():
-                    setattr(task, field, value)
-                # A body rewritten on the Google side clears the
-                # rich-text mirror — notes_doc is the doc for the
-                # notes text we last synced, not for new remote
-                # text. Matching remote text keeps the doc.
-                if defaults['notes'] != (previous_notes or ''):
-                    task.notes_doc = None
-                task.updated_at = sync_time
+                _apply_remote_defaults(task, defaults, sync_time)
                 # A repeated remote id mutates the already-queued row
                 # in place (last wins) instead of appending a second
                 # CASE branch that Postgres would ignore.
@@ -477,13 +658,8 @@ def _write_remote_tasks(user, pulls, remote_ids):
                 del by_task_id[old_id]
                 task.task_id = task_id
                 by_task_id[task_id] = task
-                previous_notes = task.notes
-                for field, value in defaults.items():
-                    setattr(task, field, value)
-                if defaults['notes'] != (previous_notes or ''):
-                    task.notes_doc = None
+                _apply_remote_defaults(task, defaults, sync_time)
                 task.created = sync_time
-                task.updated_at = sync_time
                 to_update.append(task)
                 queued.add(task.pk)
                 logger.info(
@@ -501,6 +677,21 @@ def _write_remote_tasks(user, pulls, remote_ids):
                 to_create.append(task)
                 pending[task_id] = task
 
+    temp_id_rows, flag_rows = _collapse_recurring_series(
+        pulls, local_tasks + to_create, remote_ids, to_update,
+        queued, sync_time,
+    )
+    if temp_id_rows:
+        # Postgres checks the unique task_id per row — an A<->B swap
+        # inside one UPDATE can collide, so staged temp ids land
+        # first and the finals flush with the main bulk_update.
+        finals = {row.pk: row.task_id for row in temp_id_rows}
+        for row in temp_id_rows:
+            row.task_id = f'__swap_{row.pk}'
+        GoogleTask.objects.bulk_update(temp_id_rows, ['task_id'])
+        for row in temp_id_rows:
+            row.task_id = finals[row.pk]
+
     if to_create:
         # update_conflicts heals rows raced in by a concurrent sync
         # (same remote id inserted after classification) instead of
@@ -517,6 +708,12 @@ def _write_remote_tasks(user, pulls, remote_ids):
         GoogleTask.objects.bulk_update(
             to_update,
             fields=TASK_BULK_UPDATE_FIELDS,
+            batch_size=500,
+        )
+    if flag_rows:
+        GoogleTask.objects.bulk_update(
+            flag_rows,
+            fields=TASK_SHADOW_UPDATE_FIELDS,
             batch_size=500,
         )
 
@@ -1267,7 +1464,9 @@ def retag_notes(user, source_path, path_for):
     """
     retagged = []
     prefix = list(source_path)
-    notes = GoogleTask.objects.filter(user=user, is_note=True)
+    notes = GoogleTask.objects.filter(
+        user=user, is_note=True, is_recurrence_shadow=False
+    )
     for note in notes:
         match = find_note_marker(note.title, note.notes)
         if match is None:
@@ -1840,7 +2039,8 @@ def process_task_labels(user, creds, task_id=None):
         tasks = GoogleTask.objects.filter(
             user=user,
             status='needsAction',
-            is_divider=False
+            is_divider=False,
+            is_recurrence_shadow=False
         ).select_related('task_list')
 
     # Get all task lists and labels once — per-item ORM calls in this

@@ -1,6 +1,14 @@
 # google_api
 
 ## Changelog
+20. Recurring tasks no longer flood lists with future occurrences:
+    Google materializes every upcoming occurrence of a series as a
+    real remote entity, and each used to sync as a separate visible
+    (and auto-starred) task — a yearly series showed ~6 identical
+    starred rows spanning years ahead. Sync now collapses a series
+    to one canonical row bound to the earliest open occurrence and
+    hides the rest; when the current occurrence completes, the same
+    task reopens onto the next year keeping its star and position
 19. Dead bank consents stop retrying: when GoCardless reports an
     expired (401 AccessExpiredError) or suspended (409) consent,
     the requisition is stamped EX/SU locally so every sync,

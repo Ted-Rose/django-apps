@@ -87,6 +87,18 @@ the pull merges remote state.
   note classification, and pending edits carry over; ambiguous
   cases create a new row
 
+#### Scenario: Materialized recurring occurrences collapse
+
+- **WHEN** a pull returns 2+ open remote tasks sharing list,
+  title, and notes — a recurring series whose upcoming
+  occurrences Google materializes as extra live entities
+- **THEN** exactly one canonical local row stays bound to the
+  earliest open occurrence and the rest are flagged
+  `is_recurrence_shadow` (hidden from views, unstarred); when
+  the current occurrence completes, the canonical row swaps
+  onto the next occurrence's remote id — reopening with stars
+  and ordering intact
+
 #### Scenario: Outgoing edits flush before incoming merge
 
 - **WHEN** `sync_tasks` runs for a user with `needs_push` rows

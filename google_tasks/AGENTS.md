@@ -33,6 +33,22 @@ keep sync query counts flat, not per-item or per-list.
   remote move between lists must not look like suppression), so
   `sync_tasks` fetches every list's pages before writing anything.
 
+  Google ALSO materializes upcoming occurrences as extra live remote
+  entities (all open, dated a period apart — a yearly series shows
+  ~6 future entities). `_collapse_recurring_series` runs inside
+  `_write_remote_tasks` after classification: a (list, title, notes)
+  group with 2+ OPEN items and a dated earliest-open item is one
+  series; ONE canonical row tracks the earliest open occurrence and
+  every other bound row is flagged `is_recurrence_shadow` + unstarred.
+  On succession the canonical row swaps remote ids with the shadow
+  bound to the new current entity (two-phase task_id write — Postgres
+  checks unique per row), so the same visible task reopens with the
+  new due date keeping stars/labels/order. Shadow rows sync normally
+  but are excluded from every view (`_task_queryset`/`_note_queryset`
+  + stats/counts), label processing, and star keywords. Detection is
+  deliberately fail-open: different-notes or undated groups are never
+  collapsed.
+
 - Local edits set `needs_push=True`; push clears it and stamps
   `last_synced_at`.
 - Push of an `is_deleted` task deletes it in Google. Push that hits a
@@ -46,7 +62,8 @@ keep sync query counts flat, not per-item or per-list.
 ## Local-only fields on GoogleTask — never send to Google
 
 `is_starred`, `is_divider`, `task_order`, `starred_order`,
-`is_archived`, `is_deleted`, `deleted_at`, `labels` (M2M
+`is_archived`, `is_deleted`, `deleted_at`,
+`is_recurrence_shadow`, `labels` (M2M
 `TaskLabel`), `is_note`, `note_category` (FK `NoteCategory`),
 `notes_doc`.
 
