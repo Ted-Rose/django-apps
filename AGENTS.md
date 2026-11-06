@@ -543,6 +543,6 @@ Prod (Cloud Run/Vercel) is unaffected.
   thorough), `google_api/README.md`, `single_pages/README.MD`.
 - Infra/deploy: `docs/QUICKSTART.md`, `terraform/`,
   `.github/workflows/`.
-- Past design docs: `docs/plans/`, `.research/`.
+- Past design docs: `docs/plans/` (frozen — history only).
 - Repo skills: `.devin/skills/` (`new-react-app`,
   `fix-good-first-issue`, `implement-plan`, `create-pr`).
