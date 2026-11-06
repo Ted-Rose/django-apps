@@ -3583,6 +3583,392 @@ class RequisitionCallbackRelinkTests(TestCase):
         self.assertEqual(self.old_account.account_id, 'acc-old')
 
 
+class RequisitionCallbackSameIdRelinkTests(TestCase):
+    """Stable-ID institutions (Swedbank) return the SAME
+    GoCardless account ids across relinks. When a new LN
+    requisition lists an id already stored under a dead
+    requisition, the existing row is repointed in place instead
+    of being skipped forever by LN-scoped fetch jobs."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.client.force_login(self.user)
+        self.dead_req = make_requisition(
+            self.user, requisition_id='req-dead', status='SU'
+        )
+        self.account = make_account(
+            self.user, self.dead_req, account_id='acc-same'
+        )
+        self.account.name = 'Checking'
+        self.account.save()
+        self.new_req = make_requisition(
+            self.user, requisition_id='req-new', status='LN'
+        )
+        session = self.client.session
+        session['requisition_id'] = 'req-new'
+        session.save()
+        self.details = {
+            'name': 'Everyday',
+            'currency': 'USD',
+        }
+
+    def run_callback(self, accounts=None, details=None,
+                     details_error=None):
+        client = MagicMock()
+        client.get_requisition_data.return_value = {
+            'status': 'LN',
+            'accounts': (
+                ['acc-same'] if accounts is None else accounts
+            ),
+        }
+        if details_error is not None:
+            client.get_account_details.side_effect = details_error
+        else:
+            client.get_account_details.return_value = (
+                self.details if details is None else details
+            )
+        with patch(
+            'finance.views.GoCardlessClient', return_value=client
+        ):
+            self.client.get(reverse('finance:callback'))
+        return client
+
+    def test_same_id_reattaches_existing_row(self):
+        """The row keeps its pk — transactions, shares, limits,
+        alerts and prefs survive; only the requisition pointer
+        (and name/currency) change."""
+        old_pk = self.account.pk
+        tx = make_transaction(self.account, 'tx-1', '-5.00')
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        share = AccountShare.objects.create(
+            account=self.account, shared_with=other
+        )
+        limit = make_limit(
+            user=self.user,
+            account=self.account,
+            limit_7_days=Decimal('100.00'),
+        )
+        alert = BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('10.00'),
+        )
+        pref = UserAccountPreference.objects.create(
+            user=self.user, account=self.account
+        )
+
+        self.run_callback()
+
+        self.assertEqual(Account.objects.count(), 1)
+        account = Account.objects.get(pk=old_pk)
+        self.assertEqual(account.account_id, 'acc-same')
+        self.assertEqual(account.requisition_id, self.new_req.pk)
+        self.assertEqual(account.name, 'Everyday')
+        self.assertEqual(account.currency, 'USD')
+        # Everything keyed to the pk survived.
+        self.assertEqual(tx.account_id, old_pk)
+        self.assertEqual(share.account_id, old_pk)
+        self.assertEqual(limit.accounts.get().pk, old_pk)
+        self.assertEqual(alert.account_id, old_pk)
+        self.assertEqual(pref.account_id, old_pk)
+
+    def test_reattach_keeps_name_and_currency_when_payload_omits(
+        self,
+    ):
+        self.details = {'currency': 'XXX'}
+        self.run_callback()
+        account = Account.objects.get(pk=self.account.pk)
+        self.assertEqual(account.requisition_id, self.new_req.pk)
+        self.assertEqual(account.name, 'Checking')
+        self.assertEqual(account.currency, 'EUR')
+
+    def test_reattach_survives_details_fetch_error(self):
+        """A GoCardlessError on the details fetch still repoints
+        the row — the stored name/currency are kept."""
+        self.run_callback(
+            details_error=GoCardlessError(500, 'x')
+        )
+        account = Account.objects.get(pk=self.account.pk)
+        self.assertEqual(account.requisition_id, self.new_req.pk)
+        self.assertEqual(account.name, 'Checking')
+        self.assertEqual(account.currency, 'EUR')
+
+    def test_live_requisition_row_untouched(self):
+        """An id already sitting under an LN requisition is not
+        repointed — only the caller's preference is ensured."""
+        live_req = make_requisition(
+            self.user, requisition_id='req-live', status='LN'
+        )
+        self.account.requisition = live_req
+        self.account.save()
+
+        self.run_callback()
+
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.requisition_id, live_req.pk)
+        self.assertTrue(
+            UserAccountPreference.objects.filter(
+                user=self.user, account=self.account
+            ).exists()
+        )
+
+    def test_other_owner_row_untouched_and_no_pref(self):
+        """The account_id unique constraint means another user's
+        row can collide — it must never be repointed and never
+        grants this user a preference on it."""
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign_req = make_requisition(
+            other, requisition_id='req-foreign', status='SU'
+        )
+        self.account.owner = other
+        self.account.requisition = foreign_req
+        self.account.save()
+
+        self.run_callback()
+
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, foreign_req.pk
+        )
+        self.assertEqual(self.account.owner_id, other.pk)
+        self.assertFalse(
+            UserAccountPreference.objects.filter(
+                user=self.user, account=self.account
+            ).exists()
+        )
+
+    def test_institution_mismatch_row_untouched(self):
+        """Same owner but a different institution — not repointed;
+        the caller still gets a preference on their own row."""
+        self.account.institution_id = 'OTHER_BANK'
+        self.account.save()
+
+        self.run_callback()
+
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.dead_req.pk
+        )
+        self.assertTrue(
+            UserAccountPreference.objects.filter(
+                user=self.user, account=self.account
+            ).exists()
+        )
+
+
+class ReattachRelinkedAccountsTests(TestCase):
+    """`reattach_relinked_accounts` repairs rows stranded on dead
+    requisitions by stable-ID relinks — the same repoint the
+    callback now performs."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.dead_req = make_requisition(
+            self.user, requisition_id='req-dead', status='SU'
+        )
+        self.live_req = make_requisition(
+            self.user, requisition_id='req-live', status='LN'
+        )
+        self.account = make_account(
+            self.user, self.dead_req, account_id='acc-1'
+        )
+
+    def run_command(self, payloads=None, **kwargs):
+        client = MagicMock()
+        if payloads is None:
+            payloads = {
+                self.live_req.requisition_id: {
+                    'accounts': ['acc-1'],
+                },
+            }
+        client.get_requisition_data.side_effect = (
+            lambda requisition_id: payloads.get(
+                requisition_id, {'accounts': []}
+            )
+        )
+        with patch(
+            'finance.management.commands'
+            '.reattach_relinked_accounts.GoCardlessClient',
+            return_value=client,
+        ):
+            call_command('reattach_relinked_accounts', **kwargs)
+        return client
+
+    def test_repoints_stranded_accounts(self):
+        self.run_command()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.live_req.pk
+        )
+
+    def test_dry_run_logs_but_does_not_write(self):
+        with self.assertLogs(
+            'finance.management.commands'
+            '.reattach_relinked_accounts',
+            level='INFO',
+        ) as logs:
+            self.run_command(dry_run=True)
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.dead_req.pk
+        )
+        self.assertTrue(
+            any('Reattaching' in line for line in logs.output)
+        )
+
+    def test_idempotent_second_run(self):
+        self.run_command()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.live_req.pk
+        )
+        # Second run: the account is already under an LN
+        # requisition, so nothing is repointed.
+        self.run_command()
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.live_req.pk
+        )
+
+    def test_newest_ln_requisition_wins(self):
+        """Two live requisitions listing the same id — the newest
+        claims the row, the older one then sees it as LN."""
+        newer_req = make_requisition(
+            self.user, requisition_id='req-live-2', status='LN'
+        )
+        self.run_command(payloads={
+            self.live_req.requisition_id: {
+                'accounts': ['acc-1'],
+            },
+            newer_req.requisition_id: {
+                'accounts': ['acc-1'],
+            },
+        })
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, newer_req.pk
+        )
+
+    def test_skips_other_owner(self):
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign_req = make_requisition(
+            other, requisition_id='req-foreign', status='SU'
+        )
+        self.account.owner = other
+        self.account.requisition = foreign_req
+        self.account.save()
+
+        self.run_command()
+
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, foreign_req.pk
+        )
+
+    def test_skips_institution_mismatch(self):
+        self.account.institution_id = 'OTHER_BANK'
+        self.account.save()
+
+        self.run_command()
+
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.dead_req.pk
+        )
+
+    def test_skips_accounts_under_live_requisition(self):
+        other_live = make_requisition(
+            self.user, requisition_id='req-other', status='LN'
+        )
+        self.account.requisition = other_live
+        self.account.save()
+
+        self.run_command()
+
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, other_live.pk
+        )
+
+    def test_gocardless_error_skips_requisition(self):
+        """A failing requisition is logged and skipped — the rest
+        still get repaired."""
+        failing_req = make_requisition(
+            self.user, requisition_id='req-failing', status='LN'
+        )
+
+        def fetch(requisition_id):
+            if requisition_id == failing_req.requisition_id:
+                raise GoCardlessError(500, 'boom')
+            return {'accounts': ['acc-1']}
+
+        client = MagicMock()
+        client.get_requisition_data.side_effect = fetch
+        with patch(
+            'finance.management.commands'
+            '.reattach_relinked_accounts.GoCardlessClient',
+            return_value=client,
+        ):
+            call_command('reattach_relinked_accounts')
+
+        # req-failing is newest and errored; req-live still
+        # repaired the stranded account.
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.live_req.pk
+        )
+
+    def test_fresh_non_ln_status_skips_and_stamps(self):
+        """A requisition locally LN but no longer linked upstream
+        is skipped — and the fresh status is stamped locally so
+        later runs leave it out of the LN queryset."""
+        self.run_command(payloads={
+            self.live_req.requisition_id: {
+                'status': 'EX',
+                'accounts': ['acc-1'],
+            },
+        })
+        self.live_req.refresh_from_db()
+        self.assertEqual(self.live_req.status, 'EX')
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.dead_req.pk
+        )
+
+    def test_terminal_error_marks_requisition_dead(self):
+        """A terminal consent error (401 AccessExpiredError)
+        stamps the requisition dead — via mark_requisition_dead
+        when a local account sits under it."""
+        make_account(self.user, self.live_req, 'acc-live')
+        client = MagicMock()
+        client.get_requisition_data.side_effect = GoCardlessError(
+            401, '{"summary": "AccessExpiredError"}'
+        )
+        with patch(
+            'finance.management.commands'
+            '.reattach_relinked_accounts.GoCardlessClient',
+            return_value=client,
+        ):
+            call_command('reattach_relinked_accounts')
+
+        self.live_req.refresh_from_db()
+        self.assertEqual(self.live_req.status, 'EX')
+        self.account.refresh_from_db()
+        self.assertEqual(
+            self.account.requisition_id, self.dead_req.pk
+        )
+
+
 class EnsureExcludedCategoryTests(TestCase):
     """The auto-provisioned 'Excluded' category — post_save signal
     on user creation plus the ensure_excluded_category helper

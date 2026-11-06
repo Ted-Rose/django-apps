@@ -1,7 +1,7 @@
 # google_api
 
 ## Changelog
-20. Recurring tasks no longer flood lists with future occurrences:
+21. Recurring tasks no longer flood lists with future occurrences:
     Google materializes every upcoming occurrence of a series as a
     real remote entity, and each used to sync as a separate visible
     (and auto-starred) task — a yearly series showed ~6 identical
@@ -11,6 +11,15 @@
     same task reopens onto the next year keeping its star and
     position, and the completed occurrence stays as its own completed
     task so per-period history accumulates
+20. Fixed relinked bank accounts staying disconnected: some banks
+    (Swedbank) return the SAME GoCardless account ids on relink,
+    so the callback skipped the existing rows and they stayed
+    pointed at the dead consent — transactions, balances and
+    alerts never refreshed. The callback now repoints such rows
+    to the new live requisition in place (transactions, shares,
+    limits, alerts and preferences preserved); a new one-off
+    `reattach_relinked_accounts` command repairs rows already
+    stranded this way
 19. Dead bank consents stop retrying: when GoCardless reports an
     expired (401 AccessExpiredError) or suspended (409) consent,
     the requisition is stamped EX/SU locally so every sync,

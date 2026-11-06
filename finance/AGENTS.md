@@ -43,19 +43,27 @@ transactions, and get spending-limit alerts.
 2. `requisition_callback` (`/finance/callback/`, the one remaining
    Django view in `views.py`): reads `session['requisition_id']`,
    refetches requisition, proceeds only when `status == 'LN'`
-   (linked). For each returned account id it fetches details
-   (iban/name/currency), then either creates an `Account` row or —
-   because GoCardless account ids are requisition-scoped and a
-   relink always returns NEW ids — **reattaches an existing row by
-   IBAN**: a normalized (spaces stripped, uppercased) IBAN matching
-   exactly one same-owner, same-institution `Account` under a
-   non-`LN` requisition rewrites `account_id`/`requisition` in
-   place, preserving transactions, shares, limits, alerts and
-   prefs (name/currency refresh, keeping stored values when the
-   payload omits them or says `XXX`). Zero/ambiguous matches and
-   missing IBANs create a new row (>1 logs a warning). A default
-   `UserAccountPreference` is ensured either way, then redirect to
-   `finance:accounts` (the SPA).
+   (linked). For each returned account id, an existing `Account`
+   row with that id is handled by `_reattach_account`: rows under
+   a dead (non-`LN`) requisition with the same owner + institution
+   are repointed to the new requisition in place — **stable-ID
+   institutions like Swedbank return the same GoCardless account
+   ids across relinks**, so without this the row stays stranded
+   on the dead consent and every `status='LN'` fetch set skips it
+   forever. Rows under a still-`LN` requisition or with an
+   owner/institution mismatch are left untouched (mismatch logs a
+   warning); a `UserAccountPreference` is only ever created for
+   the caller's own accounts. Unknown ids fetch details
+   (iban/name/currency) and go through `_link_account` — most
+   institutions are requisition-scoped so a relink returns NEW
+   ids, and a normalized (spaces stripped, uppercased) IBAN
+   matching exactly one same-owner, same-institution `Account`
+   under a non-`LN` requisition rewrites `account_id`/
+   `requisition` in place, preserving transactions, shares,
+   limits, alerts and prefs (name/currency refresh, keeping
+   stored values when the payload omits them or says `XXX`).
+   Zero/ambiguous matches and missing IBANs create a new row (>1
+   logs a warning). Then redirect to `finance:accounts` (the SPA).
 
 Dead consents: `Requisition.status` mirrors GoCardless's lifecycle —
 `EX`/`SU` are terminal and stamped by `mark_requisition_dead` when
@@ -237,6 +245,18 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   Notification row is the record of delivery). Accounts whose fetch
   failed/429'd or whose currency mismatches are skipped — never
   alert on a stale stored balance. Logs `BALANCE_ALERT_TRIGGERED`.
+- `reattach_relinked_accounts` (`--dry-run`): one-off repair for
+  rows stranded before the callback's same-id reattach existed —
+  for each `status='LN'` requisition (newest first, so the newest
+  live consent wins when two list the same id) it refetches the
+  requisition and repoints local rows still under a different
+  non-`LN` requisition (same owner + institution required). The
+  fresh upstream `status` wins over the local stamp: a non-`LN`
+  response or a terminal `GoCardlessError` marks the requisition
+  dead (`mark_requisition_dead` via a local account when one
+  exists, else a direct status save) and skips it; other
+  `GoCardlessError`s are logged and skipped.
+  Idempotent — run once post-deploy, safe to re-run.
 - Terraform (`terraform/cloud_run_jobs.tf`) runs these via one
   `all-jobs` Cloud Run job executing `run_all_jobs`
   (`django_apps/management/commands/run_all_jobs.py`), fired daily
