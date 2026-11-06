@@ -132,3 +132,37 @@ creates a new row.
   shares the IBAN
 - **THEN** no reattach happens — a warning is logged and a new
   row is created
+
+### Requirement: Known account_id reattaches in place
+
+When the relink callback returns an `account_id` that already
+exists locally under a non-`LN` requisition, that row SHALL be
+repointed to the new requisition in place — `requisition`
+rewritten, `name`/`currency` refreshed — but only when the row
+has the same owner and institution. Rows under `LN`
+requisitions and owner/institution mismatches SHALL be left
+untouched.
+
+#### Scenario: Stable-ID relink repoints the existing row
+
+- **WHEN** a returned `account_id` matches an existing
+  `Account` under a non-`LN` requisition with the same owner
+  and the same institution as the new requisition
+- **THEN** that row's `requisition` is updated in place and
+  `name`/`currency` refreshed — stored values kept when the
+  details payload omits them or reports `XXX`; pk,
+  transactions, shares, limits, alerts and preferences survive
+
+#### Scenario: Live requisition is a no-op
+
+- **WHEN** the returned `account_id` matches an `Account`
+  already under an `LN` requisition
+- **THEN** the row is left unchanged — no details fetch, no
+  save
+
+#### Scenario: Owner or institution mismatch is left untouched
+
+- **WHEN** the matching `Account` belongs to another owner or
+  a different institution
+- **THEN** it stays under its dead requisition, a warning is
+  logged, and no new row is created (`account_id` is unique)

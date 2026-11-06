@@ -69,7 +69,8 @@ Two live deploy targets share the same database:
 - `terraform/` — all GCP infra (Cloud Run service + jobs, Cloud
   Scheduler, Artifact Registry, GCS audio bucket, WIF).
 - `docs/` — `QUICKSTART.md` (deploy runbook), `changelog.md`,
-  `coding_diary.md` (dev log), `plans/` (design docs).
+  `coding_diary.md` (dev log), `plans/` (frozen historical
+  design docs).
 
 URL routing (`django_apps/urls.py`): `google_api`, `gmail` and
 `single_pages` mount at root — single_pages owns only `/twister`,
@@ -203,11 +204,15 @@ Universal rules — follow exactly:
 10. **Update the developer docs after functionality changes** —
     the owning app's `AGENTS.md`/`README.md`, and
     `docs/changelog.md` for user-visible changes.
-11. **Plans live in `docs/plans/` as `<feature>-plan.md`**
-    (multi-file plans get a subdirectory), each starting with a
-    status header: `Status: implemented | partial | in progress |
-    not implemented | reverted`. Older UPPERCASE files predate
-    this convention — leave them, use the convention for new ones.
+11. **`docs/plans/` is frozen — never create files there.**
+    Existing `<feature>-plan.md` docs (and older UPPERCASE
+    files, which predate the naming convention) stay as
+    history, each with a `Status:` header (`implemented |
+    partial | in progress | not implemented | reverted`) that
+    may still be updated. ALL new planning — features,
+    investigations, design docs — goes through
+    `openspec changes` (see the OpenSpec section); never write
+    new `*-plan.md` or other planning markdown.
 12. **Test login**: no standing test account exists. E2E seeds a
     local staff user `e2e` / `e2e-pass` (snippet in
     `frontend/README.md`); app login is Google OAuth (the owner's
@@ -295,10 +300,11 @@ level.
   `openspec changes` (that update is the archive) or not (edit
   the spec directly). A spec that no longer matches shipped
   behavior is a bug, not documentation drift.
-- **`docs/plans/` is frozen for new feature plans** — new
-  feature work goes through `openspec changes`. Existing
-  `docs/plans/*` stay as history, and investigation/report docs
-  (non-feature) still belong there per convention 11.
+- **`docs/plans/` is fully frozen** — new feature work AND
+  investigations go through `openspec changes`
+  (`openspec-propose` for changes; `openspec-explore` or change
+  artifacts for investigations). Existing `docs/plans/*` stay
+  as history — nothing new is added there (convention 11).
 
 ## Known gaps (do NOT "fix" without asking)
 
@@ -543,6 +549,6 @@ Prod (Cloud Run/Vercel) is unaffected.
   thorough), `google_api/README.md`, `single_pages/README.MD`.
 - Infra/deploy: `docs/QUICKSTART.md`, `terraform/`,
   `.github/workflows/`.
-- Past design docs: `docs/plans/`, `.research/`.
+- Past design docs: `docs/plans/` (frozen — history only).
 - Repo skills: `.devin/skills/` (`new-react-app`,
   `fix-good-first-issue`, `implement-plan`, `create-pr`).
