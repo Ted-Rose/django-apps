@@ -911,6 +911,236 @@ class RecurringTaskSyncTests(TestCase):
         self.assertFalse(divider.is_deleted)
 
 
+class RecurringSeriesCollapseTests(TestCase):
+    """Materialized future occurrences of a recurring series.
+
+    Google keeps every upcoming occurrence of a series as its own
+    live remote entity in tasks().list (all open, dated a period
+    apart, identical title/notes). Sync must fold them: one canonical
+    row tracks the earliest open occurrence; every other row in the
+    group becomes is_recurrence_shadow — hidden and unstarred.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+        self.task_list = GoogleTaskList.objects.create(
+            user=self.user, list_id='list-1', title='List 1'
+        )
+
+    def make_task(self, task_id, title, **kwargs):
+        kwargs.setdefault('task_list', self.task_list)
+        return GoogleTask.objects.create(
+            user=self.user, task_id=task_id, title=title, **kwargs
+        )
+
+    def remote_item(self, task_id, title, **fields):
+        item = {
+            'id': task_id,
+            'title': title,
+            'status': 'needsAction',
+            'updated': '2026-10-10T03:00:00Z',
+        }
+        item.update(fields)
+        return item
+
+    def run_sync(self, items):
+        service = MagicMock()
+        service.tasks.return_value.list.return_value.execute \
+            .return_value = {'items': items}
+        with patch(
+            'google_tasks.services.push_local_changes',
+            return_value={}
+        ), patch(
+            'google_tasks.services.get_tasks_service',
+            return_value=service
+        ):
+            result = sync_tasks(self.user, creds={})
+        self.assertTrue(result)
+
+    def series_items(self, count, title='Clean the roof',
+                     notes='#physical #starred',
+                     start_year=2026):
+        """N open remote occurrences a year apart, like the annual
+        series Google materializes."""
+        return [
+            self.remote_item(
+                f'occ-{start_year + i}', title,
+                notes=notes,
+                due=f'{start_year + i}-11-07T00:00:00.000Z',
+            )
+            for i in range(count)
+        ]
+
+    def test_materialized_occurrences_collapse(self):
+        """First sight of a series: the earliest open occurrence is
+        the canonical row; the later spawns land already shadowed."""
+        self.run_sync(self.series_items(3))
+        canonical = GoogleTask.objects.get(task_id='occ-2026')
+        self.assertFalse(canonical.is_recurrence_shadow)
+        shadows = GoogleTask.objects.filter(
+            task_id__in=['occ-2027', 'occ-2028']
+        )
+        self.assertEqual(shadows.count(), 2)
+        for shadow in shadows:
+            self.assertTrue(shadow.is_recurrence_shadow)
+            self.assertFalse(shadow.is_starred)
+        self.assertEqual(
+            GoogleTask.objects.filter(title='Clean the roof').count(),
+            3,
+        )
+
+    def test_existing_duplicate_rows_collapse(self):
+        """Rows accumulated before the collapse pass (all starred by
+        the #starred notes they carry) fold down to one visible,
+        still-starred canonical."""
+        tasks = [
+            self.make_task(
+                f'occ-{2026 + i}', 'Clean the roof',
+                notes='#physical #starred',
+                is_starred=True, starred_order=float(i + 1),
+            )
+            for i in range(3)
+        ]
+        self.run_sync(self.series_items(3))
+        tasks[0].refresh_from_db()
+        self.assertFalse(tasks[0].is_recurrence_shadow)
+        self.assertTrue(tasks[0].is_starred)
+        for dup in tasks[1:]:
+            dup.refresh_from_db()
+            self.assertTrue(dup.is_recurrence_shadow)
+            self.assertFalse(dup.is_starred)
+            self.assertIsNone(dup.starred_order)
+
+    def test_succession_reopens_canonical_row(self):
+        """The year rolls over: the current remote entity completes
+        and the next occurrence becomes canonical. The SAME local row
+        reopens with the new remote id — stars and ordering ride
+        along — even though it sat completed."""
+        canonical = self.make_task(
+            'occ-2026', 'Clean the roof', notes='#physical #starred',
+            status='completed', is_starred=True, starred_order=2.0,
+            task_order=5.0,
+        )
+        shadow = self.make_task(
+            'occ-2027', 'Clean the roof', notes='#physical #starred',
+            is_recurrence_shadow=True,
+        )
+        items = [
+            self.remote_item(
+                'occ-2026', 'Clean the roof',
+                notes='#physical #starred', status='completed',
+                due='2026-11-07T00:00:00.000Z',
+                completed='2026-11-06T10:00:00.000Z',
+            ),
+        ] + self.series_items(2, start_year=2027)
+        self.run_sync(items)
+        canonical.refresh_from_db()
+        shadow.refresh_from_db()
+        # The visible row reopened on the next occurrence's entity.
+        self.assertEqual(canonical.task_id, 'occ-2027')
+        self.assertEqual(canonical.status, 'needsAction')
+        self.assertTrue(canonical.is_starred)
+        self.assertEqual(canonical.starred_order, 2.0)
+        self.assertEqual(canonical.task_order, 5.0)
+        self.assertFalse(canonical.is_recurrence_shadow)
+        self.assertEqual(canonical.due_date.year, 2027)
+        # The displaced row keeps the completed entity's binding —
+        # it stays visible as this occurrence's completion record.
+        self.assertEqual(shadow.task_id, 'occ-2026')
+        self.assertFalse(shadow.is_recurrence_shadow)
+        self.assertEqual(shadow.status, 'completed')
+        self.assertFalse(shadow.is_starred)
+        self.assertEqual(
+            GoogleTask.objects.filter(title='Clean the roof').count(),
+            3,
+        )
+
+    def test_undated_duplicates_not_collapsed(self):
+        """Same-titled open tasks without due dates are ambiguous —
+        not a series, both stay visible."""
+        self.run_sync([
+            self.remote_item('a', 'Put lamps', notes='#physical'),
+            self.remote_item('b', 'Put lamps', notes='#physical'),
+        ])
+        self.assertFalse(
+            GoogleTask.objects.filter(
+                is_recurrence_shadow=True
+            ).exists()
+        )
+        self.assertEqual(
+            GoogleTask.objects.filter(title='Put lamps').count(), 2
+        )
+
+    def test_different_notes_not_collapsed(self):
+        """Same title but different bodies are genuinely separate
+        tasks — the collapse must not touch them."""
+        self.run_sync([
+            self.remote_item(
+                'a', 'dup', notes='n1',
+                due='2026-11-07T00:00:00.000Z',
+            ),
+            self.remote_item(
+                'b', 'dup', notes='n2',
+                due='2027-11-07T00:00:00.000Z',
+            ),
+        ])
+        self.assertFalse(
+            GoogleTask.objects.filter(
+                is_recurrence_shadow=True
+            ).exists()
+        )
+
+    def test_completed_occurrences_stay_visible_unstarred(self):
+        """Completed occurrences of the series are real history —
+        they are not shadowed, only unstarred, while the future open
+        occurrences still collapse."""
+        done = self.make_task(
+            'occ-2025', 'Clean the roof', notes='#physical #starred',
+            status='completed', is_starred=True, starred_order=3.0,
+        )
+        current = self.make_task(
+            'occ-2026', 'Clean the roof', notes='#physical #starred',
+            is_starred=True, starred_order=1.0,
+        )
+        self.run_sync(
+            [self.remote_item(
+                'occ-2025', 'Clean the roof',
+                notes='#physical #starred', status='completed',
+                due='2025-11-07T00:00:00.000Z',
+                completed='2025-11-06T10:00:00.000Z',
+            )] + self.series_items(3)
+        )
+        done.refresh_from_db()
+        current.refresh_from_db()
+        self.assertFalse(done.is_recurrence_shadow)
+        self.assertEqual(done.status, 'completed')
+        self.assertFalse(done.is_starred)
+        self.assertFalse(current.is_recurrence_shadow)
+        self.assertTrue(current.is_starred)
+        shadows = GoogleTask.objects.filter(
+            task_id__in=['occ-2027', 'occ-2028']
+        )
+        for shadow in shadows:
+            self.assertTrue(shadow.is_recurrence_shadow)
+            self.assertFalse(shadow.is_starred)
+
+    def test_shadow_rows_skip_label_processing(self):
+        """Shadow rows keep their '#starred' notes — label
+        processing must not re-star them while hidden."""
+        self.make_task(
+            'occ-2027', 'Clean the roof',
+            notes='#physical #starred',
+            is_recurrence_shadow=True,
+        )
+        stats = process_task_labels(self.user, creds={})
+        self.assertEqual(stats['processed'], 0)
+        self.assertFalse(
+            GoogleTask.objects.filter(is_starred=True).exists()
+        )
+
+
 class BulkSyncWriteTests(TestCase):
     """Pull-side bulk writes: remote items are classified against one
     in-memory snapshot and flushed via bulk_create/bulk_update, so

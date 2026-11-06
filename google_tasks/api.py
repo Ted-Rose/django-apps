@@ -323,7 +323,7 @@ def _list_response(request, creds, tasks, completed, labels,
 
 def _task_queryset(user):
     return GoogleTask.objects.filter(
-        user=user
+        user=user, is_recurrence_shadow=False
     ).select_related(
         'task_list', 'note_category'
     ).prefetch_related('labels')
@@ -487,7 +487,8 @@ def trash(request,
     # computed over the label-filtered base, like every other list
     # endpoint.
     base = GoogleTask.objects.filter(
-        user=request.user, is_deleted=True, status='needsAction'
+        user=request.user, is_deleted=True, status='needsAction',
+        is_recurrence_shadow=False,
     )
     if label:
         base = base.filter(labels__name=label)
@@ -557,6 +558,7 @@ def stats(request,
     qs = GoogleTask.objects.filter(
         user=request.user, status='completed',
         is_deleted=False, is_divider=False, is_note=False,
+        is_recurrence_shadow=False,
     )
     if list:
         qs = qs.filter(task_list__list_id=list)

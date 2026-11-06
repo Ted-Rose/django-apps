@@ -128,7 +128,7 @@ class NoteCategoryMutationOut(Schema):
 
 def _note_queryset(user):
     return GoogleTask.objects.filter(
-        user=user, is_note=True
+        user=user, is_note=True, is_recurrence_shadow=False
     ).select_related(
         'task_list', 'note_category'
     ).prefetch_related('labels')
@@ -217,6 +217,7 @@ def notes_dashboard(request,
         for row in GoogleTask.objects.filter(
             user=request.user, is_note=True,
             is_archived=False, is_deleted=False,
+            is_recurrence_shadow=False,
             status='needsAction',
         ).values('note_category_id').annotate(n=Count('pk'))
     }
@@ -335,6 +336,7 @@ def _category_out(user, category):
     count = GoogleTask.objects.filter(
         user=user, is_note=True,
         is_archived=False, is_deleted=False,
+        is_recurrence_shadow=False,
         status='needsAction',
         note_category_id__in=_subtree_ids(user, category),
     ).count()

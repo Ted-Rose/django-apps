@@ -168,6 +168,12 @@ class GoogleTask(models.Model):
         default=False,
         help_text='Task is in trash (will be auto-purged after 30 days)'
     )
+    is_recurrence_shadow = models.BooleanField(
+        default=False,
+        help_text='Non-current materialized occurrence of a recurring '
+                  'series — mirrors a live remote entity but is hidden '
+                  'from all views'
+    )
     deleted_at = models.DateTimeField(
         null=True,
         blank=True,

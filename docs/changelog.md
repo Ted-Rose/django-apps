@@ -1,6 +1,16 @@
 # google_api
 
 ## Changelog
+21. Recurring tasks no longer flood lists with future occurrences:
+    Google materializes every upcoming occurrence of a series as a
+    real remote entity, and each used to sync as a separate visible
+    (and auto-starred) task — a yearly series showed ~6 identical
+    starred rows spanning years ahead. Sync now collapses a series
+    to one canonical row bound to the earliest open occurrence and
+    hides the future ones; when the current occurrence completes, the
+    same task reopens onto the next year keeping its star and
+    position, and the completed occurrence stays as its own completed
+    task so per-period history accumulates
 20. Fixed relinked bank accounts staying disconnected: some banks
     (Swedbank) return the SAME GoCardless account ids on relink,
     so the callback skipped the existing rows and they stayed
