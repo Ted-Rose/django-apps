@@ -81,6 +81,21 @@ describe('App relaunch restore', () => {
     );
   });
 
+  it('restores a legacy /tasks/app/… path on a bare-/ landing', async () => {
+    mockedApiGet.mockResolvedValue(
+      makeDashboard({
+        flags: { ...makeDashboard().flags, is_starred_view: true },
+      }),
+    );
+    localStorage.setItem('lastTasksView', '/tasks/app/starred');
+    renderApp('/');
+    const empty = await screen.findByText('No starred tasks yet');
+    expect(empty).toBeInTheDocument();
+    expect(mockedApiGet).toHaveBeenCalledWith(
+      '/api/tasks/starred/?order=order_asc',
+    );
+  });
+
   it('restores stored dashboard filters (/tasks/?list=…)', async () => {
     localStorage.setItem('lastTasksView', '/tasks/?list=list-1');
     renderApp('/');
@@ -91,6 +106,15 @@ describe('App relaunch restore', () => {
   });
 
   it('renders the dashboard when nothing is stored', async () => {
+    renderApp('/');
+    await screen.findByText('No tasks found');
+    expect(mockedApiGet).toHaveBeenCalledWith(
+      '/api/tasks/dashboard/?order=order_asc',
+    );
+  });
+
+  it('renders the dashboard when the stored value resolves to /', async () => {
+    localStorage.setItem('lastTasksView', '/tasks/');
     renderApp('/');
     await screen.findByText('No tasks found');
     expect(mockedApiGet).toHaveBeenCalledWith(
