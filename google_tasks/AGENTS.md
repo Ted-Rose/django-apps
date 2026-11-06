@@ -199,3 +199,10 @@ keep sync query counts flat, not per-item or per-list.
   for `home.html` and the `google_api` OAuth-callback default.
 - Client-side undo/redo lives in `frontend/src/tasks/actionHistory.ts`
   (localStorage, 50-action cap).
+- `App.tsx` also reads `localStorage.lastTasksView` on a fresh mount:
+  a bare-`/` landing with no query string client-navigates
+  (`replace`) to the stored section — resolved through
+  `spaPathFromStoredUrl()` — so relaunching the PWA returns to the
+  last view. Deep links (non-`/` path or `/?<params>`) skip it, and
+  the value is captured in a `useState` initializer because child
+  route effects rewrite `lastTasksView` on mount.

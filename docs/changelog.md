@@ -1,6 +1,11 @@
 # google_api
 
 ## Changelog
+22. Reopening the tasks app now returns to the last-viewed section:
+    every section page already recorded its URL in the browser, and
+    a fresh visit to `/tasks/` now restores it — including the
+    dashboard's list/label filters — instead of always landing on
+    All Tasks. Direct links still take precedence
 21. Recurring tasks no longer flood lists with future occurrences:
     Google materializes every upcoming occurrence of a series as a
     real remote entity, and each used to sync as a separate visible
