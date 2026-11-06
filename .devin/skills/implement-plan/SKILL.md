@@ -1,11 +1,13 @@
 ---
 name: implement-plan
 description: >
-  Orchestrate execution of a docs/plans/*-plan.md with subagents —
-  implementers cut feature branches and open draft PRs, fresh
-  reviewer agents return severity-tagged findings, fixer agents
-  iterate until clean. Use when asked to implement an existing
-  plan file end-to-end.
+  Orchestrate execution of a PRE-EXISTING docs/plans/*-plan.md
+  with subagents — implementers cut feature branches and open
+  draft PRs, fresh reviewer agents return severity-tagged
+  findings, fixer agents iterate until clean. Use only when
+  asked to implement an existing plan file end-to-end;
+  docs/plans/ is frozen, so new planning goes through openspec
+  changes instead.
 ---
 
 # Implement a plan with subagents
@@ -15,9 +17,11 @@ review.
 
 ## Phase 1 — decompose
 
-1. Read the plan file the user named (must live in `docs/plans/`;
-   check its `Status:` header — do not start a plan marked
-   implemented/reverted without asking).
+1. Read the plan file the user named (must be a pre-existing
+   file in `docs/plans/`, which is frozen — if the user has no
+   plan file yet, route them to `openspec changes` instead of
+   writing one; check its `Status:` header — do not start a
+   plan marked implemented/reverted without asking).
 2. Extract: branch slug (`feat/<slug>`), the list of Django apps /
    frontend entries / infra it touches, and the contract between
    those parts (API shapes, URL slugs, schema fields) that every
@@ -66,6 +70,9 @@ review.
 
 ## Guardrails
 
+- `docs/plans/` is frozen: this skill executes existing plan
+  files only — never create new `*-plan.md` or other planning
+  docs; new planning goes through `openspec changes`.
 - Background subagents cannot gain permissions: if one is blocked
   on a denied tool call, resume it in the foreground
   (`run_subagent` with `resume=<agent_id>`).
