@@ -151,6 +151,23 @@
                     </div>
                 </a>
             </div>
+
+            {% if user.is_staff %}
+            <div class="col-md-6 col-lg-4">
+                <a href="{% url 'admin:index' %}"
+                   class="text-decoration-none">
+                    <div class="card tool-card">
+                        <div class="card-body text-center">
+                            <i class="bi bi-gear tool-icon"></i>
+                            <h5 class="card-title">Admin</h5>
+                            <p class="card-text">
+                              Django admin site
+                            </p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            {% endif %}
         </div>
     </div>
 
