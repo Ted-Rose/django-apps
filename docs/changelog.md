@@ -1,6 +1,9 @@
 # google_api
 
 ## Changelog
+23. The home dashboard now shows an Admin card linking to the
+    Django admin site — visible only to staff users, matching who
+    can actually log in there
 22. Reopening the tasks app now returns to the last-viewed section:
     every section page already recorded its URL in the browser, and
     a fresh visit to `/tasks/` now restores it — including the
