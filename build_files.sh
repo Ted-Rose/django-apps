@@ -8,11 +8,11 @@ if command -v uv >/dev/null 2>&1; then
   # have no psycopg2-binary==2.9.9 wheels and Django 4.2 doesn't support them.
   uv venv --python 3.12 /tmp/build-venv
   source /tmp/build-venv/bin/activate
-  uv pip install -r requirements.txt
+  uv pip install -r requirements-vercel.txt
 else
   python3 -m venv /tmp/build-venv
   source /tmp/build-venv/bin/activate
-  python3 -m pip install -r requirements.txt
+  python3 -m pip install -r requirements-vercel.txt
 fi
 
 python3 django_apps/console_tasks/build.py create_ca_pem create_config_yaml
@@ -34,5 +34,6 @@ python3 manage.py collectstatic --noinput
 mkdir -p .vercel/output/static
 cp -r staticfiles/* .vercel/output/static/
 
-python3 manage.py makemigrations
-python3 manage.py migrate
+# Migrations do NOT run here: deploy.yml's migrate step covers the
+# schema, and build-time makemigrations could push uncommitted
+# migration files to production.

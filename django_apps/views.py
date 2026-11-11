@@ -28,7 +28,10 @@ def manifest(request):
         request, 'pwa/manifest.webmanifest',
         content_type='application/manifest+json',
     )
-    response['Cache-Control'] = 'public, max-age=86400'
+    # s-maxage lets Vercel's shared edge cache hold the anonymous
+    # response (plain max-age is browser-only); content is identical
+    # for every user.
+    response['Cache-Control'] = 'public, max-age=86400, s-maxage=86400'
     return response
 
 
@@ -50,8 +53,12 @@ def service_worker(request):
 
 
 def offline(request):
-    """Fallback page shown by the service worker when the user is offline."""
-    return render(request, 'pwa/offline.html')
+    """Fallback page shown by the service worker when the user is
+    offline. Static, anonymous content — edge-cacheable like the
+    manifest."""
+    response = render(request, 'pwa/offline.html')
+    response['Cache-Control'] = 'public, max-age=86400, s-maxage=86400'
+    return response
 
 
 def chrome_devtools_probe(request):

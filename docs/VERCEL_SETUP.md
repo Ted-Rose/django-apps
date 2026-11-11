@@ -41,7 +41,8 @@ not set it manually; it's what puts `settings.py` into cloud mode.
 Set every variable above to the **Production** environment (that's
 what live traffic uses). This is also why **preview deployments
 currently fail**: the vars are Production-scoped, so preview builds
-run `collectstatic`/`migrate` without them.
+run `collectstatic` without them. (Migrations never run in the
+Vercel build — `deploy.yml` owns `manage.py migrate`.)
 
 To fix previews (optional): add the same variables with the
 **Preview** scope too — either point them at the same Aiven DB
