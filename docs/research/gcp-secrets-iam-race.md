@@ -1,8 +1,9 @@
 # Known bug: Cloud Run service created before secret IAM grant
 
 > **For the agent running the GCP project migration** (see
-> `MIGRATION.md` / `migrate_to_django_apps.sh`): read this before
-> Phase 4 (`terraform apply` of the Cloud Run service + jobs).
+> `../plans/MIGRATION.md` / `migrate_to_django_apps.sh`): read
+> this before Phase 4 (`terraform apply` of the Cloud Run
+> service + jobs).
 
 ## Symptom
 
