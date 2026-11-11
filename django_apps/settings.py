@@ -250,11 +250,11 @@ elif os.path.isfile(CONFIG_YAML_PATH):
     )
 
 # DEBUG (local dev) and tests always run on a local sqlite DB:
-# the config.yaml connection is a read-only user against
-# production that cannot create the test database, and a dev server
-# should never write to production. The read-only production
-# connection is reachable only via DEBUG=false in
-# config.yaml.
+# a dev server should never write to production, and the test
+# runner cannot create a test database there. The production
+# Postgres connection (DATABASE_URL / config.yaml — the DB user
+# and its privileges depend on the local .env) is reachable only
+# via DEBUG=false.
 if DEBUG or 'test' in sys.argv:
     DATABASES = {
         'default': {
@@ -323,17 +323,27 @@ LOGIN_URL = '/login/'
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# Both deploy fronts terminate TLS at the edge and already force
+# https; with the proxy header above request.is_secure() is
+# accurate behind them, so cookies can be marked Secure and any
+# stray http request that reaches Django is redirected. Local dev
+# keeps plain-http cookies for runserver.
+if IS_CLOUD_ENVIRONMENT:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+# The platform wildcards stay: Vercel and Cloud Run assign a new
+# hostname per deployment (preview deploys, per-PR
+# django-apps-pr-<n> services) under .vercel.app / .run.app.
 ALLOWED_HOSTS = [
-    'tedisrozenfelds.pythonanywhere.com',
     '127.0.0.1',
     'localhost',
     '.vercel.app',
     'tedisrozenfelds.vercel.app',
-    '.appspot.com',
     '.run.app',
 ]
 
-# WSGI_APPLICATION = 'django_apps.wsgi.app'
 WSGI_APPLICATION = 'django_apps.wsgi.application'
 
 # Application definition
@@ -383,16 +393,15 @@ MIDDLEWARE = [
 if not IS_VERCEL_ENVIRONMENT:
     MIDDLEWARE.insert(2, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
+# Same-origin SPA traffic needs no CORS entries at all. The
+# remaining origin is the site's own production domain; the
+# entries for reactive-bible.vercel.app / localhost:5173 and the
+# third-party *-vincent-uches-projects.vercel.app preview regex
+# were dropped — they served the bible_research/tv_archive apps,
+# which were removed from this repo (the bible API now lives in
+# its own App Engine deploy).
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "https://reactive-bible.vercel.app",
     "https://tedisrozenfelds.vercel.app",
-]
-
-
-# Allow all Vercel automatically deployed PR preview origins
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://.*-vincent-uches-projects\.vercel\.app$",
 ]
 
 CORS_ALLOW_METHODS = (
