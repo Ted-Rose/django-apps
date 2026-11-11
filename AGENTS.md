@@ -239,6 +239,8 @@ Universal rules — follow exactly:
   `frontend/README.md`); app login is Google OAuth (the
   owner's account). Ask the user before creating other
   accounts.
+- **Changelog**: update `docs/changelog.md` for user-visible
+  changes — it is the repo's release-notes doc.
 
 Code conventions:
 
