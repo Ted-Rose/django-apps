@@ -347,7 +347,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'django.contrib.staticfiles',
     'django_vite',
-    'sslserver',
     # Before ninja so its export_openapi_schema override wins
     # (earlier INSTALLED_APPS entries take command precedence).
     'django_apps',
@@ -359,10 +358,15 @@ INSTALLED_APPS = [
     'single_pages',
 ]
 
+# django-sslserver is a dev-only package (runsslserver) that
+# requirements-vercel.txt omits — registering it on Vercel would
+# crash app setup. Position is irrelevant: it only adds a command.
+if not IS_VERCEL_ENVIRONMENT:
+    INSTALLED_APPS.append('sslserver')
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -370,6 +374,14 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# WhiteNoise serves /static/* on Cloud Run and locally. On Vercel the
+# CDN answers /static/* via vercel.json routes (requests never reach
+# the lambda) and requirements-vercel.txt omits the package —
+# importing the middleware would crash. Index 2 keeps it right after
+# SecurityMiddleware.
+if not IS_VERCEL_ENVIRONMENT:
+    MIDDLEWARE.insert(2, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",

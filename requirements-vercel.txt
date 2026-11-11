@@ -1,0 +1,33 @@
+# Vercel lambda dependency set — a slimmed-down requirements.txt.
+# Everything the function ships is bundled by @vercel/python, so
+# server-only and dev-only packages are excluded to keep the lambda
+# under maxLambdaSize and speed up cold installs:
+#   gunicorn            — Cloud Run Dockerfile entrypoint only
+#   django-sslserver    — local HTTPS dev server (runsslserver)
+#   debugpy             — VS Code debugger, dev only
+#   whitenoise[brotli]  — Vercel's CDN serves /static/* via vercel.json
+#                         routes; the middleware is skipped under
+#                         IS_VERCEL_ENVIRONMENT in settings.py
+# Keep in sync with requirements.txt when adding runtime deps.
+Django==4.2.6
+django-cors-headers
+gtts==2.5.1
+google-api-python-client==2.136.0
+google-auth==2.31.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0
+google-cloud-storage==2.19.0
+langdetect==1.0.9
+beautifulsoup4==4.12.3
+psycopg2-binary==2.9.9
+google-cloud-secret-manager
+dj-database-url
+requests>=2.31,<3
+django-vite==3.2.0
+django-ninja==1.7.1
+pydantic==2.13.5
+nh3==0.3.7
+pywebpush==2.5.0
+polib==1.2.0
+PyYAML==6.0.3
+sentry-sdk==2.73.0
