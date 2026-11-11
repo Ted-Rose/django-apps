@@ -412,10 +412,19 @@ level.
   plans on PRs touching `terraform/` and applies on main. Both
   share `concurrency: gcp-main` with deploy — intentional.
 - Vercel deploys via its GitHub integration (not Actions);
-  `build_files.sh` runs `npm ci --include=dev` +
-  `npm run build --prefix frontend`, then deletes
-  `frontend/node_modules` so the lambda stays under
-  `maxLambdaSize`.
+  `vercel.json` pins the function to `fra1` (the Aiven Postgres
+  resolves to Frankfurt — `dig` the `DATABASE_URL` host to confirm
+  before ever changing the region), and `build_files.sh` installs
+  the slimmer `requirements-vercel.txt` (no gunicorn, sslserver,
+  debugpy or whitenoise — `settings.py` registers the sslserver app
+  and WhiteNoise middleware only outside Vercel), runs
+  `npm ci --include=dev` + `npm run build --prefix frontend`, then
+  deletes `frontend/node_modules` so the lambda stays under
+  `maxLambdaSize`. Migrations do NOT run in the Vercel build —
+  `deploy.yml`'s migrate step owns the schema. `vercel.json`
+  `headers` gives hashed Vite assets (`<name>.<8+charhash>.<ext>`)
+  immutable year-long CDN caching, and the `manifest.webmanifest` /
+  `/offline/` responses carry `s-maxage` so the edge can cache them.
 - Scheduled Cloud Run jobs (Cloud Scheduler →
   `terraform/cloud_run_jobs.tf`): a single `all-jobs` Cloud Run
   job (`python manage.py run_all_jobs`,

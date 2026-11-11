@@ -1,6 +1,13 @@
 # google_api
 
 ## Changelog
+24. Faster Vercel loads: the serverless function now runs in
+    Frankfurt (same city as the Aiven Postgres, cutting per-request
+    DB round-trips since connections are never pooled), hashed JS/
+    CSS assets get year-long immutable CDN caching so repeat visits
+    skip re-downloads, the app manifest and offline page are cached
+    at the edge, and the function bundle shed its dev/server-only
+    dependencies for quicker cold starts
 23. The home dashboard now shows an Admin card linking to the
     Django admin site — visible only to staff users, matching who
     can actually log in there
