@@ -163,67 +163,82 @@ page. No Python linter is configured; match existing style.
 
 Universal rules — follow exactly:
 
-1. **Max 79 chars per line, every file type.** Verify with
+1. **Max 79 chars per line, every file type.** Verify:
    `awk 'length > 79 {print FILENAME":"NR}' <file>`. Fix
-   violations you introduce plus long lines in files already being
-   modified. Exempt: the vendored `.agents/skills/openspec-*/`
-   files and their `.devin` copies — `openspec update` owns them.
-2. **Commit format `Type: Capitalized message`** — one of
-   Feat / Fix / Docs / Refactor / Test / Chore.
-3. **Commit on feature branches only, never `main`.** Stage only
-   files changed this session, by path — never `git add -A`, `git
-   add .` or `git commit -a`; run `git status` first and leave the
-   user's dirty files alone; never commit scratch markdown.
-4. **Never run dangerous commands**: `python manage.py migrate`
-   or anything applying migrations to a real DB (CI runs it on
-   deploy; the throwaway test DB and local `db.sqlite3` are the
-   only exceptions); `terraform apply`/`destroy`; `gcloud run
-   deploy`, `gcloud scheduler` mutations; `vercel` CLI deploys;
-   `git push` to `main` (every push deploys). If one is needed,
-   write the change and tell the user the command to run.
-5. **Run scoped tests for what you changed** — `manage.py test
-   <app>` or a single Vitest file — not the whole suite.
-6. **PR bodies go to a temp file** + `gh pr create --body-file`,
-   never inline `--body`; delete the temp file after. (See the
-   `/create-pr` skill.)
-7. **Every PR body includes a UI verification / QC section**:
-   concrete steps (page, clicks, expected result) exercising the
-   change end-to-end. Omit only when genuinely unreachable from
-   the UI — then give an equivalent (curl, log line).
-8. **`origin` is the owner's repo** (`Ted-Rose/django-apps`, no
-   upstream) — all `gh`/GitHub operations target it. `gh` must be
-   installed (`brew install gh && gh auth login`) — if it is
-   missing, tell the user instead of working around it.
-9. **No secrets in code.** Gitignored and must stay that way:
-   `.env`, `config.yaml`, `private_settings.json` (legacy),
-   `google_api/app_secrets.json`, `ca.pem`,
-   `terraform/terraform.tfstate*`, `terraform/tfplan`,
-   `terraform/.terraform/`, `settings.json`, `data/`. Cloud
-   secrets come from env vars / GCP Secret Manager; never log
-   tokens.
-10. **Update the developer docs after functionality changes** —
-    the owning app's `AGENTS.md`/`README.md`, and
-    `docs/changelog.md` for user-visible changes.
-11. **`docs/plans/` is frozen — never create files there.**
-    Existing `<feature>-plan.md` docs (and older UPPERCASE
-    files, which predate the naming convention) stay as
-    history, each with a `Status:` header (`implemented |
-    partial | in progress | not implemented | reverted`) that
-    may still be updated. ALL new planning — features,
-    investigations, design docs — goes through
-    `openspec changes` (see the OpenSpec section); never write
-    new `*-plan.md` or other planning markdown.
-12. **Test login**: no standing test account exists. E2E seeds a
-    local staff user `e2e` / `e2e-pass` (snippet in
-    `frontend/README.md`); app login is Google OAuth (the owner's
-    account). Ask the user before creating other accounts.
-13. **This file is self-updating.** When you hit local-setup,
-    infrastructure or missing-tooling friction (a CLI that isn't
-    installed, a non-obvious way to run the project, a required
-    version/path), do not grind through failing alternatives:
-    missing tool → tell the user what to install; working flow or
-    local quirk discovered → write it into the relevant AGENTS.md
-    and commit that doc update alongside the work.
+   violations you introduce plus long lines in files already
+   being modified. Exempt: formatter output (e.g. Prettier at
+   printWidth 80 may emit 80-char lines) and vendored upstream
+   skill files under `.agents/skills/` and `.devin/skills/`
+   (`openspec-*`, `vercel-react-best-practices/`) — refresh
+   tools own them.
+2. **Commit format** `Type: Capitalized message` —
+   `Feat:`/`Fix:`/`Docs:`/`Refactor:`/`Test:`/`Chore:`.
+3. **Commit on feature branches only, never `main`.**
+   Name branches `<type>/<slug>` with the commit types
+   (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`).
+   Stage only files changed this session, by path — never
+   `git add -A`, `git add .` or `git commit -a`; confirm the
+   staged set with `git status` first; leave the user's own
+   dirty files alone; never commit plan/scratch markdown.
+4. **Dangerous commands — never run** the destructive/deploy
+   commands listed under "Repo-specific rules" below; write
+   the change and tell the user the command to run instead.
+5. **Scoped verification** — run only the tests/checks for
+   what you changed, not the whole suite.
+6. **PR bodies go to a temp file** + `gh pr create
+   --body-file`, never inline `--body`; delete the temp file
+   after. See `.devin/skills/create-pr/`.
+7. **Every PR body includes a UI verification / QC section** —
+   concrete steps (pages, clicks, expected result) exercising
+   the change end-to-end through the UI. Omit only when
+   genuinely unreachable from the UI — then give an
+   equivalent (curl command, log line, file to inspect).
+8. **GitHub remote targeting**: when `origin` is the user's
+   fork (an `upstream` remote exists), ALL GitHub operations
+   — issues, PRs, comments, releases — target the fork via
+   `--repo <owner>/<fork>`; never upstream unless asked.
+   Otherwise `origin` is the target.
+9. **No secrets in code.** Secrets live in gitignored local
+   files / env vars / GCP Secret Manager. Never create new
+   Secret Manager secrets — append KEY=VALUE lines to the
+   shared `env-file` secret (each extra secret adds cost).
+10. **Update docs after functionality changes** — this file
+    and the repo's other contract docs (README /
+    DEVELOPER_GUIDE / docs/*) — in the same change.
+11. **`docs/plans/` is frozen** — existing files stay as
+    history with their status headers (implemented / partial /
+    in progress / not implemented / reverted); nothing new is
+    added there or anywhere else — all new planning goes
+    through OpenSpec (`openspec-propose` for changes,
+    `openspec-explore`/change artifacts for investigations).
+12. **This file is self-updating.** Missing tool → tell the
+    user what to install instead of grinding through failing
+    alternatives. Discovered flow/local quirk → write it into
+    the relevant AGENTS.md and commit that doc update
+    alongside the work that discovered it.
+
+### Repo-specific rules
+
+- **Dangerous commands — never run**: `python manage.py
+  migrate` or anything applying migrations to a real DB (CI
+  runs it on deploy; the throwaway test DB and local
+  `db.sqlite3` are the only exceptions); `terraform
+  apply`/`destroy`; `gcloud run deploy`, `gcloud scheduler`
+  mutations; `vercel` CLI deploys; `git push` to `main`
+  (every push deploys). If one is needed, write the change
+  and tell the user the command to run.
+- **`origin` is the owner's repo** (`Ted-Rose/django-apps`,
+  no upstream) — all `gh`/GitHub operations target it.
+- **Gitignored secrets/config** (must stay untracked):
+  `.env`, `config.yaml`, `private_settings.json` (legacy),
+  `google_api/app_secrets.json`, `ca.pem`,
+  `terraform/terraform.tfstate*`, `terraform/tfplan`,
+  `terraform/.terraform/`, `settings.json`, `data/`.
+- **Test login**: no standing test account exists. E2E seeds
+  a local staff user `e2e` / `e2e-pass` (snippet in
+  `frontend/README.md`); app login is Google OAuth (the
+  owner's account). Ask the user before creating other
+  accounts.
 
 Code conventions:
 
@@ -265,8 +280,8 @@ level.
   convention, not upward root-resolution.
 - The CLI is a global npm install — it lives in
   `/opt/homebrew/bin` next to `node`/`npm`/`gh`, which is not on
-  agent shells' PATH; prefix exec calls with
-  `export PATH="/opt/homebrew/bin:$PATH"`.
+  agent-shell PATH (see the machine-environment notes in
+  `~/.config/devin/AGENTS.md`).
 - **Always run `openspec validate --all --strict` after
   touching `openspec/`** — proposing, spec edits, sync,
   archive. It must pass before committing; strict mode catches
@@ -304,7 +319,7 @@ level.
   investigations go through `openspec changes`
   (`openspec-propose` for changes; `openspec-explore` or change
   artifacts for investigations). Existing `docs/plans/*` stay
-  as history — nothing new is added there (convention 11).
+  as history — nothing new is added there (rule 11).
 
 ## Known gaps (do NOT "fix" without asking)
 
@@ -503,14 +518,12 @@ That issue list IS the fix queue; `GET
 /issues/<id>/` with `{"status":"resolvedInNextRelease"}` — only
 after the fix merges.
 
-Local-only quirk: this dev machine sits behind a Netskope
-TLS-intercepting proxy — Python→Sentry egress FAILS SILENTLY
-(`SSLCertVerificationError` inside the SDK transport; `flush()`
-returns but events never arrive) unless `SSL_CERT_FILE` points
-at a CA bundle that includes the Netskope root — build one by
-concatenating `certifi.where()` output with
-`/Library/Application Support/Netskope/STAgent/data/nscacert.pem`.
-Prod (Cloud Run/Vercel) is unaffected.
+Local-only quirk: Python→Sentry egress fails SILENTLY from
+this machine (`flush()` returns but events never arrive)
+behind the TLS-intercepting proxy — the `SSL_CERT_FILE`
+CA-bundle fix lives in the global machine-environment notes
+(`~/.config/devin/AGENTS.md`). Prod (Cloud Run/Vercel) is
+unaffected.
 
 ## Gotchas
 
