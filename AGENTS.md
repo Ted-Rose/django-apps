@@ -229,6 +229,24 @@ Universal rules — follow exactly:
   and tell the user the command to run.
 - **`origin` is the owner's repo** (`Ted-Rose/django-apps`,
   no upstream) — all `gh`/GitHub operations target it.
+- **Work in a git worktree, never the main checkout** —
+  `git fetch origin`, then `git worktree add
+  ../django-apps-wt/<slug> -b <type>/<slug> origin/main` and
+  do all work (commits, push, PR) inside it. The main
+  checkout may hold the user's uncommitted work or another
+  agent's session; never switch branches there. Once the
+  PR's checks are green and no work remains, clean up
+  IMMEDIATELY — don't wait for the merge (the PR lives on
+  the remote branch; removing the local worktree/branch does
+  not touch it, and the remote branch is deleted at merge
+  time). From the main checkout: `git worktree remove
+  ../django-apps-wt/<slug>` + `git branch -D <type>/<slug>`
+  (`-D`, not `-d` — squash-merges leave the branch
+  "unmerged"). Abandoned work gets the same cleanup;
+  follow-up requests get a FRESH worktree — never reuse an
+  old one. Goal state: `git worktree list` shows only the
+  main checkout when the task ends. Each worktree needs its
+  own `venv` + `.env` (both gitignored).
 - **Gitignored secrets/config** (must stay untracked):
   `.env`, `config.yaml`, `private_settings.json` (legacy),
   `google_api/app_secrets.json`, `ca.pem`,
