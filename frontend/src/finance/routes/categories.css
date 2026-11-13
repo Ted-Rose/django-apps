@@ -45,4 +45,10 @@
   .cat-table .fin-money {
     white-space: normal;
   }
+  /* The thirteen-column monthly matrix lives in .table-responsive
+     and is meant to scroll horizontally — fixed layout would
+     squash every month column into the wrapper width. */
+  .table-responsive .cat-table {
+    table-layout: auto;
+  }
 }
