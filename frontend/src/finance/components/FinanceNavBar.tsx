@@ -51,12 +51,6 @@ export function FinanceNavBar() {
       btn_class: 'btn-light',
     },
     {
-      label: t('nav.accounts'),
-      to: '/accounts',
-      icon: 'wallet2',
-      btn_class: 'btn-light',
-    },
-    {
       label: t('nav.transactions'),
       to: '/transactions',
       icon: 'arrow-left-right',
@@ -81,6 +75,12 @@ export function FinanceNavBar() {
       btn_class: 'btn-light',
     },
     {
+      label: t('nav.accounts'),
+      to: '/accounts',
+      icon: 'wallet2',
+      btn_class: 'btn-light',
+    },
+    {
       label: t('common:common.logout', { user }),
       url: '/admin/logout/',
       icon: 'box-arrow-right',
@@ -90,11 +90,11 @@ export function FinanceNavBar() {
 
   const tabs = [
     { to: '/categories', label: t('nav.categories') },
-    { to: '/accounts', label: t('nav.accounts') },
     { to: '/transactions', label: t('nav.transactions') },
     { to: '/balances', label: t('nav.balances') },
     { to: '/limits', label: t('nav.limits') },
     { to: '/rules', label: t('nav.rules') },
+    { to: '/accounts', label: t('nav.accounts') },
   ];
 
   return (
