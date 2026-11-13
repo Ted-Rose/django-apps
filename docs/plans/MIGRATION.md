@@ -1,5 +1,9 @@
 # GCP Migration: gmail-vercel → django-apps
 
+Status: implemented — one-time migration, completed Oct 2026
+(project `django-apps-7345` is live). Kept as the runbook for
+any future project re-creation.
+
 ## Goal
 
 Re-create all GCP infrastructure in project `django-apps` (it was
@@ -203,7 +207,7 @@ deploy against the new project, which doesn't exist yet.
 > `SecretsAccessCheckFailed`, site 503s. The `depends_on` fix is in
 > the repo and the commands below pre-apply the IAM grant + let it
 > propagate — don't skip them on a fresh project. Full diagnosis and
-> recovery: `GCP_MIGRATION_SECRETS_RACE.md`.
+> recovery: `../research/gcp-secrets-iam-race.md`.
 
 Terraform state bucket chicken-and-egg: `backend.tf` points at a
 bucket that doesn't exist yet. Same trick `bootstrap_gcp.sh` used,
@@ -245,14 +249,14 @@ gcloud builds submit \
 
 cd terraform
 sleep 60                       # finish IAM propagation
-terraform apply -auto-approve    # SAs, WIF, Cloud Run svc+jobs, scheduler, buckets
-terraform output                 # keep cloud_run_url + workload_identity_provider
+terraform apply -auto-approve   # SAs, WIF, svc+jobs, sched, buckets
+terraform output                # keep cloud_run_url + WIF provider
 ```
 
 If the Cloud Run service still comes up `SecretsAccessCheckFailed`
 (a revision stuck there never self-heals — it must be deleted and
 re-created), follow the recovery steps at the bottom of
-`GCP_MIGRATION_SECRETS_RACE.md`.
+`../research/gcp-secrets-iam-race.md`.
 
 If `terraform output workload_identity_provider` disagrees with the
 `WIF_PROVIDER` written in Phase 3, fix the workflows to match the
@@ -305,7 +309,8 @@ The client JSON's `project_id` field says which project owns it:
 ```bash
 gcloud secrets versions access latest \
   --secret=GOOGLE_OAUTH_CLIENT_JSON --project=$NEW \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["web"]["project_id"])'
+  | python3 -c 'import json,sys; print(
+      json.load(sys.stdin)["web"]["project_id"])'
 ```
 
 In `https://console.cloud.google.com/apis/credentials?project=<that-project>`,
@@ -350,7 +355,8 @@ Report to the user:
 
 ```
 https://$(gcloud run services describe django-apps \
-  --region=$REGION --project=$NEW --format='value(status.url)' | sed 's|https://||')
+  --region=$REGION --project=$NEW \
+  --format='value(status.url)' | sed 's|https://||')
 ```
 
 Verification checklist: home page loads → `/tasks/` SPA loads →

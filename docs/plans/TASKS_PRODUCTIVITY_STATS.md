@@ -1,5 +1,9 @@
 # Tasks Productivity Stats — Completed Tasks Dashboard
 
+Status: implemented — shipped as `/tasks/stats`
+(`google_tasks/api.py` `GET /api/tasks/stats/` +
+`frontend/src/tasks/routes/Stats.tsx`).
+
 ## Goal
 
 Add a "Stats" page to the tasks SPA (`/tasks/stats`) so the user can see

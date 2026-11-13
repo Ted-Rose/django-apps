@@ -1,5 +1,16 @@
 # GCP Cloud Run Deployment Quick Start
 
+> **Status: partially stale.** Written for the initial
+> `django-apps-7345` bootstrap. The "Deploy in 3 Steps" section
+> and `bootstrap_gcp.sh` are superseded — infra is
+> Terraform-managed and deploys are the GitHub Actions pipeline
+> (see `docs/plans/MIGRATION.md` for the full runbook and
+> `AGENTS.md` "Deployment & CI"). Still accurate: the
+> prerequisites, the OAuth redirect-URI step, the VAPID
+> key-generation block, and the monitoring commands. The
+> trailing "Files Created"/"Full Documentation" sections
+> reference docs that no longer exist.
+
 ## Prerequisites Check
 
 ```bash
@@ -11,7 +22,8 @@ gcloud auth login
 gcloud config set project django-apps-7345
 
 # Verify permissions
-gcloud projects get-iam-policy django-apps-7345 | grep $(gcloud config get-value account)
+gcloud projects get-iam-policy django-apps-7345 \
+    | grep "$(gcloud config get-value account)"
 ```
 
 ## Deploy in 3 Steps
@@ -34,7 +46,9 @@ git status | grep -E "(GCP_DEPLOYMENT_PLAN|config.yaml|ca.pem|app_secrets)"
 # Should return nothing
 
 # Stage changes
-git add terraform/ .github/ django_apps/ google_api/ requirements.txt Dockerfile .dockerignore .gitignore bootstrap_gcp.sh *.md
+git add terraform/ .github/ django_apps/ google_api/ \
+    requirements.txt Dockerfile .dockerignore .gitignore \
+    bootstrap_gcp.sh *.md
 
 # Commit
 git commit -m "Add GCP Cloud Run deployment infrastructure"
@@ -48,10 +62,13 @@ git push origin main
 Get your Cloud Run URL:
 
 ```bash
-gcloud run services describe django-apps --region=europe-west3 --project=django-apps-7345 --format='value(status.url)'
+gcloud run services describe django-apps \
+    --region=europe-west3 --project=django-apps-7345 \
+    --format='value(status.url)'
 ```
 
-Then go to: https://console.cloud.google.com/apis/credentials?project=django-apps-7345
+Then open **APIs & Services → Credentials** in the GCP console
+for the `django-apps-7345` project:
 
 Edit OAuth 2.0 Client ID → Add redirect URI:
 ```
@@ -84,8 +101,10 @@ the secrets like the bootstrap script:
 printf '%s' 'YOUR_VAPID_PUBLIC_KEY' | gcloud secrets create VAPID_PUBLIC_KEY \
     --project=django-apps-7345 --data-file=- --replication-policy=automatic
 
-printf '%s' 'YOUR_VAPID_PRIVATE_KEY' | gcloud secrets create VAPID_PRIVATE_KEY \
-    --project=django-apps-7345 --data-file=- --replication-policy=automatic
+printf '%s' 'YOUR_VAPID_PRIVATE_KEY' \
+    | gcloud secrets create VAPID_PRIVATE_KEY \
+        --project=django-apps-7345 --data-file=- \
+        --replication-policy=automatic
 
 printf '%s' 'mailto:you@example.com' | gcloud secrets create VAPID_SUBJECT \
     --project=django-apps-7345 --data-file=- --replication-policy=automatic
@@ -101,10 +120,12 @@ data sources — create the three secrets, then re-run.
 open https://github.com/Ted-Rose/django-apps/actions
 
 # Watch Cloud Run logs
-gcloud run services logs tail django-apps --region=europe-west3 --project=django-apps-7345
+gcloud run services logs tail django-apps \
+    --region=europe-west3 --project=django-apps-7345
 
 # Check service status
-gcloud run services describe django-apps --region=europe-west3 --project=django-apps-7345
+gcloud run services describe django-apps \
+    --region=europe-west3 --project=django-apps-7345
 ```
 
 ## Troubleshooting
@@ -116,12 +137,14 @@ Install gcloud CLI (see Prerequisites above).
 Ensure you have Owner/Editor role on django-apps-7345 project.
 
 ### Workflow files still show "PROJECT_NUMBER_PLACEHOLDER"
-The bootstrap script should update these automatically. If not, get project number:
+The bootstrap script should update these automatically.
+If not, get project number:
 ```bash
 gcloud projects describe django-apps-7345 --format='value(projectNumber)'
 ```
 
-Then manually update `.github/workflows/terraform.yml` and `.github/workflows/deploy.yml`.
+Then manually update `.github/workflows/terraform.yml` and
+`.github/workflows/deploy.yml`.
 
 ### OAuth callback errors after deployment
 Ensure you completed step 2 (adding redirect URI in GCP Console).
@@ -147,7 +170,8 @@ Ensure you completed step 2 (adding redirect URI in GCP Console).
 
 ## Cost: ~$5-15/month 💰
 
-**Huge savings!** Cloud Run scales to 0 when idle - you only pay for actual usage, not idle time.
+**Huge savings!** Cloud Run scales to 0 when idle - you only pay
+for actual usage, not idle time.
 
 See `IMPLEMENTATION_SUMMARY.md` for detailed breakdown.
 

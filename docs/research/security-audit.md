@@ -4,6 +4,12 @@ Static security review of the whole codebase (all apps, settings,
 URL routing, middleware, frontend JS). Each finding lists the fix
 and the **regression risks** to watch for when applying it.
 
+> **Status (2026-11, verified against `main`):**
+> resolved — F3, F4, F7, F8, F9 (code deleted or sanitized);
+> **still open — F1, F2, F5, F6, F10, F11, F12**, all tracked in
+> the OpenSpec change `fix-security-audit-findings`; F13 accepted
+> risk (personal app, DB-token encryption out of scope).
+
 ## Suggested implementation order
 
 1. Low-risk, no behavior change: F2, F5, F6, F10, F12
@@ -17,6 +23,8 @@ and the **regression risks** to watch for when applying it.
 
 ## F1 — OAuth callback does not validate `state` (Login CSRF)
 
+- **Status:** open — tracked in `fix-security-audit-findings`.
+  Still unfixed: `callback` never compares `state`.
 - **Severity:** High
 - **Location:** `google_api/utils.py:648-761`, wired at
   `google_api/urls.py:13`
@@ -44,6 +52,8 @@ and the **regression risks** to watch for when applying it.
 
 ## F2 — Open redirect via unvalidated `next` parameter
 
+- **Status:** open — tracked in `fix-security-audit-findings`.
+  `next` is still stored/redirected unvalidated.
 - **Severity:** Medium
 - **Location:** `google_api/views.py:140-152` (`login_view`),
   `google_api/utils.py:745-761` (`callback` redirect)
@@ -64,6 +74,11 @@ and the **regression risks** to watch for when applying it.
 
 ## F3 — Unauthenticated `/text-to-audio` writes to GCS
 
+- **Status:** resolved — the route is commented out in
+  `google_api/urls.py` (dead `views.audio` handler remains until
+  `fix-security-audit-findings` removes it); the replacement ops
+  (`/api/gmail/audio/`, `/api/single_pages/tts/`) are
+  session-authenticated and both SPAs are `@login_required`.
 - **Severity:** Medium
 - **Location:** `google_api/views.py:155-184`,
   `google_api/urls.py:12`
@@ -82,6 +97,9 @@ and the **regression risks** to watch for when applying it.
 
 ## F4 — Scraped third-party HTML rendered via `|safe` (XSS)
 
+- **Status:** resolved — `single_pages` is backend-only now;
+  `GET /api/single_pages/spoki/` runs `nh3.clean` on the
+  article HTML before the SPA renders it.
 - **Severity:** Medium
 - **Location:** `single_pages/views.py:32`,
   `single_pages/templates/blog_proxy_template.html:18`
@@ -102,6 +120,9 @@ and the **regression risks** to watch for when applying it.
 
 ## F5 — Missing cookie/transport security flags
 
+- **Status:** open — tracked in `fix-security-audit-findings`.
+  Still unset in `settings.py` (only
+  `SECURE_PROXY_SSL_HEADER` exists).
 - **Severity:** Medium
 - **Location:** `django_apps/settings.py` (settings absent)
 - **Issue:** `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`,
@@ -120,6 +141,8 @@ and the **regression risks** to watch for when applying it.
 
 ## F6 — `OAUTHLIB_INSECURE_TRANSPORT` enabled unconditionally
 
+- **Status:** open — tracked in `fix-security-audit-findings`.
+  Still set unconditionally at import.
 - **Severity:** Low
 - **Location:** `google_api/utils.py:38`
 - **Issue:** `os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT',
@@ -135,6 +158,9 @@ and the **regression risks** to watch for when applying it.
 
 ## F7 — `escapeJs()` bypassable → stored XSS in task creation
 
+- **Status:** resolved by removal — `create_task.js` and the whole
+  `google_tasks/static/` tree were deleted at the React SPA
+  cutover; task creation goes through the typed ninja API now.
 - **Severity:** Low (mostly self-XSS; elevates if titles ever become
   attacker-influenced, e.g. Gmail-sourced tasks)
 - **Location:**
@@ -189,6 +215,9 @@ and the **regression risks** to watch for when applying it.
 
 ## F10 — Refresh token duplicated into the session store
 
+- **Status:** open — tracked in `fix-security-audit-findings`.
+  `session['google_credentials']` is still written in `callback`
+  (still never read).
 - **Severity:** Low
 - **Location:** `google_api/utils.py:679-684`
 - **Issue:** `request.session['google_credentials']` stores the
@@ -201,6 +230,8 @@ and the **regression risks** to watch for when applying it.
 
 ## F11 — Overly broad `ALLOWED_HOSTS` wildcards
 
+- **Status:** open — tracked in `fix-security-audit-findings`.
+  `.vercel.app`, `.appspot.com`, `.run.app` are still present.
 - **Severity:** Low
 - **Location:** `django_apps/settings.py:115-123`
 - **Issue:** `.vercel.app`, `.appspot.com`, `.run.app` accept Host
@@ -215,6 +246,11 @@ and the **regression risks** to watch for when applying it.
 
 ## F12 — Internal error details returned to clients
 
+- **Status:** open — tracked in `fix-security-audit-findings`.
+  Unhandled ninja exceptions now return generic
+  `{error: 'server_error'}` (Sentry integration), but handled
+  `{'error': str(e)}` view payloads still reach clients verbatim
+  through `_adapt`'s `detail` passthrough.
 - **Severity:** Low
 - **Location:** `google_tasks/views.py:1128,1189,1688,1756`;
   `bible_research/views.py:21`; `google_api/views.py:176`
@@ -228,6 +264,8 @@ and the **regression risks** to watch for when applying it.
 
 ## F13 — OAuth tokens stored in plaintext (informational)
 
+- **Status:** accepted risk — field-level encryption judged out
+  of scope for a personal single-owner app.
 - **Severity:** Low
 - **Location:** `google_api/models.py:16-24`
 - **Issue:** `access_token`/`refresh_token` plaintext TextFields —

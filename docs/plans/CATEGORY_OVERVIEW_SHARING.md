@@ -1,7 +1,7 @@
 # Proposal: Shareable category overviews
 
-Status: implemented (migration `0018_categoryoverviewshare`
-generated, not applied — `migrate` runs at deploy).
+Status: implemented — migration `0018_categoryoverviewshare`
+applied via the deploy pipeline's `migrate` step.
 
 ## 1. Goal
 
