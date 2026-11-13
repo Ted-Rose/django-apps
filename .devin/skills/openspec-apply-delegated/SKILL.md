@@ -119,10 +119,13 @@ stays small and survives `openspec update`.
 ## Phase 5 — cleanup
 
 9. Once the loop is clean AND the PR's checks are green,
-   remove the worktree immediately (`git worktree remove
-   ../django-apps-wt/<change-name> --force` + `git branch -D
-   feat/<change-name>` from the main checkout) — don't wait
-   for the merge; the PR lives on the remote branch.
+   remove every worktree the run created immediately —
+   `git worktree remove --force` on
+   `../django-apps-wt/<change-name>` and any
+   `../django-apps-wt/fix-<change-name>` (`git worktree
+   list` to check), then `git branch -D feat/<change-name>`
+   from the main checkout — don't wait for the merge; the
+   PR lives on the remote branch.
 
 ## Guardrails
 

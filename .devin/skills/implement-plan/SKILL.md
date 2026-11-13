@@ -98,7 +98,8 @@ review.
   `git worktree remove --force` on both
   `../django-apps-wt/<slug>-<part>` and any
   `../django-apps-wt/fix-<slug>-<part>`, then `git branch -D
-  feat/<slug>-<part>` from the main checkout — don't wait
+  feat/<slug>-<part>` (or `feat/<slug>` for a
+  single-implementer run) from the main checkout — don't wait
   for merge; fixer rounds get fresh worktrees (reviewers
   only read `gh pr diff` and need none).
 - Final report: per PR — URL, branch, review rounds, unresolved
