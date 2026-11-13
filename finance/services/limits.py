@@ -69,7 +69,9 @@ def spent_in_window(limit, start, end=None,
     Windows bound ``occurrence_date`` — the day the user spent the
     money (earlier of booking/value date), not the bank's posting
     date, so a Sep-30 card purchase booked on Oct 1 counts toward
-    September.
+    September. ``respect_exclusion`` forwards to
+    ``_spend_queryset`` — ``evaluate_spending_limits`` passes
+    ``False`` so alerts track real spend.
     """
     transactions = _spend_queryset(
         limit, respect_exclusion=respect_exclusion

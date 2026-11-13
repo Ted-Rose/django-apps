@@ -6,7 +6,11 @@ from django.utils import timezone, translation
 from django.utils.translation import gettext
 
 from django_apps.models import user_language
-from finance.models import LimitEvaluation, TransactionLimit
+from finance.models import (
+    Account,
+    LimitEvaluation,
+    TransactionLimit,
+)
 from finance.services.limits import (
     _next_month,
     monthly_period_start,
@@ -57,7 +61,15 @@ class Command(BaseCommand):
             )
             self._record_evaluations(limit, spent, period)
             if spent > limit.limit_monthly:
-                accounts = list(limit.accounts.all())
+                # Only accessible accounts can contribute spend
+                # — a revoked AccountShare leaves its M2M row.
+                accounts = list(
+                    limit.accounts.filter(
+                        pk__in=Account.objects.for_user(
+                            limit.user
+                        )
+                    )
+                )
                 alerts += 1
                 logger.warning(
                     'SPENDING_LIMIT_EXCEEDED user=%s accounts=%s '
@@ -135,7 +147,13 @@ class Command(BaseCommand):
     def _send_alert(self, limit, spent):
         # Rendered in the recipient's language — gettext_lazy values
         # resolve to str() inside the translation.override block.
-        accounts = list(limit.accounts.all())
+        # Only accessible accounts can contribute spend — name
+        # just those (a revoked AccountShare leaves its M2M row).
+        accounts = list(
+            limit.accounts.filter(
+                pk__in=Account.objects.for_user(limit.user)
+            )
+        )
         account = ', '.join(
             a.name or a.iban or a.account_id for a in accounts
         )
