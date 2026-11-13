@@ -105,7 +105,7 @@ describe('App notification drain', () => {
     );
   });
 
-  it('fetches nothing to read out when there are no notifications', async () => {
+  it('fetches nothing with no unread notifications', async () => {
     mockGet([]);
     renderApp();
     // The page settles (empty accounts state) without any
