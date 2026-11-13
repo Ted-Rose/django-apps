@@ -33,7 +33,7 @@ export default function Spoki() {
     <>
       <NavBar title="Spoki" items={burgerItems} />
       <div className="container py-4">
-        <div className="d-flex align-items-center justify-content-between mt-3 mb-3">
+        <div className="d-flex align-items-center justify-content-between mb-3">
           <h1 className="mb-0">{data?.title || 'Spoki'}</h1>
           <button
             type="button"
