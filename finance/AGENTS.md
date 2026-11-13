@@ -146,27 +146,27 @@ just-dead requisition are skipped without another API call.
   one or more `accounts` (M2M — the SPA form checks accounts, a
   same-category limit must not overlap another's accounts, enforced
   as a 409 in `save_limit` since unique constraints can't span a
-  M2M). Three window kinds: rolling 7 days, rolling
-  30 days, or the current calendar month. `category` is optional —
+  M2M). One window kind: the current calendar month
+  (`limit_monthly`). `category` is optional —
   when set, only the limit user's own category assignments count.
-  `alerted_7d_at` / `alerted_30d_at` / `alerted_monthly_at` are
-  per-window last-notified stamps for push alerts: set each time a
-  breach notification is sent, and the alert repeats once the stamp
-  is older than `ALERT_REPEAT_AFTER` (~daily, `services/push.py`)
-  while the window stays breached. Cleared once spending falls back
-  under the threshold so the next breach alerts again. Window math
-  (`limit_windows`, `monthly_period_start`), spend sums
-  (`spent_in_window`), display stats (`limit_window_stats`) and the
-  per-past-month breakdown (`monthly_history`) live in
-  `services/limits.py`, shared by the limits endpoint and
-  `evaluate_spending_limits`. The SPA limits page shows progress
-  bars per window plus expandable past-month history — clicking a
+  `alerted_monthly_at` is the last-notified stamp for push alerts:
+  set each time a breach notification is sent, and the alert repeats
+  once the stamp is older than `ALERT_REPEAT_AFTER` (~daily,
+  `services/push.py`) while the month stays breached. Cleared once
+  spending falls back under the threshold (or the threshold is
+  removed) so the next breach alerts again. Month math
+  (`monthly_period_start`), spend sums (`spent_in_window`), display
+  stats (`limit_window_stats`) and the per-past-month breakdown
+  (`monthly_history`) live in `services/limits.py`, shared by the
+  limits endpoint and `evaluate_spending_limits`. The SPA limits
+  page shows a progress bar for the month plus expandable
+  past-month history — clicking a
   categorized limit's window stat or history month drills into the
   matching transactions below (`?limit=&window=` plus
   `category`/`account=<csv>`/`from`/`to` filters in the URL) via
   the shared `TransactionDrilldown` panel — and an
   "Overview" month dropdown (`?month=YYYY-MM` on
-  `GET /api/finance/limits/`) re-evaluates every window as of the
+  `GET /api/finance/limits/`) re-evaluates the month as of the
   selected month's last day (`as_of` in `limit_window_stats`); rows
   are edited via `?edit=<id>` client-side and deleted via
   `POST /api/finance/limits/<id>/delete/`.
@@ -202,8 +202,13 @@ just-dead requisition are skipped without another API call.
   ttl=0 makes FCM silently drop alerts to offline browsers).
   Browsers
   subscribe via `POST /api/finance/push/subscribe/` (+
-  `unsubscribe/`) from the SPA's limits page
-  (`usePushSubscription` hook); no-op when `VAPID_*` settings are
+  `unsubscribe/`). There is no standalone subscribe UI — the
+  `usePushSubscription` hook's `ensureSubscribed` gates every
+  alerting opt-in (a limit's alerts switch, the balance-check
+  switch, the balance-alert save): it checks `Notification`
+  permission plus the browser subscription and prompts only when
+  needed, so a denied permission or an unsupported browser leaves
+  the resource disabled; no-op when `VAPID_*` settings are
   empty.
 - `Category` — per-user, unique on `(user, name)`, optional hex
   color, `is_excluded` flag (transactions contribute nothing to
@@ -247,14 +252,14 @@ flagged `excluded`.
   auto-categorized per viewer — one pass writes the
   owner's `UserTransactionCategory` row plus each sharer's via
   `categorize_transaction()`.
-- `evaluate_spending_limits`: sums negative amounts per active limit
-  window — 7-day, 30-day, or monthly — via `services/limits.py`
+- `evaluate_spending_limits`: sums negative amounts per active
+  limit for the current calendar month via `services/limits.py`
   (filtered to the limit's category when set); logs
   `SPENDING_LIMIT_EXCEEDED ...` warnings and sends one Web Push
   notification per limit on each breach and then every
-  `ALERT_REPEAT_AFTER` (~daily) while still breached (all due
-  windows named in a single notification) to the user's
-  `PushSubscription`s.
+  `ALERT_REPEAT_AFTER` (~daily) while still breached to the user's
+  `PushSubscription`s, and upserts that month's `LimitEvaluation`
+  row each run.
 - `check_balance_alerts` (`--dry-run`): fetches each alerted
   account's balance once (`fetch_balances_parallel`, deduped across
   users of shared accounts) — only `LN`-requisition accounts are
@@ -285,7 +290,8 @@ flagged `excluded`.
   (`django_apps/management/commands/run_all_jobs.py`), fired daily
   at 03:00 UTC by the `all-jobs-daily` Cloud Scheduler trigger —
   the command's `JOBS` list is the place to enable/disable the
-  individual commands (only `check_balance_alerts` is enabled).
+  individual commands (`check_balance_alerts` and
+  `evaluate_spending_limits` are enabled).
 
 ## Rules engine (`services/rules.py`)
 

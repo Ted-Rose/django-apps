@@ -32,10 +32,7 @@
     "thresholdAria": "Brīdinājuma slieksnis {{currency}}",
     "cancelBalanceAlert": "Atcelt atlikuma brīdinājumu",
     "lastBalance": "Pēdējais ziņotais atlikums: {{amount}} {{currency}}.",
-    "noDevices": "Nav abonētu ierīču — ieslēdz brīdinājumus <lnk>Limitu lapā</lnk>.",
-    "pushEnabled_zero": "Push paziņojumi ieslēgti {{count}} ierīcēs.",
-    "pushEnabled_one": "Push paziņojumi ieslēgti {{count}} ierīcē.",
-    "pushEnabled_other": "Push paziņojumi ieslēgti {{count}} ierīcēs."
+    "pushHint": "Brīdinājumi tiek sūtīti kā pārlūka push paziņojumi."
   },
   "balances": {
     "title": "Atlikumi",
@@ -179,7 +176,7 @@
   },
   "limits": {
     "title": "Tēriņu limiti",
-    "subtitle": "Tēriņu limiti vienam vai vairākiem kontiem 7 dienu, 30 dienu vai kalendārā mēneša periodos — pēc izvēles ierobežoti vienai kategorijai. Saņemsi brīdinājumu, kad tēriņi pārsniegs limitu.",
+    "subtitle": "Tēriņu limiti vienam vai vairākiem kontiem kalendārā mēneša periodā — pēc izvēles ierobežoti vienai kategorijai. Saņemsi brīdinājumu, kad tēriņi pārsniegs limitu.",
     "loading": "Ielādē limitus",
     "loadLabel": "limitus",
     "overview": "Limitu pārskats",
@@ -196,18 +193,13 @@
     "emptyTitle": "Limiti vēl nav iestatīti.",
     "formTitleNew": "Iestatīt limitu",
     "formTitleEdit": "Rediģēt limitu",
-    "alertsTitle": "Tēriņu brīdinājumi",
     "form": {
       "editingNotice": "Rediģē esošo limitu.",
       "accounts": "Konti",
       "category": "Kategorija",
       "allCategories": "Visas kategorijas",
-      "timeWindows": "Laika periodi",
-      "timeWindowsHint": "Vari iestatīt jebkuru kombināciju — atstāj lauku tukšu, lai attiecīgo periodu atslēgtu.",
-      "per7Days": "Limits 7 dienās",
-      "per30Days": "Limits 30 dienās",
       "perMonth": "Limits kalendārajā mēnesī",
-      "isActive": "Ir aktīvs"
+      "alerts": "Brīdinājumi (pārlūka paziņojumi)"
     },
     "item": {
       "all": "Visas",
@@ -218,19 +210,6 @@
       "pastMonths": "Iepriekšējie mēneši",
       "over": "par {{amount}} {{currency}} pārsniegts",
       "left": "atlicis {{amount}} {{currency}}"
-    },
-    "push": {
-      "description": "Saņem pārlūka push paziņojumu, kad tēriņu limits tiek pārsniegts — arī tad, kad šī lapa ir aizvērta.",
-      "enabledOn_zero": "Ieslēgts {{count}} ierīcēs",
-      "enabledOn_one": "Ieslēgts {{count}} ierīcē",
-      "enabledOn_other": "Ieslēgts {{count}} ierīcēs",
-      "disable": "Atslēgt šajā pārlūkā",
-      "enable": "Ieslēgt tēriņu brīdinājumus",
-      "notSupported": "— push paziņojumi šeit netiek atbalstīti",
-      "subscribed": "— šis pārlūks ir abonēts",
-      "subscribeFailed": "Neizdevās abonēt",
-      "unsubscribeFailed": "Neizdevās atcelt abonementu",
-      "permissionDenied": "Paziņojumu atļauja nav piešķirta"
     }
   },
   "rules": {
@@ -238,7 +217,7 @@
     "subtitle": "Noteikumi izpildās no augšas uz leju — pirmais atbilstošais noteikums piešķir savu kategoriju. Saglabājot noteikumu, vēsture tiek pārkategorizēta (manuāli iestatītās kategorijas netiek pārrakstītas).",
     "loading": "Ielādē noteikumus",
     "loadLabel": "noteikumus",
-    "rulesTitle": "Noteikumi",
+    "moreRules": "Vairāk noteikumu",
     "newRule": "Jauns noteikums",
     "reapply": "Pielietot noteikumus vēlreiz",
     "colPriority": "Nr.",
@@ -449,14 +428,15 @@
       "allTime": "Viss laiks"
     },
     "windows": {
-      "days7": "7 dienas",
-      "days30": "30 dienas",
       "thisMonth": "Šis mēnesis"
     },
     "periodText": {
-      "days7": "pēdējās 7 dienās",
-      "days30": "pēdējās 30 dienās",
       "thisMonth": "šajā mēnesī"
     }
+  },
+  "push": {
+    "notSupported": "Push paziņojumi šajā pārlūkā netiek atbalstīti.",
+    "permissionDenied": "Paziņojumu atļauja netika piešķirta.",
+    "subscribeFailed": "Neizdevās ieslēgt paziņojumus"
   }
 }

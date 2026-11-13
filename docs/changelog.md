@@ -1,7 +1,7 @@
 # google_api
 
 ## Changelog
-33. Finance accounts can now be excluded: a new "Excluded" switch
+35. Finance accounts can now be excluded: a new "Excluded" switch
     on each Accounts-page card hides the account and its
     transactions everywhere else — transactions, category
     spending, balances, limits and sync — until you switch it
@@ -9,6 +9,19 @@
     listed (dimmed) on the Accounts page only; sharers can
     exclude a shared account from their own view without
     affecting the owner
+34. Spending limits are monthly-only now — the 7-day and 30-day
+    windows are gone, and the separate "Spending alerts" card was
+    removed. Instead, switching on alerts (a spending limit's
+    Alerts toggle, the Accounts page Balance check, or a saved
+    balance alert) asks the browser for notification permission
+    right there: granting it subscribes this browser and turns
+    the feature on, while denying it leaves it off. Behind the
+    scenes the daily cloud job finally evaluates spending limits
+    again, so breached monthly limits actually push alerts
+33. The finance rules list now opens folded: the card is renamed
+    "More rules" and stays collapsed until you click its header —
+    the New rule and Re-apply rules buttons stay reachable in the
+    header either way
 32. Apps no longer reload when you switch between them: the
     dashboard, Tasks, Finance, Gmail and Notes now run inside one
     shared page, so moving between sections is instant and lists

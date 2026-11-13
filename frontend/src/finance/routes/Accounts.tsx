@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Trans, useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import FinanceNavBar from '../components/FinanceNavBar';
 import PageShell from '../components/PageShell';
 import EmptyState from '../components/EmptyState';
@@ -9,6 +9,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import ErrorState from '../components/ErrorState';
 import Toasts from '../../shared/components/Toasts';
 import { fetchAccounts, type AccountOut, type PushConfigOut } from '../api';
+import usePushSubscription from '../hooks/usePushSubscription';
 import {
   useDeleteBalanceAlert,
   useSaveBalanceAlert,
@@ -111,12 +112,33 @@ function AccountRow({
   const share = useShareAccount();
   const saveAlert = useSaveBalanceAlert();
   const deleteAlert = useDeleteBalanceAlert();
+  const push = usePushSubscription(pushConfig);
   const [username, setUsername] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [threshold, setThreshold] = useState('');
 
-  const toggling = toggle.isPending && toggle.variables === account.id;
+  // Opting an account into the balance check doubles as the
+  // notification opt-in: enabling it runs `ensureSubscribed`,
+  // which asks the browser for notification permission when
+  // needed — a denied or unsupported result leaves the switch
+  // off. The same gate guards the balance-alert save below.
+  const toggleCheck = async () => {
+    if (account.included_in_balance_check || (await push.ensureSubscribed())) {
+      toggle.mutate(account.id);
+    }
+  };
+  const submitAlert = async () => {
+    if (!threshold.trim()) return;
+    if (await push.ensureSubscribed()) {
+      saveAlert.mutate(
+        { accountId: account.id, threshold: threshold.trim() },
+        { onSuccess: () => setAlertOpen(false) },
+      );
+    }
+  };
+  const toggling =
+    push.busy || (toggle.isPending && toggle.variables === account.id);
   const excluding = exclude.isPending && exclude.variables === account.id;
   const sharing = share.isPending && share.variables?.accountId === account.id;
   const savingAlert =
@@ -170,7 +192,7 @@ function AccountRow({
               title={t('accounts.includeInBalanceCheck')}
               checked={account.included_in_balance_check}
               disabled={toggling}
-              onChange={() => toggle.mutate(account.id)}
+              onChange={() => void toggleCheck()}
             />
             <label className="form-check-label" htmlFor={switchId}>
               {t('accounts.balanceCheck')}
@@ -303,11 +325,7 @@ function AccountRow({
           className="acct-alert-form d-flex gap-2 flex-wrap"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!threshold.trim()) return;
-            saveAlert.mutate(
-              { accountId: account.id, threshold: threshold.trim() },
-              { onSuccess: () => setAlertOpen(false) },
-            );
+            void submitAlert();
           }}
         >
           <label
@@ -388,17 +406,7 @@ function AccountRow({
                 })}{' '}
               </>
             )}
-            {pushConfig.subscription_count === 0 ? (
-              <Trans
-                i18nKey="accounts.noDevices"
-                ns="finance"
-                components={{ lnk: <Link to="/limits" /> }}
-              />
-            ) : (
-              t('accounts.pushEnabled', {
-                count: pushConfig.subscription_count,
-              })
-            )}
+            {t('accounts.pushHint')}
           </p>
         </form>
       )}

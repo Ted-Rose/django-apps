@@ -1,10 +1,9 @@
-"""Spending-limit time windows and spend sums.
+"""Spending-limit monthly window and spend sums.
 
-Shared by the limits page (spent vs limit progress bars, monthly
+Shared by the limits page (spent vs limit progress bar, monthly
 history) and the ``evaluate_spending_limits`` management command
 (push alerts).
 """
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -15,67 +14,10 @@ from django.utils import timezone
 from finance.models import Transaction
 from finance.services.categories import annotate_counted_amount
 
-# (threshold field, last-alerted stamp field, window length, label,
-#  i18n key — the SPA translates `key`, `label` stays the English
-#  fallback, and gettext uses `key` for the push-alert wording).
-FIXED_WINDOWS = (
-    ('limit_7_days', 'alerted_7d_at', 7, '7 days', 'days7'),
-    ('limit_30_days', 'alerted_30d_at', 30, '30 days', 'days30'),
-)
-
-# Every threshold field paired with its last-alerted stamp, monthly
-# included — used to reset stale stamps when a threshold is removed.
-ALERT_FIELD_BY_THRESHOLD = {
-    'limit_7_days': 'alerted_7d_at',
-    'limit_30_days': 'alerted_30d_at',
-    'limit_monthly': 'alerted_monthly_at',
-}
-
-
-@dataclass
-class LimitWindow:
-    """One configured window of a TransactionLimit."""
-    label: str            # '7 days', '30 days', 'This month'
-    key: str              # 'days7', 'days30', 'thisMonth'
-    threshold_field: str
-    alert_field: str
-    threshold: Decimal
-    start: date           # window covers [start, today]
-    days: int | None = None   # rolling length; None for monthly
-
 
 def monthly_period_start(today):
     """First day of the calendar month containing ``today``."""
     return today.replace(day=1)
-
-
-def limit_windows(limit, today=None):
-    """Active windows of ``limit`` with their current period start."""
-    today = today or timezone.now().date()
-    windows = []
-    for threshold_field, alert_field, days, label, key in FIXED_WINDOWS:
-        threshold = getattr(limit, threshold_field)
-        if threshold is None:
-            continue
-        windows.append(LimitWindow(
-            label=label,
-            key=key,
-            threshold_field=threshold_field,
-            alert_field=alert_field,
-            threshold=threshold,
-            start=today - timedelta(days=days),
-            days=days,
-        ))
-    if limit.limit_monthly is not None:
-        windows.append(LimitWindow(
-            label='This month',
-            key='thisMonth',
-            threshold_field='limit_monthly',
-            alert_field='alerted_monthly_at',
-            threshold=limit.limit_monthly,
-            start=monthly_period_start(today),
-        ))
-    return windows
 
 
 def _spend_queryset(limit):
@@ -257,34 +199,19 @@ def monthly_history(limit, before=None, today=None):
 
 
 def limit_window_stats(limit, today=None, as_of=None):
-    """Per-window spend vs threshold dicts for display.
+    """The monthly window's spend vs threshold dict for display.
 
-    ``as_of`` evaluates every window as of that date: rolling windows
-    cover the N days ending on it, the monthly window covers its
-    calendar month. Defaults to today (live view).
+    ``as_of`` evaluates the window as of that date's calendar
+    month. Defaults to today (live view). Empty when the limit
+    has no monthly threshold.
     """
+    if limit.limit_monthly is None:
+        return []
     today = today or timezone.now().date()
     as_of = as_of or today
-    stats = []
-    for window in limit_windows(limit, today):
-        if window.threshold_field == 'limit_monthly':
-            period = as_of.replace(day=1)
-            stat = monthly_stat(limit, period, today)
-            stat['history'] = monthly_history(
-                limit, before=period, today=today
-            )
-        else:
-            spent = spent_in_window(
-                limit,
-                as_of - timedelta(days=window.days),
-                end=as_of + timedelta(days=1),
-            )
-            stat = {
-                'label': window.label,
-                'key': window.key,
-                'date_from': as_of - timedelta(days=window.days),
-                'date_to': as_of,
-                **_stat(spent, window.threshold),
-            }
-        stats.append(stat)
-    return stats
+    period = as_of.replace(day=1)
+    stat = monthly_stat(limit, period, today)
+    stat['history'] = monthly_history(
+        limit, before=period, today=today
+    )
+    return [stat]

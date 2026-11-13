@@ -2,18 +2,49 @@
     "version": "2.0.0",
     "tasks": [
         {
+            // Frees :5373 before "vite dev server" starts. The
+            // background vite task is NOT killed when the debug
+            // session stops, and VS Code reusing the still-running
+            // task is what hangs "Waiting for preLaunchTask" — it
+            // waits for an endsPattern line vite printed long ago.
+            // When the task does respawn (or a stray external vite
+            // squats on the port), this guarantees a clean start:
+            // fresh vite reprints "ready in" so the matcher fires,
+            // strictPort never trips, and post-install stale
+            // node_modules state is cleared with the old process.
+            "label": "free vite port",
+            "type": "shell",
+            // -sTCP:LISTEN keeps client sockets (e.g. the browser)
+            // out of the kill set. xargs skips empty input; sleep
+            // gives the SIGTERM'd server a beat to release the port.
+            "command": "lsof -sTCP:LISTEN -ti :5373 | xargs kill; sleep .3",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
             // Runs `npm run dev` in frontend/ on :5373 (server.port
             // in vite.config.ts reads VITE_PORT; strictPort makes it
             // fail loudly rather than silently take another port).
             // Started automatically as preLaunchTask by the
-            // "Django + Vite (dev loop)" debug config and killed
-            // when the session ends.
+            // "Django + Vite (dev loop)" debug config. NOTE: the
+            // task is NOT killed when the session ends — it runs
+            // until the window closes or it is terminated manually
+            // (Terminal → Terminate Task…). dependsOn frees the
+            // port first so a respawned task always starts clean.
             "label": "vite dev server",
+            "dependsOn": [
+                "free vite port"
+            ],
             "type": "shell",
-            // Absolute nvm path + PATH env: VS Code launched from
-            // the Dock doesn't inherit the shell's nvm PATH, so
-            // bare "npm" fails to spawn here.
-            "command": "${env:HOME}/.nvm/versions/node/v22.2.0/bin/npm",
+            // nvm PATH prefix: VS Code launched from the Dock
+            // doesn't inherit the shell's nvm PATH, so bare "npm"
+            // and vite's `env node` shebang would resolve nothing
+            // (or a different node) here.
+            "command": "PATH=~/.nvm/versions/node/v22.2.0/bin:$PATH npm",
             "args": [
                 "run",
                 "dev"
@@ -21,8 +52,7 @@
             "options": {
                 "cwd": "${workspaceFolder}/frontend",
                 "env": {
-                    "VITE_PORT": "5373",
-                    "PATH": "${env:HOME}/.nvm/versions/node/v22.2.0/bin:${env:PATH}"
+                    "VITE_PORT": "5373"
                 }
             },
             "isBackground": true,

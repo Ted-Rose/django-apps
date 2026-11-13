@@ -405,14 +405,14 @@ class CategoryRule(models.Model):
 
 
 class TransactionLimit(models.Model):
-    """Per user outgoing-spending limits over a set of accounts.
+    """Per user outgoing-spending limit over a set of accounts.
 
-    Three window kinds: rolling 7 days, rolling 30 days, or the
-    current calendar month. When ``category`` is set, only
-    transactions in that category count towards the limit; when
-    null, all outgoing spending counts. A user's limits with the
-    same category must cover disjoint account sets — enforced in
-    the API since unique constraints can't span a M2M.
+    The window is the current calendar month. When ``category`` is
+    set, only transactions in that category count towards the
+    limit; when null, all outgoing spending counts. A user's
+    limits with the same category must cover disjoint account
+    sets — enforced in the API since unique constraints can't
+    span a M2M.
     """
     accounts = models.ManyToManyField(
         Account,
@@ -430,18 +430,6 @@ class TransactionLimit(models.Model):
         blank=True,
         help_text='Optional: limit only spending in this category'
     )
-    limit_7_days = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        null=True,
-        blank=True
-    )
-    limit_30_days = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        null=True,
-        blank=True
-    )
     limit_monthly = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -450,16 +438,6 @@ class TransactionLimit(models.Model):
         help_text='Limit for the current calendar month'
     )
     is_active = models.BooleanField(default=True)
-    alerted_7d_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text='When a push alert was last sent for the 7-day window'
-    )
-    alerted_30d_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text='When a push alert was last sent for the 30-day window'
-    )
     alerted_monthly_at = models.DateTimeField(
         null=True,
         blank=True,
