@@ -16,7 +16,7 @@ Python lines ≤79 chars. When in doubt, mirror
 - `frontend/src/<entry>/mutations.ts`
 - `frontend/src/<entry>/components/<App>NavBar.tsx`
 - `frontend/src/<entry>/locales/en.json`
-- Build registration (vite.config.ts + gen:types)
+- Build registration (shell route table + gen:types)
 - `<app>/tests.py` skeleton
 
 ## `<app>/urls.py`
@@ -29,7 +29,7 @@ from django_apps.views import react_app
 
 app_name = '<app>'
 
-react_app_<app> = partial(react_app, entry='<entry>', title='<Title>')
+react_app_<app> = partial(react_app, title='<Title>')
 
 urlpatterns = [
     # External callbacks / non-SPA Django views go BEFORE the
@@ -99,31 +99,31 @@ def rename(request, item_id: int, payload: RenameIn):
 ## `frontend/src/<entry>/main.tsx`
 
 ```tsx
-import 'vite/modulepreload-polyfill';
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-import { QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
-import { initI18n } from '../shared/i18n';
-import queryClient from '../shared/queryClient';
+import { registerI18n } from '../shared/i18n';
+import { AppRouter } from '../shared/components/AppRouter';
+import { ErrorBoundary } from '../shared/ErrorBoundary';
 import en from './locales/en.json';
 import lv from './locales/lv.json';
 
-// Must run before any component reads t() — catalogs are static
-// imports so both languages are already bundled.
-initI18n('<entry>', { en, lv });
+// Registers this app's catalogs on the shell's shared i18next —
+// runs at lazy-chunk evaluation, before any component renders.
+registerI18n('<entry>', { en, lv });
 
-const root = document.getElementById('root');
-if (root) {
-  createRoot(root).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter basename="/<entry>">
-          <App />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </StrictMode>,
+/**
+ * The <entry> app as a mountable component — the unified shell
+ * lazy-imports it under /<entry>/*. AppRouter supplies the same
+ * basename semantics a standalone BrowserRouter basename did, so
+ * every in-app absolute link resolves inside /<entry> unchanged.
+ * NO createRoot / QueryClientProvider — the shell owns both.
+ */
+export default function <Entry>App() {
+  return (
+    <AppRouter basename="/<entry>">
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </AppRouter>
   );
 }
 ```
@@ -214,12 +214,12 @@ app's pages:
 import { useTranslation } from 'react-i18next';
 import NavBar from '../../shared/components/NavBar';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 
 export function <App>NavBar() {
   const { t } = useTranslation('<entry>');
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const items: BurgerMenuItem[] = [
     { label: t('common:common.home'), url: '/', icon: 'house',
@@ -251,15 +251,13 @@ the same keys.
 
 ## Build registration
 
-```ts
-// frontend/vite.config.ts → rollupOptions.input
-input: {
-  tasks: 'src/tasks/main.tsx',
-  finance: 'src/finance/main.tsx',
-  gmail: 'src/gmail/main.tsx',
-  single_pages: 'src/single_pages/main.tsx',
-  <entry>: 'src/<entry>/main.tsx',
-},
+```tsx
+// frontend/src/shell/App.tsx — lazy import + route + title +
+// idle-prefetch loader (vite.config.ts keeps the ONE 'shell'
+// input; apps never add rollupOptions.input keys)
+const <Entry>App = lazy(() => import('../<entry>/main'));
+
+<Route path="/<entry>/*" element={<LazyApp app={<Entry>App} />} />
 ```
 
 ```json

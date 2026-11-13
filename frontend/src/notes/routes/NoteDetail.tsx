@@ -9,7 +9,7 @@ import ListSkeleton from '../../shared/components/ListSkeleton';
 import PageNavBar from '../../shared/components/PageNavBar';
 import Toasts from '../../shared/components/Toasts';
 import { errorDetail } from '../../shared/api/errors';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import RichTextEditor from '../../shared/components/RichTextEditor';
 import { isTiptapDocString } from '../../shared/tiptapContent';
 import { fetchNoteDetail, fetchNotes } from '../api';
@@ -40,8 +40,8 @@ export default function NoteDetail() {
   const { t } = useTranslation('notes');
   const { id: taskId = '' } = useParams();
   const navigate = useNavigate();
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['notes', 'note', taskId],

@@ -55,15 +55,16 @@ admin; messages themselves live in Google and the session.
   failures → 502 `upstream_error`).
 - `urls.py` — `gmail-to-audio` 301s to `/gmail/` preserving the
   query string; `gmail/` + `gmail/<path:subpath>` serve the SPA
-  shell (`react_app`); `gmail:index` names the SPA route so
-  `home.html`'s `{% url 'gmail:index' %}` keeps working. Mounted at
+  shell (`react_app`); `gmail:index` names the SPA route for
+  `reverse()` callers. Mounted at
   root in `django_apps/urls.py` — **never add a bare
   `<path:subpath>` catch-all**, only the `gmail/` prefix.
 
 ## Frontend
 
-`frontend/src/gmail/` — Vite entry `gmail`,
-`BrowserRouter basename='/gmail'`, single route (`/` → GmailReader).
+`frontend/src/gmail/` — a lazy chunk of the unified `shell` Vite
+entry, `AppRouter basename='/gmail'`, single route
+(`/` → GmailReader).
 The reader gates on `/api/gmail/status/` (bounces to
 `/login/?next=` when `has_credentials` is false), keeps the Gmail
 query in `?query=` (auto-fetches when the URL carries `query` or the

@@ -1333,9 +1333,12 @@ class NotesPageMountTests(TestCase):
             username='alice', password='pw'
         )
 
-    def test_requires_login(self):
+    def test_shell_is_public_for_anonymous(self):
+        # Public edge-cached shell; the client bounces to login
+        # after the /api/me bootstrap 401.
         resp = self.client.get('/notes/')
-        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="root"')
 
     def test_renders_shell(self):
         self.client.force_login(self.user)

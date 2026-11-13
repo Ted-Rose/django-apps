@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { actionHistory } from '../actionHistory';
 import { fetchArchived, type TaskOut } from '../api';
 import SecondaryLabelDropdown from '../components/SecondaryLabelDropdown';
@@ -39,8 +39,8 @@ export default function Archived() {
   const secondaryLabel = searchParams.get('secondary_label') ?? '';
   const navigate = useNavigate();
 
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   // ['dashboard', …] root key so unarchive/star mutations invalidate
   // and optimistic-patch this page like every other list view.

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import NavBar from '../../shared/components/NavBar';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 
 /**
  * React port of gmail.html's navbar + burger_menu_items — brand
@@ -11,8 +11,8 @@ import useBootstrap from '../../shared/hooks/useBootstrap';
  */
 export function GmailNavBar() {
   const { t } = useTranslation('gmail');
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const items: BurgerMenuItem[] = [
     {

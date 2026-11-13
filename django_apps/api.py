@@ -88,6 +88,10 @@ SPA_BASES = {
     'gmail': '/gmail/',
     'single_pages': '/twister',
     'notes': '/notes/',
+    # The session bootstrap is page-agnostic — after login the
+    # dashboard is the sane default; the shell client overrides
+    # `next` with the page it was actually on anyway.
+    'me': '/',
 }
 
 

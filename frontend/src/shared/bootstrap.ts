@@ -1,17 +1,19 @@
-import type { BurgerMenuItem } from './components/BurgerMenu';
-
 /**
  * Payload rendered by `spa_shell.html` via
- * `{{ bootstrap|json_script:"spa-bootstrap" }}`. Views pass at least
- * `user`; `burger_menu_items` and app-specific keys may be added by
- * the shell view later.
+ * `{{ bootstrap|json_script:"spa-bootstrap" }}`. The shell is
+ * edge-cached and byte-identical for all users, so only
+ * user-agnostic deployment config rides in it — the Sentry init
+ * values the web SDK needs before app modules import. Per-user
+ * context (username/language/is_staff) arrives via `GET /api/me/`
+ * (see `shared/session.ts`), which also plants the csrftoken
+ * cookie.
  */
 export interface BootstrapPayload {
-  user?: string;
-  /** Stored per-user language pref ('en'/'lv') — see UserSettings. */
-  language?: string;
-  burger_menu_items?: BurgerMenuItem[];
-  [key: string]: unknown;
+  sentry?: {
+    dsn?: string | null;
+    environment?: string | null;
+    release?: string | null;
+  };
 }
 
 /**

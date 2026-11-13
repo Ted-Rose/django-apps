@@ -13,27 +13,27 @@ from finance.services.rules import apply_rules
 logger = logging.getLogger('django')
 
 
-@login_required
 def finance_app(request, subpath=''):
     """Serve the finance SPA shell for every /finance/* page.
 
-    Re-runs ``apply_rules`` for the caller on each page load so
-    categorization is enforced on visit — before the SPA's API
-    calls read categories. Non-GET requests 404 like
-    ``react_app``; a rules failure is logged but never blocks the
-    page.
+    Re-runs ``apply_rules`` for the caller on each authenticated
+    page load so categorization is enforced on visit — before the
+    SPA's API calls read categories. The shell itself is public
+    (anonymous visitors get the same edge-cached HTML and the
+    client bounces to login after the bootstrap 401); non-GET
+    requests 404 like ``react_app``; a rules failure is logged but
+    never blocks the page.
     """
     if request.method not in ('GET', 'HEAD'):
         raise Http404
-    try:
-        apply_rules(request.user)
-    except Exception:
-        logger.exception(
-            'apply_rules failed for user %s', request.user.pk
-        )
-    return react_app(
-        request, entry='finance', title='Finance', subpath=subpath
-    )
+    if request.user.is_authenticated:
+        try:
+            apply_rules(request.user)
+        except Exception:
+            logger.exception(
+                'apply_rules failed for user %s', request.user.pk
+            )
+    return react_app(request, title='Finance', subpath=subpath)
 
 
 @login_required

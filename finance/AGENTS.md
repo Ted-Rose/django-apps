@@ -315,15 +315,16 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
 
 ## Views & API (post-cutover)
 
-- The UI is the React SPA (`frontend/src/finance/`, Vite entry
-  `finance`) served by `views.finance_app` — a thin wrapper over
+- The UI is the React SPA (`frontend/src/finance/`, a lazy chunk
+  of the unified `shell` Vite entry) served by
+  `views.finance_app` — a thin wrapper over
   the shared `react_app` shell that re-runs `apply_rules` for the
   caller on every page load (logged, never blocking), so
   categorization is enforced on each visit — at `/finance/` + a
   `<path:subpath>` catch-all, with named shell routes
   (`index`/`connect`/`accounts`/`transactions`/`balances`/`limits`/
   `rules`/`categories`) so `reverse('finance:…')` keeps working for
-  `home.html`, `evaluate_spending_limits` push URLs and the
+  `evaluate_spending_limits` push URLs and the
   callback's redirects. `/finance/app/*` 301-redirects to
   `/finance/*` (legacy strangler mount); non-GET/HEAD requests under
   `/finance/` 404 — the template views and their form-POST URLs are

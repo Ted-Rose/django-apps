@@ -1496,12 +1496,16 @@ class SpaMountTests(ApiTestCase):
             reverse('finance:callback'), '/finance/callback/'
         )
 
-    def test_shell_requires_login(self):
-        resp = self.client.get('/finance/')
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(
-            resp['Location'].startswith('/login/?next=')
-        )
+    def test_shell_is_public_for_anonymous(self):
+        # The unified shell is edge-cacheable: anonymous users get
+        # the same 200 HTML; the client bounces to login after the
+        # /api/me bootstrap 401. apply_rules must not run without a
+        # real user.
+        with patch('finance.views.apply_rules') as apply_mock:
+            resp = self.client.get('/finance/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'spa-bootstrap')
+        apply_mock.assert_not_called()
 
     def test_shell_get_renders(self):
         self.client.force_login(self.user)

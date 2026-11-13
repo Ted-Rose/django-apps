@@ -11,7 +11,7 @@ import ListSkeleton from '../../shared/components/ListSkeleton';
 import Modal from '../../shared/components/Modal';
 import PageNavBar from '../../shared/components/PageNavBar';
 import Toasts from '../../shared/components/Toasts';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { fetchNotes, type NoteCategoryOut } from '../api';
 import {
   categoryPathLabel,
@@ -40,8 +40,8 @@ type MergeTarget = number | 'uncategorized' | '';
 export default function Categories() {
   const { t } = useTranslation('notes');
   const navigate = useNavigate();
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['notes', 'categories'],

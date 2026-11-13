@@ -26,7 +26,7 @@ api.add_router('/single_pages/', sp_router)
 # The notes SPA is data-owned by google_tasks (notes are GoogleTask
 # rows) but mounts at a top-level /notes/ prefix — like tasks, every
 # GET/HEAD serves the shell and React Router resolves the page.
-react_app_notes = partial(react_app, entry='notes', title='Notes')
+react_app_notes = partial(react_app, title='Notes')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -44,7 +44,9 @@ urlpatterns = [
     path('notes/<path:subpath>', react_app_notes,
          name='notes_subpath'),
     path('', include('single_pages.urls', namespace='single_pages')),
-    path('', views.home),
+    # The dashboard is a React route inside the unified shell —
+    # publicly viewable like the old home.html.
+    path('', partial(react_app, title='Home'), name='home'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 if settings.DEBUG:

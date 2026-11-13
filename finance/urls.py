@@ -22,10 +22,9 @@ urlpatterns = [
     # and must precede the catch-all below.
     path('callback/', views.requisition_callback, name='callback'),
     # Every page name keeps resolving for reverse() callers
-    # (home.html's finance:accounts, evaluate_spending_limits'
-    # finance:limits, the callback's finance:connect/accounts
-    # redirects); each serves the SPA shell and React Router
-    # resolves the page client-side.
+    # (evaluate_spending_limits' finance:limits, the callback's
+    # finance:connect/accounts redirects); each serves the SPA
+    # shell and React Router resolves the page client-side.
     path('', views.finance_app, name='index'),
     path('connect/', views.finance_app, name='connect'),
     path('accounts/', views.finance_app, name='accounts'),

@@ -143,11 +143,14 @@ class SinglePagesCutoverRouteTests(TestCase):
             self.assertEqual(resp.status_code, 200, url)
             self.assertTemplateUsed(resp, 'spa_shell.html')
 
-    def test_spa_mounts_are_login_gated(self):
+    def test_spa_mounts_are_public(self):
+        # The unified shell is edge-cacheable: anonymous users get
+        # the same 200 HTML; the client bounces to login after the
+        # /api/me bootstrap 401.
         for url in ('/twister', '/spoki/'):
             resp = self.client.get(url)
-            self.assertEqual(resp.status_code, 302, url)
-            self.assertIn('/login/?next=', resp.url)
+            self.assertEqual(resp.status_code, 200, url)
+            self.assertTemplateUsed(resp, 'spa_shell.html')
 
     def test_non_get_to_page_path_404s(self):
         self.client.force_login(self.user)

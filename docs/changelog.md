@@ -1,6 +1,14 @@
 # google_api
 
 ## Changelog
+25. Apps no longer reload when you switch between them: the
+    dashboard, Tasks, Finance, Gmail and Notes now run inside one
+    shared page, so moving between sections is instant and lists
+    stay cached instead of re-fetching on every visit. App pages
+    are also served from the CDN edge and load a little faster;
+    your username, language and staff flag are fetched quietly in
+    the background. The dashboard itself is part of the app now
+    (same cards as before, still public)
 24. Faster Vercel loads: the serverless function now runs in
     Frankfurt (same city as the Aiven Postgres, cutting per-request
     DB round-trips since connections are never pooled), hashed JS/
