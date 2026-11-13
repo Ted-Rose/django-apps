@@ -411,24 +411,7 @@ export default function CategoryOverview() {
           <>
             {data.rows.length > 0 ? (
               <div className="row g-3">
-                <div className="col-12 col-lg-4">
-                  <div className="fin-card p-3 h-100">
-                    <h2 className="h6 text-muted">
-                      {t('categories.chartTitle')}
-                    </h2>
-                    <Suspense
-                      fallback={
-                        <div
-                          className="fin-skeleton"
-                          style={{ height: '17.5rem' }}
-                        />
-                      }
-                    >
-                      <CategoryChart rows={data.rows} />
-                    </Suspense>
-                  </div>
-                </div>
-                <div className="col-12 col-lg-8">
+                <div className="col-12">
                   <div className="fin-card p-3 h-100">
                     <table className="table table-hover cat-table mb-0">
                       <thead>
@@ -476,6 +459,25 @@ export default function CategoryOverview() {
                         })()}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+                {/* The donut sits under the breakdown — it reads
+                    as a summary of the table, not its peer. */}
+                <div className="col-12 col-lg-6">
+                  <div className="fin-card p-3 h-100">
+                    <h2 className="h6 text-muted">
+                      {t('categories.chartTitle')}
+                    </h2>
+                    <Suspense
+                      fallback={
+                        <div
+                          className="fin-skeleton"
+                          style={{ height: '17.5rem' }}
+                        />
+                      }
+                    >
+                      <CategoryChart rows={data.rows} />
+                    </Suspense>
                   </div>
                 </div>
               </div>

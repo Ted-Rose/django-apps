@@ -255,8 +255,12 @@ describe('CategoryOverview', () => {
       screen.queryByRole('button', { name: 'Last year' }),
     ).not.toBeInTheDocument();
     // The recharts donut is stubbed (jsdom renders it 0-size) but
-    // the chart card is still wired into the layout.
-    expect(await screen.findByTestId('category-chart')).toBeInTheDocument();
+    // the chart card is still wired into the layout — beneath the
+    // breakdown table, not beside it.
+    const chart = await screen.findByTestId('category-chart');
+    expect(
+      table.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('writes from/to params when a preset is clicked', async () => {
