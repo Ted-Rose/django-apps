@@ -1,11 +1,11 @@
 import { QueryClient } from '@tanstack/react-query';
 
 /**
- * One QueryClient per SPA bundle — created here (not in main.tsx)
- * so non-component code like LanguageSwitcher can invalidate
- * queries without a hook context. Both entries share the same
- * options: one retry keeps transient network errors from flashing
- * error states; real failures still surface via ApiError.
+ * One QueryClient for the whole shell — created here (not in
+ * main.tsx) so non-component code like LanguageSwitcher can
+ * invalidate queries without a hook context. Options: one retry
+ * keeps transient network errors from flashing error states;
+ * real failures still surface via ApiError.
  */
 export const queryClient = new QueryClient({
   defaultOptions: {

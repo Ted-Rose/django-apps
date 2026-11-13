@@ -75,7 +75,8 @@ interface ShellLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
  * navigation when rendered inside the unified shell, and stays a
  * plain anchor everywhere else — href always carries the real
  * URL, so /admin/*, OAuth and external links work unchanged and
- * middle-/modifier-click opens a new tab like any anchor.
+ * middle-/modifier-click, `target="_blank"` and `download` keep
+ * their native behavior.
  */
 export function ShellLink({ href, onClick, ...rest }: ShellLinkProps) {
   const shellNav = useShellNav();
@@ -91,6 +92,8 @@ export function ShellLink({ href, onClick, ...rest }: ShellLinkProps) {
           event.ctrlKey ||
           event.shiftKey ||
           event.altKey ||
+          rest.target === '_blank' ||
+          rest.download !== undefined ||
           !shellNav ||
           !isShellPath(href)
         ) {

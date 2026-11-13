@@ -12,17 +12,32 @@ import Limits from './routes/Limits';
 import Rules from './routes/Rules';
 import Transactions from './routes/Transactions';
 
+// Once-per-shell-session latch — module scope because the shell
+// document lives for the whole session, so client-side remounts
+// of finance must not re-fire the (idempotent) POST.
+let applyRulesFired = false;
+
+/** Test hook — clears the per-session latch. */
+export function resetApplyRulesLatch(): void {
+  applyRulesFired = false;
+}
+
 /**
- * Re-runs the caller's categorization rules once per app mount —
- * the client-side replacement for the per-page-load `apply_rules`
- * the old finance_app view ran (the shell HTML is edge-cached
- * now, so page views no longer reach Django). Fire-and-forget and
- * idempotent; on success the finance query cache is invalidated
- * so lists re-render with the fresh categories.
+ * Re-runs the caller's categorization rules once per shell
+ * session — the client-side replacement for the per-page-load
+ * `apply_rules` the old finance_app view ran (the shell HTML is
+ * edge-cached now, so page views no longer reach Django).
+ * Fire-and-forget and idempotent; on success the finance query
+ * cache is invalidated so lists re-render with the fresh
+ * categories. Latching before the POST also absorbs dev
+ * StrictMode's double-invoked effect (the extra call it would
+ * produce is idempotent and dev-only anyway).
  */
 function useApplyRulesOnMount() {
   const queryClient = useQueryClient();
   useEffect(() => {
+    if (applyRulesFired) return;
+    applyRulesFired = true;
     apiPost('/api/finance/rules/apply/', {})
       .then(() => queryClient.invalidateQueries({ queryKey: ['finance'] }))
       .catch(() => {});

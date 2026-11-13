@@ -20,9 +20,9 @@ import Home from './Home';
 /**
  * The unified shell: ONE React root, ONE top-level router for the
  * whole site. Every app renders under its URL prefix as a lazy
- * chunk that keeps its own nested `BrowserRouter basename` — so
- * in-app absolute links needed zero changes, and app-to-app
- * navigation is a client-side route change (no document reload).
+ * chunk that keeps its own `AppRouter basename` — so in-app
+ * absolute links needed zero changes, and app-to-app navigation
+ * is a client-side route change (no document reload).
  *
  * `/` is the dashboard (public, like the old home.html); the shell
  * also serves the two single_pages root mounts /twister + /spoki/.
@@ -94,7 +94,13 @@ function prefetchAppChunks(): void {
   const next = (i: number) => {
     if (i >= loaders.length) return;
     schedule(() => {
-      void loaders[i]().then(() => next(i + 1));
+      // A failed chunk import must not abort the chain — the
+      // rejection is swallowed here (the real lazy() load retries
+      // on demand and surfaces through the ErrorBoundary).
+      void loaders[i]().then(
+        () => next(i + 1),
+        () => next(i + 1),
+      );
     });
   };
   next(0);

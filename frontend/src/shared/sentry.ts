@@ -3,7 +3,7 @@ import type { ErrorEvent, EventHint } from '@sentry/react';
 import { readBootstrap } from './bootstrap';
 
 /**
- * Sentry init + `beforeSend` for every SPA entry.
+ * Sentry init + `beforeSend` for the single shell entry.
  *
  * dsn/environment/release ship inside the `#spa-bootstrap`
  * json_script rendered by `spa_shell` (django_apps/views.py) — the

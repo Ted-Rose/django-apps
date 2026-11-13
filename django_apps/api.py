@@ -172,6 +172,10 @@ def _adapt(request, response):
 @api.exception_handler(AuthenticationError)
 def _on_unauthenticated(request, exc):
     """Session auth failed → JSON 401, never a login redirect."""
+    # Deliberate divergence: PAGE-level anonymous bounces go to
+    # /login/ (Google OAuth, via SessionGate), but API 401s keep
+    # /admin/login/ — the staff/password path. Unifying them is a
+    # follow-up.
     return api.create_response(request, {
         'error': 'unauthenticated',
         'login_url': (

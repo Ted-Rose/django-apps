@@ -133,8 +133,10 @@ URL routing (`django_apps/urls.py`): `google_api`, `gmail` and
    for every user). Per-user context arrives asynchronously from
    `GET /api/me/` (`username`/`language`/`is_staff`, plants the
    csrftoken cookie); the shell's `SessionGate` bounces anonymous
-   users on non-public paths to `login_url?next=<path>`
-   client-side — `/` stays public. Client-side route switching
+   users on non-public paths to `/login/?next=<path>`
+   client-side — deliberately NOT the 401 body's `login_url`,
+   which stays `/admin/login/` (staff password path). `/` stays
+   public. Client-side route switching
    among `/tasks/`, `/finance/`, `/gmail/`, `/notes/`, `/twister`,
    `/spoki/` never reloads the document and shares one React
    Query cache. A 401 from `/api/<app>/*` maps back to the SPA

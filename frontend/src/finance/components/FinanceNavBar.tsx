@@ -12,9 +12,10 @@ import { useSession } from '../../shared/session';
  * six primary sections visible (the burger menu stays for Home,
  * Connect Bank and Logout).
  *
- * In-SPA entries use `to` (react-router Links — no page reload);
- * Home and Logout stay plain `url` anchors because both navigate
- * out of the SPA to full-page Django routes.
+ * In-app entries use `to` (react-router Links — no page reload).
+ * `url` entries render ShellLink: Home (`/`) is a shell path and
+ * client-navigates; only Logout (`/admin/logout/`) is a true
+ * document exit to a Django route outside the shell.
  */
 export function FinanceNavBar() {
   const { t } = useTranslation('finance');

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import App from './App';
+import App, { resetApplyRulesLatch } from './App';
 import { apiGet, apiPost } from '../shared/api/client';
 import { clearToasts } from '../shared/toasts';
 
@@ -53,6 +53,7 @@ beforeEach(() => {
   // give it a resolved promise so its .then chain can't throw.
   mockedApiPost.mockResolvedValue({ success: true });
   clearToasts();
+  resetApplyRulesLatch();
 });
 
 describe('App notification drain', () => {
@@ -80,7 +81,7 @@ describe('App notification drain', () => {
     );
   });
 
-  it('fetches nothing to read out when there are no notifications', async () => {
+  it('marks nothing read when there are no notifications', async () => {
     mockGet([]);
     renderApp();
     // The page settles (empty accounts state) without any
@@ -96,7 +97,7 @@ describe('App notification drain', () => {
     ).toBe(false);
   });
 
-  it('re-runs categorization rules once on mount', async () => {
+  it('re-runs categorization rules once per shell session', async () => {
     mockGet([]);
     renderApp();
     // Client-side replacement for the old per-page-load
@@ -108,5 +109,13 @@ describe('App notification drain', () => {
         {},
       ),
     );
+    // A client-side remount must not re-fire the POST — the
+    // module-level latch holds for the whole shell session.
+    renderApp();
+    await screen.findAllByText(/No accounts yet/);
+    const applyCalls = mockedApiPost.mock.calls.filter(([url]) =>
+      String(url).includes('/rules/apply/'),
+    );
+    expect(applyCalls).toHaveLength(1);
   });
 });

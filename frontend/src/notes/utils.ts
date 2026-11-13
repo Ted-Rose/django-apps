@@ -106,7 +106,7 @@ export function stripNoteMarker(text?: string | null): string {
     .trim();
 }
 
-/** BrowserRouter basename from main.tsx. */
+/** `AppRouter basename` from main.tsx. */
 const SPA_BASENAME = '/notes';
 
 /**

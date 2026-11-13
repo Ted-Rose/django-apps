@@ -1,4 +1,5 @@
 from django.shortcuts import redirect
+from django.utils.http import url_has_allowed_host_and_scheme
 from google_api.utils import (
     text_to_audio,
     google_auth,
@@ -13,7 +14,15 @@ def login_view(request):
     """
     from google_api.utils import ALL_APP_SCOPES
 
-    next_url = request.GET.get('next', 'google_tasks:dashboard')
+    next_url = request.GET.get('next')
+    if next_url and not url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}):
+        # Open-redirect guard — the shell's SessionGate makes
+        # /login/?next=<path> the standard anonymous bounce, so
+        # `next` is request input that must stay same-origin
+        # (rejects https://evil.com and scheme-relative //host).
+        next_url = None
+    next_url = next_url or 'google_tasks:dashboard'
     request.session['oauth_redirect_url'] = next_url
 
     # Request all scopes at once for a unified login experience
