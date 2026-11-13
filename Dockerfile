@@ -1,6 +1,6 @@
 # React frontend — built in a node stage so the final image has no
 # node_modules; only frontend_dist/ is copied over.
-FROM node:22-slim AS frontend
+FROM node:25-slim AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 # --include=dev: parity with build_files.sh — if NODE_ENV=production
