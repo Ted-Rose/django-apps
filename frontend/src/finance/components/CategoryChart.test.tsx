@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chartValueLabel, resolveSlice, rowKey } from './CategoryChart';
+import { resolveSlice, rowKey, shareLabel, spentLabel } from './CategoryChart';
 import type { CategoryRowOut } from '../api';
 
 function makeRow(overrides: Partial<CategoryRowOut> = {}): CategoryRowOut {
@@ -33,17 +33,20 @@ const SLICES: CategoryRowOut[] = [
   }),
 ];
 
-describe('chartValueLabel', () => {
-  it('rounds the share and appends the spent amount', () => {
-    expect(chartValueLabel(makeRow())).toBe('76% · -120.50 EUR');
-    const label = chartValueLabel(makeRow({ share: 24.4 }));
-    expect(label).toBe('24% · -120.50 EUR');
+describe('shareLabel', () => {
+  it('rounds the share to a whole-number percentage', () => {
+    expect(shareLabel(makeRow())).toBe('76%');
+    expect(shareLabel(makeRow({ share: 24.4 }))).toBe('24%');
+  });
+});
+
+describe('spentLabel', () => {
+  it('formats the absolute spent amount with currency', () => {
+    expect(spentLabel(makeRow())).toBe('-120.50 EUR');
   });
 
-  it('omits the amount when the category spent nothing', () => {
-    expect(chartValueLabel(makeRow({ spent: '0.00', share: 33.3 }))).toBe(
-      '33%',
-    );
+  it('returns empty when the category spent nothing', () => {
+    expect(spentLabel(makeRow({ spent: '0.00' }))).toBe('');
   });
 });
 

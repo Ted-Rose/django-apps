@@ -220,7 +220,7 @@ describe('CategoryOverview', () => {
     expect(table.querySelectorAll('thead th')).toHaveLength(3);
     expect(table.querySelector('tfoot')).toBeNull();
     // Share column and the secondary tx-count subtext.
-    expect(screen.getByText('75.5%')).toBeInTheDocument();
+    expect(screen.getByText('76%')).toBeInTheDocument();
     expect(screen.getByText('12 transactions')).toBeInTheDocument();
     expect(screen.getByText('1 transaction')).toBeInTheDocument();
     // Per-currency totals land as StatCards below the table —

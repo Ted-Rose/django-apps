@@ -13,16 +13,20 @@ import type { CategoryRowOut } from '../api';
 const FALLBACK_COLOR = '#6c757d';
 
 /**
- * Rounded share + absolute spent figure — the value half of both
- * the slice tooltip and the click-selection readout. A zero-spent
- * row (share-0 slices never render, but the guard keeps the
- * helper total) collapses to just the percentage.
+ * Whole-number share — the first line of both the slice tooltip
+ * and the click-selection readout.
  */
-export function chartValueLabel(row: CategoryRowOut): string {
-  const share = `${Math.round(row.share)}%`;
-  return Number(row.spent) > 0
-    ? `${share} · -${row.spent} ${row.currency}`
-    : share;
+export function shareLabel(row: CategoryRowOut): string {
+  return `${Math.round(row.share)}%`;
+}
+
+/**
+ * Absolute spent figure — the second line under the share. A
+ * zero-spent row (share-0 slices never render, but the guard
+ * keeps the helper total) produces an empty string.
+ */
+export function spentLabel(row: CategoryRowOut): string {
+  return Number(row.spent) > 0 ? `-${row.spent} ${row.currency}` : '';
 }
 
 /**
@@ -157,9 +161,17 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
             <Tooltip
               formatter={(value, _name, item) => {
                 const row = resolveSlice(slices, item);
-                return row
-                  ? chartValueLabel(row)
-                  : `${Math.round(Number(value))}%`;
+                if (!row) return `${Math.round(Number(value))}%`;
+                const spent = spentLabel(row);
+                // Percentage on the first line, the absolute
+                // amount beneath it — same layout as the
+                // selection readout.
+                return (
+                  <>
+                    <div>{shareLabel(row)}</div>
+                    {spent && <div>{spent}</div>}
+                  </>
+                );
               }}
             />
             <Legend iconType="circle" iconSize={8} onClick={toggle} />
@@ -168,7 +180,13 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
       </div>
       {selectedRow && (
         <p className="text-muted small text-center mt-2 mb-0">
-          {selectedName} — {chartValueLabel(selectedRow)}
+          {selectedName} — {shareLabel(selectedRow)}
+          {spentLabel(selectedRow) && (
+            <>
+              <br />
+              {spentLabel(selectedRow)}
+            </>
+          )}
         </p>
       )}
     </>

@@ -395,7 +395,9 @@ export default function CategoryOverview() {
                       <thead>
                         <tr>
                           <th>{t('transactions.columns.category')}</th>
-                          <th className="w-25">{t('categories.share')}</th>
+                          <th style={{ width: '4.5rem' }}>
+                            {t('categories.share')}
+                          </th>
                           <th className="text-end">
                             {t('categories.spentCol')}
                           </th>
@@ -627,8 +629,9 @@ function ShareOverviewCard({
 
 /**
  * One breakdown row: category badge + tx count, a share bar tinted
- * with the category color, and the spent amount — income shows up
- * once in the totals cards instead of a per-category column.
+ * with the category color over its whole-number percentage, and
+ * the spent amount — income shows up once in the totals cards
+ * instead of a per-category column.
  * The row is a click target: selecting it opens the transaction
  * drill-down below the table (`?category=` in the URL).
  */
@@ -687,14 +690,14 @@ function OverviewRow({
             {t('categories.excludedFromStats')}
           </small>
         ) : (
-          <div className="d-flex align-items-center gap-2">
+          <div>
             <div
-              className="progress flex-grow-1"
+              className="progress w-100"
               role="progressbar"
               aria-valuenow={row.share}
               aria-valuemin={0}
               aria-valuemax={100}
-              style={{ height: '0.5rem', minWidth: '1.5rem' }}
+              style={{ height: '0.5rem' }}
             >
               <div
                 className="progress-bar"
@@ -704,7 +707,9 @@ function OverviewRow({
                 }}
               />
             </div>
-            <small className="text-nowrap">{row.share.toFixed(1)}%</small>
+            {/* Whole-number share under the bar — stacking keeps
+                the column narrow enough for phone screens. */}
+            <small>{Math.round(row.share)}%</small>
           </div>
         )}
       </td>
