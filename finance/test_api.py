@@ -466,6 +466,100 @@ class ExcludedAccountApiTests(ApiTestCase):
         )
         self.assertEqual(resp.status_code, 400)
 
+    def test_save_limit_drops_unshared_account(self):
+        """A stale excluded pref must not resurrect an account
+        that is no longer shared with the user at all."""
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign = make_account(
+            other, make_requisition(other, 'req-b'), 'acc-b'
+        )
+        share = AccountShare.objects.create(
+            account=foreign, shared_with=self.user
+        )
+        limit = make_limit(
+            account=foreign,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        UserAccountPreference.objects.create(
+            user=self.user, account=foreign, excluded=True
+        )
+        share.delete()
+        resp = self.post_json(
+            '/limits/save/',
+            {
+                'limit_id': limit.pk,
+                'accounts': [self.account.pk],
+                'limit_7_days': '100.00',
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            set(limit.accounts.values_list('pk', flat=True)),
+            {self.account.pk},
+        )
+
+    def test_save_limit_overlap_includes_excluded_account(self):
+        """Preserved excluded accounts still count toward the
+        same-category disjoint-accounts check."""
+        cat_a = make_category(self.user, 'Food')
+        cat_b = make_category(self.user, 'Travel')
+        visible = make_account(self.user, self.req, 'acc-2')
+        first = TransactionLimit.objects.create(
+            user=self.user,
+            category=cat_a,
+            limit_7_days=Decimal('100.00'),
+        )
+        first.accounts.set([self.account])
+        second = TransactionLimit.objects.create(
+            user=self.user,
+            category=cat_b,
+            limit_7_days=Decimal('50.00'),
+        )
+        second.accounts.set([self.account])
+        self.exclude()
+        resp = self.post_json(
+            '/limits/save/',
+            {
+                'limit_id': first.pk,
+                'accounts': [visible.pk],
+                'category': cat_b.pk,
+                'limit_7_days': '100.00',
+            },
+        )
+        self.assertEqual(resp.status_code, 409)
+
+    def test_share_overview_preserves_excluded_account(self):
+        """Re-saving an account-scoped share keeps excluded
+        accounts in its stored set — but an explicit empty set
+        still means share-everything."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        other = make_account(self.user, self.req, 'acc-2')
+        share = CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        share.accounts.set([self.account, other])
+        self.exclude()
+        resp = self.post_json(
+            '/categories/overview/share/',
+            {'username': 'bob', 'accounts': [other.pk]},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            set(share.accounts.values_list('pk', flat=True)),
+            {self.account.pk, other.pk},
+        )
+        resp = self.post_json(
+            '/categories/overview/share/',
+            {'username': 'bob', 'accounts': []},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(share.accounts.count(), 0)
+
     def test_rules_apply_and_preview_skip_excluded(self):
         category = make_category(self.user, 'Food')
         make_transaction(

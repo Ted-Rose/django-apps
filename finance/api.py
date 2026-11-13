@@ -1512,6 +1512,18 @@ def share_overview(request, payload: ShareOverviewIn):
     share, created = CategoryOverviewShare.objects.get_or_create(
         sharer=request.user, shared_with=target
     )
+    # The checkbox list only offers visible accounts — keep
+    # excluded ones already in the share so re-including restores
+    # them for the viewer. An explicit empty set stays "share
+    # everything", so nothing is preserved in that case.
+    if not created and pks:
+        accounts += list(
+            share.accounts.filter(
+                pk__in=Account.objects.for_user(request.user),
+                user_preferences__user=request.user,
+                user_preferences__excluded=True,
+            )
+        )
     share.accounts.set(accounts)
     if created:
         Notification.objects.create(
@@ -1923,15 +1935,36 @@ def save_limit(request, payload: LimitSaveIn):
             code='couldNotSaveLimit',
             params={'errors': _flatten_errors(form)},
         )
+    # The form only offers accounts visible to this user, so
+    # save_m2m() would silently strip excluded ones — they are
+    # re-attached below to keep the limit's configured account
+    # set intact (only accounts still in for_user; an unshared
+    # account's stale pref must not resurrect it).
+    hidden_pks = []
+    if editing is not None:
+        hidden_pks = list(
+            editing.accounts.filter(
+                pk__in=Account.objects.for_user(request.user),
+                user_preferences__user=request.user,
+                user_preferences__excluded=True,
+            ).values_list('pk', flat=True)
+        )
     # Limits of the same user+category must cover disjoint account
     # sets — the M2M replacement for the old (account, user,
     # category) unique constraint, which can't span a M2M field.
+    # Preserved excluded accounts count toward the overlap too.
     overlap = (
         TransactionLimit.objects
         .filter(
             user=request.user,
             category=form.cleaned_data['category'],
-            accounts__in=form.cleaned_data['accounts'],
+            accounts__in=(
+                list(
+                    form.cleaned_data['accounts'].values_list(
+                        'pk', flat=True
+                    )
+                ) + hidden_pks
+            ),
         )
         .exclude(pk=editing.pk if editing else None)
     )
@@ -1945,17 +1978,6 @@ def save_limit(request, payload: LimitSaveIn):
     limit = form.save(commit=False)
     limit.user = request.user
     limit.save()
-    # The form only offers accounts visible to this user, so
-    # save_m2m() would silently strip excluded ones — re-attach
-    # them to keep the limit's configured account set intact.
-    hidden_pks = []
-    if editing is not None:
-        hidden_pks = list(
-            editing.accounts.filter(
-                user_preferences__user=request.user,
-                user_preferences__excluded=True,
-            ).values_list('pk', flat=True)
-        )
     form.save_m2m()
     if hidden_pks:
         limit.accounts.add(*hidden_pks)
