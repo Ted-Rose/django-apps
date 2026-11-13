@@ -3,7 +3,7 @@ name: implement-plan
 description: >
   Orchestrate execution of a PRE-EXISTING docs/plans/*-plan.md
   with subagents — implementers cut feature branches and open
-  draft PRs, fresh reviewer agents return severity-tagged
+  PRs, fresh reviewer agents return severity-tagged
   findings, fixer agents iterate until clean. Use only when
   asked to implement an existing plan file end-to-end;
   docs/plans/ is frozen, so new planning goes through openspec
@@ -43,7 +43,7 @@ review.
    no-migrate, staging rules), and the scoped test commands for
    its files.
 5. Each implementer commits `Feat:`/`Fix:` commits on its branch
-   and opens a DRAFT PR via the `/create-pr` workflow (body file,
+   and opens a PR via the `/create-pr` workflow (body file,
    UI verification section). They report branch + PR URL.
 6. If a workstream turns out unimplementable as planned, stop the
    whole run and ask the user — do not let agents improvise a
