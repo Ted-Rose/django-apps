@@ -16,7 +16,7 @@ Django's `<path:subpath>` catch-all already serves the shell on every
   copy from GCP Secret Manager or local `config.yaml` →
   `SECRET_KEY`.
 - `APP_BASE_URL` — `https://<your-vercel-domain>` (e.g.
-  `https://tedisrozenfelds.vercel.app`). **Must match the host
+  `https://tedis.vercel.app`). **Must match the host
   serving the traffic.** GoCardless bakes
   `{BASE_URL}/finance/callback/` into the requisition; if a user
   starts Connect Bank on Vercel but `APP_BASE_URL` points at Cloud
@@ -101,7 +101,7 @@ database.
 4. `APP_BASE_URL` = the Vercel domain (with `https://`, no trailing
    slash). If you attach a custom domain, also add it to
    `ALLOWED_HOSTS` in `django_apps/settings.py` (currently
-   `.vercel.app` + `tedisrozenfelds.vercel.app`).
+   `.vercel.app` + `tedis.vercel.app`).
 5. Deployments → redeploy the latest `main` build (env changes
    don't apply retroactively).
 6. Verify: open `/finance/` on the Vercel domain → SPA loads;
