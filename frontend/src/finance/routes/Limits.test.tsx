@@ -372,6 +372,37 @@ describe('Limits', () => {
     ).toBeInTheDocument();
   });
 
+  it('?edit= drops excluded accounts from the posted selection', async () => {
+    // Excluded accounts stay in limit.accounts (config fidelity)
+    // but aren't checkbox options — seeding them would make the
+    // API reject the save as an unavailable choice.
+    mockedApiGet.mockResolvedValue(
+      makeLimits({
+        limits: [
+          makeLimit({
+            accounts: [
+              { id: 5, name: 'Everyday account', iban: null, currency: 'EUR' },
+              { id: 99, name: 'Hidden account', iban: null, currency: 'EUR' },
+            ],
+          }),
+        ],
+      }),
+    );
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Spending limit updated.',
+    });
+    renderLimits('/limits?edit=7');
+    expect(await screen.findByLabelText('Everyday account')).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }));
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/limits/save/',
+        expect.objectContaining({ accounts: [5] }),
+      ),
+    );
+  });
+
   it('toasts the detail on a 409 account+category conflict', async () => {
     mockedApiGet.mockResolvedValue(makeLimits());
     mockedApiPost.mockRejectedValue(

@@ -253,10 +253,17 @@ def _resolve_overview_user(request, owner_username):
     visible = Account.objects.visible_for(owner)
     if share.accounts.exists():
         visible = share.accounts.filter(pk__in=visible)
-    return owner, visible.exclude(
+    # The viewer's own exclusions hide shared accounts too — but
+    # only while the viewer still holds the account (a pref left
+    # behind by a revoked AccountShare must not hide it forever;
+    # the toggle 404s once it leaves for_user).
+    viewer_excluded = Account.objects.for_user(
+        request.user
+    ).filter(
         user_preferences__user=request.user,
         user_preferences__excluded=True,
     )
+    return owner, visible.exclude(pk__in=viewer_excluded)
 
 
 def _choices(pairs):

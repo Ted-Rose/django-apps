@@ -416,6 +416,31 @@ class ExcludedAccountApiTests(ApiTestCase):
         self.assertEqual(body['rows'], [])
         self.assertEqual(body['accounts'], [])
 
+    def test_stale_pref_ignored_after_unshare(self):
+        """A pref left behind by a revoked AccountShare must not
+        hide the account from a later overview share — the toggle
+        404s once the account leaves for_user, so the viewer has
+        no other way to un-exclude it."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        link = AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        UserAccountPreference.objects.create(
+            user=viewer, account=self.account, excluded=True
+        )
+        link.delete()
+        CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        self.client.force_login(viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertEqual(len(body['rows']), 1)
+
     def test_my_shares_hides_excluded_account_names(self):
         """The sharer's own share block on the Categories page
         doesn't name accounts they excluded."""
