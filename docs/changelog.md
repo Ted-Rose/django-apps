@@ -1,6 +1,10 @@
 # google_api
 
 ## Changelog
+25. The Vercel function timeout is pinned at 300 seconds again
+    (the maximum under Fluid compute — the old 60s override was
+    lost in the caching rework), so slow endpoints like Gmail
+    TTS audio generation and tasks sync keep their headroom
 24. Faster Vercel loads: the serverless function now runs in
     Frankfurt (same city as the Aiven Postgres, cutting per-request
     DB round-trips since connections are never pooled), hashed JS/
