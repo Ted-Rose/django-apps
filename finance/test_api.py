@@ -376,6 +376,117 @@ class ExcludedAccountApiTests(ApiTestCase):
         self.assertEqual(body['accounts'], [])
         client.fetch_transactions.assert_not_called()
 
+    def test_clear_category_404_on_excluded_transaction(self):
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/category/clear/'
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_set_exclusion_404_on_excluded_transaction(self):
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/exclusion/',
+            {'excluded_amount': '5.00'},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_viewer_exclusion_hides_shared_overview(self):
+        """A viewer who excluded the shared account sees nothing
+        through the owner's shared overview either."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        UserAccountPreference.objects.create(
+            user=viewer, account=self.account, excluded=True
+        )
+        self.client.force_login(viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertEqual(body['rows'], [])
+        self.assertEqual(body['accounts'], [])
+
+    def test_my_shares_hides_excluded_account_names(self):
+        """The sharer's own share block on the Categories page
+        doesn't name accounts they excluded."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        share = CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        share.accounts.set([self.account])
+        self.exclude()
+        body = self.client.get(
+            f'{self.API}/categories/overview/'
+        ).json()
+        self.assertEqual(body['my_shares'][0]['accounts'], [])
+
+    def test_save_limit_preserves_excluded_account(self):
+        """The limit form only offers visible accounts, so
+        editing must not strip excluded ones from the config."""
+        other = make_account(self.user, self.req, 'acc-2')
+        limit = TransactionLimit.objects.create(
+            user=self.user, limit_7_days=Decimal('100.00')
+        )
+        limit.accounts.set([self.account, other])
+        self.exclude()
+        resp = self.post_json(
+            '/limits/save/',
+            {
+                'limit_id': limit.pk,
+                'accounts': [other.pk],
+                'limit_7_days': '100.00',
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            set(limit.accounts.values_list('pk', flat=True)),
+            {self.account.pk, other.pk},
+        )
+
+    def test_save_limit_rejects_excluded_account(self):
+        self.exclude()
+        resp = self.post_json(
+            '/limits/save/',
+            {
+                'accounts': [self.account.pk],
+                'limit_7_days': '100.00',
+            },
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_rules_apply_and_preview_skip_excluded(self):
+        category = make_category(self.user, 'Food')
+        make_transaction(
+            self.account,
+            't-1',
+            '-10.00',
+            remittance_information='Rimi shop',
+        )
+        self.exclude()
+        resp = self.post_json('/rules/apply/')
+        self.assertEqual(resp.json()['changed'], 0)
+        resp = self.post_json(
+            '/rules/preview/',
+            {
+                'category_id': category.pk,
+                'description_pattern': 'Rimi',
+                'is_active': True,
+            },
+        )
+        self.assertEqual(resp.json()['match_count'], 0)
+
 
 class BalanceAlertApiTests(ApiTestCase):
     """Per-user low-balance alerts: any viewer (owner or sharer)

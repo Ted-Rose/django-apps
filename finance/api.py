@@ -1176,6 +1176,14 @@ def category_overview(request,
         for label, key, start, end in presets
     ]
 
+    # my_shares only names accounts the sharer hasn't excluded —
+    # hidden accounts stay invisible even in their own share
+    # config block.
+    my_visible_pks = set(
+        Account.objects.visible_for(request.user).values_list(
+            'pk', flat=True
+        )
+    )
     return {
         'rows': rows,
         'totals': totals,
@@ -1203,7 +1211,9 @@ def category_overview(request,
             {
                 'username': share.shared_with.username,
                 'accounts': [
-                    str(shared) for shared in share.accounts.all()
+                    str(shared)
+                    for shared in share.accounts.all()
+                    if shared.pk in my_visible_pks
                 ],
             }
             for share in CategoryOverviewShare.objects.filter(
@@ -1935,7 +1945,20 @@ def save_limit(request, payload: LimitSaveIn):
     limit = form.save(commit=False)
     limit.user = request.user
     limit.save()
+    # The form only offers accounts visible to this user, so
+    # save_m2m() would silently strip excluded ones — re-attach
+    # them to keep the limit's configured account set intact.
+    hidden_pks = []
+    if editing is not None:
+        hidden_pks = list(
+            editing.accounts.filter(
+                user_preferences__user=request.user,
+                user_preferences__excluded=True,
+            ).values_list('pk', flat=True)
+        )
     form.save_m2m()
+    if hidden_pks:
+        limit.accounts.add(*hidden_pks)
     if editing is not None:
         return {
             'success': True,
