@@ -6,7 +6,7 @@ import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import NavBar from '../../shared/components/NavBar';
 import RichTextEditor from '../../shared/components/RichTextEditor';
 import { isTiptapDocString } from '../../shared/tiptapContent';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { fetchTaskDetail } from '../api';
 import Toasts from '../../shared/components/Toasts';
 import { errorDetail, useToggleStar, useUpdateTask } from '../mutations';
@@ -37,8 +37,8 @@ export default function TaskDetail() {
   const { taskId = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['task', taskId],

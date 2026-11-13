@@ -13,7 +13,7 @@ import Trash from './routes/Trash';
 
 /**
  * Router host for the tasks SPA (mounted at /tasks/ since the Stage 6
- * cutover, see `BrowserRouter basename` in main.tsx). `/` is the
+ * cutover, see `AppRouter basename` in main.tsx). `/` is the
  * dashboard; starred/overdue reuse the dashboard-shaped TaskListPage;
  * archived, trash, search, stats and task detail are standalone pages.
  * The Django catch-all routes every /tasks/<subpath>/ here, so deep

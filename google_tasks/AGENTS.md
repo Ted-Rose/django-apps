@@ -168,14 +168,15 @@ keep sync query counts flat, not per-item or per-list.
 - Task views exclude notes: `is_note=False` on dashboard,
   starred, overdue, search, stats (and their label-count bases).
 - The notes SPA mounts at root-level `/notes/` in
-  `django_apps/urls.py` (`react_app(entry='notes')` + catch-all),
+  `django_apps/urls.py` (`react_app(title='Notes')` + catch-all),
   `SPA_BASES['notes']` covers `/api/notes/*` → `/notes/` for the
   post-auth `next` map.
 
 ## Views & API (post-cutover)
 
-- The UI is the React SPA (`frontend/src/tasks/`, Vite entry `tasks`)
-  served by `react_app` at `/tasks/` + a `<path:subpath>` catch-all.
+- The UI is the React SPA (`frontend/src/tasks/`, a lazy chunk of
+  the unified `shell` Vite entry) served by `react_app` at
+  `/tasks/` + a `<path:subpath>` catch-all.
   `/tasks/app/*` 301-redirects to `/tasks/*` (legacy strangler mount);
   non-GET/HEAD requests under `/tasks/` 404 — the old template views
   and their POST URLs are gone.
@@ -196,7 +197,7 @@ keep sync query counts flat, not per-item or per-list.
   → 401 `{error: google_reauth, authorization_url}` — the SPA
   navigates to the OAuth flow itself.
 - `reverse('google_tasks:dashboard')` resolves to `/tasks/` — kept
-  for `home.html` and the `google_api` OAuth-callback default.
+  for the `google_api` OAuth-callback default.
 - Client-side undo/redo lives in `frontend/src/tasks/actionHistory.ts`
   (localStorage, 50-action cap).
 - `App.tsx` also reads `localStorage.lastTasksView` on a fresh mount:

@@ -29,15 +29,17 @@ async function login(page: Page) {
 }
 
 test.describe('unauthenticated', () => {
-  test('/finance/ redirects to login (session auth)', async ({ request }) => {
-    // @login_required → 302 to LOGIN_URL (/login/?next=…); that view
-    // then forwards into Google OAuth. Assert the first hop only —
-    // the rest depends on accounts.google.com being reachable.
-    const response = await request.get('/finance/', {
-      maxRedirects: 0,
-    });
-    expect(response.status()).toBe(302);
-    expect(response.headers()['location']).toContain('/login/?next=');
+  test('/finance/ serves the shell then bounces to login', async ({ page }) => {
+    // The unified shell is public + edge-cached: anonymous deep
+    // links get 200 HTML, then the /api/me/ bootstrap 401 navigates
+    // the client to /login/?next=<deep link>. Wait for the request —
+    // /login/ 302s to an external OAuth provider e2e can't reach.
+    const bounce = page.waitForRequest(/\/login\//);
+    const response = await page.goto('/finance/');
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()['cache-control']).toContain('s-maxage=');
+    const request = await bounce;
+    expect(decodeURIComponent(request.url())).toContain('next=');
   });
 
   test('the API answers 401 without a session', async ({ request }) => {
@@ -57,21 +59,28 @@ test.describe('authenticated smoke', () => {
 
   test('login renders the accounts page', async ({ page }) => {
     await login(page);
-    await page.goto('/finance/');
+    await page.goto('/finance/?lang=en');
     // `/` inside the SPA redirects to /accounts.
     await expect(page).toHaveURL(/\/finance\/accounts/);
     // React mounted: navbar + either the account list or an
     // empty-state alert (never the raw "Loading React app…").
     await expect(page.locator('nav.navbar').first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Accounts', exact: true }),
+    ).toBeVisible();
     await expect(page.locator('#root')).not.toContainText('Loading React app');
   });
 
-  test('navigates to transactions via the burger menu', async ({ page }) => {
+  test('navigates to transactions via the nav links', async ({ page }) => {
     await login(page);
-    await page.goto('/finance/accounts');
-    await page.getByRole('button', { name: 'Toggle menu' }).click();
-    await page.getByRole('link', { name: 'Transactions' }).click();
+    // ?lang=en pins English copy regardless of the stored pref.
+    await page.goto('/finance/accounts?lang=en');
+    // The burger items render inline on desktop (the toggle only
+    // appears below 768px) — click the visible Transactions link.
+    await page
+      .getByRole('link', { name: 'Transactions', exact: true })
+      .first()
+      .click();
     await expect(page).toHaveURL(/\/finance\/transactions/);
     await expect(
       page.getByRole('heading', { name: 'Transactions' }),

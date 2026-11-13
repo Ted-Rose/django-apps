@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { fetchTrash, type TaskOut } from '../api';
 import ConfirmModal from '../../shared/components/ConfirmModal';
 import SecondaryLabelDropdown from '../components/SecondaryLabelDropdown';
@@ -37,8 +37,8 @@ export default function Trash() {
   const secondaryLabel = searchParams.get('secondary_label') ?? '';
   const navigate = useNavigate();
 
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', { view: 'trash', label, order }],

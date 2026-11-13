@@ -1,14 +1,16 @@
 /**
- * Shared i18next instance — one per SPA entry, initialized in each
- * main.tsx before createRoot. Catalogs are static imports per entry:
- * the `common` namespace ships with shared/, the entry namespace
- * (e.g. 'finance') is that folder's locales/*.json, and the
- * top-level `server` section inside an entry catalog is hoisted into
- * a `server` namespace so API `code` values resolve uniformly as
- * `t(`server:${code}`)`.
+ * Shared i18next instance — ONE for the whole unified shell.
+ * `initI18n` runs once in the shell entry with the `common`
+ * catalog; each app's lazy module calls `registerI18n` at chunk
+ * evaluation (before its components render) to add its own
+ * namespace — so translations follow the chunk, not the entry.
+ * The top-level `server` section inside an app catalog is merged
+ * into a shared `server` namespace so API `code` values resolve
+ * uniformly as `t(`server:${code}`)` from any app.
  *
  * Language resolution order: `?lang=` dev override → the user's
- * stored preference (spa_shell bootstrap payload) → the
+ * stored preference (applied via `changeLanguage` once the
+ * /api/me bootstrap lands — see `shared/session.tsx`) → the
  * `lang_override` localStorage key → navigator.language (via the
  * detector) → 'en' fallback.
  */
@@ -16,7 +18,6 @@ import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 
-import { readBootstrap } from './bootstrap';
 import commonEn from './locales/en.json';
 import commonLv from './locales/lv.json';
 
@@ -26,31 +27,23 @@ export const LANG_OVERRIDE_KEY = 'lang_override';
 
 type Catalog = Record<string, unknown>;
 
-function isSupported(lang: unknown): lang is Language {
+export function isSupportedLanguage(lang: unknown): lang is Language {
   return (
     typeof lang === 'string' &&
     (SUPPORTED_LANGUAGES as readonly string[]).includes(lang)
   );
 }
 
-/** `language` field of the #spa-bootstrap json_script payload. */
-function readBootstrapLanguage(): string | undefined {
-  const language = readBootstrap().language;
-  return isSupported(language) ? language : undefined;
-}
-
 /**
  * The language to boot with — undefined lets the detector's
- * navigator step (+ `fallbackLng: 'en'`) decide.
+ * navigator step (+ `fallbackLng: 'en'`) decide; the stored
+ * per-user pref is applied later via `changeLanguage` when the
+ * session bootstrap resolves.
  */
 export function bootstrapLanguage(): string | undefined {
   const urlLang = new URLSearchParams(window.location.search).get('lang');
-  for (const candidate of [
-    urlLang,
-    readBootstrapLanguage(),
-    localStorage.getItem(LANG_OVERRIDE_KEY),
-  ]) {
-    if (isSupported(candidate)) return candidate;
+  for (const candidate of [urlLang, localStorage.getItem(LANG_OVERRIDE_KEY)]) {
+    if (isSupportedLanguage(candidate)) return candidate;
   }
   return undefined;
 }
@@ -64,32 +57,57 @@ export function splitServer(catalog: Catalog): {
   return { app, server: server ?? {} };
 }
 
-export function initI18n(
-  entryNs: string,
-  catalogs: { en: Catalog; lv: Catalog },
-): typeof i18n {
-  const en = splitServer(catalogs.en);
-  const lv = splitServer(catalogs.lv);
+/**
+ * Initializes the shared instance with the `common` catalog —
+ * called once in the shell entry before `createRoot`.
+ */
+export function initI18n(): typeof i18n {
+  // The edge-cached HTML is a static lang="en" — keep the attribute
+  // in sync as every language source (detector, session pref,
+  // switcher, ?lang=) funnels through changeLanguage.
+  i18n.on('languageChanged', (lng) => {
+    document.documentElement.lang = lng;
+  });
   i18n
     .use(LanguageDetector)
     .use(initReactI18next)
     .init({
       resources: {
-        en: { common: commonEn, [entryNs]: en.app, server: en.server },
-        lv: { common: commonLv, [entryNs]: lv.app, server: lv.server },
+        en: { common: commonEn },
+        lv: { common: commonLv },
       },
       lng: bootstrapLanguage(),
       fallbackLng: 'en',
-      ns: ['common', entryNs, 'server'],
+      ns: ['common'],
       defaultNS: 'common',
       // Detector handles ONLY the navigator.language fallback step —
-      // the stored pref and overrides are resolved explicitly above.
+      // the stored pref and overrides are resolved explicitly.
       detection: { order: ['navigator'], caches: [] },
       // lv needs its three plural categories (zero/one/other).
       compatibilityJSON: 'v4',
       interpolation: { escapeValue: false },
     });
+  document.documentElement.lang = i18n.language || 'en';
   return i18n;
+}
+
+/**
+ * Registers one app's catalogs on the shared instance — called at
+ * lazy-chunk evaluation in each app's main.tsx, before its
+ * components render. `deep`/`overwrite` merge flags let every app
+ * contribute to the shared `server` namespace without clobbering
+ * keys another chunk already added.
+ */
+export function registerI18n(
+  ns: string,
+  catalogs: { en: Catalog; lv: Catalog },
+): void {
+  const en = splitServer(catalogs.en);
+  const lv = splitServer(catalogs.lv);
+  i18n.addResourceBundle('en', ns, en.app, true, true);
+  i18n.addResourceBundle('lv', ns, lv.app, true, true);
+  i18n.addResourceBundle('en', 'server', en.server, true, true);
+  i18n.addResourceBundle('lv', 'server', lv.server, true, true);
 }
 
 /**

@@ -1406,10 +1406,11 @@ class BulkSyncWriteTests(TestCase):
 
 
 class ReactAppShellTests(TestCase):
-    """Post-cutover SPA mount: /tasks/ + catch-all serve the shell;
-    /tasks/app/* 301-redirects; retired mutation URLs 404 on POST."""
+    """Post-cutover SPA mount: /tasks/ + catch-all serve the
+    unified shell; /tasks/app/* 301-redirects; retired mutation
+    URLs 404 on POST."""
 
-    ENTRY_KEY = 'src/tasks/main.tsx'
+    ENTRY_KEY = 'src/shell/main.tsx'
 
     def setUp(self):
         User = get_user_model()
@@ -1433,13 +1434,17 @@ class ReactAppShellTests(TestCase):
             }
         })
 
-    def test_requires_login(self):
+    def test_shell_is_public_for_anonymous(self):
+        # The unified shell is edge-cacheable: same 200 HTML for
+        # anonymous users; the client bounces to login after the
+        # /api/me bootstrap 401.
         resp = self.client.get(reverse('google_tasks:dashboard'))
-        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'id="root"')
 
-    def test_subpath_requires_login(self):
+    def test_subpath_is_public_for_anonymous(self):
         resp = self.client.get('/tasks/starred/')
-        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.status_code, 200)
 
     def test_renders_shell_with_bootstrap(self):
         self.client.force_login(self.user)
@@ -1447,13 +1452,20 @@ class ReactAppShellTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="root"')
         self.assertContains(resp, 'id="spa-bootstrap"')
-        self.assertContains(resp, '"user": "alice"')
+        # Only user-agnostic deployment config rides in the HTML —
+        # username/language arrive via GET /api/me/ instead.
+        self.assertContains(resp, '"sentry"')
+        self.assertNotContains(resp, '"user"')
+        self.assertNotContains(resp, '"language"')
 
-    def test_sets_csrf_cookie(self):
-        # The React client's POSTs depend on the csrftoken cookie.
+    def test_shell_is_edge_cacheable(self):
+        # s-maxage lets Vercel's edge cache hold the shell; no
+        # cookies may be set or it stops being shareable. The
+        # csrftoken cookie moved to GET /api/me/.
         self.client.force_login(self.user)
         resp = self.client.get(reverse('google_tasks:dashboard'))
-        self.assertIn('csrftoken', resp.cookies)
+        self.assertIn('s-maxage=86400', resp['Cache-Control'])
+        self.assertNotIn('csrftoken', resp.cookies)
 
     def test_subpath_renders_shell(self):
         self.client.force_login(self.user)
@@ -1560,7 +1572,7 @@ class ReactAppShellTests(TestCase):
         self.client.force_login(self.user)
         client = DjangoViteAssetLoader.instance()._apps['default']
         entry = ManifestEntry(
-            file='tasks/tasks.abc12345.js',
+            file='shell/shell.abc12345.js',
             src=self.ENTRY_KEY,
             isEntry=True,
         )
@@ -1573,7 +1585,7 @@ class ReactAppShellTests(TestCase):
                 resp = self.client.get(
                     reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'tasks/tasks.abc12345.js')
+        self.assertContains(resp, 'shell/shell.abc12345.js')
         self.assertNotContains(resp, 'React entry not loaded')
 
     def test_dev_mode_renders_entry_without_manifest(self):
@@ -1581,9 +1593,14 @@ class ReactAppShellTests(TestCase):
         # shell ready and vite_asset points at the dev server.
         self.client.force_login(self.user)
         client = DjangoViteAssetLoader.instance()._apps['default']
+        # The loader singleton caches its config at instantiation —
+        # patch the port too or the emitted dev URL keeps the real
+        # settings port (5273) instead of the override's 5173.
         with self._vite_override(
             '/nonexistent/manifest.json', dev_mode=True
-        ), patch.object(client, 'dev_mode', True):
+        ), patch.object(client, 'dev_mode', True), patch.object(
+            client, 'dev_server_port', 5173
+        ):
             resp = self.client.get(
                 reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 200)

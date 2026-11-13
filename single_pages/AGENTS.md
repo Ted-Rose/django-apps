@@ -23,7 +23,7 @@ lives in `services.py`.
     renders `html` via `dangerouslySetInnerHTML`, so upstream
     `<script>`/`on*` must never reach it unsanitized.
 - `urls.py` — root-mounted cutover shape: `twister` + `spoki/` serve
-  the SPA shell (`react_app`, entry `single_pages`), `/app/*`
+  the unified SPA shell (`react_app`), `/app/*`
   301-redirects to `/*` via `app_redirect(base='')`. **Never add a
   `<path:subpath>` catch-all at this level** — the app is included
   at root and would shadow every later URLconf (and home). Deep
@@ -31,9 +31,10 @@ lives in `services.py`.
 
 ## Frontend
 
-`frontend/src/single_pages/` — Vite entry `single_pages`, plain
-`BrowserRouter` (no basename — Django decides which URLs serve the
-shell). Routes: `/twister`, `/spoki`, `*` → `/twister`. Latvian-only
+`frontend/src/single_pages/` — a lazy chunk of the unified `shell`
+Vite entry under `AppRouter basename='/'` (Django decides which
+URLs serve the shell). Routes: `/twister`, `/spoki`, `*` →
+`/twister`. Latvian-only
 UI — deliberately no i18n catalogs (the `i18next/no-literal-string`
 rule is disabled per-file); `api.ts` carries a local `errorText`
 instead of the i18n-dependent shared `errorDetail`.
@@ -56,10 +57,11 @@ instead of the i18n-dependent shared `errorDetail`.
 
 ## Gotchas
 
-- Auth tightened at cutover: both pages were public, `react_app` is
-  `@login_required` and `django_auth` covers `/api/single_pages/*` —
-  anonymous clicks on the home-page Twister card bounce to
-  `/login/`. Deliberate (F3 hardening for the TTS endpoint).
+- Auth tightened at cutover: both pages were public; the shell is
+  public HTML now but `django_auth` covers `/api/single_pages/*`,
+  and the shell's SessionGate bounces anonymous visitors on
+  non-public paths (including `/twister`) to login after the
+  `/api/me/` 401. Deliberate (F3 hardening for the TTS endpoint).
 - `spa_url_for` collapses `/api/single_pages/*` to `/twister` via
   `SPA_BASES` in `django_apps/api.py` — `next` after auth lands on
   the page, not a JSON URL.

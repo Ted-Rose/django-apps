@@ -36,6 +36,22 @@
   "nav": {
     "brand": "Tedis's Tools"
   },
+  "home": {
+    "greeting": "Hi, I'm Tedis",
+    "tagline": "A collection of useful tools I built. Feel free to explore!",
+    "emailManager": "Email Manager",
+    "emailManagerText": "Access and manage your Gmail messages",
+    "twisterGame": "Twister Game",
+    "twisterGameText": "Play Twister with random move announcements",
+    "googleTasks": "Google Tasks",
+    "googleTasksText": "Manage your tasks and to-do lists",
+    "finance": "Finance",
+    "financeText": "Bank accounts, transactions and balances",
+    "notes": "Notes",
+    "notesText": "Quick notes filed by #notes hashtags",
+    "admin": "Admin",
+    "adminText": "Django admin site"
+  },
   "language": {
     "label": "Language"
   },

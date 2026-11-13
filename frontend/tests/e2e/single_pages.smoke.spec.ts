@@ -30,16 +30,20 @@ async function login(page: Page) {
 }
 
 test.describe('unauthenticated', () => {
-  test('/twister and /spoki/ redirect to login (session auth)', async ({
-    request,
+  test('/twister and /spoki/ serve the shell then bounce to login', async ({
+    page,
   }) => {
-    // Both pages were public before the React cutover — the bounce
-    // to login is a deliberate hardening (the tts endpoint needs a
-    // session anyway).
+    // The unified shell is public + edge-cached: anonymous deep
+    // links get 200 HTML, then the /api/me/ bootstrap 401 navigates
+    // the client to /login/?next=<deep link> (Google OAuth) — the
+    // same net bounce the old @login_required produced. Wait for
+    // the request: /login/ 302s to an external provider.
     for (const url of ['/twister', '/spoki/']) {
-      const response = await request.get(url, { maxRedirects: 0 });
-      expect(response.status()).toBe(302);
-      expect(response.headers()['location']).toContain('/login/?next=');
+      const bounce = page.waitForRequest(/\/login\//);
+      const response = await page.goto(url);
+      expect(response?.status()).toBe(200);
+      const request = await bounce;
+      expect(decodeURIComponent(request.url())).toContain('next=');
     }
   });
 

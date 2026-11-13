@@ -61,15 +61,17 @@ async function mockGmailApi(page: Page) {
 }
 
 test.describe('unauthenticated', () => {
-  test('/gmail/ redirects to login (session auth)', async ({ request }) => {
-    // @login_required → 302 to LOGIN_URL (/login/?next=…); that view
-    // then forwards into Google OAuth. Assert the first hop only —
-    // the rest depends on accounts.google.com being reachable.
-    const response = await request.get('/gmail/', {
-      maxRedirects: 0,
-    });
-    expect(response.status()).toBe(302);
-    expect(response.headers()['location']).toContain('/login/?next=');
+  test('/gmail/ serves the shell then bounces to login', async ({ page }) => {
+    // The unified shell is public + edge-cached: anonymous deep
+    // links get 200 HTML, then the /api/me/ bootstrap 401 navigates
+    // the client to /login/?next=<deep link>. Wait for the request —
+    // /login/ 302s to an external OAuth provider e2e can't reach.
+    const bounce = page.waitForRequest(/\/login\//);
+    const response = await page.goto('/gmail/');
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()['cache-control']).toContain('s-maxage=');
+    const request = await bounce;
+    expect(decodeURIComponent(request.url())).toContain('next=');
   });
 
   test('/gmail-to-audio 301s to /gmail/ preserving the query', async ({
@@ -119,7 +121,8 @@ test.describe('authenticated smoke', () => {
     page.on('dialog', (dialog) => dialog.accept());
     await mockGmailApi(page);
     await login(page);
-    await page.goto('/gmail/');
+    // ?lang=en pins English labels regardless of the stored pref.
+    await page.goto('/gmail/?lang=en');
 
     // React mounted: navbar + filter form (never the raw
     // "Loading React app…").
@@ -136,8 +139,7 @@ test.describe('authenticated smoke', () => {
     ).toBeVisible();
 
     await page.getByRole('button', { name: 'Mark as read' }).first().click();
-    await expect(
-      page.getByRole('button', { name: 'Read' }).first(),
-    ).toBeDisabled();
+    // Per-card button: flips to a disabled "Read" state.
+    await expect(page.locator('.mark-read-btn').first()).toBeDisabled();
   });
 });

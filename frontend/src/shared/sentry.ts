@@ -3,32 +3,25 @@ import type { ErrorEvent, EventHint } from '@sentry/react';
 import { readBootstrap } from './bootstrap';
 
 /**
- * Sentry init + `beforeSend` for every SPA entry.
+ * Sentry init + `beforeSend` for the single shell entry.
  *
  * dsn/environment/release ship inside the `#spa-bootstrap`
  * json_script rendered by `spa_shell` (django_apps/views.py) — the
  * SPA is server-rendered, so the web DSN arrives at request time
- * and needs no build-time `VITE_*` plumbing. `useBootstrap` is a
- * React hook and cannot run before `createRoot`, so the DOM node
- * is read via the plain `readBootstrap` helper.
+ * and needs no build-time `VITE_*` plumbing. It runs before
+ * `createRoot`, so the DOM node is read via the plain
+ * `readBootstrap` helper rather than a React hook.
  */
-interface SentryBootstrap {
-  sentry?: {
-    dsn?: string | null;
-    environment?: string | null;
-    release?: string | null;
-  };
-}
-
 /**
  * `Sentry.init` — a complete no-op unless a DSN resolves, so
  * tests, `npm run dev`, and pages whose bootstrap carries no DSN
- * send nothing. Call once per entry before `createRoot`.
+ * send nothing. Called once in the shell entry before `createRoot`
+ * so init-time failures in lazy app chunks are reported too.
  */
 export function initSentry(): void {
   // VITE_SENTRY_DSN is an override escape hatch (e.g. a page
   // served without the Django-rendered bootstrap).
-  const bootstrap = (readBootstrap() as SentryBootstrap).sentry ?? {};
+  const bootstrap = readBootstrap().sentry ?? {};
   const dsn =
     (import.meta.env.VITE_SENTRY_DSN as string | undefined) ||
     bootstrap.dsn ||

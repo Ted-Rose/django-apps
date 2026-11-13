@@ -1474,7 +1474,7 @@ class SpaMountTests(ApiTestCase):
         )
 
     def test_named_page_routes_resolve(self):
-        """reverse('finance:…') stays alive for home.html,
+        """reverse('finance:…') stays alive for the shell routes,
         evaluate_spending_limits and the callback redirects."""
         self.assertEqual(reverse('finance:index'), '/finance/')
         self.assertEqual(reverse('finance:connect'), '/finance/connect/')
@@ -1496,12 +1496,13 @@ class SpaMountTests(ApiTestCase):
             reverse('finance:callback'), '/finance/callback/'
         )
 
-    def test_shell_requires_login(self):
+    def test_shell_is_public_for_anonymous(self):
+        # The unified shell is edge-cacheable: anonymous users get
+        # the same 200 HTML; the client bounces to login after the
+        # /api/me bootstrap 401.
         resp = self.client.get('/finance/')
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(
-            resp['Location'].startswith('/login/?next=')
-        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'spa-bootstrap')
 
     def test_shell_get_renders(self):
         self.client.force_login(self.user)
@@ -1526,9 +1527,11 @@ class SpaMountTests(ApiTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'spa-bootstrap')
 
-    def test_shell_get_applies_rules(self):
-        """Every page load enforces the caller's categorization
-        rules before the SPA's API calls read them."""
+    def test_shell_get_does_not_apply_rules(self):
+        """The per-visit apply_rules moved client-side (the shell
+        HTML is edge-cached — page GETs must not touch the DB);
+        the SPA posts /api/finance/rules/apply/ once on mount
+        instead (endpoint covered by the rules API tests)."""
         self.client.force_login(self.user)
         requisition = make_requisition(self.user)
         account = make_account(self.user, requisition)
@@ -1539,35 +1542,13 @@ class SpaMountTests(ApiTestCase):
         make_rule(self.user, category, sender='rimi')
         resp = self.client.get('/finance/')
         self.assertEqual(resp.status_code, 200)
-        self.assertTrue(
+        self.assertFalse(
             UserTransactionCategory.objects.filter(
                 user=self.user,
                 transaction=tx,
                 category=category,
             ).exists()
         )
-
-    def test_shell_rules_failure_still_renders(self):
-        """A rules-engine error is logged, never a 500 — the shell
-        still serves so the app stays usable."""
-        self.client.force_login(self.user)
-        with patch(
-            'finance.views.apply_rules', side_effect=ValueError
-        ):
-            resp = self.client.get('/finance/')
-        self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'spa-bootstrap')
-
-    def test_post_to_shell_skips_rules(self):
-        self.client.force_login(self.user)
-        with patch('finance.views.apply_rules') as apply_mock:
-            resp = self.client.post(
-                '/finance/',
-                data='{}',
-                content_type='application/json',
-            )
-        self.assertEqual(resp.status_code, 404)
-        apply_mock.assert_not_called()
 
     def test_post_to_page_routes_is_404(self):
         # The shell is GET/HEAD-only — the retired form-POST URLs

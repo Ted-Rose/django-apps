@@ -1,9 +1,11 @@
 import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
-// One entry per Django app. Output goes to repo-root frontend_dist/,
-// which is a STATICFILES_DIRS entry so collectstatic ships it and
-// django-vite resolves entries via manifest.json.
+// ONE entry for the whole site: the unified shell owns every app
+// route and lazy-imports each app as its own chunk. Output goes to
+// repo-root frontend_dist/, which is a STATICFILES_DIRS entry so
+// collectstatic ships it and django-vite resolves the entry via
+// manifest.json.
 export default defineConfig({
   plugins: [react()],
   base: '/static/',
@@ -13,11 +15,7 @@ export default defineConfig({
     manifest: 'manifest.json',
     rollupOptions: {
       input: {
-        tasks: 'src/tasks/main.tsx',
-        notes: 'src/notes/main.tsx',
-        finance: 'src/finance/main.tsx',
-        gmail: 'src/gmail/main.tsx',
-        single_pages: 'src/single_pages/main.tsx',
+        shell: 'src/shell/main.tsx',
       },
       output: {
         entryFileNames: '[name]/[name].[hash].js',

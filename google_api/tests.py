@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlparse
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from oauthlib.oauth2.rfc6749.errors import (
@@ -77,6 +78,71 @@ class OAuthCallbackTests(TestCase):
         with fetch_token_raising(InvalidGrantError()):
             resp = self.client.get(CALLBACK_URL)
         self.assert_login_redirect(resp)
+
+
+class LoginViewTests(TestCase):
+    """GET /login/?next= is the shell's standard anonymous bounce
+    (SessionGate), so `next` is attacker-controlled input: an
+    external URL must never be redirected to or stored in the
+    session (open redirect)."""
+
+    LOGIN_URL = '/login/'
+
+    def _login(self):
+        user = get_user_model().objects.create_user(
+            'u', 'u@example.com', 'p'
+        )
+        self.client.force_login(user)
+
+    def test_external_next_redirects_to_safe_default(self):
+        self._login()
+        # Valid Google creds → login_view redirects to `next`
+        # directly instead of starting the OAuth flow.
+        with patch('google_api.views.google_auth',
+                   return_value=Mock()):
+            resp = self.client.get(
+                f'{self.LOGIN_URL}?next=https://evil.com'
+            )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, '/tasks/')
+
+    def test_scheme_relative_next_rejected(self):
+        self._login()
+        with patch('google_api.views.google_auth',
+                   return_value=Mock()):
+            resp = self.client.get(
+                f'{self.LOGIN_URL}?next=//evil.com/x'
+            )
+        self.assertEqual(resp.url, '/tasks/')
+
+    def test_same_origin_next_is_followed(self):
+        self._login()
+        with patch('google_api.views.google_auth',
+                   return_value=Mock()):
+            resp = self.client.get(
+                f'{self.LOGIN_URL}?next=/finance/'
+            )
+        self.assertEqual(resp.url, '/finance/')
+
+    def test_external_next_not_stored_for_oauth_flow(self):
+        # Anonymous → OAuth flow starts; the session-stored
+        # redirect target must be the safe fallback, not the
+        # off-site URL, or the callback would redirect there.
+        auth = {
+            'authorization_url': 'https://accounts.google.com/o',
+            'state': 'st',
+            'scopes': [],
+        }
+        with patch('google_api.views.google_auth',
+                   return_value=auth):
+            resp = self.client.get(
+                f'{self.LOGIN_URL}?next=https://evil.com'
+            )
+        self.assertEqual(resp.url, 'https://accounts.google.com/o')
+        self.assertEqual(
+            self.client.session['oauth_redirect_url'],
+            'google_tasks:dashboard',
+        )
 
 
 @contextmanager

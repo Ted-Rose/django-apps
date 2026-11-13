@@ -3,23 +3,15 @@ import os
 import re
 
 from django.conf import settings
-from django.contrib.auth.decorators import login_required
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.cache import cache_control
-from django.views.decorators.csrf import ensure_csrf_cookie
-
-from django_apps.models import user_language
-
-
-def home(request):
-    return render(request, 'home.html')
 
 
 # --- Progressive Web App (PWA) endpoints ---
 
 # Bump this to force clients to refresh the service worker cache.
-PWA_CACHE_VERSION = '26'
+PWA_CACHE_VERSION = '27'
 
 
 def manifest(request):
@@ -68,10 +60,13 @@ def chrome_devtools_probe(request):
     return JsonResponse({})
 
 
-# SPA entry names map to folders under frontend/src/ and keys in
-# manifest.json — restrict them to plain lowercase identifiers so a
-# future mount deriving `entry` from a URL segment can't traverse or
-# 500 on {% vite_asset %}.
+# The one Vite entry every app mount serves — the unified shell
+# (frontend/src/shell/main.tsx) owns all client-side routes.
+SHELL_ENTRY = 'shell'
+
+# SPA entry names map to keys in manifest.json — restrict them to
+# plain lowercase identifiers so a caller-supplied `entry` can't
+# traverse or 500 on {% vite_asset %}.
 SPA_ENTRY_RE = re.compile(r'[a-z0-9_]+')
 
 
@@ -90,18 +85,24 @@ def _manifest_has_entry(manifest_path, entry_key):
         return False
 
 
-@login_required
-@ensure_csrf_cookie
-def spa_shell(request, entry, title=''):
-    """Render the shared React SPA shell for a Vite entry name.
+def spa_shell(request, entry=SHELL_ENTRY, title=''):
+    """Render the shared React SPA shell — public + edge-cacheable.
 
-    `entry` is the app folder under frontend/src/ (e.g. 'tasks' →
-    src/tasks/main.tsx). `manifest_ready` tells the template whether
-    {% vite_asset %} is safe to call: always in dev mode (VITE_DEV=1,
-    where django-vite hits the dev server and never reads the
-    manifest), or in prod only when manifest.json exists and contains
-    the entry key. Otherwise the page shows a diagnostic instead of
-    crashing.
+    Every app mount serves the SAME shell (`src/shell/main.tsx`):
+    the response must be byte-identical for all users, so no
+    `@login_required`, no `@ensure_csrf_cookie`, no per-user
+    context, and no cookies — `s-maxage` lets Vercel's shared edge
+    cache hold it while `max-age=0` keeps browsers revalidating.
+    Per-user context (username/language/is_staff) arrives via the
+    `GET /api/me/` bootstrap call the shell fires at startup, which
+    also plants the csrftoken cookie. Anonymous users get the same
+    HTML; the client navigates to login after the bootstrap 401.
+
+    `manifest_ready` tells the template whether {% vite_asset %} is
+    safe to call: always in dev mode (VITE_DEV=1, where django-vite
+    hits the dev server and never reads the manifest), or in prod
+    only when manifest.json exists and contains the entry key.
+    Otherwise the page shows a diagnostic instead of crashing.
     """
     if not SPA_ENTRY_RE.fullmatch(entry):
         raise Http404(f'Unknown SPA entry: {entry}')
@@ -112,21 +113,20 @@ def spa_shell(request, entry, title=''):
         os.path.join(settings.BASE_DIR, 'frontend_dist',
                      'manifest.json'),
     )
-    language = user_language(request.user)
-    return render(request, 'spa_shell.html', {
+    response = render(request, 'spa_shell.html', {
         'title': title,
         'vite_entry': vite_entry,
-        'language': language,
         'manifest_ready': (
             vite_config.get('dev_mode')
             or _manifest_has_entry(manifest_path, vite_entry)
         ),
         'bootstrap': {
-            'user': request.user.get_username(),
-            'language': language,
             # The web SDK reads this straight from the rendered
             # #spa-bootstrap json_script before React mounts — no
-            # build-time VITE_* plumbing. None DSN → no init.
+            # build-time VITE_* plumbing. None DSN → no init. It is
+            # deployment config, identical for every user — nothing
+            # per-user may join it or the page stops being
+            # edge-cacheable.
             'sentry': {
                 'dsn': settings.SENTRY_WEB_DSN,
                 'environment': settings.SENTRY_ENVIRONMENT,
@@ -134,30 +134,30 @@ def spa_shell(request, entry, title=''):
             },
         },
     })
+    response['Cache-Control'] = 'public, max-age=0, s-maxage=86400'
+    return response
 
 
-@login_required
-def react_app(request, entry, title='', subpath=''):
-    """React SPA shell shared by every app-level mount.
+def react_app(request, title='', subpath=''):
+    """React SPA shell shared by every app-level mount (and /).
 
-    Mount with functools.partial (or a thin wrapper) binding `entry`
-    (the frontend/src/<entry>/ folder and vite input key) and
+    Mount with functools.partial (or a thin wrapper) binding
     `title`, e.g.::
 
-        path('', partial(react_app, entry='tasks', title='Tasks'))
-        path('app/<path:subpath>',
-             partial(react_app, entry='finance', title='Finance'))
+        path('', partial(react_app, title='Tasks'))
+        path('notes/<path:subpath>',
+             partial(react_app, title='Notes'))
 
-    Every GET/HEAD path under the mount renders the shell and React
-    Router resolves the page client-side; `subpath` is captured by
-    <path:subpath> catch-alls and intentionally unused.
+    Every GET/HEAD path under the mount renders the unified shell
+    and React Router resolves the page client-side; `subpath` is
+    captured by <path:subpath> catch-alls and intentionally unused.
 
     Non-GET/HEAD requests 404: retired template-mutation URLs must
     not answer with the HTML shell — mutations live under /api/.
     """
     if request.method not in ('GET', 'HEAD'):
         raise Http404
-    return spa_shell(request, entry=entry, title=title)
+    return spa_shell(request, title=title)
 
 
 def app_redirect(request, base, subpath=''):

@@ -75,7 +75,7 @@ export function truncateWords(text: string, count: number): string {
   return `${words.slice(0, count).join(' ')} …`;
 }
 
-/** BrowserRouter basename from main.tsx. */
+/** `AppRouter basename` from main.tsx. */
 const SPA_BASENAME = '/tasks';
 /** Pre-cutover mount (Stages 1–5) — stored paths from old sessions
  *  still resolve. */

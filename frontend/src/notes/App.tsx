@@ -6,7 +6,7 @@ import NotesPage from './routes/NotesPage';
 
 /**
  * Router host for the notes SPA (mounted at /notes/, see
- * `BrowserRouter basename` in main.tsx). `/` is the notes list —
+ * `AppRouter basename` in main.tsx). `/` is the notes list —
  * `?category=<id>&q=&order=` query params are the source of truth,
  * like the tasks dashboard. `/category/:id` is a deep-linkable
  * alias that redirects onto the query-param form so there is only

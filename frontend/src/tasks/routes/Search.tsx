@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { actionHistory } from '../actionHistory';
 import { fetchSearchTasks, type TaskOut } from '../api';
 import Toasts from '../../shared/components/Toasts';
@@ -37,8 +37,8 @@ export default function Search() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
 
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
   const syncMutation = useSync();
 
   // Keep the input in step with URL changes (back/forward, Clear).

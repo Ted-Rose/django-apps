@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { BurgerMenu, type BurgerMenuItem } from './BurgerMenu';
+import { ShellLink } from '../shellNav';
 
 /**
  * Shared Bootstrap navbar matching the site look
@@ -23,9 +24,9 @@ export function NavBar({ title, user, items = [] }: NavBarProps) {
   return (
     <nav className="app-navbar navbar navbar-expand-lg navbar-dark bg-primary">
       <div className="container-fluid">
-        <a className="navbar-brand" href="/">
+        <ShellLink className="navbar-brand" href="/">
           <i className="bi bi-house-heart" /> {t('nav.brand')}
-        </a>
+        </ShellLink>
         {title && <span className="navbar-text">{title}</span>}
         <div className="ms-auto d-flex align-items-center gap-2">
           {user && <span className="navbar-text">{user}</span>}

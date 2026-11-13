@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { fetchLabels, type LabelOut } from '../api';
 import { useUpdateLabel } from '../mutations';
 import Toasts from '../../shared/components/Toasts';
@@ -30,8 +30,8 @@ export default function Labels() {
   const { t } = useTranslation('tasks');
   const navigate = useNavigate();
 
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['labels'],

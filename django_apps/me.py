@@ -1,12 +1,17 @@
 """Per-user settings API — mounted at /api/me/ in urls.py.
 
-The SPAs read `language` from the spa_shell bootstrap at load; GET
-lets them re-sync without a page reload, PATCH persists a change so
-server-side contexts (job-generated notifications) pick it up too.
-PATCH also sets the standard `django_language` cookie — inert today
-(no LocaleMiddleware) but free future-proofing.
+GET is the shell's session bootstrap: the edge-cached SPA HTML
+carries no per-user context, so the client fetches
+username/language/is_staff here at startup — and this view plants
+the `csrftoken` cookie the shell's old @ensure_csrf_cookie used to
+set, keeping unsafe API calls working. PATCH persists the language
+pref so server-side contexts (job-generated notifications) pick it
+up too, and sets the standard `django_language` cookie — inert
+today (no LocaleMiddleware) but free future-proofing.
 """
 from django.conf import settings
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import ensure_csrf_cookie
 from ninja import Router, Schema
 from ninja.errors import HttpError
 
@@ -19,6 +24,7 @@ router = Router()
 class MeOut(Schema):
     username: str
     language: str
+    is_staff: bool
 
 
 class LanguageIn(Schema):
@@ -29,12 +35,19 @@ def _me_payload(request, language=None):
     return {
         'username': request.user.get_username(),
         'language': language or user_language(request.user),
+        'is_staff': request.user.is_staff,
     }
 
 
 @router.get('/', response=MeOut)
+@ensure_csrf_cookie
+@never_cache
 def get_me(request):
-    return _me_payload(request)
+    # A real HttpResponse (not the plain dict) so the decorators can
+    # act on it — ensure_csrf_cookie plants csrftoken, never_cache
+    # marks the per-user payload unambiguously non-cacheable.
+    return api.create_response(request, _me_payload(request),
+                               status=200)
 
 
 @router.patch('/', response=MeOut)

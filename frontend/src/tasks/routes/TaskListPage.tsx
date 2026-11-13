@@ -22,7 +22,7 @@ import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import ErrorStateView from '../../shared/components/ErrorState';
 import ListSkeleton from '../../shared/components/ListSkeleton';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { actionHistory } from '../actionHistory';
 import {
   fetchDashboard,
@@ -102,8 +102,8 @@ export function TaskListPage({ view }: { view: ListView }) {
   const order = searchParams.get('order') ?? 'order_asc';
   const secondaryLabel = searchParams.get('secondary_label') ?? '';
 
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', { view, list, label, order }],

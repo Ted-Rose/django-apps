@@ -271,7 +271,10 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
   can see (owned **and** shared — the assignment table keys by user,
   so a sharer's rules are meaningful on shared accounts). Call it
   after any ruleset mutation (rule save/delete/move, category
-  delete); the SPA shell view also calls it on every page load.
+  delete); the SPA also re-runs it once per app mount by posting
+  `/api/finance/rules/apply/` — the client-side replacement for
+  the per-page-load call the pre-cutover shell view made (the
+  shell HTML is edge-cached, so page GETs never reach Django).
 - `categorize_transaction(tx, rules, user)` upserts/deletes that
   user's assignment row and skips `is_manual` rows.
 - `preview_rule(user, data)` dry-runs a candidate rule over history
@@ -315,15 +318,13 @@ Ownership-only checks (e.g. sharing) use `owner=request.user`.
 
 ## Views & API (post-cutover)
 
-- The UI is the React SPA (`frontend/src/finance/`, Vite entry
-  `finance`) served by `views.finance_app` — a thin wrapper over
-  the shared `react_app` shell that re-runs `apply_rules` for the
-  caller on every page load (logged, never blocking), so
-  categorization is enforced on each visit — at `/finance/` + a
+- The UI is the React SPA (`frontend/src/finance/`, a lazy chunk
+  of the unified `shell` Vite entry) served by the shared
+  `react_app` shell at `/finance/` + a
   `<path:subpath>` catch-all, with named shell routes
   (`index`/`connect`/`accounts`/`transactions`/`balances`/`limits`/
   `rules`/`categories`) so `reverse('finance:…')` keeps working for
-  `home.html`, `evaluate_spending_limits` push URLs and the
+  `evaluate_spending_limits` push URLs and the
   callback's redirects. `/finance/app/*` 301-redirects to
   `/finance/*` (legacy strangler mount); non-GET/HEAD requests under
   `/finance/` 404 — the template views and their form-POST URLs are

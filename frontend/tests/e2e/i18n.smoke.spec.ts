@@ -34,45 +34,68 @@ test.describe('i18n smoke', () => {
     await login(page);
     // ?lang= is a client-side dev override — <html lang> still
     // reflects the stored pref, so assert only rendered copy here.
+    // The burger toggle only exists below 768px; on desktop the
+    // same items render inline, so assert a Latvian nav label.
     await page.goto('/finance/?lang=lv');
+    // Several "Connect bank" affordances render at once — assert
+    // any of them is visible rather than a unique one.
     await expect(
-      page.getByRole('button', { name: 'Pārslēgt izvēlni' }),
+      page.getByRole('link', { name: 'Pievienot banku' }).first(),
     ).toBeVisible();
 
     await page.goto('/tasks/?lang=lv');
     await expect(
-      page.getByRole('button', { name: 'Pārslēgt izvēlni' }),
+      page.getByRole('link', { name: 'Sākums' }).first(),
     ).toBeVisible();
   });
 
   test('switcher PATCHes /api/me/ and persists across reloads', async ({
     page,
   }) => {
+    const mePatch = (response: import('@playwright/test').Response) =>
+      response.url().endsWith('/api/me/') &&
+      response.request().method() === 'PATCH' &&
+      response.status() === 200;
+
     await login(page);
     await page.goto('/finance/');
 
-    const patch = page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/me/') &&
-        response.request().method() === 'PATCH' &&
-        response.status() === 200,
-    );
+    // switchTo() no-ops when the target language is already active,
+    // and the stored pref may be 'lv' from a previous run — reset
+    // to English first so the LV click really PATCHes.
+    if (
+      (await page
+        .getByRole('button', { name: 'LV' })
+        .getAttribute('aria-pressed')) === 'true'
+    ) {
+      const reset = page.waitForResponse(mePatch);
+      await page.getByRole('button', { name: 'EN' }).click();
+      await reset;
+    }
+
+    const patch = page.waitForResponse(mePatch);
     await page.getByRole('button', { name: 'LV' }).click();
     await patch;
     await expect(page.getByText('Konti').first()).toBeVisible();
 
-    // The stored pref wins on reload without ?lang= — the shell's
-    // <html lang> follows the bootstrap too.
+    // The stored pref wins on reload without ?lang= — the shell
+    // applies it via /api/me/ + changeLanguage, which also keeps
+    // <html lang> in sync (the edge-cached HTML is static en).
+    // The tasks view links live inside the burger menu; the top
+    // nav still localizes, so assert its visible "Home" label.
     await page.goto('/tasks/');
     await expect(page.locator('html')).toHaveAttribute('lang', 'lv');
     await expect(
-      page.getByRole('button', { name: 'Pārslēgt izvēlni' }),
+      page.getByRole('link', { name: 'Sākums' }).first(),
     ).toBeVisible();
 
-    // Restore English so the seeded user is left unchanged.
+    // Restore English so the seeded user is left unchanged —
+    // await the PATCH so the stored pref really flips back.
+    const restore = page.waitForResponse(mePatch);
     await page.getByRole('button', { name: 'EN' }).click();
+    await restore;
     await expect(
-      page.getByRole('button', { name: 'Toggle menu' }),
+      page.getByRole('link', { name: 'Home' }).first(),
     ).toBeVisible();
   });
 });

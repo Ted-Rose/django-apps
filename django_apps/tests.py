@@ -35,14 +35,30 @@ class MeApiTests(TestCase):
             content_type='application/json',
         )
 
-    def test_get_returns_username_and_default_language(self):
+    def test_get_returns_bootstrap_payload(self):
         self.client.force_login(self.user)
         resp = self.client.get(self.URL)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
             resp.json(),
-            {'username': 'alice', 'language': 'en'},
+            {'username': 'alice', 'language': 'en',
+             'is_staff': False},
         )
+
+    def test_get_serializes_is_staff(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=['is_staff'])
+        self.client.force_login(self.user)
+        self.assertTrue(self.client.get(self.URL).json()['is_staff'])
+
+    def test_get_sets_csrf_cookie(self):
+        # The edge-cached shell sets no cookies — the csrftoken the
+        # SPA's unsafe requests need is planted here instead.
+        self.client.force_login(self.user)
+        resp = self.client.get(self.URL)
+        self.assertIn('csrftoken', resp.cookies)
+        # The per-user payload must never be edge-/browser-cached.
+        self.assertIn('no-store', resp['Cache-Control'])
 
     def test_get_reads_stored_language(self):
         self.client.force_login(self.user)
@@ -84,7 +100,56 @@ class MeApiTests(TestCase):
     def test_unauthenticated_get_is_401(self):
         resp = self.client.get(self.URL)
         self.assertEqual(resp.status_code, 401)
-        self.assertEqual(resp.json()['error'], 'unauthenticated')
+        body = resp.json()
+        self.assertEqual(body['error'], 'unauthenticated')
+        # The bootstrap endpoint is page-agnostic — `next` defaults
+        # to the dashboard (the client overrides it with the page
+        # it was actually on).
+        self.assertIn('next=%2F', body['login_url'])
+
+
+class SpaShellTests(TestCase):
+    """The unified shell mount: `/` and every SPA page render the
+    same public, edge-cached spa_shell.html for anonymous and
+    authenticated users alike."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='alice', password='pw'
+        )
+
+    def test_home_serves_shell_anonymous(self):
+        resp = self.client.get('/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, 'spa_shell.html')
+        self.assertContains(resp, 'id="root"')
+        self.assertContains(resp, 'id="spa-bootstrap"')
+
+    def test_home_serves_shell_authenticated(self):
+        self.client.force_login(self.user)
+        resp = self.client.get('/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, 'spa_shell.html')
+
+    def test_bootstrap_carries_only_sentry(self):
+        # Byte-identical for all users — no per-user content may
+        # ride in the json_script or the page stops being
+        # edge-cacheable.
+        resp = self.client.get('/')
+        self.assertContains(resp, '"sentry"')
+        self.assertNotContains(resp, '"user"')
+        self.assertNotContains(resp, '"language"')
+
+    def test_shell_is_edge_cacheable_and_cookieless(self):
+        resp = self.client.get('/')
+        self.assertIn('public', resp['Cache-Control'])
+        self.assertIn('s-maxage=86400', resp['Cache-Control'])
+        self.assertNotIn('Set-Cookie', resp)
+
+    def test_post_to_home_404s(self):
+        resp = self.client.post('/', data='{}',
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 404)
 
 
 class CompilePoTests(TestCase):

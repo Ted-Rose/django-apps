@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { fetchStats, type StatsBucketOut, type StatsOut } from '../api';
 import Toasts from '../../shared/components/Toasts';
 import { MONTHS, formatShortDate, spaPathFromStoredUrl } from '../utils';
@@ -40,8 +40,8 @@ export default function Stats() {
   const list = searchParams.get('list');
   const navigate = useNavigate();
 
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['stats', { weeks, months, list }],

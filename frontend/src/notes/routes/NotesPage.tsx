@@ -8,7 +8,7 @@ import EmptyState from '../../shared/components/EmptyState';
 import ErrorState from '../../shared/components/ErrorState';
 import ListSkeleton from '../../shared/components/ListSkeleton';
 import Toasts from '../../shared/components/Toasts';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 import { fetchNotes, type NotesDashboardOut, type TaskOut } from '../api';
 import NoteCard from '../components/NoteCard';
 import NoteFormModal from '../components/NoteFormModal';
@@ -37,8 +37,8 @@ export function NotesPage() {
   const q = searchParams.get('q') || null;
   const order = searchParams.get('order') ?? 'created_desc';
 
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['notes', { category: categoryId, q, order }],

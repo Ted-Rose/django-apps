@@ -29,26 +29,22 @@ async function login(page: Page) {
 }
 
 test.describe('unauthenticated', () => {
-  test('/tasks/ redirects to login (session auth)', async ({ request }) => {
-    // @login_required → 302 to LOGIN_URL (/login/?next=…); that view
-    // then forwards into Google OAuth. Assert the first hop only —
-    // the rest depends on accounts.google.com being reachable.
-    const response = await request.get('/tasks/', {
-      maxRedirects: 0,
+  // The unified shell is public + edge-cached: anonymous deep links
+  // get 200 HTML, then the /api/me/ bootstrap 401 navigates the
+  // client to /login/?next=<deep link> (Google OAuth — the admin
+  // password form can't log an OAuth user in). Assert the real
+  // browser flow: wait for the /login/ request, not the committed
+  // URL — /login/ 302s to an external provider e2e can't reach.
+  for (const path of ['/tasks/', '/tasks/stats']) {
+    test(`${path} serves the shell then bounces to login`, async ({ page }) => {
+      const bounce = page.waitForRequest(/\/login\//);
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(200);
+      expect(response?.headers()['cache-control']).toContain('s-maxage=');
+      const request = await bounce;
+      expect(decodeURIComponent(request.url())).toContain('next=');
     });
-    expect(response.status()).toBe(302);
-    expect(response.headers()['location']).toContain('/login/?next=');
-  });
-
-  test('/tasks/stats redirects to login (session auth)', async ({
-    request,
-  }) => {
-    const response = await request.get('/tasks/stats', {
-      maxRedirects: 0,
-    });
-    expect(response.status()).toBe(302);
-    expect(response.headers()['location']).toContain('/login/?next=');
-  });
+  }
 
   test('the API answers 401 without a session', async ({ request }) => {
     const response = await request.get('/api/tasks/dashboard/');

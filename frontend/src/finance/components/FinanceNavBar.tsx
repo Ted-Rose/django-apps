@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import NavBar from '../../shared/components/NavBar';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import useBootstrap from '../../shared/hooks/useBootstrap';
+import { useSession } from '../../shared/session';
 
 /**
  * React port of finance/views.py `_burger_menu_items` — the shared
@@ -12,14 +12,15 @@ import useBootstrap from '../../shared/hooks/useBootstrap';
  * six primary sections visible (the burger menu stays for Home,
  * Connect Bank and Logout).
  *
- * In-SPA entries use `to` (react-router Links — no page reload);
- * Home and Logout stay plain `url` anchors because both navigate
- * out of the SPA to full-page Django routes.
+ * In-app entries use `to` (react-router Links — no page reload).
+ * `url` entries render ShellLink: Home (`/`) is a shell path and
+ * client-navigates; only Logout (`/admin/logout/`) is a true
+ * document exit to a Django route outside the shell.
  */
 export function FinanceNavBar() {
   const { t } = useTranslation('finance');
-  const bootstrap = useBootstrap();
-  const user = bootstrap.user ?? 'unknown';
+  const session = useSession();
+  const user = session?.username ?? 'unknown';
   const tabsRef = useRef<HTMLDivElement>(null);
 
   // Every route mounts a fresh nav bar, so the scrollable tab

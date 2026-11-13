@@ -1369,6 +1369,8 @@ export interface components {
             username: string;
             /** Language */
             language: string;
+            /** Is Staff */
+            is_staff: boolean;
         };
         /** LanguageIn */
         LanguageIn: {

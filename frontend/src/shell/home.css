@@ -1,0 +1,56 @@
+/* Ported from the inline <style> of the retired home.html —
+ * selectors are scoped under .home-page so the dashboard's look
+ * doesn't leak onto app pages sharing this document. */
+.home-page {
+  background-color: #f8f9fa;
+  min-height: 100vh;
+}
+
+.home-page .hero-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 3rem 0;
+  margin-bottom: 2rem;
+}
+
+.home-page .tool-card {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+  border: none;
+  height: 100%;
+  background-color: white;
+}
+
+.home-page .tool-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.home-page .tool-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  color: #667eea;
+}
+
+.home-page .card-title {
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: #212529;
+}
+
+.home-page .card-text {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.home-page a.text-decoration-none {
+  color: inherit;
+  display: block;
+}
+
+.home-page a.text-decoration-none:hover,
+.home-page a.text-decoration-none:focus {
+  color: inherit;
+  outline: none;
+}

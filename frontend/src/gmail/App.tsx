@@ -3,7 +3,7 @@ import GmailReader from './routes/GmailReader';
 
 /**
  * Router host for the gmail SPA mounted at /gmail/ (see
- * `BrowserRouter basename` in main.tsx). The app has exactly one
+ * `AppRouter basename` in main.tsx). The app has exactly one
  * page today — the reader — plus a `*` redirect for stray subpaths
  * the gmail/<path:subpath> catch-all serves the shell for.
  */

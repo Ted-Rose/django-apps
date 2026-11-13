@@ -36,6 +36,22 @@
   "nav": {
     "brand": "Tedis's Tools"
   },
+  "home": {
+    "greeting": "Sveiki, mani sauc Tedis",
+    "tagline": "Noderīgu rīku kolekcija, ko esmu izveidojis. Droši izpēti!",
+    "emailManager": "E-pasta pārvaldnieks",
+    "emailManagerText": "Piekļūsti saviem Gmail ziņojumiem un pārvaldi tos",
+    "twisterGame": "Twister spēle",
+    "twisterGameText": "Spēlē Twister ar nejaušiem gājienu paziņojumiem",
+    "googleTasks": "Google Tasks",
+    "googleTasksText": "Pārvaldi savus uzdevumus un darāmo darbu sarakstus",
+    "finance": "Finanses",
+    "financeText": "Banku konti, transakcijas un atlikumi",
+    "notes": "Piezīmes",
+    "notesText": "Ātrās piezīmes ar #notes birku",
+    "admin": "Administrācija",
+    "adminText": "Django administrācijas vietne"
+  },
   "language": {
     "label": "Valoda"
   },

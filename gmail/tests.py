@@ -503,11 +503,14 @@ class GmailCutoverRouteTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTemplateUsed(resp, 'spa_shell.html')
 
-    def test_spa_mount_is_login_gated(self):
+    def test_spa_mount_is_public(self):
+        # The unified shell is edge-cacheable: anonymous users get
+        # the same 200 HTML; the client bounces to login after the
+        # /api/me bootstrap 401.
         self.client.logout()
         resp = self.client.get('/gmail/')
-        self.assertEqual(resp.status_code, 302)
-        self.assertIn('/login/?next=', resp.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, 'spa_shell.html')
 
     def test_non_get_to_spa_mount_404s(self):
         self.client.force_login(self.user)

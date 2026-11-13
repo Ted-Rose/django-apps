@@ -1,13 +1,26 @@
 # frontend/ — React workspace
 
-Shared Vite + React + TypeScript workspace for the React rewrites —
-one entry per Django app under `src/<app>/` (google_tasks is
-`src/tasks/`). Django stays the backend: session auth, CSRF and the
-ninja API are all same-origin. The build lands in repo-root
-`frontend_dist/` (gitignored), which `STATICFILES_DIRS` +
-`django-vite` resolve through `manifest.json`.
+Shared Vite + React + TypeScript workspace for the React apps.
+**One Vite entry**: `src/shell/` is the unified SPA shell — a
+single React root + `BrowserRouter` + shared `QueryClient` for
+the whole site. Each app (`src/tasks/`, `src/finance/`,
+`src/gmail/`, `src/notes/`, `src/single_pages/` — google_tasks
+is `src/tasks/`) exports a default component from its
+`main.tsx`, wrapped in `shared/components/AppRouter` for
+basename semantics, and lazy-loads via the route table in
+`src/shell/App.tsx`. Cross-app navigation is client-side — no
+document reload, one shared query cache. Django stays the
+backend: session auth, CSRF and the ninja API are all
+same-origin. Per-user context (`username`/`language`/`is_staff`)
+arrives from `GET /api/me/` at shell startup
+(`src/shared/session.tsx`); the shell HTML itself is public and
+edge-cacheable (Sentry-only bootstrap). The build lands in
+repo-root `frontend_dist/` (gitignored), which
+`STATICFILES_DIRS` + `django-vite` resolve through
+`manifest.json`.
 
-See `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md` for the staged plan.
+See `docs/plans/GOOGLE_TASKS_REACT_REWRITE.md` for the staged
+plan (the shell unification landed after it).
 
 ## Commands
 
@@ -54,14 +67,16 @@ and CSRF-protected POSTs.
    source venv/bin/activate
    python manage.py shell -c "
    from django.contrib.auth.models import User
-   from google_tasks.models import GoogleTask
+   from google_tasks.models import GoogleTask, GoogleTaskList
    u, _ = User.objects.get_or_create(
        username='e2e',
        defaults={'is_staff': True, 'is_superuser': True})
    u.set_password('e2e-pass'); u.save()
+   lst, _ = GoogleTaskList.objects.get_or_create(
+       user=u, list_id='e2e-list', defaults={'title': 'E2E'})
    GoogleTask.objects.get_or_create(
        user=u, task_id='e2e-seed',
-       defaults={'title': 'E2E seed task', 'status': 'needsAction'})
+       defaults={'title': 'E2E seed task', 'task_list': lst})
    "
    python manage.py runserver
    ```
@@ -83,14 +98,21 @@ E2E_BASE_URL=http://localhost:8000 E2E_USERNAME=... E2E_PASSWORD=... \
   npm run test:e2e
 ```
 
-What it covers (`tests/e2e/tasks.smoke.spec.ts`):
+What it covers:
 
-- `/tasks/` answers 302 → `/login/?next=…` without a session
-  (`@login_required`; that view then forwards into Google OAuth).
-- `GET /api/tasks/dashboard/` answers 401 without a session.
-- Admin login → dashboard renders (navbar + task list/empty state).
-- Star-toggle mutation round trip: POST `toggle-star` twice and back
-  so seeded data is left unchanged.
+- `shell.smoke.spec.ts` — the unified shell: public edge-cacheable
+  HTML (`s-maxage`, byte-identical for all users), anonymous
+  dashboard at `/`, deep-link → shell → client-side bounce to
+  login, and dashboard → finance → tasks navigation with no
+  document reload.
+- `<app>.smoke.spec.ts` per app — anonymous deep links serve the
+  shell then bounce to login after the `/api/me/` 401; the API
+  answers 401 without a session; admin login renders the app
+  (navbar + seeded content); a mutation round trip (e.g. tasks
+  star-toggle) leaves seeded data unchanged.
+- `i18n.smoke.spec.ts` — `?lang=lv` renders Latvian chrome and the
+  language switcher PATCHes `/api/me/` so the pref survives
+  reloads.
 
 Without `E2E_USERNAME`/`E2E_PASSWORD` the authenticated specs skip
 themselves; the unauthenticated bounce always runs.
