@@ -55,7 +55,7 @@ export default function App() {
   useNotificationToasts();
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/accounts" replace />} />
+      <Route path="/" element={<Navigate to="/categories" replace />} />
       <Route path="/accounts" element={<Accounts />} />
       <Route path="/connect" element={<ConnectBank />} />
       <Route path="/transactions" element={<Transactions />} />
@@ -63,7 +63,7 @@ export default function App() {
       <Route path="/limits" element={<Limits />} />
       <Route path="/rules" element={<Rules />} />
       <Route path="/categories" element={<CategoryOverview />} />
-      <Route path="*" element={<Navigate to="/accounts" replace />} />
+      <Route path="*" element={<Navigate to="/categories" replace />} />
     </Routes>
   );
 }

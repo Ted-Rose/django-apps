@@ -1,6 +1,28 @@
 # google_api
 
 ## Changelog
+28. Clicking a category on the spending overview now opens its
+    transactions directly beneath the breakdown table — above the
+    donut chart — where the panel's close button dismisses them
+27. Categories is now the finance app's landing page — `/finance/`
+    opens the spending overview and the Categories tab and burger
+    entry moved first in the navigation
+26. Category spending now opens on the current month; the Last
+    year and All time shortcuts moved out of the chip row into
+    the calendar filter form (All time covers everything from
+    2000 onward), the active-range recap line is gone since the
+    selected chip and the form's fields already show it, and the
+    category management card sits at the bottom of the page
+    beneath the Spent/Received totals
+25. The category spending page got a cleanup: the share button
+    moved into the page header, the bulky Filters card collapsed
+    into a calendar icon beside the period chips (the active
+    range still shows inline), the breakdown table dropped its
+    Received column and totals footer — those figures now live
+    in the Spent/Received cards at the bottom of the page — and
+    the donut chart reports a rounded percentage plus the spent
+    amount on hover; clicking a slice or legend entry pins that
+    readout under the chart
 24. Faster Vercel loads: the serverless function now runs in
     Frankfurt (same city as the Aiven Postgres, cutting per-request
     DB round-trips since connections are never pooled), hashed JS/
