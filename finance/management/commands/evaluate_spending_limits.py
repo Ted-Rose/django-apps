@@ -6,7 +6,11 @@ from django.utils import timezone, translation
 from django.utils.translation import gettext
 
 from django_apps.models import user_language
-from finance.models import LimitEvaluation, TransactionLimit
+from finance.models import (
+    Account,
+    LimitEvaluation,
+    TransactionLimit,
+)
 from finance.services.limits import (
     _next_month,
     monthly_period_start,
@@ -46,13 +50,26 @@ class Command(BaseCommand):
         alerts = 0
         for limit in limits:
             # Same bounds as monthly_stat — next-month-dated rows
-            # never count toward this month's alert.
+            # never count toward this month's alert. Excluded
+            # accounts still count: the hide flag is a display
+            # preference, not a way out of a configured alert.
             spent = spent_in_window(
-                limit, period, end=_next_month(period)
+                limit,
+                period,
+                end=_next_month(period),
+                respect_exclusion=False,
             )
             self._record_evaluations(limit, spent, period)
             if spent > limit.limit_monthly:
-                accounts = list(limit.accounts.all())
+                # Only accessible accounts can contribute spend
+                # — a revoked AccountShare leaves its M2M row.
+                accounts = list(
+                    limit.accounts.filter(
+                        pk__in=Account.objects.for_user(
+                            limit.user
+                        )
+                    )
+                )
                 alerts += 1
                 logger.warning(
                     'SPENDING_LIMIT_EXCEEDED user=%s accounts=%s '
@@ -110,7 +127,8 @@ class Command(BaseCommand):
             period_start - timezone.timedelta(days=1)
         ).replace(day=1)
         prev_spent = spent_in_window(
-            limit, previous, end=period_start
+            limit, previous, end=period_start,
+            respect_exclusion=False,
         )
         record, created = LimitEvaluation.objects.get_or_create(
             limit=limit,
@@ -129,7 +147,13 @@ class Command(BaseCommand):
     def _send_alert(self, limit, spent):
         # Rendered in the recipient's language — gettext_lazy values
         # resolve to str() inside the translation.override block.
-        accounts = list(limit.accounts.all())
+        # Only accessible accounts can contribute spend — name
+        # just those (a revoked AccountShare leaves its M2M row).
+        accounts = list(
+            limit.accounts.filter(
+                pk__in=Account.objects.for_user(limit.user)
+            )
+        )
         account = ', '.join(
             a.name or a.iban or a.account_id for a in accounts
         )

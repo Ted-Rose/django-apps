@@ -90,17 +90,32 @@ just-dead requisition are skipped without another API call.
   `Transaction.objects.visible_for(user)` (`managers.py`) are the
   `for_user` sets minus the caller's excluded accounts, and every
   read path except `GET /accounts/` uses them: transactions,
-  category overview (the sharer's exclusions hide accounts from
-  their shared `?owner=` view too), limits (spend sums via
-  `_spend_queryset`, month list, form options), balances,
-  transaction mutations (404), rule categorization/preview, and
-  the manual `sync` endpoint (excluded accounts are paused — the
-  scheduled `sync_bank_transactions` job still syncs them since
-  sync is per-account across viewers, so re-including picks the
-  cursor back up). `check_balance_alerts` skips excluded
-  accounts' alerts. A `TransactionLimit`'s configured account
-  list still names excluded accounts (config fidelity — they just
-  contribute no spend).
+  category overview (the viewer's own exclusions hide accounts
+  from shared `?owner=` views; the sharer's do NOT — a share
+  keeps showing accounts the sharer excluded), limits (spend
+  sums via `_spend_queryset`, month list, form options),
+  balances, transaction mutations (404), rule
+  categorization/preview, and the manual `sync` endpoint
+  (excluded accounts are paused — the scheduled
+  `sync_bank_transactions` job still syncs them since sync is
+  per-account across viewers, so re-including picks the cursor
+  back up). Exclusion is a display preference, not a kill
+  switch: `check_balance_alerts` keeps firing on excluded
+  accounts (its notifications link to the Accounts page — the
+  only place they're visible — and alerts whose user lost
+  access entirely, e.g. a revoked AccountShare, stay silent),
+  and `evaluate_spending_limits` counts their real spend (via
+  `respect_exclusion=False`) so configured notifications
+  still go out. The limits page's own progress and recomputed
+  history read 0 from excluded accounts, but recorded
+  `LimitEvaluation` months always show the real spend — the
+  audit trail of why a notification fired (so a breach push can
+  link to a page that visibly reads 0 until the month rolls
+  over — cosmetic, accepted). A
+  `TransactionLimit`'s configured account list still names
+  excluded accounts (config fidelity — editing preserves
+  them), though a NEW limit can't pick excluded accounts
+  since the form only lists visible ones.
 - `CategoryOverviewShare` — grants another user read access to the
   sharer's category overview (`/finance/categories/?owner=<sharer>`)
   plus its transaction drill-down (`/api/finance/…?owner=`). One row
@@ -255,7 +270,9 @@ flagged `excluded`.
   `categorize_transaction()`.
 - `evaluate_spending_limits`: sums negative amounts per active
   limit for the current calendar month via `services/limits.py`
-  (filtered to the limit's category when set); logs
+  (filtered to the limit's category when set; excluded accounts
+  DO count — exclusion only hides page reads, not configured
+  alerts); logs
   `SPENDING_LIMIT_EXCEEDED ...` warnings and sends one Web Push
   notification per limit on each breach and then every
   `ALERT_REPEAT_AFTER` (~daily) while still breached to the user's
@@ -271,9 +288,14 @@ flagged `excluded`.
   `alerted_at` or one older than `ALERT_REPEAT_AFTER` creates the
   in-app `Notification` row AND pushes via
   `send_limit_alert`, then stamps `alerted_at` unconditionally (the
-  Notification row is the record of delivery). Accounts whose fetch
-  failed/429'd or whose currency mismatches are skipped — never
-  alert on a stale stored balance. Logs `BALANCE_ALERT_TRIGGERED`.
+  Notification row is the record of delivery). Alerts run only
+  while the alert's user can still access the account (owned or
+  shared-in — a revoked AccountShare silences leftovers), and
+  excluded-account breaches link to `/finance/accounts/` instead
+  of `/finance/balances/` since that's the only page still
+  showing the account. Accounts whose fetch failed/429'd or whose
+  currency mismatches are skipped — never alert on a stale stored
+  balance. Logs `BALANCE_ALERT_TRIGGERED`.
 - `reattach_relinked_accounts` (`--dry-run`): one-off repair for
   rows stranded before the callback's same-id reattach existed —
   for each `status='LN'` requisition (newest first, so the newest

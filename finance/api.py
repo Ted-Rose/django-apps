@@ -227,9 +227,10 @@ def _resolve_overview_user(request, owner_username):
     account set. 404s on unknown usernames and missing shares so
     the endpoint doesn't reveal which usernames exist.
 
-    Excluded accounts stay out of the scope: the sharer's own
-    exclusions hide them from the shared view, and the viewer's
-    exclusions hide shared-in accounts they excluded themselves.
+    Excluded accounts stay out of the scope only via the
+    viewer's own exclusions — the sharer's hide flag is a
+    display preference for their own pages; accounts they
+    excluded but still share appear in the viewer's copy.
     """
     owner_username = (owner_username or '').strip()
     if not owner_username or owner_username == request.user.username:
@@ -249,10 +250,13 @@ def _resolve_overview_user(request, owner_username):
         raise Http404('Overview not shared')
     # Re-intersect on every read: if the sharer loses access to an
     # account (AccountShare revoked), the viewer's scope shrinks
-    # without any cleanup of the share row.
-    visible = Account.objects.visible_for(owner)
+    # without any cleanup of the share row. for_user, not
+    # visible_for: the sharer's own exclusions hide accounts from
+    # THEIR pages — the shared view is the viewer's, so only the
+    # viewer's exclusions apply below.
+    scope = Account.objects.for_user(owner)
     if share.accounts.exists():
-        visible = share.accounts.filter(pk__in=visible)
+        scope = share.accounts.filter(pk__in=scope)
     # The viewer's own exclusions hide shared accounts too — but
     # only while the viewer still holds the account (a pref left
     # behind by a revoked AccountShare must not hide it forever;
@@ -263,7 +267,7 @@ def _resolve_overview_user(request, owner_username):
         user_preferences__user=request.user,
         user_preferences__excluded=True,
     )
-    return owner, visible.exclude(pk__in=viewer_excluded)
+    return owner, scope.exclude(pk__in=viewer_excluded)
 
 
 def _choices(pairs):

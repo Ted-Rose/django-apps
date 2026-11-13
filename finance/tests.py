@@ -286,6 +286,57 @@ class EvaluateSpendingLimitsTests(TestCase):
             mock_logger.warning.call_args[0][0],
         )
 
+    def test_limit_alert_counts_excluded_account(self):
+        """The hide flag doesn't exempt an account from a
+        configured spending limit — the alert still fires."""
+        make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
+        UserAccountPreference.objects.create(
+            user=self.user, account=self.account, excluded=True
+        )
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert'
+        ) as mock_send:
+            mock_logger = self.run_command()
+        mock_logger.warning.assert_called_once()
+        mock_send.assert_called_once()
+        # The recorded evaluation keeps the real spend — it is
+        # the audit trail of why the notification fired.
+        evaluation = LimitEvaluation.objects.get(
+            period_start=timezone.now().date().replace(day=1)
+        )
+        self.assertEqual(evaluation.spent, Decimal('150.00'))
+
+    def test_revoked_share_limit_stops_counting(self):
+        """A limit configured on a shared-in account stops
+        counting once the AccountShare is revoked — the stale
+        M2M row lingers but the spend must not."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        share = AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        make_limit(
+            account=self.account,
+            user=viewer,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
+        share.delete()
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert'
+        ) as mock_send:
+            mock_logger = self.run_command()
+        mock_logger.warning.assert_not_called()
+        mock_send.assert_not_called()
+
     def test_limit_not_exceeded_no_warning(self):
         make_limit(
             account=self.account,
@@ -2575,15 +2626,44 @@ class CheckBalanceAlertsTests(TestCase):
         )
         self.assertIsNotNone(self.account.balance_updated_at)
 
-    def test_excluded_account_alerts_stay_dormant(self):
+    def test_excluded_account_alerts_still_fire(self):
+        """Excluding an account hides pages, not configured
+        alerts — the breach still notifies."""
         UserAccountPreference.objects.create(
             user=self.user, account=self.account, excluded=True
         )
-        BalanceAlert.objects.create(
+        alert = BalanceAlert.objects.create(
             user=self.user,
             account=self.account,
             threshold=Decimal('50.00'),
         )
+        mock_send, _ = self.run_command()
+        mock_send.assert_called_once()
+        alert.refresh_from_db()
+        self.assertIsNotNone(alert.alerted_at)
+        notification = Notification.objects.get(user=self.user)
+        # The account only lives on the Accounts page now —
+        # the notification links there, not the balances page.
+        self.assertEqual(notification.url, '/finance/accounts/')
+        self.assertEqual(
+            mock_send.call_args[0][3], '/finance/accounts/'
+        )
+
+    def test_revoked_share_alert_stays_silent(self):
+        """An alert left behind by a revoked AccountShare never
+        fires — the user can't see the account anywhere."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        share = AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        BalanceAlert.objects.create(
+            user=viewer,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        share.delete()
         mock_send, client = self.run_command()
         mock_send.assert_not_called()
         client.fetch_balances_parallel.assert_not_called()

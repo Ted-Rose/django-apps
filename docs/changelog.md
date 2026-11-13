@@ -1,6 +1,12 @@
 # google_api
 
 ## Changelog
+39. Excluded finance accounts no longer go quiet: balance alerts
+    and spending-limit notifications you set up keep firing even
+    while the account is hidden (exclusion only hides it from
+    the app's pages), and a category overview you share still
+    shows your excluded accounts to the person viewing it —
+    hiding only ever affects your own view
 38. Finance accounts can now be excluded: a new "Excluded" switch
     on each Accounts-page card hides the account and its
     transactions everywhere else — transactions, category
