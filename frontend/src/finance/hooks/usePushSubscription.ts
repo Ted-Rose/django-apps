@@ -85,12 +85,17 @@ function subscribePayload(subscription: PushSubscription): PushSubscribeIn {
   };
 }
 
-/** Register an existing browser subscription server-side. */
-async function registerOnServer(
-  config: PushConfigOut,
-  subscription: PushSubscription,
-) {
-  await apiPost(config.subscribe_url, subscribePayload(subscription));
+/** ms to wait for the service worker before giving up — `ready`
+ *  can pend forever (e.g. Firefox private windows). */
+const SW_READY_TIMEOUT_MS = 5000;
+
+function readyWithTimeout(): Promise<ServiceWorkerRegistration> {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), SW_READY_TIMEOUT_MS),
+    ),
+  ]);
 }
 
 export function usePushSubscription(
@@ -105,20 +110,26 @@ export function usePushSubscription(
     Boolean(config.vapid_public_key);
   const [busy, setBusy] = useState(false);
   const queryClient = useQueryClient();
+  // Primitives, not `config` — a refetched payload is a fresh
+  // object and would re-run the effect / stale the callback.
+  const vapidKey = config.vapid_public_key;
+  const subscribeUrl = config.subscribe_url;
 
   useEffect(() => {
     if (!supported) return;
     let cancelled = false;
     (async () => {
       try {
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await readyWithTimeout();
         const subscription = await registration.pushManager.getSubscription();
         if (!subscription) return;
-        if (sameKey(subscription, config.vapid_public_key)) {
+        if (sameKey(subscription, vapidKey)) {
           // Browser stayed subscribed but the server row may be
           // gone — re-register (best effort).
           if (!cancelled) {
-            registerOnServer(config, subscription).catch(() => {});
+            apiPost(subscribeUrl, subscribePayload(subscription)).catch(
+              () => {},
+            );
           }
         } else {
           // Bound to a different VAPID key — pushes can never
@@ -134,7 +145,7 @@ export function usePushSubscription(
     return () => {
       cancelled = true;
     };
-  }, [supported, config]);
+  }, [supported, vapidKey, subscribeUrl]);
 
   const ensureSubscribed = useCallback(async (): Promise<boolean> => {
     if (!supported) {
@@ -143,15 +154,9 @@ export function usePushSubscription(
     }
     setBusy(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
-      let subscription = await registration.pushManager.getSubscription();
-      if (subscription && !sameKey(subscription, config.vapid_public_key)) {
-        await subscription.unsubscribe();
-        subscription = null;
-      }
-      // A subscription can outlive a revoked permission — check
-      // before trusting it. On 'default' this prompts; on
-      // 'granted' it resolves instantly.
+      // Permission first — a subscription can outlive a revoked
+      // grant. On 'default' this prompts; on 'granted' it resolves
+      // instantly, on 'denied' without prompting.
       if (Notification.permission !== 'granted') {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
@@ -159,13 +164,19 @@ export function usePushSubscription(
           return false;
         }
       }
+      const registration = await readyWithTimeout();
+      let subscription = await registration.pushManager.getSubscription();
+      if (subscription && !sameKey(subscription, vapidKey)) {
+        await subscription.unsubscribe();
+        subscription = null;
+      }
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(config.vapid_public_key),
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
         });
       }
-      await registerOnServer(config, subscription);
+      await apiPost(subscribeUrl, subscribePayload(subscription));
       queryClient.invalidateQueries({ queryKey: ['finance'] });
       return true;
     } catch (error) {
@@ -174,7 +185,7 @@ export function usePushSubscription(
     } finally {
       setBusy(false);
     }
-  }, [supported, config, queryClient, t]);
+  }, [supported, vapidKey, subscribeUrl, queryClient, t]);
 
   return { supported, busy, ensureSubscribed };
 }

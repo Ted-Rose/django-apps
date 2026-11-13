@@ -1,6 +1,12 @@
 # google_api
 
 ## Changelog
+37. Reliability fixes for the monthly-limits switch: limits that
+    only had 7/30-day thresholds are now shown as paused instead
+    of silently doing nothing, the notification permission step
+    can no longer hang the switches in browsers whose service
+    worker never starts, and duplicate notification registrations
+    on the Accounts page are gone
 36. Category pickers on the transactions page now show each
     category's color: a row's assign menu lists the same tinted
     pills you see on the categories page, and the column-header
