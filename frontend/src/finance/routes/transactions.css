@@ -1,5 +1,6 @@
-/* Transactions route — page-scoped polish on top of finance.css.
-   Imported by Transactions.tsx only. */
+/* Transactions-table polish on top of finance.css — imported by
+   every route that renders TransactionTable (Transactions,
+   CategoryOverview, Limits). */
 
 /* The table + pagination sit on a white card on desktop. Below lg
    finance.css turns each row into its own card, so the panel drops

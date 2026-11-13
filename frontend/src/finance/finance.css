@@ -181,6 +181,7 @@ body {
    (active) row it flips to a light halo so dark colors still read
    against the blue. */
 .fin-cat-dot {
+  display: inline-block;
   flex: none;
   width: 0.65rem;
   height: 0.65rem;

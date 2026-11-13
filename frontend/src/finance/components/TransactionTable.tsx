@@ -391,6 +391,7 @@ function SortItem({
   label,
   active = false,
   className = '',
+  ariaCurrent = false,
   onClick,
 }: {
   label: ReactNode;
@@ -398,6 +399,9 @@ function SortItem({
   /** Extra classes on the item — e.g. `d-flex` for marker+label
       layouts (category color dots/badges). */
   className?: string;
+  /** Marks the applied option when `active` (the blue highlight)
+      isn't used — e.g. the badge-pill category items. */
+  ariaCurrent?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -408,6 +412,7 @@ function SortItem({
           `dropdown-item${className ? ` ${className}` : ''}` +
           (active ? ' active' : '')
         }
+        aria-current={active || ariaCurrent ? 'true' : undefined}
         onClick={onClick}
       >
         {label}
@@ -589,14 +594,23 @@ function TransactionRow({
                     )}
                   </>
                 }
+                ariaCurrent={currentId === category.id}
                 onClick={() =>
                   assign.mutate({ txId: tx.id, categoryId: category.id })
                 }
               />
             ))}
             <FilterItem
-              label={t('transactions.noCategory')}
-              active={currentId === null}
+              className="d-flex align-items-center gap-2"
+              label={
+                <>
+                  {t('transactions.noCategory')}
+                  {currentId === null && (
+                    <i className="bi bi-check ms-auto" aria-hidden="true" />
+                  )}
+                </>
+              }
+              ariaCurrent={currentId === null}
               onClick={() => assign.mutate({ txId: tx.id, categoryId: null })}
             />
             <li>
