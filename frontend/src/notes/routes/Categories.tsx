@@ -11,7 +11,7 @@ import ListSkeleton from '../../shared/components/ListSkeleton';
 import Modal from '../../shared/components/Modal';
 import PageNavBar from '../../shared/components/PageNavBar';
 import Toasts from '../../shared/components/Toasts';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { fetchNotes, type NoteCategoryOut } from '../api';
 import {
   categoryPathLabel,
@@ -40,8 +40,7 @@ type MergeTarget = number | 'uncategorized' | '';
 export default function Categories() {
   const { t } = useTranslation('notes');
   const navigate = useNavigate();
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['notes', 'categories'],
@@ -126,12 +125,7 @@ export default function Categories() {
       btn_class: 'btn-primary',
       onClick: () => navigate('/'),
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   const renderRow = (

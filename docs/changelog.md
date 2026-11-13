@@ -1,6 +1,14 @@
 # google_api
 
 ## Changelog
+35. Every burger menu now ends with a Log in / Log out item: signed
+    in shows "Logout (you)", signed out shows "Login with Google"
+    (reachable on the public dashboard — the only page anonymous
+    visitors can see; Twister/Spoki gained the standard menu bar
+    too). When your session expires mid-use, API calls now send
+    you back through Google login and land you on the page you
+    were on, instead of the admin password form Google users
+    can't use
 34. Spending limits are monthly-only now — the 7-day and 30-day
     windows are gone, and the separate "Spending alerts" card was
     removed. Instead, switching on alerts (a spending limit's

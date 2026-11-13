@@ -3,24 +3,24 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import NavBar from '../../shared/components/NavBar';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 
 /**
  * React port of finance/views.py `_burger_menu_items` — the shared
  * NavBar plus a burger menu listing the same entries the template
  * UI shows, followed by a `.fin-tabs` pill tab bar that keeps the
  * six primary sections visible (the burger menu stays for Home,
- * Connect Bank and Logout).
+ * Connect Bank and the session auth item).
  *
  * In-app entries use `to` (react-router Links — no page reload).
  * `url` entries render ShellLink: Home (`/`) is a shell path and
- * client-navigates; only Logout (`/admin/logout/`) is a true
- * document exit to a Django route outside the shell.
+ * client-navigates; only the auth item (`useAuthMenuItem` —
+ * `/login/` or `/admin/logout/`) is a true document exit to a
+ * Django route outside the shell.
  */
 export function FinanceNavBar() {
   const { t } = useTranslation('finance');
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
   const tabsRef = useRef<HTMLDivElement>(null);
 
   // Every route mounts a fresh nav bar, so the scrollable tab
@@ -81,12 +81,7 @@ export function FinanceNavBar() {
       icon: 'wallet2',
       btn_class: 'btn-light',
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   const tabs = [

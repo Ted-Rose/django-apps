@@ -11,6 +11,7 @@ import json
 import logging
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import Http404, JsonResponse
 from django.urls import reverse
@@ -172,14 +173,15 @@ def _adapt(request, response):
 @api.exception_handler(AuthenticationError)
 def _on_unauthenticated(request, exc):
     """Session auth failed → JSON 401, never a login redirect."""
-    # Deliberate divergence: PAGE-level anonymous bounces go to
-    # /login/ (Google OAuth, via SessionGate), but API 401s keep
-    # /admin/login/ — the staff/password path. Unifying them is a
-    # follow-up.
+    # login_url is settings.LOGIN_URL (/login/ — Google OAuth), the
+    # same target SessionGate uses for page-level anonymous
+    # bounces; /admin/login/ stays reachable for password users but
+    # is never where the SPA sends someone. `next` lands back on
+    # the SPA page (never a raw /api/ URL) via spa_url_for.
     return api.create_response(request, {
         'error': 'unauthenticated',
         'login_url': (
-            f'/admin/login/'
+            f'{settings.LOGIN_URL}'
             f'?{urlencode({"next": spa_url_for(request)})}'
         ),
     }, status=401)

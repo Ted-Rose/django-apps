@@ -9,7 +9,7 @@ import ListSkeleton from '../../shared/components/ListSkeleton';
 import PageNavBar from '../../shared/components/PageNavBar';
 import Toasts from '../../shared/components/Toasts';
 import { errorDetail } from '../../shared/api/errors';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import RichTextEditor from '../../shared/components/RichTextEditor';
 import { isTiptapDocString } from '../../shared/tiptapContent';
 import { fetchNoteDetail, fetchNotes } from '../api';
@@ -40,8 +40,7 @@ export default function NoteDetail() {
   const { t } = useTranslation('notes');
   const { id: taskId = '' } = useParams();
   const navigate = useNavigate();
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['notes', 'note', taskId],
@@ -164,12 +163,7 @@ export default function NoteDetail() {
       btn_class: 'btn-primary',
       onClick: () => navigate(backTarget),
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   return (

@@ -453,7 +453,7 @@ class TasksApiTests(TestCase):
         body = resp.json()
         self.assertEqual(body['error'], 'unauthenticated')
         self.assertTrue(
-            body['login_url'].startswith('/admin/login/?next=')
+            body['login_url'].startswith('/login/?next=')
         )
 
     def test_unauthenticated_post_is_401_not_redirect(self):

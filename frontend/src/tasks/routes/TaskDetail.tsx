@@ -6,7 +6,7 @@ import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import NavBar from '../../shared/components/NavBar';
 import RichTextEditor from '../../shared/components/RichTextEditor';
 import { isTiptapDocString } from '../../shared/tiptapContent';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { fetchTaskDetail } from '../api';
 import Toasts from '../../shared/components/Toasts';
 import { errorDetail, useToggleStar, useUpdateTask } from '../mutations';
@@ -37,8 +37,7 @@ export default function TaskDetail() {
   const { taskId = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['task', taskId],
@@ -193,12 +192,7 @@ export default function TaskDetail() {
       btn_class: 'btn-light',
       onClick: () => navigate('/stats'),
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   return (
