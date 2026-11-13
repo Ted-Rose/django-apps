@@ -85,6 +85,23 @@
   margin-left: 0.25rem;
 }
 
+/* Bootstrap only honors `dropdown-menu-end` when Popper sets
+   data-bs-popper, and the JS bundle isn't loaded — implement the
+   right-edge alignment here. Keeps menus anchored near the right
+   edge (the Amount header chip, the mobile card's right-pinned
+   category badge) from running off the viewport. */
+.tx-table .dropdown-menu.dropdown-menu-end {
+  right: 0;
+  left: auto;
+}
+/* The assign-category badge sits at the card's right edge on
+   mobile and in the last columns on desktop — anchor its menu to
+   that edge so it can't widen the page past the screen. */
+.tx-table .tx-cell-category .dropdown-menu {
+  right: 0;
+  left: auto;
+}
+
 /* Pill page links matching the chip aesthetic. */
 .tx-pagination .pagination {
   gap: 0.25rem;

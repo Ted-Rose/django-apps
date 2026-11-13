@@ -1,6 +1,10 @@
 # google_api
 
 ## Changelog
+30. Mobile fix: the transaction row's category dropdown no longer
+    spills past the screen's right edge — its menu anchors to the
+    badge's right edge and row menus share the same viewport
+    width cap the header filter menus already had
 29. Rule drawer cleanup: the description filter now sits at the top
     of the form, the category picker shows each category's color
     dot both on the selected value and inside the dropdown list,
