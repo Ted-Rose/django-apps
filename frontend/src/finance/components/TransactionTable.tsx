@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import Dropdown from '../../shared/components/Dropdown';
 import Modal from '../../shared/components/Modal';
-import CategoryBadge from './CategoryBadge';
+import CategoryBadge, { CategoryDot } from './CategoryBadge';
 import MoneyText from './MoneyText';
 import { fmtDate } from '../../shared/format';
 import {
@@ -257,7 +257,13 @@ export function TransactionTable({
               {data.categories.map((category) => (
                 <FilterItem
                   key={category.id}
-                  label={category.name}
+                  className="d-flex align-items-center gap-2"
+                  label={
+                    <>
+                      <CategoryDot category={category} />
+                      <span className="fin-cat-name">{category.name}</span>
+                    </>
+                  }
                   active={data.selected_category === String(category.id)}
                   onClick={() => onUpdate({ category: String(category.id) })}
                 />
@@ -383,18 +389,25 @@ function ColumnHeader({
 
 function SortItem({
   label,
-  active,
+  active = false,
+  className = '',
   onClick,
 }: {
   label: ReactNode;
-  active: boolean;
+  active?: boolean;
+  /** Extra classes on the item — e.g. `d-flex` for marker+label
+      layouts (category color dots/badges). */
+  className?: string;
   onClick: () => void;
 }) {
   return (
     <li>
       <button
         type="button"
-        className={`dropdown-item${active ? ' active' : ''}`}
+        className={
+          `dropdown-item${className ? ` ${className}` : ''}` +
+          (active ? ' active' : '')
+        }
         onClick={onClick}
       >
         {label}
@@ -564,15 +577,18 @@ function TransactionRow({
             {categories.map((category) => (
               <FilterItem
                 key={category.id}
+                className="d-flex align-items-center gap-2"
                 label={
                   <>
+                    {/* Same pill as the categories page and the
+                        cell toggle — a plain name would render in
+                        the larger dropdown font instead. */}
+                    <CategoryBadge category={category} />
                     {currentId === category.id && (
-                      <i className="bi bi-check me-1" aria-hidden="true" />
+                      <i className="bi bi-check ms-auto" aria-hidden="true" />
                     )}
-                    {category.name}
                   </>
                 }
-                active={currentId === category.id}
                 onClick={() =>
                   assign.mutate({ txId: tx.id, categoryId: category.id })
                 }

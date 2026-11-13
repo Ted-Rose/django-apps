@@ -1,6 +1,10 @@
 # google_api
 
 ## Changelog
+34. Category pickers on the transactions page now show each
+    category's color: a row's assign menu lists the same tinted
+    pills you see on the categories page, and the column-header
+    filter puts a color dot beside every name
 33. The finance rules list now opens folded: the card is renamed
     "More rules" and stays collapsed until you click its header —
     the New rule and Re-apply rules buttons stay reachable in the

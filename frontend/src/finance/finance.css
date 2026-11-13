@@ -174,6 +174,29 @@ body {
   border: 1px solid var(--fin-border);
 }
 
+/* The badge's color dot + truncating name as standalone markers —
+   plain-text category lists (filter dropdowns, the rule drawer's
+   picker) where the whole pill would be too heavy. The inset ring
+   keeps light colors visible on white; on the highlighted
+   (active) row it flips to a light halo so dark colors still read
+   against the blue. */
+.fin-cat-dot {
+  flex: none;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+}
+.fin-cat-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dropdown-item.active .fin-cat-dot {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%);
+}
+
 /* Collapsible cards (components/CollapsibleCard.tsx): transparent
    header, hairline divider. */
 .fin-collapsible > .card-header {
