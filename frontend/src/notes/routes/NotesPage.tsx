@@ -96,8 +96,9 @@ export function NotesPage() {
         onClick: () => syncMutation.mutate(),
       },
     );
-  } else if (session) {
-    // Signed in but Google creds are dead — "reconnect" affordance.
+  } else if (session && data) {
+    // Signed in but Google creds are dead — "reconnect" affordance
+    // (data gate avoids flashing it while the query is pending).
     // Anonymous already gets the identical /login/ link via authItem.
     burgerItems.push({
       label: t('menu.loginGoogle'),
