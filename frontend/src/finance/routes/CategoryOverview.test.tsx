@@ -200,43 +200,48 @@ describe('CategoryOverview', () => {
 
     expect(await screen.findByText('Groceries')).toBeInTheDocument();
     expect(screen.getByText('Salary')).toBeInTheDocument();
-    // Spent and received render as separate columns per category —
-    // a mixed-direction row shows both sides instead of a net sum.
+    // Each row keeps a single spent column — income surfaces once
+    // in the totals cards below, not as a per-category column.
     const groceriesRow = screen.getByText('Groceries').closest('tr')!;
     expect(within(groceriesRow).getByText('-120.50 EUR')).toHaveClass(
       'text-danger',
     );
     const salaryRow = screen.getByText('Salary').closest('tr')!;
-    expect(within(salaryRow).getByText('+2000.00 EUR')).toHaveClass(
-      'text-success',
-    );
-    // Zero-amount cells render a muted dash.
+    // A zero-spent row renders a muted dash; no Received column.
     expect(within(salaryRow).getByText('—')).toHaveClass('text-muted');
+    expect(within(salaryRow).queryByText('+2000.00 EUR')).toBeNull();
     const uncategorizedRow = screen.getByText('Uncategorized').closest('tr')!;
     expect(within(uncategorizedRow).getByText('-39.00 USD')).toHaveClass(
       'text-danger',
     );
+    // Three columns — category, share bar, spent — and no totals
+    // footer: the figures moved to the StatCards below.
+    const table = groceriesRow.closest('table')!;
+    expect(table.querySelectorAll('thead th')).toHaveLength(3);
+    expect(table.querySelector('tfoot')).toBeNull();
     // Share column and the secondary tx-count subtext.
     expect(screen.getByText('75.5%')).toBeInTheDocument();
     expect(screen.getByText('12 transactions')).toBeInTheDocument();
     expect(screen.getByText('1 transaction')).toBeInTheDocument();
-    // Totals footer keeps spent and received separate per currency.
-    const eurTotal = screen.getByText('Total (EUR)').closest('tr');
-    expect(eurTotal).not.toBeNull();
-    expect(within(eurTotal!).getByText('-120.50 EUR')).toHaveClass(
-      'text-danger',
-    );
-    expect(within(eurTotal!).getByText('+2000.00 EUR')).toHaveClass(
-      'text-success',
-    );
-    const usdTotal = screen.getByText('Total (USD)').closest('tr');
-    expect(usdTotal).not.toBeNull();
-    expect(within(usdTotal!).getByText('-39.00 USD')).toHaveClass(
-      'text-danger',
-    );
-    expect(within(usdTotal!).getByText('+0.00 USD')).toHaveClass(
-      'text-success',
-    );
+    // Per-currency totals land as StatCards below the table —
+    // the received figure shows only there now.
+    const spentCard = screen.getByText('Spent (EUR)');
+    expect(screen.getByText('Received (EUR)')).toBeInTheDocument();
+    expect(screen.getByText('+2000.00 EUR')).toHaveClass('text-success');
+    expect(
+      table.compareDocumentPosition(spentCard) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The share toggle lives in the page header's action slot.
+    const shareToggle = screen.getByRole('button', {
+      name: 'Share overview',
+    });
+    expect(shareToggle.closest('.fin-page-header')).not.toBeNull();
+    // The calendar icon next to the preset chips toggles the
+    // collapsed from/to/account form.
+    expect(
+      screen.getByRole('button', { name: 'Set dates and account' }),
+    ).toHaveAttribute('aria-expanded', 'false');
     // The active preset is rendered as the pressed chip.
     const active = screen.getByRole('button', { name: 'This month' });
     expect(active).toHaveClass('fin-chip', 'active');
@@ -368,8 +373,11 @@ describe('CategoryOverview', () => {
   it('applies the account filter via the form', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview();
-    // The filter card is collapsed by default — expand it first.
-    fireEvent.click(await screen.findByRole('button', { name: /Filters/ }));
+    // The filter form is collapsed by default — the calendar icon
+    // next to the preset chips expands it.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
     // The account options render once the overview has loaded.
     await screen.findByRole('option', { name: 'Everyday account' });
     fireEvent.change(screen.getByLabelText('Account'), {
@@ -402,7 +410,9 @@ describe('CategoryOverview', () => {
   it('applies the date range via the form', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview();
-    fireEvent.click(await screen.findByRole('button', { name: /Filters/ }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
     fireEvent.change(await screen.findByLabelText('From'), {
       target: { value: '2025-02-01' },
     });
@@ -469,10 +479,12 @@ describe('CategoryOverview', () => {
     );
   });
 
-  it('keeps the filter card collapsed with a summary of active filters', async () => {
+  it('keeps the filter form collapsed with a summary', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview('/categories?from=2025-01-01&to=2025-01-15&account=5');
-    const toggle = await screen.findByRole('button', { name: /Filters/ });
+    const toggle = await screen.findByRole('button', {
+      name: 'Set dates and account',
+    });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByLabelText('Account')).not.toBeInTheDocument();
     // Wait for the overview so the account label joins the summary.

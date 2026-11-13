@@ -1,6 +1,15 @@
 # google_api
 
 ## Changelog
+25. The category spending page got a cleanup: the share button
+    moved into the page header, the bulky Filters card collapsed
+    into a calendar icon beside the period chips (the active
+    range still shows inline), the breakdown table dropped its
+    Received column and totals footer — those figures now live
+    in the Spent/Received cards at the bottom of the page — and
+    the donut chart reports a rounded percentage plus the spent
+    amount on hover; clicking a slice or legend entry pins that
+    readout under the chart
 24. Faster Vercel loads: the serverless function now runs in
     Frankfurt (same city as the Aiven Postgres, cutting per-request
     DB round-trips since connections are never pooled), hashed JS/

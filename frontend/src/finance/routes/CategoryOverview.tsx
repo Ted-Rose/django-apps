@@ -45,12 +45,12 @@ import './transactions.css';
  * totals by currency exactly like the template's `totals` dict.
  *
  * Money arrives as Decimal-serialized strings and renders as-is;
- * each row shows spent and received as separate columns so income
- * can't hide inside a category's net figure. Headline StatCards
- * surface spent/received per currency,
- * a recharts donut (CategoryChart) shows the spending share, and
- * the breakdown table stays three slim columns so it fits narrow
- * screens — the tx count is secondary text under the badge.
+ * each row shows a single spent column — income surfaces once in
+ * the per-currency Spent/Received StatCards at the bottom of the
+ * page, after the table and monthly matrix. A recharts donut
+ * (CategoryChart) shows the spending share, and the breakdown
+ * table stays three slim columns so it fits narrow screens — the
+ * tx count is secondary text under the badge.
  */
 export default function CategoryOverview() {
   const { t } = useTranslation('finance');
@@ -160,8 +160,9 @@ export default function CategoryOverview() {
     setSearchParams(next);
   };
 
-  // One-line recap of the active filters, shown while the filter
-  // card is collapsed so a deep-linked range stays visible.
+  // One-line recap of the active filters, shown next to the
+  // period chips while the form is collapsed so a deep-linked
+  // range stays visible.
   const accountLabel = data?.accounts.find(
     (account) => String(account.id) === params.account,
   )?.label;
@@ -201,131 +202,53 @@ export default function CategoryOverview() {
       <PageShell
         title={t('categories.title')}
         subtitle={t('categories.subtitle')}
+        actions={
+          data &&
+          !isSharedView && (
+            <button
+              type="button"
+              className="btn btn-sm acct-icon-btn"
+              title={t('categories.shareOverview')}
+              aria-label={t('categories.shareOverview')}
+              aria-expanded={shareOpen}
+              onClick={() => setShareOpen((open) => !open)}
+            >
+              <i className="bi bi-share" />
+            </button>
+          )
+        }
       >
-        {data && (
+        {data && (data.shared_with_me.length > 0 || isSharedView) && (
           <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-            {(data.shared_with_me.length > 0 || isSharedView) && (
-              <>
-                <button
-                  type="button"
-                  className={`fin-chip${params.owner ? '' : ' active'}`}
-                  aria-pressed={!params.owner}
-                  onClick={() => selectOwner(null)}
-                >
-                  {t('categories.myOverview')}
-                </button>
-                {data.shared_with_me.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className={`fin-chip${
-                      params.owner === name ? ' active' : ''
-                    }`}
-                    aria-pressed={params.owner === name}
-                    onClick={() => selectOwner(name)}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </>
-            )}
+            <button
+              type="button"
+              className={`fin-chip${params.owner ? '' : ' active'}`}
+              aria-pressed={!params.owner}
+              onClick={() => selectOwner(null)}
+            >
+              {t('categories.myOverview')}
+            </button>
+            {data.shared_with_me.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={`fin-chip${params.owner === name ? ' active' : ''}`}
+                aria-pressed={params.owner === name}
+                onClick={() => selectOwner(name)}
+              >
+                {name}
+              </button>
+            ))}
             {isSharedView && (
               <span className="badge acct-shared-badge">
                 {t('categories.sharedBy', { username: data.view_owner })}
               </span>
-            )}
-            {!isSharedView && (
-              <button
-                type="button"
-                className="btn btn-sm acct-icon-btn ms-auto"
-                title={t('categories.shareOverview')}
-                aria-label={t('categories.shareOverview')}
-                aria-expanded={shareOpen}
-                onClick={() => setShareOpen((open) => !open)}
-              >
-                <i className="bi bi-share" />
-              </button>
             )}
           </div>
         )}
         {data && !isSharedView && shareOpen && (
           <ShareOverviewCard accounts={data.accounts} shares={data.my_shares} />
         )}
-        <div className="fin-card p-3 mb-3">
-          <button
-            type="button"
-            className="btn btn-link p-0 text-body text-decoration-none d-flex align-items-center gap-2"
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((open) => !open)}
-          >
-            <i
-              className={`bi bi-chevron-${filtersOpen ? 'up' : 'down'}`}
-              aria-hidden="true"
-            />
-            {t('categories.filters')}
-            {!filtersOpen && filterSummary && (
-              <span className="text-muted small">{filterSummary}</span>
-            )}
-          </button>
-          {filtersOpen && (
-            <form className="mt-3" onSubmit={applyFilters}>
-              <div className="row g-2 align-items-end mb-0">
-                <div className="col-6 col-sm-auto">
-                  <label htmlFor="date-from" className="form-label">
-                    {t('categories.dateFrom')}
-                  </label>
-                  <input
-                    type="date"
-                    name="from"
-                    id="date-from"
-                    className="form-control"
-                    key={`from-${params.from}`}
-                    defaultValue={params.from}
-                  />
-                </div>
-                <div className="col-6 col-sm-auto">
-                  <label htmlFor="date-to" className="form-label">
-                    {t('categories.dateTo')}
-                  </label>
-                  <input
-                    type="date"
-                    name="to"
-                    id="date-to"
-                    className="form-control"
-                    key={`to-${params.to}`}
-                    defaultValue={params.to}
-                  />
-                </div>
-                <div className="col-12 col-sm-auto">
-                  <label htmlFor="account-filter" className="form-label">
-                    {t('categories.account')}
-                  </label>
-                  <select
-                    name="account"
-                    id="account-filter"
-                    className="form-select"
-                    // Remount once the options load (and on param change)
-                    // so defaultValue picks up a deep-linked account.
-                    key={`account-${params.account}-${data ? 'ready' : 'loading'}`}
-                    defaultValue={params.account}
-                  >
-                    <option value="">{t('categories.allAccounts')}</option>
-                    {(data?.accounts ?? []).map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-12 col-sm-auto">
-                  <button type="submit" className="btn btn-primary w-100">
-                    {t('common:common.apply')}
-                  </button>
-                </div>
-              </div>
-            </form>
-          )}
-        </div>
 
         {data && !isSharedView && (
           <div className="mb-3">
@@ -334,22 +257,95 @@ export default function CategoryOverview() {
         )}
 
         {data && (
-          <div className="d-flex flex-wrap gap-2 mb-4">
-            {data.periods.map((period) => (
+          <div className="mb-4">
+            <div className="d-flex flex-wrap align-items-center gap-2">
+              {data.periods.map((period) => (
+                <button
+                  key={period.key ?? period.label}
+                  type="button"
+                  className={`fin-chip${period.active ? ' active' : ''}`}
+                  aria-pressed={period.active}
+                  onClick={() => selectPeriod(period.date_from, period.date_to)}
+                >
+                  {period.key
+                    ? t(`server:periods.${period.key}`, {
+                        defaultValue: period.label,
+                      })
+                    : period.label}
+                </button>
+              ))}
               <button
-                key={period.key ?? period.label}
                 type="button"
-                className={`fin-chip${period.active ? ' active' : ''}`}
-                aria-pressed={period.active}
-                onClick={() => selectPeriod(period.date_from, period.date_to)}
+                className="btn btn-sm acct-icon-btn"
+                title={t('categories.filtersToggle')}
+                aria-label={t('categories.filtersToggle')}
+                aria-expanded={filtersOpen}
+                onClick={() => setFiltersOpen((open) => !open)}
               >
-                {period.key
-                  ? t(`server:periods.${period.key}`, {
-                      defaultValue: period.label,
-                    })
-                  : period.label}
+                <i className="bi bi-calendar3" aria-hidden="true" />
               </button>
-            ))}
+              {!filtersOpen && filterSummary && (
+                <span className="text-muted small">{filterSummary}</span>
+              )}
+            </div>
+            {filtersOpen && (
+              <form className="mt-3" onSubmit={applyFilters}>
+                <div className="row g-2 align-items-end mb-0">
+                  <div className="col-6 col-sm-auto">
+                    <label htmlFor="date-from" className="form-label">
+                      {t('categories.dateFrom')}
+                    </label>
+                    <input
+                      type="date"
+                      name="from"
+                      id="date-from"
+                      className="form-control"
+                      key={`from-${params.from}`}
+                      defaultValue={params.from}
+                    />
+                  </div>
+                  <div className="col-6 col-sm-auto">
+                    <label htmlFor="date-to" className="form-label">
+                      {t('categories.dateTo')}
+                    </label>
+                    <input
+                      type="date"
+                      name="to"
+                      id="date-to"
+                      className="form-control"
+                      key={`to-${params.to}`}
+                      defaultValue={params.to}
+                    />
+                  </div>
+                  <div className="col-12 col-sm-auto">
+                    <label htmlFor="account-filter" className="form-label">
+                      {t('categories.account')}
+                    </label>
+                    <select
+                      name="account"
+                      id="account-filter"
+                      className="form-select"
+                      // Remount on param change so defaultValue picks
+                      // up a deep-linked account.
+                      key={`account-${params.account}`}
+                      defaultValue={params.account}
+                    >
+                      <option value="">{t('categories.allAccounts')}</option>
+                      {data.accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-12 col-sm-auto">
+                    <button type="submit" className="btn btn-primary w-100">
+                      {t('common:common.apply')}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
           </div>
         )}
 
@@ -365,8 +361,82 @@ export default function CategoryOverview() {
         )}
         {data && (
           <>
+            {data.rows.length > 0 ? (
+              <div className="row g-3">
+                <div className="col-12 col-lg-4">
+                  <div className="fin-card p-3 h-100">
+                    <h2 className="h6 text-muted">
+                      {t('categories.chartTitle')}
+                    </h2>
+                    <Suspense
+                      fallback={
+                        <div
+                          className="fin-skeleton"
+                          style={{ height: '17.5rem' }}
+                        />
+                      }
+                    >
+                      <CategoryChart rows={data.rows} />
+                    </Suspense>
+                  </div>
+                </div>
+                <div className="col-12 col-lg-8">
+                  <div className="fin-card p-3 h-100">
+                    <table className="table table-hover cat-table mb-0">
+                      <thead>
+                        <tr>
+                          <th>{t('transactions.columns.category')}</th>
+                          <th className="w-25">{t('categories.share')}</th>
+                          <th className="text-end">
+                            {t('categories.spentCol')}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          // Excluded rows sort last server-side; a
+                          // muted section header splits them off.
+                          const firstExcluded = data.rows.findIndex(
+                            (row) => row.is_excluded,
+                          );
+                          return data.rows.map((row, index) => (
+                            <Fragment key={`${row.category_name}-${index}`}>
+                              {index === firstExcluded && (
+                                <tr>
+                                  <td
+                                    colSpan={3}
+                                    className="text-muted small border-0 pt-3"
+                                  >
+                                    {t('categories.excludedSection')}
+                                  </td>
+                                </tr>
+                              )}
+                              <OverviewRow
+                                row={row}
+                                index={index}
+                                selected={
+                                  (row.category_id != null
+                                    ? String(row.category_id)
+                                    : 'none') === params.category
+                                }
+                                onSelect={() => selectCategory(row)}
+                              />
+                            </Fragment>
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <EmptyState icon="pie-chart" title={t('categories.emptyTitle')} />
+            )}
+            {showMonthly && data.monthly.rows.length > 0 && (
+              <MonthlyCard monthly={data.monthly} />
+            )}
             {Object.keys(data.totals).length > 0 && (
-              <div className="row g-3 mb-4">
+              <div className="row g-3 mt-1 mb-4">
                 {Object.entries(data.totals).flatMap(([currency, total]) => [
                   <div
                     className="col-12 col-sm-6 col-lg-3"
@@ -400,99 +470,6 @@ export default function CategoryOverview() {
                   </div>,
                 ])}
               </div>
-            )}
-            {data.rows.length > 0 ? (
-              <div className="row g-3">
-                <div className="col-12 col-lg-4">
-                  <div className="fin-card p-3 h-100">
-                    <h2 className="h6 text-muted">
-                      {t('categories.chartTitle')}
-                    </h2>
-                    <Suspense
-                      fallback={
-                        <div
-                          className="fin-skeleton"
-                          style={{ height: '17.5rem' }}
-                        />
-                      }
-                    >
-                      <CategoryChart rows={data.rows} />
-                    </Suspense>
-                  </div>
-                </div>
-                <div className="col-12 col-lg-8">
-                  <div className="fin-card p-3 h-100">
-                    <table className="table table-hover cat-table mb-0">
-                      <thead>
-                        <tr>
-                          <th>{t('transactions.columns.category')}</th>
-                          <th className="w-25">{t('categories.share')}</th>
-                          <th className="text-end">
-                            {t('categories.spentCol')}
-                          </th>
-                          <th className="text-end">
-                            {t('categories.receivedCol')}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          // Excluded rows sort last server-side; a
-                          // muted section header splits them off.
-                          const firstExcluded = data.rows.findIndex(
-                            (row) => row.is_excluded,
-                          );
-                          return data.rows.map((row, index) => (
-                            <Fragment key={`${row.category_name}-${index}`}>
-                              {index === firstExcluded && (
-                                <tr>
-                                  <td
-                                    colSpan={4}
-                                    className="text-muted small border-0 pt-3"
-                                  >
-                                    {t('categories.excludedSection')}
-                                  </td>
-                                </tr>
-                              )}
-                              <OverviewRow
-                                row={row}
-                                index={index}
-                                selected={
-                                  (row.category_id != null
-                                    ? String(row.category_id)
-                                    : 'none') === params.category
-                                }
-                                onSelect={() => selectCategory(row)}
-                              />
-                            </Fragment>
-                          ));
-                        })()}
-                      </tbody>
-                      <tfoot>
-                        {Object.entries(data.totals).map(
-                          ([currency, total]) => (
-                            <tr className="fw-bold" key={currency}>
-                              <td>{t('categories.total', { currency })}</td>
-                              <td />
-                              <td className="text-end text-nowrap text-danger fin-money">
-                                -{total.spent} {currency}
-                              </td>
-                              <td className="text-end text-nowrap text-success fin-money">
-                                +{total.received} {currency}
-                              </td>
-                            </tr>
-                          ),
-                        )}
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <EmptyState icon="pie-chart" title={t('categories.emptyTitle')} />
-            )}
-            {showMonthly && data.monthly.rows.length > 0 && (
-              <MonthlyCard monthly={data.monthly} />
             )}
           </>
         )}
@@ -641,8 +618,8 @@ function ShareOverviewCard({
 
 /**
  * One breakdown row: category badge + tx count, a share bar tinted
- * with the category color, and the spent/received amounts as
- * separate columns — a category with both directions shows both.
+ * with the category color, and the spent amount — income shows up
+ * once in the totals cards instead of a per-category column.
  * The row is a click target: selecting it opens the transaction
  * drill-down below the table (`?category=` in the URL).
  */
@@ -726,15 +703,6 @@ function OverviewRow({
         {Number(row.spent) > 0 ? (
           <span className="text-danger">
             -{row.spent} {row.currency}
-          </span>
-        ) : (
-          <span className="text-muted">—</span>
-        )}
-      </td>
-      <td className="text-end text-nowrap fin-money">
-        {Number(row.received) > 0 ? (
-          <span className="text-success">
-            +{row.received} {row.currency}
           </span>
         ) : (
           <span className="text-muted">—</span>

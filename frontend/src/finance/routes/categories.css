@@ -13,6 +13,11 @@
   height: 17.5rem;
 }
 
+/* Legend entries act as selection buttons next to the slices. */
+.cat-chart .recharts-legend-item {
+  cursor: pointer;
+}
+
 /* Quieter table chrome inside the fin-card: small-caps header and
    no trailing border under the last row. */
 .cat-table > thead > tr > th {
