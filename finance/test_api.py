@@ -343,6 +343,11 @@ class ExcludedAccountApiTests(ApiTestCase):
         ).json()
         self.assertEqual(len(body['rows']), 1)
         self.assertEqual(len(body['accounts']), 1)
+        # The transaction drill-down resolves the same scope.
+        body = self.client.get(
+            f'{self.API}/transactions/?owner=alice'
+        ).json()
+        self.assertEqual(len(body['transactions']), 1)
 
     def test_sharer_excludes_only_own_view(self):
         """A sharer's exclusion is per-user — the owner keeps

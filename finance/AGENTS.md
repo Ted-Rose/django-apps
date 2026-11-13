@@ -101,12 +101,19 @@ just-dead requisition are skipped without another API call.
   per-account across viewers, so re-including picks the cursor
   back up). Exclusion is a display preference, not a kill
   switch: `check_balance_alerts` keeps firing on excluded
-  accounts, and `evaluate_spending_limits` counts their real
-  spend (via `respect_exclusion=False`) so configured
-  notifications still go out — only the limits page's own
-  progress/history reads 0 from them. A `TransactionLimit`'s
-  configured account list still names excluded accounts (config
-  fidelity).
+  accounts (its notifications link to the Accounts page — the
+  only place they're visible — and alerts whose user lost
+  access entirely, e.g. a revoked AccountShare, stay silent),
+  and `evaluate_spending_limits` counts their real spend (via
+  `respect_exclusion=False`) so configured notifications
+  still go out. The limits page's own progress and recomputed
+  history read 0 from excluded accounts, but recorded
+  `LimitEvaluation` months always show the real spend — the
+  audit trail of why a notification fired. A
+  `TransactionLimit`'s configured account list still names
+  excluded accounts (config fidelity — editing preserves
+  them), though a NEW limit can't pick excluded accounts
+  since the form only lists visible ones.
 - `CategoryOverviewShare` — grants another user read access to the
   sharer's category overview (`/finance/categories/?owner=<sharer>`)
   plus its transaction drill-down (`/api/finance/…?owner=`). One row

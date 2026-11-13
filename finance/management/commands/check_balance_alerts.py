@@ -2,6 +2,7 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 from django.core.management.base import BaseCommand
+from django.db.models import F, Q
 from django.urls import reverse
 from django.utils import timezone, translation
 from django.utils.translation import gettext
@@ -46,7 +47,14 @@ class Command(BaseCommand):
             BalanceAlert.objects.filter(
                 is_active=True,
                 account__requisition__status='LN',
-            ).select_related('account', 'account__requisition', 'user')
+            ).filter(
+                # Alerts only fire while the user can still see the
+                # account — a revoked share shouldn't keep pinging.
+                Q(account__owner=F('user'))
+                | Q(account__shares__shared_with=F('user'))
+            ).select_related(
+                'account', 'account__requisition', 'user'
+            ).distinct()
         )
         if not alerts:
             self.stdout.write('No active balance alerts.')
@@ -178,7 +186,14 @@ class Command(BaseCommand):
             account.name or account.iban or account.account_id
         )
         currency = account.currency
-        url = reverse('finance:balances')
+        # An excluded account is only visible on the Accounts
+        # page — point its notification there instead.
+        excluded = account.user_preferences.filter(
+            user=alert.user, excluded=True
+        ).exists()
+        url = reverse(
+            'finance:accounts' if excluded else 'finance:balances'
+        )
         with translation.override(user_language(alert.user)):
             title = gettext('Low balance')
             body = gettext(

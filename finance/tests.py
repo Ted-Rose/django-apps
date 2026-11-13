@@ -305,6 +305,12 @@ class EvaluateSpendingLimitsTests(TestCase):
             mock_logger = self.run_command()
         mock_logger.warning.assert_called_once()
         mock_send.assert_called_once()
+        # The recorded evaluation keeps the real spend — it is
+        # the audit trail of why the notification fired.
+        evaluation = LimitEvaluation.objects.get(
+            period_start=timezone.now().date().replace(day=1)
+        )
+        self.assertEqual(evaluation.spent, Decimal('150.00'))
 
     def test_limit_not_exceeded_no_warning(self):
         make_limit(
@@ -2610,7 +2616,33 @@ class CheckBalanceAlertsTests(TestCase):
         mock_send.assert_called_once()
         alert.refresh_from_db()
         self.assertIsNotNone(alert.alerted_at)
-        self.assertTrue(Notification.objects.exists())
+        notification = Notification.objects.get(user=self.user)
+        # The account only lives on the Accounts page now —
+        # the notification links there, not the balances page.
+        self.assertEqual(notification.url, '/finance/accounts/')
+        self.assertEqual(
+            mock_send.call_args[0][3], '/finance/accounts/'
+        )
+
+    def test_revoked_share_alert_stays_silent(self):
+        """An alert left behind by a revoked AccountShare never
+        fires — the user can't see the account anywhere."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        share = AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        BalanceAlert.objects.create(
+            user=viewer,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        share.delete()
+        mock_send, client = self.run_command()
+        mock_send.assert_not_called()
+        client.fetch_balances_parallel.assert_not_called()
+        self.assertFalse(Notification.objects.exists())
 
     def test_above_threshold_stays_silent(self):
         alert = BalanceAlert.objects.create(
