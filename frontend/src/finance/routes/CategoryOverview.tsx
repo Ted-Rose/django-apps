@@ -395,10 +395,10 @@ export default function CategoryOverview() {
                       <thead>
                         <tr>
                           <th>{t('transactions.columns.category')}</th>
-                          <th style={{ width: '4.5rem' }}>
+                          <th style={{ width: '3rem' }}>
                             {t('categories.share')}
                           </th>
-                          <th className="text-end">
+                          <th className="text-end" style={{ width: '6rem' }}>
                             {t('categories.spentCol')}
                           </th>
                         </tr>
@@ -685,7 +685,7 @@ function OverviewRow({
       </td>
       <td className="align-middle">
         {row.is_excluded ? (
-          <small className="text-nowrap">
+          <small>
             <i className="bi bi-eye-slash me-1" aria-hidden="true" />
             {t('categories.excludedFromStats')}
           </small>
@@ -713,7 +713,10 @@ function OverviewRow({
           </div>
         )}
       </td>
-      <td className="text-end text-nowrap fin-money">
+      {/* No text-nowrap: .fin-money keeps one line on desktop,
+          and categories.css relaxes it under sm so the amount
+          wraps at the currency gap instead of overflowing. */}
+      <td className="text-end fin-money">
         {Number(row.spent) > 0 ? (
           <span className="text-danger">
             -{row.spent} {row.currency}
