@@ -338,7 +338,7 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
     '.vercel.app',
-    'tedisrozenfelds.vercel.app',
+    'tedis.vercel.app',
     '.run.app',
 ]
 
