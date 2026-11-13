@@ -1,6 +1,7 @@
-/* Accounts page — `.fin-card` account rows, the balance-check
-   switch, and the inline share form that expands under the card
-   header. Classes are prefixed `acct-` to stay out of finance.css. */
+/* Accounts page — `.fin-card` account rows, the balance-check and
+   excluded switches, and the inline share form that expands under
+   the card header. Classes are prefixed `acct-` to stay out of
+   finance.css. */
 
 .acct-list {
   display: flex;
@@ -56,4 +57,17 @@
 /* Threshold field stays compact next to its label/suffix. */
 .acct-alert-input {
   max-width: 9rem;
+}
+
+/* Excluded accounts stay listed but muted — they exist only on
+   this page until re-included. */
+.acct-card-excluded {
+  opacity: 0.55;
+}
+
+.acct-excluded-badge {
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  background: rgba(108, 117, 125, 0.08);
+  border: 1px solid rgba(108, 117, 125, 0.25);
 }

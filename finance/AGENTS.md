@@ -81,7 +81,26 @@ just-dead requisition are skipped without another API call.
 - `Account` — owned by `owner`, linked via `requisition`.
 - `AccountShare` — grants another user read access.
 - `UserAccountPreference` — per-user `included_in_balance_check` toggle
-  (created automatically on link/share).
+  (created automatically on link/share) plus `excluded`: the
+  per-account hide flag flipped from the Accounts page's
+  "Excluded" switch (`POST
+  /api/finance/accounts/<id>/toggle-excluded/`). An excluded
+  account (and its transactions) is visible ONLY on the Accounts
+  page — `Account.objects.visible_for(user)` /
+  `Transaction.objects.visible_for(user)` (`managers.py`) are the
+  `for_user` sets minus the caller's excluded accounts, and every
+  read path except `GET /accounts/` uses them: transactions,
+  category overview (the sharer's exclusions hide accounts from
+  their shared `?owner=` view too), limits (spend sums via
+  `_spend_queryset`, month list, form options), balances,
+  transaction mutations (404), rule categorization/preview, and
+  the manual `sync` endpoint (excluded accounts are paused — the
+  scheduled `sync_bank_transactions` job still syncs them since
+  sync is per-account across viewers, so re-including picks the
+  cursor back up). `check_balance_alerts` skips excluded
+  accounts' alerts. A `TransactionLimit`'s configured account
+  list still names excluded accounts (config fidelity — they just
+  contribute no spend).
 - `CategoryOverviewShare` — grants another user read access to the
   sharer's category overview (`/finance/categories/?owner=<sharer>`)
   plus its transaction drill-down (`/api/finance/…?owner=`). One row
@@ -209,6 +228,10 @@ just-dead requisition are skipped without another API call.
 `Account.objects.for_user(user)` / `Transaction.objects.for_user(user)`
 (owned OR shared, `managers.py`) — never bare `objects.all()` in views.
 Ownership-only checks (e.g. sharing) use `owner=request.user`.
+User-facing reads (everything except the Accounts page and
+account-level mutations like share/alert/toggles) use the
+`visible_for(user)` variants, which also drop accounts the user
+flagged `excluded`.
 
 ## Management commands → Cloud Run jobs
 

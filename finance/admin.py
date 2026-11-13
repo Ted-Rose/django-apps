@@ -53,8 +53,10 @@ class CategoryOverviewShareAdmin(admin.ModelAdmin):
 
 @admin.register(UserAccountPreference)
 class UserAccountPreferenceAdmin(admin.ModelAdmin):
-    list_display = ['user', 'account', 'included_in_balance_check']
-    list_filter = ['included_in_balance_check', 'user']
+    list_display = [
+        'user', 'account', 'included_in_balance_check', 'excluded',
+    ]
+    list_filter = ['included_in_balance_check', 'excluded', 'user']
 
 
 @admin.register(Transaction)

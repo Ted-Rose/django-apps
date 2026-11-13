@@ -1,6 +1,14 @@
 # google_api
 
 ## Changelog
+33. Finance accounts can now be excluded: a new "Excluded" switch
+    on each Accounts-page card hides the account and its
+    transactions everywhere else — transactions, category
+    spending, balances, limits and sync — until you switch it
+    back on and everything reappears. Excluded accounts stay
+    listed (dimmed) on the Accounts page only; sharers can
+    exclude a shared account from their own view without
+    affecting the owner
 32. Apps no longer reload when you switch between them: the
     dashboard, Tasks, Finance, Gmail and Notes now run inside one
     shared page, so moving between sections is instant and lists

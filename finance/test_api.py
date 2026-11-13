@@ -208,6 +208,175 @@ class AccountsApiTests(ApiTestCase):
         self.assertFalse(pref.included_in_balance_check)
 
 
+class ExcludedAccountApiTests(ApiTestCase):
+    """The per-account `excluded` pref hides an account — and its
+    transactions — from every page except /accounts/; toggling it
+    back restores the account everywhere."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.client.force_login(self.user)
+
+    def exclude(self):
+        return UserAccountPreference.objects.create(
+            user=self.user, account=self.account, excluded=True
+        )
+
+    def test_toggle_flips_pref_and_returns_flag(self):
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/toggle-excluded/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body['success'])
+        self.assertTrue(body['excluded'])
+        self.assertEqual(body['code'], 'accountExcludedFromViews')
+        self.assertTrue(
+            UserAccountPreference.objects.get(
+                user=self.user, account=self.account
+            ).excluded
+        )
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/toggle-excluded/'
+        )
+        self.assertFalse(resp.json()['excluded'])
+        self.assertEqual(
+            resp.json()['code'], 'accountIncludedInViews'
+        )
+
+    def test_toggle_404_for_foreign_account(self):
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign = make_account(
+            other, make_requisition(other, 'req-b'), 'acc-b'
+        )
+        resp = self.post_json(
+            f'/accounts/{foreign.pk}/toggle-excluded/'
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accounts_lists_excluded_with_flag(self):
+        self.exclude()
+        resp = self.client.get(f'{self.API}/accounts/')
+        self.assertTrue(resp.json()['accounts'][0]['excluded'])
+
+    def test_transactions_hide_excluded_account(self):
+        make_transaction(
+            self.account, 't-1', '-10.00', creditor_name='Rimi'
+        )
+        self.exclude()
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 0)
+        self.assertEqual(body['accounts'], [])
+        self.assertEqual(body['counterparties'], [])
+
+    def test_reinclude_restores_transactions(self):
+        make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        self.post_json(
+            f'/accounts/{self.account.pk}/toggle-excluded/'
+        )
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 1)
+
+    def test_overview_hides_excluded_account(self):
+        make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        body = self.client.get(
+            f'{self.API}/categories/overview/?from=2000-01-01'
+        ).json()
+        self.assertEqual(body['rows'], [])
+        self.assertEqual(body['accounts'], [])
+
+    def test_balances_hide_excluded_account(self):
+        UserAccountPreference.objects.create(
+            user=self.user,
+            account=self.account,
+            included_in_balance_check=True,
+            excluded=True,
+        )
+        body = self.client.get(f'{self.API}/balances/').json()
+        self.assertEqual(body['accounts'], [])
+
+    def test_limit_stats_and_options_skip_excluded_account(self):
+        make_transaction(self.account, 't-1', '-10.00')
+        make_limit(
+            account=self.account,
+            user=self.user,
+            limit_7_days=Decimal('100.00'),
+        )
+        self.exclude()
+        body = self.client.get(f'{self.API}/limits/').json()
+        stat = body['limits'][0]['window_stats'][0]
+        self.assertEqual(Decimal(stat['spent']), Decimal('0'))
+        self.assertEqual(body['accounts'], [])
+
+    def test_assign_404_on_excluded_transaction(self):
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/category/', {'category': None}
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_sharers_exclusion_hides_shared_overview(self):
+        """Excluding an account hides it from the overview the
+        owner shared — the viewer never sees it."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        self.client.force_login(viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertEqual(body['rows'], [])
+        self.assertEqual(body['accounts'], [])
+
+    def test_sharer_excludes_only_own_view(self):
+        """A sharer's exclusion is per-user — the owner keeps
+        seeing the account everywhere."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        UserAccountPreference.objects.create(
+            user=viewer, account=self.account, excluded=True
+        )
+        self.client.force_login(viewer)
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 0)
+        self.client.force_login(self.user)
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 1)
+
+    def test_sync_skips_excluded_accounts(self):
+        self.exclude()
+        client = MagicMock()
+        client.fetch_transactions.return_value = {'booked': []}
+        with patch(
+            'finance.api.GoCardlessClient', return_value=client
+        ):
+            resp = self.post_json('/transactions/sync/')
+        body = resp.json()
+        self.assertEqual(body['code'], 'noLinkedAccounts')
+        self.assertEqual(body['accounts'], [])
+        client.fetch_transactions.assert_not_called()
+
+
 class BalanceAlertApiTests(ApiTestCase):
     """Per-user low-balance alerts: any viewer (owner or sharer)
     keeps their own threshold on an account they can see."""

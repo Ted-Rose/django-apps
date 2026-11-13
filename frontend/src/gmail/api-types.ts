@@ -872,6 +872,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/finance/accounts/{account_id}/toggle-excluded/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toggle Excluded
+         * @description Flip the caller's per-account excluded flag — an excluded
+         *     account and its transactions vanish from every page except
+         *     Accounts until it is included again.
+         */
+        post: operations["finance_api_toggle_excluded"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/finance/accounts/{account_id}/share/": {
         parameters: {
             query?: never;
@@ -1824,6 +1846,11 @@ export interface components {
             owner_username: string;
             /** Included In Balance Check */
             included_in_balance_check: boolean;
+            /**
+             * Excluded
+             * @default false
+             */
+            excluded: boolean;
             /** Balance Alert */
             balance_alert?: string | null;
             /** Last Balance */
@@ -2341,6 +2368,21 @@ export interface components {
             } | null;
             /** Included In Balance Check */
             included_in_balance_check: boolean;
+        };
+        /** ToggleExcludedOut */
+        ToggleExcludedOut: {
+            /** Success */
+            success: boolean;
+            /** Message */
+            message: string;
+            /** Code */
+            code?: string | null;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            } | null;
+            /** Excluded */
+            excluded: boolean;
         };
         /** MessageOut */
         MessageOut: {
@@ -3877,6 +3919,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ToggleBalanceCheckOut"];
+                };
+            };
+        };
+    };
+    finance_api_toggle_excluded: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToggleExcludedOut"];
                 };
             };
         };

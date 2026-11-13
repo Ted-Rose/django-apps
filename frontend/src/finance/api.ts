@@ -56,6 +56,7 @@ export type MessageOut = components['schemas']['MessageOut'];
 export type SuccessOut = components['schemas']['SuccessOut'];
 export type ToggleBalanceCheckOut =
   components['schemas']['ToggleBalanceCheckOut'];
+export type ToggleExcludedOut = components['schemas']['ToggleExcludedOut'];
 
 /** GET /api/finance/accounts/ → AccountsOut. */
 export function fetchAccounts(): Promise<AccountsOut> {

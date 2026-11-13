@@ -130,6 +130,13 @@ class UserAccountPreference(models.Model):
         related_name='user_preferences'
     )
     included_in_balance_check = models.BooleanField(default=True)
+    excluded = models.BooleanField(
+        default=False,
+        help_text=(
+            'Hide the account and its transactions from every '
+            'page except Accounts'
+        ),
+    )
 
     class Meta:
         unique_together = ('user', 'account')

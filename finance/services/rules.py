@@ -110,8 +110,13 @@ def active_rules_for(user):
 
 
 def categorizable_transactions(user):
-    """Transactions the user's rules may categorize (owned+shared)."""
-    return Transaction.objects.for_user(user).select_related('account')
+    """Transactions the user's rules may categorize — the visible
+    (owned+shared, non-excluded) set, so rule previews never leak
+    an excluded account's name onto the rules page."""
+    return (
+        Transaction.objects.visible_for(user)
+        .select_related('account')
+    )
 
 
 _UNSET = object()

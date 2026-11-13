@@ -14,16 +14,19 @@ import {
   useSaveBalanceAlert,
   useShareAccount,
   useToggleBalanceCheck,
+  useToggleExcluded,
 } from '../mutations';
 import './accounts.css';
 
 /**
  * React port of accounts.html — the account list with a per-card
- * balance-check switch (each user's own UserAccountPreference, so
- * sharers get the switch too), an owner-only share icon that
- * expands an inline share form below the card header, and a bell
- * icon that expands the inline low-balance alert form. The
- * "Connect Bank" action routes in-SPA to /connect.
+ * balance-check switch and an excluded switch (each user's own
+ * UserAccountPreference, so sharers get both switches too — an
+ * excluded account shows only here until re-included), an
+ * owner-only share icon that expands an inline share form below
+ * the card header, and a bell icon that expands the inline
+ * low-balance alert form. The "Connect Bank" action routes in-SPA
+ * to /connect.
  */
 export default function Accounts() {
   const { t } = useTranslation('finance');
@@ -104,6 +107,7 @@ function AccountRow({
 }) {
   const { t } = useTranslation('finance');
   const toggle = useToggleBalanceCheck();
+  const exclude = useToggleExcluded();
   const share = useShareAccount();
   const saveAlert = useSaveBalanceAlert();
   const deleteAlert = useDeleteBalanceAlert();
@@ -113,6 +117,7 @@ function AccountRow({
   const [threshold, setThreshold] = useState('');
 
   const toggling = toggle.isPending && toggle.variables === account.id;
+  const excluding = exclude.isPending && exclude.variables === account.id;
   const sharing = share.isPending && share.variables?.accountId === account.id;
   const savingAlert =
     saveAlert.isPending && saveAlert.variables?.accountId === account.id;
@@ -122,6 +127,7 @@ function AccountRow({
     .filter(Boolean)
     .join(' · ');
   const switchId = `balance-check-${account.id}`;
+  const excludeId = `exclude-${account.id}`;
   const lastBalance = (account.last_balance ?? null) as LastBalance | null;
   const lastAmount = lastBalance?.balanceAmount;
 
@@ -132,11 +138,20 @@ function AccountRow({
   };
 
   return (
-    <div className="fin-card acct-card">
+    <div
+      className={`fin-card acct-card${
+        account.excluded ? ' acct-card-excluded' : ''
+      }`}
+    >
       <div className="acct-card-head">
         <div>
           <h2 className="h5 mb-1">{account.display_name}</h2>
           <p className="mb-1 text-muted small">{details}</p>
+          {account.excluded && (
+            <span className="badge acct-excluded-badge">
+              {t('accounts.excluded')}
+            </span>
+          )}{' '}
           {!account.is_owner && (
             <span className="badge acct-shared-badge">
               {t('accounts.sharedBy', {
@@ -161,7 +176,22 @@ function AccountRow({
               {t('accounts.balanceCheck')}
             </label>
           </div>
-          {toggling && (
+          <div className="form-check form-switch m-0">
+            <input
+              id={excludeId}
+              type="checkbox"
+              role="switch"
+              className="form-check-input"
+              title={t('accounts.excludedHint')}
+              checked={account.excluded}
+              disabled={excluding}
+              onChange={() => exclude.mutate(account.id)}
+            />
+            <label className="form-check-label" htmlFor={excludeId}>
+              {t('accounts.excluded')}
+            </label>
+          </div>
+          {(toggling || excluding) && (
             <span className="spinner-border spinner-border-sm" role="status" />
           )}
           {!alertOpen && (

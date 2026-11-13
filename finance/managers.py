@@ -8,12 +8,32 @@ class AccountQuerySet(models.QuerySet):
             Q(owner=user) | Q(shares__shared_with=user)
         ).distinct()
 
+    def visible_for(self, user):
+        """``for_user`` minus accounts the user excluded.
+
+        The set every page except Accounts reads — an excluded
+        account surfaces only on the Accounts page until the user
+        includes it again.
+        """
+        return self.for_user(user).exclude(
+            user_preferences__user=user,
+            user_preferences__excluded=True,
+        )
+
 
 class TransactionQuerySet(models.QuerySet):
     def for_user(self, user):
         from finance.models import Account
         return self.filter(
             account__in=Account.objects.for_user(user)
+        ).distinct()
+
+    def visible_for(self, user):
+        """Transactions on ``visible_for`` accounts — excluded
+        accounts' transactions reach no page or aggregation."""
+        from finance.models import Account
+        return self.filter(
+            account__in=Account.objects.visible_for(user)
         ).distinct()
 
     def with_occurrence_date(self):
