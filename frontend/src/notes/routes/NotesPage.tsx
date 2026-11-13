@@ -8,6 +8,7 @@ import EmptyState from '../../shared/components/EmptyState';
 import ErrorState from '../../shared/components/ErrorState';
 import ListSkeleton from '../../shared/components/ListSkeleton';
 import Toasts from '../../shared/components/Toasts';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { useSession } from '../../shared/session';
 import { fetchNotes, type NotesDashboardOut, type TaskOut } from '../api';
 import NoteCard from '../components/NoteCard';
@@ -37,8 +38,8 @@ export function NotesPage() {
   const q = searchParams.get('q') || null;
   const order = searchParams.get('order') ?? 'created_desc';
 
+  const authItem = useAuthMenuItem();
   const session = useSession();
-  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['notes', { category: categoryId, q, order }],
@@ -94,14 +95,11 @@ export function NotesPage() {
         btn_class: 'btn-light',
         onClick: () => syncMutation.mutate(),
       },
-      {
-        label: t('common:common.logout', { user }),
-        url: '/admin/logout/',
-        icon: 'box-arrow-right',
-        btn_class: 'btn-outline-light',
-      },
     );
-  } else {
+  } else if (session && data) {
+    // Signed in but Google creds are dead — "reconnect" affordance
+    // (data gate avoids flashing it while the query is pending).
+    // Anonymous already gets the identical /login/ link via authItem.
     burgerItems.push({
       label: t('menu.loginGoogle'),
       url: loginUrl,
@@ -109,6 +107,7 @@ export function NotesPage() {
       btn_class: 'btn-warning',
     });
   }
+  burgerItems.push(authItem);
 
   return (
     <>

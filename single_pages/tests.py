@@ -56,7 +56,7 @@ class SinglePagesApiTests(TestCase):
         self.client.logout()
         resp = self.client.get(f'{API}/spoki/?x=1')
         login_url = urlparse(resp.json()['login_url'])
-        self.assertEqual(login_url.path, '/admin/login/')
+        self.assertEqual(login_url.path, '/login/')
         self.assertEqual(
             parse_qs(login_url.query)['next'], ['/twister?x=1']
         )

@@ -16,19 +16,10 @@ msgstr ""
 msgid "All spending"
 msgstr ""
 
-msgid "the last 7 days"
-msgstr ""
-
-msgid "the last 30 days"
-msgstr ""
-
-msgid "this month"
-msgstr ""
-
 msgid "Spending limit exceeded"
 msgstr ""
 
-msgid "{scope} on {account}: {spent} of {threshold} in {period}"
+msgid "{scope} on {account}: {spent} of {threshold} this month"
 msgstr ""
 
 msgid "Low balance"

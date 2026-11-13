@@ -9,6 +9,7 @@
     "edit": "Edit",
     "home": "Home",
     "loading": "Loading",
+    "loginGoogle": "Login with Google",
     "logout": "Logout ({{user}})",
     "remove": "Remove",
     "retry": "Retry",

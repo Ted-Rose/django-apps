@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -65,10 +65,59 @@ function renderAccounts() {
   );
 }
 
+/** A PushSubscription-shaped stub — only the members the hook uses. */
+function makeSubscription(endpoint = 'https://push.example/sub-1') {
+  return {
+    endpoint,
+    options: {},
+    unsubscribe: vi.fn().mockResolvedValue(true),
+    toJSON: () => ({
+      endpoint,
+      keys: { p256dh: 'key-p256dh', auth: 'key-auth' },
+    }),
+  } as unknown as PushSubscription;
+}
+
+/** jsdom has no Push API — install the globals the hook probes. */
+function mockPushApis(subscription: PushSubscription | null = null) {
+  const pushManager = {
+    getSubscription: vi.fn().mockResolvedValue(subscription),
+    subscribe: vi
+      .fn()
+      .mockResolvedValue(makeSubscription('https://push.example/new-sub')),
+  };
+  Object.defineProperty(window.navigator, 'serviceWorker', {
+    value: { ready: Promise.resolve({ pushManager }) },
+    configurable: true,
+  });
+  Object.defineProperty(window, 'PushManager', {
+    value: class PushManager {},
+    configurable: true,
+  });
+  Object.defineProperty(window, 'Notification', {
+    value: {
+      permission: 'granted',
+      requestPermission: vi.fn().mockResolvedValue('granted'),
+    },
+    configurable: true,
+  });
+  return pushManager;
+}
+
+function removePushApis() {
+  delete (window.navigator as { serviceWorker?: unknown }).serviceWorker;
+  delete (window as { PushManager?: unknown }).PushManager;
+  delete (window as { Notification?: unknown }).Notification;
+}
+
 beforeEach(() => {
   mockedApiGet.mockReset();
   mockedApiPost.mockReset();
   clearToasts();
+});
+
+afterEach(() => {
+  removePushApis();
 });
 
 describe('Accounts', () => {
@@ -106,6 +155,7 @@ describe('Accounts', () => {
   });
 
   it('toggles balance check and toasts the API message', async () => {
+    mockPushApis();
     mockedApiGet.mockResolvedValue(makeAccounts([makeAccount()]));
     mockedApiPost.mockResolvedValue({
       success: true,
@@ -159,6 +209,7 @@ describe('Accounts', () => {
   });
 
   it('opens the alert form and saves the threshold', async () => {
+    mockPushApis();
     mockedApiGet.mockResolvedValue(makeAccounts([makeAccount()]));
     mockedApiPost.mockResolvedValue({
       success: true,
@@ -211,17 +262,60 @@ describe('Accounts', () => {
     ).toBeInTheDocument();
   });
 
-  it('warns when no devices are subscribed to push', async () => {
-    mockedApiGet.mockResolvedValue(
-      makeAccounts([makeAccount()], makePushConfig({ subscription_count: 0 })),
-    );
+  it('explains the push channel inside the alert form', async () => {
+    mockedApiGet.mockResolvedValue(makeAccounts([makeAccount()]));
     renderAccounts();
     fireEvent.click(
       await screen.findByRole('button', { name: 'Set balance alert' }),
     );
     expect(
-      await screen.findByText(/No devices subscribed/),
+      await screen.findByText(/Alerts are sent as browser push notifications/),
     ).toBeInTheDocument();
+  });
+
+  it('denied notification permission leaves the balance check off', async () => {
+    const pushManager = mockPushApis(null);
+    // 'default' makes the hook ask; the mock user then denies.
+    (Notification as { permission: string }).permission = 'default';
+    vi.mocked(Notification.requestPermission).mockResolvedValue('denied');
+    mockedApiGet.mockResolvedValue(makeAccounts([makeAccount()]));
+    renderAccounts();
+    const toggle = await screen.findByRole('switch', {
+      name: /Balance check/,
+    });
+    fireEvent.click(toggle);
+    expect(
+      await screen.findByText('Notification permission was not granted.'),
+    ).toBeInTheDocument();
+    expect(pushManager.subscribe).not.toHaveBeenCalled();
+    expect(
+      mockedApiPost.mock.calls.filter(([url]) =>
+        String(url).includes('toggle-balance-check'),
+      ),
+    ).toHaveLength(0);
+    expect(toggle).not.toBeChecked();
+  });
+
+  it('unsupported push keeps the balance-alert save from firing', async () => {
+    // No Push APIs at all (jsdom default).
+    mockedApiGet.mockResolvedValue(makeAccounts([makeAccount()]));
+    renderAccounts();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set balance alert' }),
+    );
+    const input = await screen.findByLabelText('Alert threshold in EUR');
+    fireEvent.change(input, { target: { value: '50.00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(
+      await screen.findByText(
+        'Push notifications are not supported in this browser.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      mockedApiPost.mock.calls.filter(([url]) =>
+        String(url).includes('balance-alert'),
+      ),
+    ).toHaveLength(0);
   });
 
   it('shows the last balance inside the alert form', async () => {
@@ -260,6 +354,7 @@ describe('Accounts', () => {
   });
 
   it('toasts an error when a mutation fails', async () => {
+    mockPushApis();
     mockedApiGet.mockResolvedValue(makeAccounts([makeAccount()]));
     mockedApiPost.mockRejectedValue(
       new ApiError('Request failed: 404 Not Found', 404, 'Not Found', {

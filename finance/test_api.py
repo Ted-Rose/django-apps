@@ -65,7 +65,7 @@ class FinanceApiAuthTests(ApiTestCase):
         body = resp.json()
         self.assertEqual(body['error'], 'unauthenticated')
         self.assertTrue(
-            body['login_url'].startswith('/admin/login/?next=')
+            body['login_url'].startswith('/login/?next=')
         )
 
     def test_unauthenticated_post_is_401(self):
@@ -745,27 +745,31 @@ class LimitsApiTests(ApiTestCase):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         resp = self.client.get(f'{self.API}/limits/')
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertEqual(len(body['limits']), 1)
         limit = body['limits'][0]
-        self.assertEqual(limit['limit_7_days'], '100.00')
+        self.assertEqual(limit['limit_monthly'], '100.00')
         self.assertEqual(
-            limit['window_stats'][0]['label'], '7 days'
+            limit['window_stats'][0]['label'], 'This month'
         )
         self.assertIn('history', limit['window_stats'][0] or {})
         # Each window stat carries its booking-date range — the
         # SPA drill-down feeds it back as ?from=/&to=.
         today = timezone.now().date()
+        first = today.replace(day=1)
         self.assertEqual(
-            limit['window_stats'][0]['date_from'],
-            (today - timezone.timedelta(days=7)).isoformat(),
+            limit['window_stats'][0]['date_from'], first.isoformat()
+        )
+        next_month = (first + timezone.timedelta(days=32)).replace(
+            day=1
         )
         self.assertEqual(
-            limit['window_stats'][0]['date_to'], today.isoformat()
+            limit['window_stats'][0]['date_to'],
+            (next_month - timezone.timedelta(days=1)).isoformat(),
         )
         push_config = body['push_config']
         self.assertEqual(push_config['subscription_count'], 0)
@@ -785,7 +789,7 @@ class LimitsApiTests(ApiTestCase):
     def test_save_limit_creates_row(self):
         resp = self.post_json('/limits/save/', {
             'accounts': [self.account.pk],
-            'limit_7_days': '100.00',
+            'limit_monthly': '100.00',
             'is_active': True,
         })
         self.assertEqual(resp.status_code, 200)
@@ -796,7 +800,7 @@ class LimitsApiTests(ApiTestCase):
         limit = TransactionLimit.objects.get(
             accounts=self.account, user=self.user
         )
-        self.assertEqual(limit.limit_7_days, Decimal('100.00'))
+        self.assertEqual(limit.limit_monthly, Decimal('100.00'))
 
     def test_save_limit_rejects_other_users_account(self):
         other = get_user_model().objects.create_user(
@@ -805,7 +809,7 @@ class LimitsApiTests(ApiTestCase):
         foreign = make_account(other, self.req, 'acc-b')
         resp = self.post_json('/limits/save/', {
             'accounts': [foreign.pk],
-            'limit_7_days': '100.00',
+            'limit_monthly': '100.00',
         })
         self.assertEqual(resp.status_code, 400)
         self.assertFalse(
@@ -821,13 +825,13 @@ class LimitsApiTests(ApiTestCase):
             account=self.account,
             user=self.user,
             category=cat_a,
-            limit_7_days=Decimal('10.00'),
+            limit_monthly=Decimal('10.00'),
         )
         second = make_limit(
             account=self.account,
             user=self.user,
             category=cat_b,
-            limit_7_days=Decimal('20.00'),
+            limit_monthly=Decimal('20.00'),
         )
         # Editing `second` to collide on (accounts, user, category)
         # hits the overlap check → 409.
@@ -835,7 +839,7 @@ class LimitsApiTests(ApiTestCase):
             'limit_id': second.pk,
             'accounts': [self.account.pk],
             'category': cat_a.pk,
-            'limit_7_days': '30.00',
+            'limit_monthly': '30.00',
             'is_active': True,
         })
         self.assertEqual(resp.status_code, 409)
@@ -850,7 +854,7 @@ class LimitsApiTests(ApiTestCase):
         foreign = make_limit(
             account=self.account,
             user=other,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         resp = self.post_json(f'/limits/{foreign.pk}/delete/')
         self.assertEqual(resp.status_code, 404)
@@ -1691,7 +1695,7 @@ class CodeContractTests(ApiTestCase):
         foreign = make_account(other, self.req, 'acc-b')
         resp = self.post_json('/limits/save/', {
             'accounts': [foreign.pk],
-            'limit_7_days': '100.00',
+            'limit_monthly': '100.00',
         })
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.json()['code'], 'couldNotSaveLimit')
@@ -1701,17 +1705,17 @@ class CodeContractTests(ApiTestCase):
         cat_b = make_category(self.user, 'B')
         make_limit(
             account=self.account, user=self.user, category=cat_a,
-            limit_7_days=Decimal('10.00'),
+            limit_monthly=Decimal('10.00'),
         )
         second = make_limit(
             account=self.account, user=self.user, category=cat_b,
-            limit_7_days=Decimal('20.00'),
+            limit_monthly=Decimal('20.00'),
         )
         resp = self.post_json('/limits/save/', {
             'limit_id': second.pk,
             'accounts': [self.account.pk],
             'category': cat_a.pk,
-            'limit_7_days': '30.00',
+            'limit_monthly': '30.00',
         })
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.json()['code'], 'limitConflict')
@@ -1719,7 +1723,7 @@ class CodeContractTests(ApiTestCase):
     def test_limit_saved_code(self):
         resp = self.post_json('/limits/save/', {
             'accounts': [self.account.pk],
-            'limit_7_days': '100.00',
+            'limit_monthly': '100.00',
             'is_active': True,
         })
         self.assertEqual(resp.json()['code'], 'limitSaved')
