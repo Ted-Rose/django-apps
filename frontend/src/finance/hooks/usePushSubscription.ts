@@ -89,11 +89,20 @@ function subscribePayload(subscription: PushSubscription): PushSubscribeIn {
  *  can pend forever (e.g. Firefox private windows). */
 const SW_READY_TIMEOUT_MS = 5000;
 
+/** Distinguishes the timeout from real errors so the catch can
+ *  show the localized fallback instead of a raw English message. */
+class SWReadyTimeoutError extends Error {
+  constructor() {
+    super('serviceWorker.ready timeout');
+    this.name = 'SWReadyTimeoutError';
+  }
+}
+
 function readyWithTimeout(): Promise<ServiceWorkerRegistration> {
   return Promise.race([
     navigator.serviceWorker.ready,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('timeout')), SW_READY_TIMEOUT_MS),
+      setTimeout(() => reject(new SWReadyTimeoutError()), SW_READY_TIMEOUT_MS),
     ),
   ]);
 }
@@ -180,7 +189,13 @@ export function usePushSubscription(
       queryClient.invalidateQueries({ queryKey: ['finance'] });
       return true;
     } catch (error) {
-      pushToast(describeError(error, t('push.subscribeFailed')), 'warning');
+      const fallback = t('push.subscribeFailed');
+      pushToast(
+        error instanceof SWReadyTimeoutError
+          ? fallback
+          : describeError(error, fallback),
+        'warning',
+      );
       return false;
     } finally {
       setBusy(false);
