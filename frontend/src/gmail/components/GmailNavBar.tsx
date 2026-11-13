@@ -5,9 +5,9 @@ import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 
 /**
  * React port of gmail.html's navbar + burger_menu_items — brand
- * 'Gmail to Audio' with Home / Tasks / Logout entries. All three are
- * `url` anchors (full-page navigations out of the SPA), mirroring
- * the template view's burger_menu_items context.
+ * 'Gmail to Audio' with Home / Tasks / auth (Login·Logout) entries.
+ * All are `url` anchors (full-page navigations out of the SPA),
+ * mirroring the template view's burger_menu_items context.
  */
 export function GmailNavBar() {
   const { t } = useTranslation('gmail');

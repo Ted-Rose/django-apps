@@ -10,12 +10,13 @@ import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
  * NavBar plus a burger menu listing the same entries the template
  * UI shows, followed by a `.fin-tabs` pill tab bar that keeps the
  * six primary sections visible (the burger menu stays for Home,
- * Connect Bank and Logout).
+ * Connect Bank and the session auth item).
  *
  * In-app entries use `to` (react-router Links — no page reload).
  * `url` entries render ShellLink: Home (`/`) is a shell path and
- * client-navigates; only Logout (`/admin/logout/`) is a true
- * document exit to a Django route outside the shell.
+ * client-navigates; only the auth item (`useAuthMenuItem` —
+ * `/login/` or `/admin/logout/`) is a true document exit to a
+ * Django route outside the shell.
  */
 export function FinanceNavBar() {
   const { t } = useTranslation('finance');
