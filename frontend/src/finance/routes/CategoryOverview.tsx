@@ -173,6 +173,12 @@ export default function CategoryOverview() {
     .filter(Boolean)
     .join(' · ');
 
+  // Remount key for the account select — flips when the account
+  // list first arrives so defaultValue picks up a deep-linked
+  // account even when the form was opened mid-load.
+  const accountSelectKey =
+    `account-${params.account}-` + (data ? 'ready' : 'loading');
+
   // The per-month matrix only makes sense under the "Last year"
   // preset — a bounded twelve-month window with full month
   // columns. Server-computed `active` also fires for a manually
@@ -256,98 +262,101 @@ export default function CategoryOverview() {
           </div>
         )}
 
-        {data && (
-          <div className="mb-4">
-            <div className="d-flex flex-wrap align-items-center gap-2">
-              {data.periods.map((period) => (
-                <button
-                  key={period.key ?? period.label}
-                  type="button"
-                  className={`fin-chip${period.active ? ' active' : ''}`}
-                  aria-pressed={period.active}
-                  onClick={() => selectPeriod(period.date_from, period.date_to)}
-                >
-                  {period.key
-                    ? t(`server:periods.${period.key}`, {
-                        defaultValue: period.label,
-                      })
-                    : period.label}
-                </button>
-              ))}
+        {/* The period chips and the collapsed from/to/account
+            form render unconditionally — gating them on `data`
+            left no way to change the window while the query was
+            loading or had failed. */}
+        <div className="mb-4">
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            {(data?.periods ?? []).map((period) => (
               <button
+                key={period.key ?? period.label}
                 type="button"
-                className="btn btn-sm acct-icon-btn"
-                title={t('categories.filtersToggle')}
-                aria-label={t('categories.filtersToggle')}
-                aria-expanded={filtersOpen}
-                onClick={() => setFiltersOpen((open) => !open)}
+                className={`fin-chip${period.active ? ' active' : ''}`}
+                aria-pressed={period.active}
+                onClick={() => selectPeriod(period.date_from, period.date_to)}
               >
-                <i className="bi bi-calendar3" aria-hidden="true" />
+                {period.key
+                  ? t(`server:periods.${period.key}`, {
+                      defaultValue: period.label,
+                    })
+                  : period.label}
               </button>
-              {!filtersOpen && filterSummary && (
-                <span className="text-muted small">{filterSummary}</span>
-              )}
-            </div>
-            {filtersOpen && (
-              <form className="mt-3" onSubmit={applyFilters}>
-                <div className="row g-2 align-items-end mb-0">
-                  <div className="col-6 col-sm-auto">
-                    <label htmlFor="date-from" className="form-label">
-                      {t('categories.dateFrom')}
-                    </label>
-                    <input
-                      type="date"
-                      name="from"
-                      id="date-from"
-                      className="form-control"
-                      key={`from-${params.from}`}
-                      defaultValue={params.from}
-                    />
-                  </div>
-                  <div className="col-6 col-sm-auto">
-                    <label htmlFor="date-to" className="form-label">
-                      {t('categories.dateTo')}
-                    </label>
-                    <input
-                      type="date"
-                      name="to"
-                      id="date-to"
-                      className="form-control"
-                      key={`to-${params.to}`}
-                      defaultValue={params.to}
-                    />
-                  </div>
-                  <div className="col-12 col-sm-auto">
-                    <label htmlFor="account-filter" className="form-label">
-                      {t('categories.account')}
-                    </label>
-                    <select
-                      name="account"
-                      id="account-filter"
-                      className="form-select"
-                      // Remount on param change so defaultValue picks
-                      // up a deep-linked account.
-                      key={`account-${params.account}`}
-                      defaultValue={params.account}
-                    >
-                      <option value="">{t('categories.allAccounts')}</option>
-                      {data.accounts.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-12 col-sm-auto">
-                    <button type="submit" className="btn btn-primary w-100">
-                      {t('common:common.apply')}
-                    </button>
-                  </div>
-                </div>
-              </form>
+            ))}
+            <button
+              type="button"
+              className="btn btn-sm acct-icon-btn"
+              title={t('categories.filtersToggle')}
+              aria-label={t('categories.filtersToggle')}
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              <i className="bi bi-calendar3" aria-hidden="true" />
+            </button>
+            {!filtersOpen && filterSummary && (
+              <span className="text-muted small">{filterSummary}</span>
             )}
           </div>
-        )}
+          {filtersOpen && (
+            <form className="mt-3" onSubmit={applyFilters}>
+              <div className="row g-2 align-items-end mb-0">
+                <div className="col-6 col-sm-auto">
+                  <label htmlFor="date-from" className="form-label">
+                    {t('categories.dateFrom')}
+                  </label>
+                  <input
+                    type="date"
+                    name="from"
+                    id="date-from"
+                    className="form-control"
+                    key={`from-${params.from}`}
+                    defaultValue={params.from}
+                  />
+                </div>
+                <div className="col-6 col-sm-auto">
+                  <label htmlFor="date-to" className="form-label">
+                    {t('categories.dateTo')}
+                  </label>
+                  <input
+                    type="date"
+                    name="to"
+                    id="date-to"
+                    className="form-control"
+                    key={`to-${params.to}`}
+                    defaultValue={params.to}
+                  />
+                </div>
+                <div className="col-12 col-sm-auto">
+                  <label htmlFor="account-filter" className="form-label">
+                    {t('categories.account')}
+                  </label>
+                  <select
+                    name="account"
+                    id="account-filter"
+                    className="form-select"
+                    // Remount on param change or first data
+                    // arrival so defaultValue picks up a
+                    // deep-linked account.
+                    key={accountSelectKey}
+                    defaultValue={params.account}
+                  >
+                    <option value="">{t('categories.allAccounts')}</option>
+                    {(data?.accounts ?? []).map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-sm-auto">
+                  <button type="submit" className="btn btn-primary w-100">
+                    {t('common:common.apply')}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+        </div>
 
         {isPending && (
           <LoadingSkeleton label={t('categories.loading')} rows={5} />

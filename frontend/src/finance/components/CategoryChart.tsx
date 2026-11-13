@@ -26,11 +26,26 @@ export function chartValueLabel(row: CategoryRowOut): string {
 }
 
 /**
+ * Stable identity for a slice row — the overview groups by
+ * (category, currency), so the key pairs the category id (the
+ * 'uncategorized' bucket has none) with the currency. Selection
+ * state stores this string, not the row object: react-query
+ * replaces `rows` on every refetch and an object selection would
+ * silently match nothing.
+ */
+export function rowKey(
+  row: Pick<CategoryRowOut, 'category_id' | 'currency'>,
+): string {
+  return `${row.category_id ?? 'uncategorized'}:${row.currency}`;
+}
+
+/**
  * Resolve a recharts click payload back to its slice row. Legend
  * entries and Pie sectors carry the datum under `.payload`, but
  * the shape varies across recharts versions — match on
- * `category_name` + `category_id`, falling back to a bare name
- * string (or the payload's `value`).
+ * `category_name` + `category_id` (+ `currency` when the datum
+ * carries it, since the same category can repeat per currency),
+ * falling back to a bare name string (or the payload's `value`).
  */
 export function resolveSlice(
   slices: CategoryRowOut[],
@@ -46,7 +61,8 @@ export function resolveSlice(
       return slices.find(
         (row) =>
           row.category_name === datum.category_name &&
-          row.category_id === (datum.category_id ?? null),
+          row.category_id === (datum.category_id ?? null) &&
+          (datum.currency == null || row.currency === datum.currency),
       );
     }
   }
@@ -75,7 +91,9 @@ export function resolveSlice(
  */
 export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
   const { t } = useTranslation('finance');
-  const [selected, setSelected] = useState<CategoryRowOut | null>(null);
+  // The key, not the row — a refetch swaps the rows array and a
+  // stored object would match nothing, dimming every slice.
+  const [selected, setSelected] = useState<string | null>(null);
   const slices = rows.filter((row) => row.share > 0);
   if (slices.length === 0) return null;
 
@@ -83,13 +101,22 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
   // resolver; picking the active row again clears the readout.
   const toggle = (entry: unknown) => {
     const row = resolveSlice(slices, entry);
-    if (row) setSelected((prev) => (prev === row ? null : row));
+    if (row) {
+      const key = rowKey(row);
+      setSelected((prev) => (prev === key ? null : key));
+    }
   };
 
-  const selectedName = selected
-    ? selected.category_key === 'uncategorized'
+  // Re-resolve the live row each render — if a refetch dropped
+  // the selected category from the window, nothing dims and the
+  // readout hides instead of showing stale figures.
+  const selectedRow = selected
+    ? slices.find((row) => rowKey(row) === selected)
+    : undefined;
+  const selectedName = selectedRow
+    ? selectedRow.category_key === 'uncategorized'
       ? t('transactions.uncategorized')
-      : selected.category_name
+      : selectedRow.category_name
     : '';
 
   return (
@@ -121,7 +148,9 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
                   }
                   // Once a slice is picked the rest dim instead of
                   // resizing — keeps recharts from re-layouting.
-                  fillOpacity={selected && row !== selected ? 0.4 : 1}
+                  fillOpacity={
+                    selectedRow && rowKey(row) !== selected ? 0.4 : 1
+                  }
                 />
               ))}
             </Pie>
@@ -137,9 +166,9 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
           </PieChart>
         </ResponsiveContainer>
       </div>
-      {selected && (
+      {selectedRow && (
         <p className="text-muted small text-center mt-2 mb-0">
-          {selectedName} — {chartValueLabel(selected)}
+          {selectedName} — {chartValueLabel(selectedRow)}
         </p>
       )}
     </>

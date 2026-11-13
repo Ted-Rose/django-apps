@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chartValueLabel, resolveSlice } from './CategoryChart';
+import { chartValueLabel, resolveSlice, rowKey } from './CategoryChart';
 import type { CategoryRowOut } from '../api';
 
 function makeRow(overrides: Partial<CategoryRowOut> = {}): CategoryRowOut {
@@ -47,6 +47,17 @@ describe('chartValueLabel', () => {
   });
 });
 
+describe('rowKey', () => {
+  it('keys rows on category id + currency, bucket on its marker', () => {
+    // The overview groups by (category, currency) — the same
+    // category can appear once per currency.
+    expect(rowKey(makeRow())).toBe('1:EUR');
+    expect(rowKey(makeRow({ category_id: 7, currency: 'USD' }))).toBe('7:USD');
+    // The uncategorized bucket keeps its own selectable key.
+    expect(rowKey(SLICES[1])).toBe('uncategorized:USD');
+  });
+});
+
 describe('resolveSlice', () => {
   it('resolves a payload carrying the original datum', () => {
     // The recharts Legend and Pie click payloads nest the row
@@ -64,6 +75,14 @@ describe('resolveSlice', () => {
     // the wrong slice.
     const impostor = { ...SLICES[0], category_id: 999 };
     expect(resolveSlice(SLICES, { payload: impostor })).toBeUndefined();
+  });
+
+  it('tells same-category slices in different currencies apart', () => {
+    const eur = makeRow();
+    const usd = makeRow({ currency: 'USD' });
+    const slices = [eur, usd];
+    expect(resolveSlice(slices, { payload: usd })).toBe(usd);
+    expect(resolveSlice(slices, { payload: eur })).toBe(eur);
   });
 
   it('falls back to a bare name string', () => {
