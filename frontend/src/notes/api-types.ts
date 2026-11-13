@@ -2146,10 +2146,6 @@ export interface components {
             category?: components["schemas"]["CategoryOut"] | null;
             /** Is Active */
             is_active: boolean;
-            /** Limit 7 Days */
-            limit_7_days?: string | null;
-            /** Limit 30 Days */
-            limit_30_days?: string | null;
             /** Limit Monthly */
             limit_monthly?: string | null;
             /**
@@ -2499,10 +2495,6 @@ export interface components {
             accounts: number[];
             /** Category */
             category?: number | null;
-            /** Limit 7 Days */
-            limit_7_days?: number | string | null;
-            /** Limit 30 Days */
-            limit_30_days?: number | string | null;
             /** Limit Monthly */
             limit_monthly?: number | string | null;
             /**

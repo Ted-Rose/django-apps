@@ -59,12 +59,9 @@ class TransactionLimitForm(forms.ModelForm):
     class Meta:
         model = TransactionLimit
         fields = [
-            'accounts', 'category', 'limit_7_days', 'limit_30_days',
-            'limit_monthly', 'is_active',
+            'accounts', 'category', 'limit_monthly', 'is_active',
         ]
         labels = {
-            'limit_7_days': 'Limit per 7 days',
-            'limit_30_days': 'Limit per 30 days',
             'limit_monthly': 'Limit per calendar month',
         }
 

@@ -497,8 +497,6 @@ class LimitOut(Schema):
     accounts: List[AccountRef]
     category: Optional[CategoryOut] = None
     is_active: bool
-    limit_7_days: Optional[Decimal] = None
-    limit_30_days: Optional[Decimal] = None
     limit_monthly: Optional[Decimal] = None
     window_stats: List[WindowStatOut] = []
 
@@ -636,8 +634,6 @@ class LimitSaveIn(Schema):
     limit_id: Optional[int] = None
     accounts: List[int] = []
     category: Optional[int] = None
-    limit_7_days: Optional[Decimal] = None
-    limit_30_days: Optional[Decimal] = None
     limit_monthly: Optional[Decimal] = None
     is_active: bool = False
 

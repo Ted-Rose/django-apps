@@ -17,20 +17,11 @@ msgstr ""
 msgid "All spending"
 msgstr "Visi tēriņi"
 
-msgid "the last 7 days"
-msgstr "pēdējās 7 dienās"
-
-msgid "the last 30 days"
-msgstr "pēdējās 30 dienās"
-
-msgid "this month"
-msgstr "šajā mēnesī"
-
 msgid "Spending limit exceeded"
 msgstr "Pārsniegts tēriņu limits"
 
-msgid "{scope} on {account}: {spent} of {threshold} in {period}"
-msgstr "{scope} — {account}: {spent} no {threshold} {period}"
+msgid "{scope} on {account}: {spent} of {threshold} this month"
+msgstr "{scope} — {account}: {spent} no {threshold} šajā mēnesī"
 
 msgid "Low balance"
 msgstr "Zems atlikums"
