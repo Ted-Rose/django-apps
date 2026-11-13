@@ -1,6 +1,10 @@
 # google_api
 
 ## Changelog
+36. Category pickers on the transactions page now show each
+    category's color: a row's assign menu lists the same tinted
+    pills you see on the categories page, and the column-header
+    filter puts a color dot beside every name
 35. Every burger menu now ends with a Log in / Log out item: signed
     in shows "Logout (you)", signed out shows "Login with Google"
     (reachable on the public dashboard — the only page anonymous

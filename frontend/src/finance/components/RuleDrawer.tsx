@@ -10,7 +10,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type {
-  CategoryOut,
   RuleOut,
   RulePreviewIn,
   RulePreviewOut,
@@ -19,6 +18,7 @@ import type {
 } from '../api';
 import { usePreviewRule, useSaveRule } from '../mutations';
 import Dropdown from '../../shared/components/Dropdown';
+import { CategoryDot } from './CategoryBadge';
 import { errorDetail } from '../../shared/api/errors';
 import './RuleDrawer.css';
 
@@ -40,19 +40,6 @@ import './RuleDrawer.css';
  */
 
 const PREVIEW_DEBOUNCE_MS = 400;
-
-const FALLBACK_COLOR = '#6c757d';
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
-
-/**
- * The category color is user input — fall back to muted grey on
- * anything that is not `#rrggbb` (same guard as CategoryBadge).
- */
-function categoryColor(category: CategoryOut | undefined): string {
-  return category && HEX_COLOR.test(category.color)
-    ? category.color
-    : FALLBACK_COLOR;
-}
 
 /** Form values kept as raw input strings; converted on submit. */
 export interface RuleFields {
@@ -432,14 +419,8 @@ export function RuleDrawer({
                     }`}
                     label={
                       <>
-                        <span
-                          className="rule-cat-dot"
-                          style={{
-                            backgroundColor: categoryColor(selectedCategory),
-                          }}
-                          aria-hidden="true"
-                        />
-                        <span className="rule-cat-name">
+                        <CategoryDot category={selectedCategory} />
+                        <span className="fin-cat-name">
                           {selectedCategory?.name ??
                             t('rules.drawer.selectCategory')}
                         </span>
@@ -462,14 +443,8 @@ export function RuleDrawer({
                             aria-selected={isSelected}
                             onClick={() => set('category', String(category.id))}
                           >
-                            <span
-                              className="rule-cat-dot"
-                              style={{
-                                backgroundColor: categoryColor(category),
-                              }}
-                              aria-hidden="true"
-                            />
-                            <span className="rule-cat-name">
+                            <CategoryDot category={category} />
+                            <span className="fin-cat-name">
                               {category.name}
                             </span>
                             {isSelected && (
