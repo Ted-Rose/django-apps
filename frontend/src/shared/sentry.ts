@@ -50,9 +50,8 @@ export function initSentry(): void {
     ],
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 1.0,
-    // Same-origin only — every SPA API call stays on the host
-    // (settings.py also allows the sentry-trace/baggage headers
-    // for cross-origin frontends that call this API).
+    // Same-origin only — every SPA API call stays on the host; no
+    // cross-origin consumer exists to propagate traces to.
     tracePropagationTargets: [location.origin],
     tracesSampleRate: 0.1,
     beforeSend: sentryBeforeSend,

@@ -107,6 +107,11 @@ URL routing (`django_apps/urls.py`): `google_api`, `gmail` and
    `{error: <slug>, detail}` shape; dead Google creds surface as
    `401 {error: 'google_reauth', authorization_url}` and the SPA
    navigates there itself. Every mutation is per-user scoped.
+   All API traffic is same-origin — the SPAs fetch relative
+   `/api/` URLs with `credentials:'same-origin'` — so there is
+   deliberately NO CORS stack (no `corsheaders` app, middleware,
+   or `CORS_*` settings, and no `django-cors-headers` dep). Do
+   not re-add it without a real cross-origin consumer.
 3. **Per-user isolation.** Every ORM query filters
    `user=request.user` (finance uses `for_user()` helpers that
    include shared accounts); scope `get_object_or_404` by user.

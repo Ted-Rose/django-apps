@@ -15,8 +15,6 @@ import logging
 import os
 import sys
 
-from corsheaders.defaults import default_headers
-
 from .sentry import sentry_before_send
 
 
@@ -354,7 +352,6 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'corsheaders',
     'django.contrib.staticfiles',
     'django_vite',
     # Before ninja so its export_openapi_schema override wins
@@ -375,7 +372,6 @@ if not IS_VERCEL_ENVIRONMENT:
     INSTALLED_APPS.append('sslserver')
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -388,35 +384,15 @@ MIDDLEWARE = [
 # WhiteNoise serves /static/* on Cloud Run and locally. On Vercel the
 # CDN answers /static/* via vercel.json routes (requests never reach
 # the lambda) and requirements-vercel.txt omits the package —
-# importing the middleware would crash. Index 2 keeps it right after
+# importing the middleware would crash. Index 1 keeps it right after
 # SecurityMiddleware.
 if not IS_VERCEL_ENVIRONMENT:
-    MIDDLEWARE.insert(2, 'whitenoise.middleware.WhiteNoiseMiddleware')
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
-# Same-origin SPA traffic needs no CORS entries at all. The
-# remaining origin is the site's own production domain; the
-# entries for reactive-bible.vercel.app / localhost:5173 and the
-# third-party *-vincent-uches-projects.vercel.app preview regex
-# were dropped — they served the bible_research/tv_archive apps,
-# which were removed from this repo (the bible API now lives in
-# its own App Engine deploy).
-CORS_ALLOWED_ORIGINS = [
-    "https://tedisrozenfelds.vercel.app",
-]
-
-CORS_ALLOW_METHODS = (
-    "GET",
-    "POST",
-)
-
-# Allow Sentry's tracing headers cross-origin so frontend errors
-# correlate with backend traces (the default header safelist does
-# not include them).
-CORS_ALLOW_HEADERS = (
-    *default_headers,
-    'sentry-trace',
-    'baggage',
-)
+# No CORS stack: every frontend call is a same-origin relative /api/
+# fetch with credentials:'same-origin', so corsheaders can never
+# engage. The package (and its CORS_* settings) was removed after the
+# last cross-origin consumer left this repo.
 
 ROOT_URLCONF = 'django_apps.urls'
 
