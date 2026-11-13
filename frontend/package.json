@@ -30,7 +30,7 @@
     "@tiptap/extension-placeholder": "^2.27.3",
     "@tiptap/extension-underline": "^2.27.3",
     "@tiptap/pm": "^2.27.3",
-    "@tiptap/react": "^2.27.3",
+    "@tiptap/react": "^3.33.0",
     "@tiptap/starter-kit": "^2.27.3",
     "i18next": "^26.4.2",
     "i18next-browser-languagedetector": "^8.2.1",
