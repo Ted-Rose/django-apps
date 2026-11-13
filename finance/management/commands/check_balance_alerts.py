@@ -2,7 +2,6 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 from django.core.management.base import BaseCommand
-from django.db.models import F
 from django.urls import reverse
 from django.utils import timezone, translation
 from django.utils.translation import gettext
@@ -41,19 +40,13 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
+        # Excluded accounts still alert — the flag hides pages,
+        # it doesn't disable configured notifications.
         alerts = list(
             BalanceAlert.objects.filter(
                 is_active=True,
                 account__requisition__status='LN',
-            )
-            # An excluded account's alerts stay dormant — it is
-            # invisible everywhere but the Accounts page, so a
-            # breach notification would point at a hidden account.
-            .exclude(
-                account__user_preferences__user=F('user'),
-                account__user_preferences__excluded=True,
-            )
-            .select_related('account', 'account__requisition', 'user')
+            ).select_related('account', 'account__requisition', 'user')
         )
         if not alerts:
             self.stdout.write('No active balance alerts.')

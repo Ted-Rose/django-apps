@@ -20,15 +20,17 @@ def monthly_period_start(today):
     return today.replace(day=1)
 
 
-def _spend_queryset(limit):
+def _spend_queryset(limit, respect_exclusion=True):
     """Outgoing transactions counting toward ``limit``.
 
-    Accounts the limit user excluded contribute nothing (the limit
-    keeps listing them — it just reads 0 from them). Transactions
-    in the limit user's ``is_excluded`` categories are dropped
-    entirely; ``counted_amount`` then applies each row's per-user
-    partial exclusion (never flips sign, so the amount<0
-    pre-filter still selects exactly the outgoing set).
+    With ``respect_exclusion``, accounts the limit user excluded
+    contribute nothing (the limit keeps listing them — it just
+    reads 0 from them); ``evaluate_spending_limits`` passes
+    ``False`` so configured alerts still track real spend.
+    Transactions in the limit user's ``is_excluded`` categories
+    are dropped entirely; ``counted_amount`` then applies each
+    row's per-user partial exclusion (never flips sign, so the
+    amount<0 pre-filter still selects exactly the outgoing set).
     """
     transactions = (
         Transaction.objects.with_occurrence_date()
@@ -37,14 +39,15 @@ def _spend_queryset(limit):
             amount__lt=0,
         )
         .exclude(
-            account__user_preferences__user=limit.user,
-            account__user_preferences__excluded=True,
-        )
-        .exclude(
             category_assignments__user=limit.user,
             category_assignments__category__is_excluded=True,
         )
     )
+    if respect_exclusion:
+        transactions = transactions.exclude(
+            account__user_preferences__user=limit.user,
+            account__user_preferences__excluded=True,
+        )
     if limit.category_id:
         transactions = transactions.filter(
             category_assignments__user=limit.user,
@@ -53,7 +56,8 @@ def _spend_queryset(limit):
     return annotate_counted_amount(transactions, limit.user)
 
 
-def spent_in_window(limit, start, end=None):
+def spent_in_window(limit, start, end=None,
+                    respect_exclusion=True):
     """Total outgoing spend (positive) in ``[start, end)``.
 
     Windows bound ``occurrence_date`` — the day the user spent the
@@ -61,7 +65,9 @@ def spent_in_window(limit, start, end=None):
     date, so a Sep-30 card purchase booked on Oct 1 counts toward
     September.
     """
-    transactions = _spend_queryset(limit).filter(
+    transactions = _spend_queryset(
+        limit, respect_exclusion=respect_exclusion
+    ).filter(
         occurrence_date__gte=start
     )
     if end is not None:

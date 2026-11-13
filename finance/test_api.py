@@ -325,9 +325,10 @@ class ExcludedAccountApiTests(ApiTestCase):
         )
         self.assertEqual(resp.status_code, 404)
 
-    def test_sharers_exclusion_hides_shared_overview(self):
-        """Excluding an account hides it from the overview the
-        owner shared — the viewer never sees it."""
+    def test_sharers_exclusion_keeps_shared_overview(self):
+        """The sharer's hide flag is a personal display pref —
+        the shared overview still shows the account to the
+        viewer."""
         viewer = get_user_model().objects.create_user(
             username='bob', password='pw'
         )
@@ -340,8 +341,8 @@ class ExcludedAccountApiTests(ApiTestCase):
         body = self.client.get(
             f'{self.API}/categories/overview/?owner=alice'
         ).json()
-        self.assertEqual(body['rows'], [])
-        self.assertEqual(body['accounts'], [])
+        self.assertEqual(len(body['rows']), 1)
+        self.assertEqual(len(body['accounts']), 1)
 
     def test_sharer_excludes_only_own_view(self):
         """A sharer's exclusion is per-user — the owner keeps

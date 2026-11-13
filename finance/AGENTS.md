@@ -90,17 +90,23 @@ just-dead requisition are skipped without another API call.
   `Transaction.objects.visible_for(user)` (`managers.py`) are the
   `for_user` sets minus the caller's excluded accounts, and every
   read path except `GET /accounts/` uses them: transactions,
-  category overview (the sharer's exclusions hide accounts from
-  their shared `?owner=` view too), limits (spend sums via
-  `_spend_queryset`, month list, form options), balances,
-  transaction mutations (404), rule categorization/preview, and
-  the manual `sync` endpoint (excluded accounts are paused — the
-  scheduled `sync_bank_transactions` job still syncs them since
-  sync is per-account across viewers, so re-including picks the
-  cursor back up). `check_balance_alerts` skips excluded
-  accounts' alerts. A `TransactionLimit`'s configured account
-  list still names excluded accounts (config fidelity — they just
-  contribute no spend).
+  category overview (the viewer's own exclusions hide accounts
+  from shared `?owner=` views; the sharer's do NOT — a share
+  keeps showing accounts the sharer excluded), limits (spend
+  sums via `_spend_queryset`, month list, form options),
+  balances, transaction mutations (404), rule
+  categorization/preview, and the manual `sync` endpoint
+  (excluded accounts are paused — the scheduled
+  `sync_bank_transactions` job still syncs them since sync is
+  per-account across viewers, so re-including picks the cursor
+  back up). Exclusion is a display preference, not a kill
+  switch: `check_balance_alerts` keeps firing on excluded
+  accounts, and `evaluate_spending_limits` counts their real
+  spend (via `respect_exclusion=False`) so configured
+  notifications still go out — only the limits page's own
+  progress/history reads 0 from them. A `TransactionLimit`'s
+  configured account list still names excluded accounts (config
+  fidelity).
 - `CategoryOverviewShare` — grants another user read access to the
   sharer's category overview (`/finance/categories/?owner=<sharer>`)
   plus its transaction drill-down (`/api/finance/…?owner=`). One row
@@ -255,7 +261,9 @@ flagged `excluded`.
   `categorize_transaction()`.
 - `evaluate_spending_limits`: sums negative amounts per active
   limit for the current calendar month via `services/limits.py`
-  (filtered to the limit's category when set); logs
+  (filtered to the limit's category when set; excluded accounts
+  DO count — exclusion only hides page reads, not configured
+  alerts); logs
   `SPENDING_LIMIT_EXCEEDED ...` warnings and sends one Web Push
   notification per limit on each breach and then every
   `ALERT_REPEAT_AFTER` (~daily) while still breached to the user's

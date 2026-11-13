@@ -286,6 +286,26 @@ class EvaluateSpendingLimitsTests(TestCase):
             mock_logger.warning.call_args[0][0],
         )
 
+    def test_limit_alert_counts_excluded_account(self):
+        """The hide flag doesn't exempt an account from a
+        configured spending limit — the alert still fires."""
+        make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
+        UserAccountPreference.objects.create(
+            user=self.user, account=self.account, excluded=True
+        )
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert'
+        ) as mock_send:
+            mock_logger = self.run_command()
+        mock_logger.warning.assert_called_once()
+        mock_send.assert_called_once()
+
     def test_limit_not_exceeded_no_warning(self):
         make_limit(
             account=self.account,
@@ -2575,19 +2595,22 @@ class CheckBalanceAlertsTests(TestCase):
         )
         self.assertIsNotNone(self.account.balance_updated_at)
 
-    def test_excluded_account_alerts_stay_dormant(self):
+    def test_excluded_account_alerts_still_fire(self):
+        """Excluding an account hides pages, not configured
+        alerts — the breach still notifies."""
         UserAccountPreference.objects.create(
             user=self.user, account=self.account, excluded=True
         )
-        BalanceAlert.objects.create(
+        alert = BalanceAlert.objects.create(
             user=self.user,
             account=self.account,
             threshold=Decimal('50.00'),
         )
-        mock_send, client = self.run_command()
-        mock_send.assert_not_called()
-        client.fetch_balances_parallel.assert_not_called()
-        self.assertFalse(Notification.objects.exists())
+        mock_send, _ = self.run_command()
+        mock_send.assert_called_once()
+        alert.refresh_from_db()
+        self.assertIsNotNone(alert.alerted_at)
+        self.assertTrue(Notification.objects.exists())
 
     def test_above_threshold_stays_silent(self):
         alert = BalanceAlert.objects.create(
