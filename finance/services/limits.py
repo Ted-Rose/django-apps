@@ -11,7 +11,7 @@ from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
-from finance.models import Transaction
+from finance.models import Account, Transaction
 from finance.services.categories import annotate_counted_amount
 
 
@@ -27,7 +27,11 @@ def _spend_queryset(limit, respect_exclusion=True):
     contribute nothing (the limit keeps listing them — it just
     reads 0 from them); ``evaluate_spending_limits`` passes
     ``False`` so configured alerts still track real spend.
-    Transactions in the limit user's ``is_excluded`` categories
+    Accounts the limit user lost access to (a revoked
+    ``AccountShare`` leaves its M2M row behind until the next
+    edit) never count — like ``check_balance_alerts``, only
+    accessible accounts contribute. Transactions in the limit
+    user's ``is_excluded`` categories
     are dropped entirely; ``counted_amount`` then applies each
     row's per-user partial exclusion (never flips sign, so the
     amount<0 pre-filter still selects exactly the outgoing set).
@@ -35,7 +39,9 @@ def _spend_queryset(limit, respect_exclusion=True):
     transactions = (
         Transaction.objects.with_occurrence_date()
         .filter(
-            account__in=limit.accounts.all(),
+            account__in=limit.accounts.filter(
+                pk__in=Account.objects.for_user(limit.user)
+            ),
             amount__lt=0,
         )
         .exclude(

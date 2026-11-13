@@ -312,6 +312,31 @@ class EvaluateSpendingLimitsTests(TestCase):
         )
         self.assertEqual(evaluation.spent, Decimal('150.00'))
 
+    def test_revoked_share_limit_stops_counting(self):
+        """A limit configured on a shared-in account stops
+        counting once the AccountShare is revoked — the stale
+        M2M row lingers but the spend must not."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        share = AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        make_limit(
+            account=self.account,
+            user=viewer,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
+        share.delete()
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert'
+        ) as mock_send:
+            mock_logger = self.run_command()
+        mock_logger.warning.assert_not_called()
+        mock_send.assert_not_called()
+
     def test_limit_not_exceeded_no_warning(self):
         make_limit(
             account=self.account,

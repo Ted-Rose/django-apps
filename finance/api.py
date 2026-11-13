@@ -254,9 +254,9 @@ def _resolve_overview_user(request, owner_username):
     # visible_for: the sharer's own exclusions hide accounts from
     # THEIR pages — the shared view is the viewer's, so only the
     # viewer's exclusions apply below.
-    visible = Account.objects.for_user(owner)
+    scope = Account.objects.for_user(owner)
     if share.accounts.exists():
-        visible = share.accounts.filter(pk__in=visible)
+        scope = share.accounts.filter(pk__in=scope)
     # The viewer's own exclusions hide shared accounts too — but
     # only while the viewer still holds the account (a pref left
     # behind by a revoked AccountShare must not hide it forever;
@@ -267,7 +267,7 @@ def _resolve_overview_user(request, owner_username):
         user_preferences__user=request.user,
         user_preferences__excluded=True,
     )
-    return owner, visible.exclude(pk__in=viewer_excluded)
+    return owner, scope.exclude(pk__in=viewer_excluded)
 
 
 def _choices(pairs):

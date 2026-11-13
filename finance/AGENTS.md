@@ -109,7 +109,9 @@ just-dead requisition are skipped without another API call.
   still go out. The limits page's own progress and recomputed
   history read 0 from excluded accounts, but recorded
   `LimitEvaluation` months always show the real spend — the
-  audit trail of why a notification fired. A
+  audit trail of why a notification fired (so a breach push can
+  link to a page that visibly reads 0 until the month rolls
+  over — cosmetic, accepted). A
   `TransactionLimit`'s configured account list still names
   excluded accounts (config fidelity — editing preserves
   them), though a NEW limit can't pick excluded accounts
@@ -286,9 +288,14 @@ flagged `excluded`.
   `alerted_at` or one older than `ALERT_REPEAT_AFTER` creates the
   in-app `Notification` row AND pushes via
   `send_limit_alert`, then stamps `alerted_at` unconditionally (the
-  Notification row is the record of delivery). Accounts whose fetch
-  failed/429'd or whose currency mismatches are skipped — never
-  alert on a stale stored balance. Logs `BALANCE_ALERT_TRIGGERED`.
+  Notification row is the record of delivery). Alerts run only
+  while the alert's user can still access the account (owned or
+  shared-in — a revoked AccountShare silences leftovers), and
+  excluded-account breaches link to `/finance/accounts/` instead
+  of `/finance/balances/` since that's the only page still
+  showing the account. Accounts whose fetch failed/429'd or whose
+  currency mismatches are skipped — never alert on a stale stored
+  balance. Logs `BALANCE_ALERT_TRIGGERED`.
 - `reattach_relinked_accounts` (`--dry-run`): one-off repair for
   rows stranded before the callback's same-id reattach existed —
   for each `status='LN'` requisition (newest first, so the newest
