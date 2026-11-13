@@ -309,7 +309,7 @@ class ExcludedAccountApiTests(ApiTestCase):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         self.exclude()
         body = self.client.get(f'{self.API}/limits/').json()
@@ -437,7 +437,7 @@ class ExcludedAccountApiTests(ApiTestCase):
         editing must not strip excluded ones from the config."""
         other = make_account(self.user, self.req, 'acc-2')
         limit = TransactionLimit.objects.create(
-            user=self.user, limit_7_days=Decimal('100.00')
+            user=self.user, limit_monthly=Decimal('100.00')
         )
         limit.accounts.set([self.account, other])
         self.exclude()
@@ -446,7 +446,7 @@ class ExcludedAccountApiTests(ApiTestCase):
             {
                 'limit_id': limit.pk,
                 'accounts': [other.pk],
-                'limit_7_days': '100.00',
+                'limit_monthly': '100.00',
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -461,7 +461,7 @@ class ExcludedAccountApiTests(ApiTestCase):
             '/limits/save/',
             {
                 'accounts': [self.account.pk],
-                'limit_7_days': '100.00',
+                'limit_monthly': '100.00',
             },
         )
         self.assertEqual(resp.status_code, 400)
@@ -481,7 +481,7 @@ class ExcludedAccountApiTests(ApiTestCase):
         limit = make_limit(
             account=foreign,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         UserAccountPreference.objects.create(
             user=self.user, account=foreign, excluded=True
@@ -492,7 +492,7 @@ class ExcludedAccountApiTests(ApiTestCase):
             {
                 'limit_id': limit.pk,
                 'accounts': [self.account.pk],
-                'limit_7_days': '100.00',
+                'limit_monthly': '100.00',
             },
         )
         self.assertEqual(resp.status_code, 200)
@@ -510,13 +510,13 @@ class ExcludedAccountApiTests(ApiTestCase):
         first = TransactionLimit.objects.create(
             user=self.user,
             category=cat_a,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         first.accounts.set([self.account])
         second = TransactionLimit.objects.create(
             user=self.user,
             category=cat_b,
-            limit_7_days=Decimal('50.00'),
+            limit_monthly=Decimal('50.00'),
         )
         second.accounts.set([self.account])
         self.exclude()
@@ -526,7 +526,7 @@ class ExcludedAccountApiTests(ApiTestCase):
                 'limit_id': first.pk,
                 'accounts': [visible.pk],
                 'category': cat_b.pk,
-                'limit_7_days': '100.00',
+                'limit_monthly': '100.00',
             },
         )
         self.assertEqual(resp.status_code, 409)

@@ -6,7 +6,10 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('finance', '0019_transaction_status'),
+        (
+            'finance',
+            '0020_remove_transactionlimit_alerted_30d_at_and_more',
+        ),
     ]
 
     operations = [
