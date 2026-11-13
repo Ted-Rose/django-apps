@@ -190,7 +190,8 @@ just-dead requisition are skipped without another API call.
   permission plus the browser subscription and prompts only when
   needed, so a denied permission or an unsupported browser leaves
   the resource disabled; no-op when `VAPID_*` settings are
-  empty.
+  empty. There is no UI path to unsubscribe a browser — stale
+  `PushSubscription` rows die via the push-response cleanup.
 - `Category` — per-user, unique on `(user, name)`, optional hex
   color, `is_excluded` flag (transactions contribute nothing to
   totals/share/limits but stay visible and keep their own overview

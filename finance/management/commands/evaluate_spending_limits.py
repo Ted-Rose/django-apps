@@ -8,6 +8,7 @@ from django.utils.translation import gettext
 from django_apps.models import user_language
 from finance.models import LimitEvaluation, TransactionLimit
 from finance.services.limits import (
+    _next_month,
     monthly_period_start,
     spent_in_window,
 )
@@ -34,7 +35,7 @@ class Command(BaseCommand):
         TransactionLimit.objects.filter(
             limit_monthly__isnull=True,
             alerted_monthly_at__isnull=False,
-        ).update(alerted_monthly_at=None)
+        ).update(alerted_monthly_at=None, updated_at=now)
         limits = TransactionLimit.objects.filter(
             is_active=True,
             limit_monthly__isnull=False,
@@ -44,7 +45,11 @@ class Command(BaseCommand):
 
         alerts = 0
         for limit in limits:
-            spent = spent_in_window(limit, period)
+            # Same bounds as monthly_stat — next-month-dated rows
+            # never count toward this month's alert.
+            spent = spent_in_window(
+                limit, period, end=_next_month(period)
+            )
             self._record_evaluations(limit, spent, period)
             if spent > limit.limit_monthly:
                 accounts = list(limit.accounts.all())
@@ -104,8 +109,6 @@ class Command(BaseCommand):
         previous = (
             period_start - timezone.timedelta(days=1)
         ).replace(day=1)
-        if previous == period_start:
-            return
         prev_spent = spent_in_window(
             limit, previous, end=period_start
         )
