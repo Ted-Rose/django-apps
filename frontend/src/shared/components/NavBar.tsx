@@ -22,7 +22,7 @@ interface NavBarProps {
 export function NavBar({ title, user, items = [] }: NavBarProps) {
   const { t } = useTranslation();
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav className="app-navbar navbar navbar-expand-lg navbar-dark bg-primary">
       <div className="container-fluid">
         <ShellLink className="navbar-brand" href="/">
           <i className="bi bi-house-heart" /> {t('nav.brand')}

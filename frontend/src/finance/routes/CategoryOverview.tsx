@@ -34,23 +34,37 @@ import './accounts.css';
 // transactions page's table chrome.
 import './transactions.css';
 
+/** The wide presets that only appear inside the filter form —
+    the chip row keeps just the month shortcuts. */
+const FORM_ONLY_PERIODS = new Set(['lastYear', 'allTime']);
+
+/** Local-time `YYYY-MM-DD` — `toISOString()` would shift a day
+    in positive UTC offsets. */
+const localIso = (date: Date) =>
+  `${date.getFullYear()}-` +
+  `${String(date.getMonth() + 1).padStart(2, '0')}-` +
+  `${String(date.getDate()).padStart(2, '0')}`;
+
 /**
  * React port of category_overview.html — per-category spending
  * totals over a selectable time window, plus the collapsible
  * categories management card (create/edit/delete, moved here from
  * the rules page). `from`/`to`/`account` live
  * in the URL (the template's GET form + preset hrefs become
- * `useSearchParams` writes), the `periods` list renders the preset
- * chips ("All time" clears the dates), and the table groups rows +
- * totals by currency exactly like the template's `totals` dict.
+ * `useSearchParams` writes); a bare URL defaults to the current
+ * month server-side, the month presets render as chips and the
+ * wider Last year/All time ranges live inside the filter form —
+ * "All time" sends an explicit 2000-01-01 start since empty
+ * dates now mean "this month". The table groups rows + totals by
+ * currency exactly like the template's `totals` dict.
  *
  * Money arrives as Decimal-serialized strings and renders as-is;
- * each row shows spent and received as separate columns so income
- * can't hide inside a category's net figure. Headline StatCards
- * surface spent/received per currency,
- * a recharts donut (CategoryChart) shows the spending share, and
- * the breakdown table stays three slim columns so it fits narrow
- * screens — the tx count is secondary text under the badge.
+ * each row shows a single spent column — income surfaces once in
+ * the per-currency Spent/Received StatCards at the bottom of the
+ * page, after the table and monthly matrix. A recharts donut
+ * (CategoryChart) shows the spending share, and the breakdown
+ * table stays three slim columns so it fits narrow screens — the
+ * tx count is secondary text under the badge.
  */
 export default function CategoryOverview() {
   const { t } = useTranslation('finance');
@@ -160,17 +174,36 @@ export default function CategoryOverview() {
     setSearchParams(next);
   };
 
-  // One-line recap of the active filters, shown while the filter
-  // card is collapsed so a deep-linked range stays visible.
-  const accountLabel = data?.accounts.find(
-    (account) => String(account.id) === params.account,
-  )?.label;
-  const filterSummary = [
-    [params.from, params.to].filter(Boolean).join(' → '),
-    accountLabel ?? '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  /** Wide quick ranges inside the filter form — the presets that
+      don't earn a chip. "All time" sends an explicit 2000 start:
+      empty dates would hit the current-month default. */
+  const selectQuickRange = (key: 'lastYear' | 'allTime') => {
+    const preset = data?.periods.find((p) => p.key === key);
+    let dateFrom = preset?.date_from ?? '';
+    let dateTo = preset?.date_to ?? '';
+    if (!dateFrom || !dateTo) {
+      // Fallback while the overview is still loading — the same
+      // bounds the server computes for these presets.
+      const now = new Date();
+      if (key === 'allTime') {
+        dateFrom = '2000-01-01';
+        dateTo = localIso(now);
+      } else {
+        dateFrom = localIso(
+          new Date(now.getFullYear(), now.getMonth() - 12, 1),
+        );
+        dateTo = localIso(new Date(now.getFullYear(), now.getMonth(), 0));
+      }
+    }
+    selectPeriod(dateFrom, dateTo);
+    setFiltersOpen(false);
+  };
+
+  // Remount key for the account select — flips when the account
+  // list first arrives so defaultValue picks up a deep-linked
+  // account even when the form was opened mid-load.
+  const accountSelectKey =
+    `account-${params.account}-` + (data ? 'ready' : 'loading');
 
   // The per-month matrix only makes sense under the "Last year"
   // preset — a bounded twelve-month window with full month
@@ -201,74 +234,107 @@ export default function CategoryOverview() {
       <PageShell
         title={t('categories.title')}
         subtitle={t('categories.subtitle')}
+        actions={
+          data &&
+          !isSharedView && (
+            <button
+              type="button"
+              className="btn btn-sm acct-icon-btn"
+              title={t('categories.shareOverview')}
+              aria-label={t('categories.shareOverview')}
+              aria-expanded={shareOpen}
+              onClick={() => setShareOpen((open) => !open)}
+            >
+              <i className="bi bi-share" />
+            </button>
+          )
+        }
       >
-        {data && (
+        {data && (data.shared_with_me.length > 0 || isSharedView) && (
           <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-            {(data.shared_with_me.length > 0 || isSharedView) && (
-              <>
-                <button
-                  type="button"
-                  className={`fin-chip${params.owner ? '' : ' active'}`}
-                  aria-pressed={!params.owner}
-                  onClick={() => selectOwner(null)}
-                >
-                  {t('categories.myOverview')}
-                </button>
-                {data.shared_with_me.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className={`fin-chip${
-                      params.owner === name ? ' active' : ''
-                    }`}
-                    aria-pressed={params.owner === name}
-                    onClick={() => selectOwner(name)}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </>
-            )}
+            <button
+              type="button"
+              className={`fin-chip${params.owner ? '' : ' active'}`}
+              aria-pressed={!params.owner}
+              onClick={() => selectOwner(null)}
+            >
+              {t('categories.myOverview')}
+            </button>
+            {data.shared_with_me.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={`fin-chip${params.owner === name ? ' active' : ''}`}
+                aria-pressed={params.owner === name}
+                onClick={() => selectOwner(name)}
+              >
+                {name}
+              </button>
+            ))}
             {isSharedView && (
               <span className="badge acct-shared-badge">
                 {t('categories.sharedBy', { username: data.view_owner })}
               </span>
-            )}
-            {!isSharedView && (
-              <button
-                type="button"
-                className="btn btn-sm acct-icon-btn ms-auto"
-                title={t('categories.shareOverview')}
-                aria-label={t('categories.shareOverview')}
-                aria-expanded={shareOpen}
-                onClick={() => setShareOpen((open) => !open)}
-              >
-                <i className="bi bi-share" />
-              </button>
             )}
           </div>
         )}
         {data && !isSharedView && shareOpen && (
           <ShareOverviewCard accounts={data.accounts} shares={data.my_shares} />
         )}
-        <div className="fin-card p-3 mb-3">
-          <button
-            type="button"
-            className="btn btn-link p-0 text-body text-decoration-none d-flex align-items-center gap-2"
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((open) => !open)}
-          >
-            <i
-              className={`bi bi-chevron-${filtersOpen ? 'up' : 'down'}`}
-              aria-hidden="true"
-            />
-            {t('categories.filters')}
-            {!filtersOpen && filterSummary && (
-              <span className="text-muted small">{filterSummary}</span>
-            )}
-          </button>
+
+        {/* The period chips and the collapsed from/to/account
+            form render unconditionally — gating them on `data`
+            left no way to change the window while the query was
+            loading or had failed. Only the month presets earn a
+            chip — the wider ranges sit inside the form. */}
+        <div className="mb-4">
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            {(data?.periods ?? [])
+              .filter((period) => !FORM_ONLY_PERIODS.has(period.key ?? ''))
+              .map((period) => (
+                <button
+                  key={period.key ?? period.label}
+                  type="button"
+                  className={`fin-chip${period.active ? ' active' : ''}`}
+                  aria-pressed={period.active}
+                  onClick={() => selectPeriod(period.date_from, period.date_to)}
+                >
+                  {period.key
+                    ? t(`server:periods.${period.key}`, {
+                        defaultValue: period.label,
+                      })
+                    : period.label}
+                </button>
+              ))}
+            <button
+              type="button"
+              className="btn btn-sm acct-icon-btn"
+              title={t('categories.filtersToggle')}
+              aria-label={t('categories.filtersToggle')}
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              <i className="bi bi-calendar3" aria-hidden="true" />
+            </button>
+          </div>
           {filtersOpen && (
             <form className="mt-3" onSubmit={applyFilters}>
+              {/* The wide presets removed from the chip row —
+                  clicking one applies its range immediately. */}
+              <div className="d-flex flex-wrap gap-2 mb-3">
+                {(['lastYear', 'allTime'] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="fin-chip"
+                    onClick={() => selectQuickRange(key)}
+                  >
+                    {t(`server:periods.${key}`, {
+                      defaultValue: key,
+                    })}
+                  </button>
+                ))}
+              </div>
               <div className="row g-2 align-items-end mb-0">
                 <div className="col-6 col-sm-auto">
                   <label htmlFor="date-from" className="form-label">
@@ -279,8 +345,11 @@ export default function CategoryOverview() {
                     name="from"
                     id="date-from"
                     className="form-control"
-                    key={`from-${params.from}`}
-                    defaultValue={params.from}
+                    // The server echoes the effective window, so a
+                    // bare-URL load (the current-month default)
+                    // still fills the field.
+                    key={`from-${params.from || data?.date_from || ''}`}
+                    defaultValue={params.from || data?.date_from || ''}
                   />
                 </div>
                 <div className="col-6 col-sm-auto">
@@ -292,8 +361,8 @@ export default function CategoryOverview() {
                     name="to"
                     id="date-to"
                     className="form-control"
-                    key={`to-${params.to}`}
-                    defaultValue={params.to}
+                    key={`to-${params.to || data?.date_to || ''}`}
+                    defaultValue={params.to || data?.date_to || ''}
                   />
                 </div>
                 <div className="col-12 col-sm-auto">
@@ -304,9 +373,10 @@ export default function CategoryOverview() {
                     name="account"
                     id="account-filter"
                     className="form-select"
-                    // Remount once the options load (and on param change)
-                    // so defaultValue picks up a deep-linked account.
-                    key={`account-${params.account}-${data ? 'ready' : 'loading'}`}
+                    // Remount on param change or first data
+                    // arrival so defaultValue picks up a
+                    // deep-linked account.
+                    key={accountSelectKey}
                     defaultValue={params.account}
                   >
                     <option value="">{t('categories.allAccounts')}</option>
@@ -327,32 +397,6 @@ export default function CategoryOverview() {
           )}
         </div>
 
-        {data && !isSharedView && (
-          <div className="mb-3">
-            <CategoriesCard categories={data.categories} />
-          </div>
-        )}
-
-        {data && (
-          <div className="d-flex flex-wrap gap-2 mb-4">
-            {data.periods.map((period) => (
-              <button
-                key={period.key ?? period.label}
-                type="button"
-                className={`fin-chip${period.active ? ' active' : ''}`}
-                aria-pressed={period.active}
-                onClick={() => selectPeriod(period.date_from, period.date_to)}
-              >
-                {period.key
-                  ? t(`server:periods.${period.key}`, {
-                      defaultValue: period.label,
-                    })
-                  : period.label}
-              </button>
-            ))}
-          </div>
-        )}
-
         {isPending && (
           <LoadingSkeleton label={t('categories.loading')} rows={5} />
         )}
@@ -365,8 +409,104 @@ export default function CategoryOverview() {
         )}
         {data && (
           <>
+            {data.rows.length > 0 ? (
+              <div className="row g-3">
+                <div className="col-12">
+                  <div className="fin-card p-3 h-100">
+                    <table className="table table-hover cat-table mb-0">
+                      <thead>
+                        <tr>
+                          <th>{t('transactions.columns.category')}</th>
+                          <th style={{ width: '3rem' }}>
+                            {t('categories.share')}
+                          </th>
+                          <th className="text-end" style={{ width: '6rem' }}>
+                            {t('categories.spentCol')}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          // Excluded rows sort last server-side; a
+                          // muted section header splits them off.
+                          const firstExcluded = data.rows.findIndex(
+                            (row) => row.is_excluded,
+                          );
+                          return data.rows.map((row, index) => (
+                            <Fragment key={`${row.category_name}-${index}`}>
+                              {index === firstExcluded && (
+                                <tr>
+                                  <td
+                                    colSpan={3}
+                                    className="text-muted small border-0 pt-3"
+                                  >
+                                    {t('categories.excludedSection')}
+                                  </td>
+                                </tr>
+                              )}
+                              <OverviewRow
+                                row={row}
+                                index={index}
+                                selected={
+                                  (row.category_id != null
+                                    ? String(row.category_id)
+                                    : 'none') === params.category
+                                }
+                                onSelect={() => selectCategory(row)}
+                              />
+                            </Fragment>
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                {/* Clicked-category transactions open right beneath
+                    the table — the panel scrolls itself into view
+                    and its close button clears ?category=. */}
+                {params.category && (
+                  <div className="col-12">
+                    <TransactionDrilldown
+                      // Remount per category so the panel scrolls
+                      // into view on every selection change.
+                      key={params.category}
+                      label={selectedLabel}
+                      params={params}
+                      owner={params.owner}
+                      readOnly={isSharedView}
+                      onUpdate={updateParams}
+                      onClose={() => updateParams({ category: null })}
+                    />
+                  </div>
+                )}
+                {/* The donut sits under the breakdown — it reads
+                    as a summary of the table, not its peer. */}
+                <div className="col-12 col-lg-6">
+                  <div className="fin-card p-3 h-100">
+                    <h2 className="h6 text-muted">
+                      {t('categories.chartTitle')}
+                    </h2>
+                    <Suspense
+                      fallback={
+                        <div
+                          className="fin-skeleton"
+                          style={{ height: '17.5rem' }}
+                        />
+                      }
+                    >
+                      <CategoryChart rows={data.rows} />
+                    </Suspense>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <EmptyState icon="pie-chart" title={t('categories.emptyTitle')} />
+            )}
+            {showMonthly && data.monthly.rows.length > 0 && (
+              <MonthlyCard monthly={data.monthly} />
+            )}
             {Object.keys(data.totals).length > 0 && (
-              <div className="row g-3 mb-4">
+              <div className="row g-3 mt-1 mb-4">
                 {Object.entries(data.totals).flatMap(([currency, total]) => [
                   <div
                     className="col-12 col-sm-6 col-lg-3"
@@ -401,113 +541,14 @@ export default function CategoryOverview() {
                 ])}
               </div>
             )}
-            {data.rows.length > 0 ? (
-              <div className="row g-3">
-                <div className="col-12 col-lg-4">
-                  <div className="fin-card p-3 h-100">
-                    <h2 className="h6 text-muted">
-                      {t('categories.chartTitle')}
-                    </h2>
-                    <Suspense
-                      fallback={
-                        <div
-                          className="fin-skeleton"
-                          style={{ height: '17.5rem' }}
-                        />
-                      }
-                    >
-                      <CategoryChart rows={data.rows} />
-                    </Suspense>
-                  </div>
-                </div>
-                <div className="col-12 col-lg-8">
-                  <div className="fin-card p-3 h-100">
-                    <table className="table table-hover cat-table mb-0">
-                      <thead>
-                        <tr>
-                          <th>{t('transactions.columns.category')}</th>
-                          <th className="w-25">{t('categories.share')}</th>
-                          <th className="text-end">
-                            {t('categories.spentCol')}
-                          </th>
-                          <th className="text-end">
-                            {t('categories.receivedCol')}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          // Excluded rows sort last server-side; a
-                          // muted section header splits them off.
-                          const firstExcluded = data.rows.findIndex(
-                            (row) => row.is_excluded,
-                          );
-                          return data.rows.map((row, index) => (
-                            <Fragment key={`${row.category_name}-${index}`}>
-                              {index === firstExcluded && (
-                                <tr>
-                                  <td
-                                    colSpan={4}
-                                    className="text-muted small border-0 pt-3"
-                                  >
-                                    {t('categories.excludedSection')}
-                                  </td>
-                                </tr>
-                              )}
-                              <OverviewRow
-                                row={row}
-                                index={index}
-                                selected={
-                                  (row.category_id != null
-                                    ? String(row.category_id)
-                                    : 'none') === params.category
-                                }
-                                onSelect={() => selectCategory(row)}
-                              />
-                            </Fragment>
-                          ));
-                        })()}
-                      </tbody>
-                      <tfoot>
-                        {Object.entries(data.totals).map(
-                          ([currency, total]) => (
-                            <tr className="fw-bold" key={currency}>
-                              <td>{t('categories.total', { currency })}</td>
-                              <td />
-                              <td className="text-end text-nowrap text-danger fin-money">
-                                -{total.spent} {currency}
-                              </td>
-                              <td className="text-end text-nowrap text-success fin-money">
-                                +{total.received} {currency}
-                              </td>
-                            </tr>
-                          ),
-                        )}
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
+            {/* Category management sits at the bottom, right
+                beneath the spent/received totals. */}
+            {!isSharedView && (
+              <div className="mb-3">
+                <CategoriesCard categories={data.categories} />
               </div>
-            ) : (
-              <EmptyState icon="pie-chart" title={t('categories.emptyTitle')} />
-            )}
-            {showMonthly && data.monthly.rows.length > 0 && (
-              <MonthlyCard monthly={data.monthly} />
             )}
           </>
-        )}
-        {params.category && (
-          <TransactionDrilldown
-            // Remount per category so the panel scrolls into view
-            // on every selection change.
-            key={params.category}
-            label={selectedLabel}
-            params={params}
-            owner={params.owner}
-            readOnly={isSharedView}
-            onUpdate={updateParams}
-            onClose={() => updateParams({ category: null })}
-          />
         )}
       </PageShell>
       <Toasts />
@@ -641,8 +682,9 @@ function ShareOverviewCard({
 
 /**
  * One breakdown row: category badge + tx count, a share bar tinted
- * with the category color, and the spent/received amounts as
- * separate columns — a category with both directions shows both.
+ * with the category color over its whole-number percentage, and
+ * the spent amount — income shows up once in the totals cards
+ * instead of a per-category column.
  * The row is a click target: selecting it opens the transaction
  * drill-down below the table (`?category=` in the URL).
  */
@@ -696,19 +738,19 @@ function OverviewRow({
       </td>
       <td className="align-middle">
         {row.is_excluded ? (
-          <small className="text-nowrap">
+          <small>
             <i className="bi bi-eye-slash me-1" aria-hidden="true" />
             {t('categories.excludedFromStats')}
           </small>
         ) : (
-          <div className="d-flex align-items-center gap-2">
+          <div>
             <div
-              className="progress flex-grow-1"
+              className="progress w-100"
               role="progressbar"
               aria-valuenow={row.share}
               aria-valuemin={0}
               aria-valuemax={100}
-              style={{ height: '0.5rem', minWidth: '1.5rem' }}
+              style={{ height: '0.5rem' }}
             >
               <div
                 className="progress-bar"
@@ -718,23 +760,19 @@ function OverviewRow({
                 }}
               />
             </div>
-            <small className="text-nowrap">{row.share.toFixed(1)}%</small>
+            {/* Whole-number share under the bar — stacking keeps
+                the column narrow enough for phone screens. */}
+            <small>{Math.round(row.share)}%</small>
           </div>
         )}
       </td>
-      <td className="text-end text-nowrap fin-money">
+      {/* No text-nowrap: .fin-money keeps one line on desktop,
+          and categories.css relaxes it under sm so the amount
+          wraps at the currency gap instead of overflowing. */}
+      <td className="text-end fin-money">
         {Number(row.spent) > 0 ? (
           <span className="text-danger">
             -{row.spent} {row.currency}
-          </span>
-        ) : (
-          <span className="text-muted">—</span>
-        )}
-      </td>
-      <td className="text-end text-nowrap fin-money">
-        {Number(row.received) > 0 ? (
-          <span className="text-success">
-            +{row.received} {row.currency}
           </span>
         ) : (
           <span className="text-muted">—</span>

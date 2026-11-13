@@ -534,6 +534,7 @@ function TransactionRow({
         ) : (
           <Dropdown
             buttonClassName="tx-cat-toggle"
+            menuClassName="dropdown-menu-end"
             menuStyle={{ maxHeight: '300px', overflowY: 'auto' }}
             ariaLabel={t('transactions.categoryMenuAria', { id: tx.id })}
             label={

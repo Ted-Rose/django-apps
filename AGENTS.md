@@ -260,19 +260,32 @@ Universal rules — follow exactly:
   ../django-apps-wt/<slug> -b <type>/<slug> origin/main` and
   do all work (commits, push, PR) inside it. The main
   checkout may hold the user's uncommitted work or another
-  agent's session; never switch branches there. Once the
-  PR's checks are green and no work remains, clean up
-  IMMEDIATELY — don't wait for the merge (the PR lives on
-  the remote branch; removing the local worktree/branch does
-  not touch it, and the remote branch is deleted at merge
-  time). From the main checkout: `git worktree remove
-  ../django-apps-wt/<slug>` + `git branch -D <type>/<slug>`
-  (`-D`, not `-d` — squash-merges leave the branch
-  "unmerged"). Abandoned work gets the same cleanup;
-  follow-up requests get a FRESH worktree — never reuse an
-  old one. Goal state: `git worktree list` shows only the
-  main checkout when the task ends. Each worktree needs its
-  own `venv` + `.env` (both gitignored).
+  agent's session; never switch branches there. Each
+  worktree needs the gitignored runtime files — symlink
+  them from the main checkout instead of reinstalling:
+  `venv`, `.env`, `ca.pem`, `google_api/app_secrets.json`,
+  `frontend/node_modules`, `db.sqlite3`.
+- **Free the branch when the PR opens.** A branch can only
+  be checked out in one place, so remove the worktree as
+  soon as the PR is pushed/opened — don't wait for checks
+  or the merge — letting the user `git switch <branch>` in
+  the main checkout to test locally (its `venv`/`.env`/
+  `node_modules` are already set up). For
+  frontend-touching PRs, first copy the built dist into
+  the main checkout (`cp -R <wt>/frontend_dist/
+  frontend_dist/`) so `runserver`/`runsslserver` there
+  serves the PR build with zero setup — and tell the user
+  to rebuild after switching back. From the main
+  checkout: `git worktree remove ../django-apps-wt/<slug>
+  --force` (the symlinks above are untracked) +
+  `git branch -D <type>/<slug>` (`-D`, not `-d` —
+  squash-merges leave the branch "unmerged"; the remote
+  branch and PR are unaffected, and `git switch`
+  recreates the local ref on demand). Abandoned work gets
+  the same cleanup; follow-up requests (reviews, fixers)
+  get a FRESH worktree — never reuse an old one. Goal
+  state: `git worktree list` shows only the main checkout
+  when the task ends.
 - **Gitignored secrets/config** (must stay untracked):
   `.env`, `config.yaml`, `private_settings.json` (legacy),
   `google_api/app_secrets.json`, `ca.pem`,
@@ -610,6 +623,18 @@ unaffected.
   rejects mismatches (http://127.0.0.1 redirect URIs are allowed).
   To run vite alone: `npm run dev --prefix frontend` or Terminal →
   Run Task → "vite dev server".
+- `dev_mode` in `DJANGO_VITE` follows `VITE_DEV` alone (NOT
+  `DEBUG`) — a local `DEBUG=false` run (production Postgres) still
+  gets vite dev + HMR; deployed envs simply never set `VITE_DEV`.
+- Google API timeouts are per-request on the authorized transport
+  (`google_api.utils.authorized_http`, 30s). Never re-add a
+  process-global `socket.setdefaulttimeout` — it applied to every
+  socket in the process, timing out idle dev-server keep-alive
+  connections and spamming `TimeoutError` tracebacks into the
+  runsslserver log.
+- Chrome DevTools open → `GET
+  /.well-known/appspecific/com.chrome.devtools.json` 404s in the
+  dev log. It's DevTools' workspace-folder probe — harmless.
 
 ## Where to look first
 

@@ -18,7 +18,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from gmail.models import EmailParsingRule
-from google_api.utils import google_auth
+from google_api.utils import authorized_http, google_auth
 
 logger = logging.getLogger('django')
 
@@ -265,7 +265,8 @@ def get_messages(query, creds, rules=None):
                 'authorization_url' in credentials):
             return credentials
 
-        service = build("gmail", "v1", credentials=credentials)
+        service = build(
+            "gmail", "v1", http=authorized_http(credentials))
         results = (
             service.users().messages()
             .list(userId="me", q=query, maxResults=100)
@@ -343,7 +344,8 @@ def mark_messages_as_read(creds, message_ids):
             'authorization_url' in credentials):
         return credentials
 
-    service = build("gmail", "v1", credentials=credentials)
+    service = build(
+        "gmail", "v1", http=authorized_http(credentials))
     try:
         # batchModify accepts up to 1000 ids per call
         for i in range(0, len(message_ids), 1000):

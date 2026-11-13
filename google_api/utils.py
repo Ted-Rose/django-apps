@@ -19,7 +19,9 @@ from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
+import httplib2
 import re
 import hashlib
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -575,6 +577,20 @@ def google_auth(creds=None, scopes=None, user=None):
     return creds
 
 
+GOOGLE_API_TIMEOUT = 30
+
+
+def authorized_http(credentials, timeout=GOOGLE_API_TIMEOUT):
+    """
+    Authorized httplib2 transport with a per-request timeout.
+    Scoping the timeout to Google API calls keeps unrelated
+    sockets (dev-server keep-alives, DB connections) on the
+    default blocking behavior. Raises socket.timeout to callers.
+    """
+    return AuthorizedHttp(
+        credentials, http=httplib2.Http(timeout=timeout))
+
+
 def build_google_service(service_name, version, creds, scopes=None):
     """
     Generic service builder for Google APIs.
@@ -589,7 +605,8 @@ def build_google_service(service_name, version, creds, scopes=None):
     credentials = google_auth(creds, scopes)
     if isinstance(credentials, dict) and 'authorization_url' in credentials:
         return credentials
-    return build(service_name, version, credentials=credentials)
+    return build(
+        service_name, version, http=authorized_http(credentials))
 
 
 def callback(request, scopes=None):

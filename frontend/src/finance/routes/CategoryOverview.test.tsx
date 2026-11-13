@@ -200,53 +200,67 @@ describe('CategoryOverview', () => {
 
     expect(await screen.findByText('Groceries')).toBeInTheDocument();
     expect(screen.getByText('Salary')).toBeInTheDocument();
-    // Spent and received render as separate columns per category —
-    // a mixed-direction row shows both sides instead of a net sum.
+    // Each row keeps a single spent column — income surfaces once
+    // in the totals cards below, not as a per-category column.
     const groceriesRow = screen.getByText('Groceries').closest('tr')!;
     expect(within(groceriesRow).getByText('-120.50 EUR')).toHaveClass(
       'text-danger',
     );
     const salaryRow = screen.getByText('Salary').closest('tr')!;
-    expect(within(salaryRow).getByText('+2000.00 EUR')).toHaveClass(
-      'text-success',
-    );
-    // Zero-amount cells render a muted dash.
+    // A zero-spent row renders a muted dash; no Received column.
     expect(within(salaryRow).getByText('—')).toHaveClass('text-muted');
+    expect(within(salaryRow).queryByText('+2000.00 EUR')).toBeNull();
     const uncategorizedRow = screen.getByText('Uncategorized').closest('tr')!;
     expect(within(uncategorizedRow).getByText('-39.00 USD')).toHaveClass(
       'text-danger',
     );
+    // Three columns — category, share bar, spent — and no totals
+    // footer: the figures moved to the StatCards below.
+    const table = groceriesRow.closest('table')!;
+    expect(table.querySelectorAll('thead th')).toHaveLength(3);
+    expect(table.querySelector('tfoot')).toBeNull();
     // Share column and the secondary tx-count subtext.
-    expect(screen.getByText('75.5%')).toBeInTheDocument();
+    expect(screen.getByText('76%')).toBeInTheDocument();
     expect(screen.getByText('12 transactions')).toBeInTheDocument();
     expect(screen.getByText('1 transaction')).toBeInTheDocument();
-    // Totals footer keeps spent and received separate per currency.
-    const eurTotal = screen.getByText('Total (EUR)').closest('tr');
-    expect(eurTotal).not.toBeNull();
-    expect(within(eurTotal!).getByText('-120.50 EUR')).toHaveClass(
-      'text-danger',
-    );
-    expect(within(eurTotal!).getByText('+2000.00 EUR')).toHaveClass(
-      'text-success',
-    );
-    const usdTotal = screen.getByText('Total (USD)').closest('tr');
-    expect(usdTotal).not.toBeNull();
-    expect(within(usdTotal!).getByText('-39.00 USD')).toHaveClass(
-      'text-danger',
-    );
-    expect(within(usdTotal!).getByText('+0.00 USD')).toHaveClass(
-      'text-success',
-    );
+    // Per-currency totals land as StatCards below the table —
+    // the received figure shows only there now.
+    const spentCard = screen.getByText('Spent (EUR)');
+    expect(screen.getByText('Received (EUR)')).toBeInTheDocument();
+    expect(screen.getByText('+2000.00 EUR')).toHaveClass('text-success');
+    expect(
+      table.compareDocumentPosition(spentCard) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The share toggle lives in the page header's action slot.
+    const shareToggle = screen.getByRole('button', {
+      name: 'Share overview',
+    });
+    expect(shareToggle.closest('.fin-page-header')).not.toBeNull();
+    // The calendar icon next to the preset chips toggles the
+    // collapsed from/to/account form.
+    expect(
+      screen.getByRole('button', { name: 'Set dates and account' }),
+    ).toHaveAttribute('aria-expanded', 'false');
     // The active preset is rendered as the pressed chip.
     const active = screen.getByRole('button', { name: 'This month' });
     expect(active).toHaveClass('fin-chip', 'active');
     expect(active).toHaveAttribute('aria-pressed', 'true');
-    const inactive = screen.getByRole('button', { name: 'All time' });
-    expect(inactive).toHaveClass('fin-chip');
-    expect(inactive).toHaveAttribute('aria-pressed', 'false');
+    // The wide presets don't earn chips — they live inside the
+    // filter form behind the calendar toggle.
+    expect(
+      screen.queryByRole('button', { name: 'All time' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Last year' }),
+    ).not.toBeInTheDocument();
     // The recharts donut is stubbed (jsdom renders it 0-size) but
-    // the chart card is still wired into the layout.
-    expect(await screen.findByTestId('category-chart')).toBeInTheDocument();
+    // the chart card is still wired into the layout — beneath the
+    // breakdown table, not beside it.
+    const chart = await screen.findByTestId('category-chart');
+    expect(
+      table.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('writes from/to params when a preset is clicked', async () => {
@@ -260,13 +274,38 @@ describe('CategoryOverview', () => {
     );
   });
 
-  it('clears the date params via the All time preset', async () => {
+  it('applies the All time range from inside the filter form', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview('/categories?from=2025-01-09&to=2025-01-15');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
     fireEvent.click(await screen.findByRole('button', { name: 'All time' }));
+    // All time is an explicit range — empty dates would fall back
+    // to the current-month default.
+    const today = new Date();
+    const to =
+      `${today.getFullYear()}-` +
+      `${String(today.getMonth() + 1).padStart(2, '0')}-` +
+      `${String(today.getDate()).padStart(2, '0')}`;
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith(
-        '/api/finance/categories/overview/',
+        `/api/finance/categories/overview/?from=2000-01-01&to=${to}`,
+      ),
+    );
+  });
+
+  it('applies the Last year range from inside the filter form', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Last year' }));
+    // The preset's server-computed bounds go straight into the URL.
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenLastCalledWith(
+        '/api/finance/categories/overview/?from=2024-01-01&to=2024-12-31',
       ),
     );
   });
@@ -368,17 +407,22 @@ describe('CategoryOverview', () => {
   it('applies the account filter via the form', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview();
-    // The filter card is collapsed by default — expand it first.
-    fireEvent.click(await screen.findByRole('button', { name: /Filters/ }));
+    // The filter form is collapsed by default — the calendar icon
+    // next to the preset chips expands it.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
     // The account options render once the overview has loaded.
     await screen.findByRole('option', { name: 'Everyday account' });
     fireEvent.change(screen.getByLabelText('Account'), {
       target: { value: '5' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    // The prefilled window fields ride along — the form submits
+    // the same effective range it displays.
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith(
-        '/api/finance/categories/overview/?account=5',
+        '/api/finance/categories/overview/?from=2025-01-09&to=2025-01-15&account=5',
       ),
     );
   });
@@ -402,7 +446,9 @@ describe('CategoryOverview', () => {
   it('applies the date range via the form', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview();
-    fireEvent.click(await screen.findByRole('button', { name: /Filters/ }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
     fireEvent.change(await screen.findByLabelText('From'), {
       target: { value: '2025-02-01' },
     });
@@ -434,9 +480,15 @@ describe('CategoryOverview', () => {
         '/api/finance/transactions/?category=1&from=2025-01-09&to=2025-01-15',
       ),
     );
+    const panel = (await screen.findByText('Transactions — Groceries')).closest(
+      '.tx-panel',
+    )!;
+    // The drill-down sits right beneath the breakdown table,
+    // before the chart card.
+    const table = row.closest('table')!;
     expect(
-      await screen.findByText('Transactions — Groceries'),
-    ).toBeInTheDocument();
+      table.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     // The embedded table renders the fetched transaction rows.
     expect(await screen.findByText('Coffee')).toBeInTheDocument();
     // The selected row is highlighted.
@@ -469,20 +521,35 @@ describe('CategoryOverview', () => {
     );
   });
 
-  it('keeps the filter card collapsed with a summary of active filters', async () => {
+  it('keeps the filter form collapsed without a dates summary', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview('/categories?from=2025-01-01&to=2025-01-15&account=5');
-    const toggle = await screen.findByRole('button', { name: /Filters/ });
+    const toggle = await screen.findByRole('button', {
+      name: 'Set dates and account',
+    });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByLabelText('Account')).not.toBeInTheDocument();
-    // Wait for the overview so the account label joins the summary.
+    // No active-window recap — the active chip and the form's
+    // fields carry that information.
     await screen.findByText('Groceries');
     expect(
-      screen.getByText('2025-01-01 → 2025-01-15 · Everyday account'),
-    ).toBeInTheDocument();
+      screen.queryByText(/2025-01-01 → 2025-01-15/),
+    ).not.toBeInTheDocument();
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByLabelText('Account')).toBeInTheDocument();
+  });
+
+  it('prefills the form with the server-echoed effective window', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
+    // No from/to in the URL — the fields show the window the
+    // server actually applied (date_from/date_to in the payload).
+    expect(await screen.findByLabelText('From')).toHaveValue('2025-01-09');
+    expect(screen.getByLabelText('To')).toHaveValue('2025-01-15');
   });
 
   it('shows the empty state when there are no rows', async () => {
@@ -518,6 +585,12 @@ describe('CategoryOverview', () => {
     expect(within(list).getByText('Housing')).toBeInTheDocument();
 
     const section = document.getElementById('categoriesCollapse')!;
+    // Management UI sits at the bottom — beneath the totals cards.
+    const spentCard = screen.getByText('Spent (EUR)');
+    expect(
+      spentCard.compareDocumentPosition(section) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(section).toHaveClass('collapse', 'show');
     const toggle = screen.getByRole('button', { name: /Categories/ });
     fireEvent.click(toggle);

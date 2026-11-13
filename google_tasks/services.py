@@ -8,7 +8,7 @@ from difflib import SequenceMatcher
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
-from google_api.utils import google_auth
+from google_api.utils import authorized_http, google_auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google_tasks.models import (
@@ -21,9 +21,6 @@ from google_tasks.models import (
 logger = logging.getLogger('django')
 
 TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks'
-
-# Set default socket timeout to prevent indefinite hangs
-socket.setdefaulttimeout(30)
 
 # Label matching configuration
 LABEL_SIMILARITY_THRESHOLD = 0.80  # 80% similarity required
@@ -52,11 +49,12 @@ def get_tasks_service(creds):
     logger.info('Successfully obtained credentials, building service')
     try:
         # Use cache_discovery=False to avoid potential hanging
-        # on discovery document fetch
-        # Build with credentials directly (google-auth handles timeout)
+        # on discovery document fetch; the timeout lives on the
+        # authorized transport so API calls still raise
+        # socket.timeout instead of hanging indefinitely
         service = build(
             'tasks', 'v1',
-            credentials=credentials,
+            http=authorized_http(credentials),
             cache_discovery=False
         )
         logger.info('Service built successfully')
