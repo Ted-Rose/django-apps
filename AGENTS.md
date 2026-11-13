@@ -63,7 +63,7 @@ Two live deploy targets share the same database:
 - `single_pages/` — one-off pages (twister, spoki.lv proxy).
   Backend-only Django app; SPA mounted at root paths `/twister`
   and `/spoki/`. See `single_pages/AGENTS.md`.
-- `frontend/` — Vite 5 + React 19 + TS workspace, one entry per
+- `frontend/` — Vite 6 + React 19 + TS workspace, one entry per
   app (`src/tasks/`, `src/finance/`, `src/gmail/`,
   `src/single_pages/`, `src/notes/`) plus `src/shared/` (API client
   `api/client.ts`, i18n, components). Builds to gitignored
