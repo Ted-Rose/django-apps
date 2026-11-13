@@ -30,10 +30,7 @@
     "thresholdAria": "Alert threshold in {{currency}}",
     "cancelBalanceAlert": "Cancel balance alert",
     "lastBalance": "Last reported balance: {{amount}} {{currency}}.",
-    "noDevices": "No devices subscribed — enable alerts on the <lnk>Limits page</lnk>.",
-    "pushEnabled_zero": "Push notifications are enabled on {{count}} devices.",
-    "pushEnabled_one": "Push notifications are enabled on {{count}} device.",
-    "pushEnabled_other": "Push notifications are enabled on {{count}} devices."
+    "pushHint": "Alerts are sent as browser push notifications."
   },
   "balances": {
     "title": "Balances",
@@ -177,7 +174,7 @@
   },
   "limits": {
     "title": "Spending Limits",
-    "subtitle": "Spending limits over one or more accounts, across 7-day, 30-day or calendar-month windows — optionally scoped to a single category. You are alerted when spending exceeds the limit.",
+    "subtitle": "Spending limits over one or more accounts for the calendar month — optionally scoped to a single category. You are alerted when spending exceeds the limit.",
     "loading": "Loading limits",
     "loadLabel": "limits",
     "overview": "Limit overview",
@@ -194,18 +191,13 @@
     "emptyTitle": "No limits set yet.",
     "formTitleNew": "Set a limit",
     "formTitleEdit": "Edit limit",
-    "alertsTitle": "Spending alerts",
     "form": {
       "editingNotice": "Editing an existing limit.",
       "accounts": "Accounts",
       "category": "Category",
       "allCategories": "All categories",
-      "timeWindows": "Time windows",
-      "timeWindowsHint": "Set any combination — leave a field blank to disable that window.",
-      "per7Days": "Limit per 7 days",
-      "per30Days": "Limit per 30 days",
       "perMonth": "Limit per calendar month",
-      "isActive": "Is active"
+      "alerts": "Alerts (browser notifications)"
     },
     "item": {
       "all": "All",
@@ -216,19 +208,6 @@
       "pastMonths": "Past months",
       "over": "{{amount}} {{currency}} over",
       "left": "{{amount}} {{currency}} left"
-    },
-    "push": {
-      "description": "Get a browser push notification when a spending limit is exceeded — even when this site is closed.",
-      "enabledOn_zero": "Enabled on {{count}} devices",
-      "enabledOn_one": "Enabled on {{count}} device",
-      "enabledOn_other": "Enabled on {{count}} devices",
-      "disable": "Disable on this browser",
-      "enable": "Enable spending alerts",
-      "notSupported": "— push notifications are not supported here",
-      "subscribed": "— this browser is subscribed",
-      "subscribeFailed": "Subscribe failed",
-      "unsubscribeFailed": "Unsubscribe failed",
-      "permissionDenied": "Notification permission not granted"
     }
   },
   "rules": {
@@ -444,14 +423,15 @@
       "allTime": "All time"
     },
     "windows": {
-      "days7": "7 days",
-      "days30": "30 days",
       "thisMonth": "This month"
     },
     "periodText": {
-      "days7": "the last 7 days",
-      "days30": "the last 30 days",
       "thisMonth": "this month"
     }
+  },
+  "push": {
+    "notSupported": "Push notifications are not supported in this browser.",
+    "permissionDenied": "Notification permission was not granted.",
+    "subscribeFailed": "Could not enable notifications"
   }
 }
