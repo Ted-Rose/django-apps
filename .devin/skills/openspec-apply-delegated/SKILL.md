@@ -106,7 +106,13 @@ stays small and survives `openspec update`.
    or the exact string `NO ISSUES`.
 8. On `[blocker]` or `[major]` findings, launch a fixer
    subagent (`subagent_general`) on the SAME branch to commit
-   and push fixes. Then start a new round with a NEW reviewer.
+   and push fixes. A branch can live in only one worktree —
+   remove whichever worktree currently holds it (`git worktree
+   list` to find it; `git worktree remove --force
+   ../django-apps-wt/<name>`), then the fixer attaches a fresh
+   one (`git worktree add ../django-apps-wt/fix-<change-name>
+   feat/<change-name>` — no `-b`). Then start a new round
+   with a NEW reviewer.
    Repeat until `NO ISSUES` (or only `[minor]`/`[nit]`) — max
    3 rounds, then stop and report what remains.
 
