@@ -68,9 +68,15 @@ jobs:
                     else "passed" end')
             # Statuses arrive newest-first; use only the latest
             # event per context, else a superseded "pending"
-            # blocks the loop forever.
+            # blocks the loop forever. The "Vercel" context is
+            # excluded: the account-level build quota makes it
+            # flap to "failure" ("Deployment rate limited") or
+            # stick at "pending" for hours, it is not a required
+            # check, and the owner merges Dependabot PRs through
+            # it anyway. Real CI gates on the check-runs poll.
             st=$(gh api "repos/$REPO/commits/$sha/statuses" \
-              --jq '[group_by(.context) | .[] | .[0]] as $s |
+              --jq '[group_by(.context) | .[] | .[0] |
+                    select(.context != "Vercel")] as $s |
                     if ($s | length) == 0 then "none"
                     elif ([$s[] | select(.state == "error" or
                           .state == "failure")] | length) > 0
