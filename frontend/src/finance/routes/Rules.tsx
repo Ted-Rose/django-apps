@@ -105,8 +105,9 @@ function RulesCard({
   return (
     <CollapsibleCard
       id="rulesCollapse"
-      title={t('rules.rulesTitle')}
+      title={t('rules.moreRules')}
       count={data.rules.length}
+      defaultOpen={false}
       actions={
         <>
           <button
