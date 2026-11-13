@@ -966,6 +966,12 @@ def category_overview(request,
     today = timezone.localdate()
     date_from = _parse_date(from_)
     date_to = _parse_date(to)
+    if date_from is None and date_to is None:
+        # A bare link defaults to the current month — "all time"
+        # is reached through an explicit early bound (the SPA's
+        # All time button sends ?from=2000-01-01).
+        date_from = today.replace(day=1)
+        date_to = today
     if date_from:
         transactions = transactions.filter(
             occurrence_date__gte=date_from

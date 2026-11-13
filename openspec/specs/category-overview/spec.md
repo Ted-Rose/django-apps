@@ -10,10 +10,19 @@ overview with another user.
 
 ### Requirement: Time-window selection
 
-The page SHALL render preset period chips with a calendar toggle
-button that opens the custom from/to/account filter form, and
-SHALL show a one-line summary of the active window and account
-while the form is collapsed.
+The page SHALL default to the current-month window when no date
+parameters are present, render only the month preset chips next
+to a calendar toggle that opens the custom from/to/account
+filter form, and place the Last year and All time quick ranges
+inside that form. No separate summary of the active window is
+shown — the active chip or the form's fields convey it. All
+time SHALL be an explicit range starting 2000-01-01.
+
+#### Scenario: Bare visit defaults to the current month
+
+- **WHEN** the user opens the page without from/to parameters
+- **THEN** the overview loads the current month and the This
+  month chip appears active
 
 #### Scenario: Preset chip selects a window
 
@@ -26,14 +35,14 @@ while the form is collapsed.
 - **WHEN** the user clicks the calendar icon next to the period
   chips
 - **THEN** the from/to/account filter form expands beneath the
-  chips and applying it reloads the overview
+  chips, showing the effective window in its fields plus Last
+  year and All time quick-range buttons
 
-#### Scenario: Collapsed filters still show the active window
+#### Scenario: All time quick range covers all history
 
-- **WHEN** the filter form is collapsed and a date range or
-  account filter is active
-- **THEN** a summary of that range and account remains visible
-  next to the period chips
+- **WHEN** the user clicks All time inside the filter form
+- **THEN** the overview reloads for a range starting at
+  2000-01-01 through today
 
 ### Requirement: Spending breakdown table
 
@@ -65,6 +74,12 @@ them.
 - **WHEN** the overview has transactions
 - **THEN** the spent/received summary cards appear beneath the
   breakdown table near the bottom of the page
+
+#### Scenario: Category management at the bottom
+
+- **WHEN** the overview renders the caller's own view
+- **THEN** the category management card sits beneath the totals
+  cards at the bottom of the page
 
 ### Requirement: Spending-share chart values
 

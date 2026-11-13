@@ -246,9 +246,14 @@ describe('CategoryOverview', () => {
     const active = screen.getByRole('button', { name: 'This month' });
     expect(active).toHaveClass('fin-chip', 'active');
     expect(active).toHaveAttribute('aria-pressed', 'true');
-    const inactive = screen.getByRole('button', { name: 'All time' });
-    expect(inactive).toHaveClass('fin-chip');
-    expect(inactive).toHaveAttribute('aria-pressed', 'false');
+    // The wide presets don't earn chips — they live inside the
+    // filter form behind the calendar toggle.
+    expect(
+      screen.queryByRole('button', { name: 'All time' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Last year' }),
+    ).not.toBeInTheDocument();
     // The recharts donut is stubbed (jsdom renders it 0-size) but
     // the chart card is still wired into the layout.
     expect(await screen.findByTestId('category-chart')).toBeInTheDocument();
@@ -265,13 +270,38 @@ describe('CategoryOverview', () => {
     );
   });
 
-  it('clears the date params via the All time preset', async () => {
+  it('applies the All time range from inside the filter form', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview('/categories?from=2025-01-09&to=2025-01-15');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
     fireEvent.click(await screen.findByRole('button', { name: 'All time' }));
+    // All time is an explicit range — empty dates would fall back
+    // to the current-month default.
+    const today = new Date();
+    const to =
+      `${today.getFullYear()}-` +
+      `${String(today.getMonth() + 1).padStart(2, '0')}-` +
+      `${String(today.getDate()).padStart(2, '0')}`;
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith(
-        '/api/finance/categories/overview/',
+        `/api/finance/categories/overview/?from=2000-01-01&to=${to}`,
+      ),
+    );
+  });
+
+  it('applies the Last year range from inside the filter form', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Last year' }));
+    // The preset's server-computed bounds go straight into the URL.
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenLastCalledWith(
+        '/api/finance/categories/overview/?from=2024-01-01&to=2024-12-31',
       ),
     );
   });
@@ -384,9 +414,11 @@ describe('CategoryOverview', () => {
       target: { value: '5' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    // The prefilled window fields ride along — the form submits
+    // the same effective range it displays.
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith(
-        '/api/finance/categories/overview/?account=5',
+        '/api/finance/categories/overview/?from=2025-01-09&to=2025-01-15&account=5',
       ),
     );
   });
@@ -479,7 +511,7 @@ describe('CategoryOverview', () => {
     );
   });
 
-  it('keeps the filter form collapsed with a summary', async () => {
+  it('keeps the filter form collapsed without a dates summary', async () => {
     mockedApiGet.mockResolvedValue(makeOverview());
     renderOverview('/categories?from=2025-01-01&to=2025-01-15&account=5');
     const toggle = await screen.findByRole('button', {
@@ -487,14 +519,27 @@ describe('CategoryOverview', () => {
     });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByLabelText('Account')).not.toBeInTheDocument();
-    // Wait for the overview so the account label joins the summary.
+    // No active-window recap — the active chip and the form's
+    // fields carry that information.
     await screen.findByText('Groceries');
     expect(
-      screen.getByText('2025-01-01 → 2025-01-15 · Everyday account'),
-    ).toBeInTheDocument();
+      screen.queryByText(/2025-01-01 → 2025-01-15/),
+    ).not.toBeInTheDocument();
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByLabelText('Account')).toBeInTheDocument();
+  });
+
+  it('prefills the form with the server-echoed effective window', async () => {
+    mockedApiGet.mockResolvedValue(makeOverview());
+    renderOverview();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Set dates and account' }),
+    );
+    // No from/to in the URL — the fields show the window the
+    // server actually applied (date_from/date_to in the payload).
+    expect(await screen.findByLabelText('From')).toHaveValue('2025-01-09');
+    expect(screen.getByLabelText('To')).toHaveValue('2025-01-15');
   });
 
   it('shows the empty state when there are no rows', async () => {
@@ -530,6 +575,12 @@ describe('CategoryOverview', () => {
     expect(within(list).getByText('Housing')).toBeInTheDocument();
 
     const section = document.getElementById('categoriesCollapse')!;
+    // Management UI sits at the bottom — beneath the totals cards.
+    const spentCard = screen.getByText('Spent (EUR)');
+    expect(
+      spentCard.compareDocumentPosition(section) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(section).toHaveClass('collapse', 'show');
     const toggle = screen.getByRole('button', { name: /Categories/ });
     fireEvent.click(toggle);

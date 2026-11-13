@@ -2122,6 +2122,36 @@ class CategoryOverviewViewTests(TestCase):
             Decimal('10.00'),
         )
 
+    def test_bare_request_defaults_to_current_month(self):
+        # One transaction this month, one older — the bare URL
+        # only sees the current month's row and marks the
+        # thisMonth preset active; "all time" needs an explicit
+        # early bound now.
+        make_transaction(self.account, 't-new', '-10.00')
+        make_transaction(
+            self.account, 't-old', '-50.00', days_ago=40
+        )
+        self.client.force_login(self.user)
+        body = self.client.get(
+            '/api/finance/categories/overview/'
+        ).json()
+        self.assertEqual(len(body['rows']), 1)
+        self.assertEqual(
+            Decimal(body['rows'][0]['spent']), Decimal('10.00')
+        )
+        self.assertEqual(
+            body['date_from'],
+            timezone.localdate().replace(day=1).isoformat(),
+        )
+        active = next(
+            p for p in body['periods'] if p['key'] == 'thisMonth'
+        )
+        self.assertTrue(active['active'])
+        all_time = next(
+            p for p in body['periods'] if p['key'] == 'allTime'
+        )
+        self.assertFalse(all_time['active'])
+
 
 class RuleViewTests(TestCase):
     """Rules API — the page is the SPA post-cutover, so assertions

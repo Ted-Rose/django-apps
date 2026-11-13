@@ -1,6 +1,13 @@
 # google_api
 
 ## Changelog
+26. Category spending now opens on the current month; the Last
+    year and All time shortcuts moved out of the chip row into
+    the calendar filter form (All time covers everything from
+    2000 onward), the active-range recap line is gone since the
+    selected chip and the form's fields already show it, and the
+    category management card sits at the bottom of the page
+    beneath the Spent/Received totals
 25. The category spending page got a cleanup: the share button
     moved into the page header, the bulky Filters card collapsed
     into a calendar icon beside the period chips (the active

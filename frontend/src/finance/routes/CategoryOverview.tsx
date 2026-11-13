@@ -34,15 +34,29 @@ import './accounts.css';
 // transactions page's table chrome.
 import './transactions.css';
 
+/** The wide presets that only appear inside the filter form —
+    the chip row keeps just the month shortcuts. */
+const FORM_ONLY_PERIODS = new Set(['lastYear', 'allTime']);
+
+/** Local-time `YYYY-MM-DD` — `toISOString()` would shift a day
+    in positive UTC offsets. */
+const localIso = (date: Date) =>
+  `${date.getFullYear()}-` +
+  `${String(date.getMonth() + 1).padStart(2, '0')}-` +
+  `${String(date.getDate()).padStart(2, '0')}`;
+
 /**
  * React port of category_overview.html — per-category spending
  * totals over a selectable time window, plus the collapsible
  * categories management card (create/edit/delete, moved here from
  * the rules page). `from`/`to`/`account` live
  * in the URL (the template's GET form + preset hrefs become
- * `useSearchParams` writes), the `periods` list renders the preset
- * chips ("All time" clears the dates), and the table groups rows +
- * totals by currency exactly like the template's `totals` dict.
+ * `useSearchParams` writes); a bare URL defaults to the current
+ * month server-side, the month presets render as chips and the
+ * wider Last year/All time ranges live inside the filter form —
+ * "All time" sends an explicit 2000-01-01 start since empty
+ * dates now mean "this month". The table groups rows + totals by
+ * currency exactly like the template's `totals` dict.
  *
  * Money arrives as Decimal-serialized strings and renders as-is;
  * each row shows a single spent column — income surfaces once in
@@ -160,18 +174,30 @@ export default function CategoryOverview() {
     setSearchParams(next);
   };
 
-  // One-line recap of the active filters, shown next to the
-  // period chips while the form is collapsed so a deep-linked
-  // range stays visible.
-  const accountLabel = data?.accounts.find(
-    (account) => String(account.id) === params.account,
-  )?.label;
-  const filterSummary = [
-    [params.from, params.to].filter(Boolean).join(' → '),
-    accountLabel ?? '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  /** Wide quick ranges inside the filter form — the presets that
+      don't earn a chip. "All time" sends an explicit 2000 start:
+      empty dates would hit the current-month default. */
+  const selectQuickRange = (key: 'lastYear' | 'allTime') => {
+    const preset = data?.periods.find((p) => p.key === key);
+    let dateFrom = preset?.date_from ?? '';
+    let dateTo = preset?.date_to ?? '';
+    if (!dateFrom || !dateTo) {
+      // Fallback while the overview is still loading — the same
+      // bounds the server computes for these presets.
+      const now = new Date();
+      if (key === 'allTime') {
+        dateFrom = '2000-01-01';
+        dateTo = localIso(now);
+      } else {
+        dateFrom = localIso(
+          new Date(now.getFullYear(), now.getMonth() - 12, 1),
+        );
+        dateTo = localIso(new Date(now.getFullYear(), now.getMonth(), 0));
+      }
+    }
+    selectPeriod(dateFrom, dateTo);
+    setFiltersOpen(false);
+  };
 
   // Remount key for the account select — flips when the account
   // list first arrives so defaultValue picks up a deep-linked
@@ -256,33 +282,30 @@ export default function CategoryOverview() {
           <ShareOverviewCard accounts={data.accounts} shares={data.my_shares} />
         )}
 
-        {data && !isSharedView && (
-          <div className="mb-3">
-            <CategoriesCard categories={data.categories} />
-          </div>
-        )}
-
         {/* The period chips and the collapsed from/to/account
             form render unconditionally — gating them on `data`
             left no way to change the window while the query was
-            loading or had failed. */}
+            loading or had failed. Only the month presets earn a
+            chip — the wider ranges sit inside the form. */}
         <div className="mb-4">
           <div className="d-flex flex-wrap align-items-center gap-2">
-            {(data?.periods ?? []).map((period) => (
-              <button
-                key={period.key ?? period.label}
-                type="button"
-                className={`fin-chip${period.active ? ' active' : ''}`}
-                aria-pressed={period.active}
-                onClick={() => selectPeriod(period.date_from, period.date_to)}
-              >
-                {period.key
-                  ? t(`server:periods.${period.key}`, {
-                      defaultValue: period.label,
-                    })
-                  : period.label}
-              </button>
-            ))}
+            {(data?.periods ?? [])
+              .filter((period) => !FORM_ONLY_PERIODS.has(period.key ?? ''))
+              .map((period) => (
+                <button
+                  key={period.key ?? period.label}
+                  type="button"
+                  className={`fin-chip${period.active ? ' active' : ''}`}
+                  aria-pressed={period.active}
+                  onClick={() => selectPeriod(period.date_from, period.date_to)}
+                >
+                  {period.key
+                    ? t(`server:periods.${period.key}`, {
+                        defaultValue: period.label,
+                      })
+                    : period.label}
+                </button>
+              ))}
             <button
               type="button"
               className="btn btn-sm acct-icon-btn"
@@ -293,12 +316,25 @@ export default function CategoryOverview() {
             >
               <i className="bi bi-calendar3" aria-hidden="true" />
             </button>
-            {!filtersOpen && filterSummary && (
-              <span className="text-muted small">{filterSummary}</span>
-            )}
           </div>
           {filtersOpen && (
             <form className="mt-3" onSubmit={applyFilters}>
+              {/* The wide presets removed from the chip row —
+                  clicking one applies its range immediately. */}
+              <div className="d-flex flex-wrap gap-2 mb-3">
+                {(['lastYear', 'allTime'] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="fin-chip"
+                    onClick={() => selectQuickRange(key)}
+                  >
+                    {t(`server:periods.${key}`, {
+                      defaultValue: key,
+                    })}
+                  </button>
+                ))}
+              </div>
               <div className="row g-2 align-items-end mb-0">
                 <div className="col-6 col-sm-auto">
                   <label htmlFor="date-from" className="form-label">
@@ -309,8 +345,11 @@ export default function CategoryOverview() {
                     name="from"
                     id="date-from"
                     className="form-control"
-                    key={`from-${params.from}`}
-                    defaultValue={params.from}
+                    // The server echoes the effective window, so a
+                    // bare-URL load (the current-month default)
+                    // still fills the field.
+                    key={`from-${params.from || data?.date_from || ''}`}
+                    defaultValue={params.from || data?.date_from || ''}
                   />
                 </div>
                 <div className="col-6 col-sm-auto">
@@ -322,8 +361,8 @@ export default function CategoryOverview() {
                     name="to"
                     id="date-to"
                     className="form-control"
-                    key={`to-${params.to}`}
-                    defaultValue={params.to}
+                    key={`to-${params.to || data?.date_to || ''}`}
+                    defaultValue={params.to || data?.date_to || ''}
                   />
                 </div>
                 <div className="col-12 col-sm-auto">
@@ -480,6 +519,13 @@ export default function CategoryOverview() {
                     />
                   </div>,
                 ])}
+              </div>
+            )}
+            {/* Category management sits at the bottom, right
+                beneath the spent/received totals. */}
+            {!isSharedView && (
+              <div className="mb-3">
+                <CategoriesCard categories={data.categories} />
               </div>
             )}
           </>
