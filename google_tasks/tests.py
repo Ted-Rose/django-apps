@@ -1587,7 +1587,10 @@ class ReactAppShellTests(TestCase):
             resp = self.client.get(
                 reverse('google_tasks:dashboard'))
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'localhost:5173')
+        # The dev-server port comes from the singleton loader's own
+        # config (settings at app startup), not the override.
+        self.assertContains(
+            resp, f'localhost:{client.dev_server_port}')
         self.assertNotContains(resp, 'React entry not loaded')
 
     def test_invalid_entry_raises_404(self):

@@ -594,6 +594,18 @@ unaffected.
   rejects mismatches (http://127.0.0.1 redirect URIs are allowed).
   To run vite alone: `npm run dev --prefix frontend` or Terminal →
   Run Task → "vite dev server".
+- `dev_mode` in `DJANGO_VITE` follows `VITE_DEV` alone (NOT
+  `DEBUG`) — a local `DEBUG=false` run (production Postgres) still
+  gets vite dev + HMR; deployed envs simply never set `VITE_DEV`.
+- Google API timeouts are per-request on the authorized transport
+  (`google_api.utils.authorized_http`, 30s). Never re-add a
+  process-global `socket.setdefaulttimeout` — it applied to every
+  socket in the process, timing out idle dev-server keep-alive
+  connections and spamming `TimeoutError` tracebacks into the
+  runsslserver log.
+- Chrome DevTools open → `GET
+  /.well-known/appspecific/com.chrome.devtools.json` 404s in the
+  dev log. It's DevTools' workspace-folder probe — harmless.
 
 ## Where to look first
 
