@@ -117,13 +117,13 @@ stays small and survives `openspec update`.
    ../django-apps-wt/<change-name> --force` + `git branch -D
    feat/<change-name>` from the main checkout) — don't wait
    for the merge; the PR lives on the remote branch.
-9. Never let the implementer or a fixer review its own work —
-   every review round uses a fresh agent.
 
 ## Guardrails
 
 - Only one agent writes to the branch at a time: implementer,
-  then sequential fixers.
+  then sequential fixers. Every review round uses a fresh
+  agent — the implementer or a fixer never reviews its own
+  work.
 - Background subagents cannot gain permissions — if one stalls
   on a denied call, resume it in the foreground
   (`run_subagent resume=<agent_id>`).

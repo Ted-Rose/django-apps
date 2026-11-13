@@ -41,8 +41,10 @@ review.
    and do all work inside it (symlink `venv`/`.env`/
    `frontend/node_modules` per AGENTS.md). Each prompt must
    state: the branch name
-   `feat/<slug>-<part>` (one branch per workstream) or the shared
-   `feat/<slug>` if the user wants a single PR, the exact file set
+   `feat/<slug>-<part>` (one branch per workstream) — a shared
+   `feat/<slug>` for a single PR is only valid with ONE
+   implementer/worktree (a branch can't be checked out in two
+   worktrees) — the exact file set
    it owns, the shared contract verbatim, the relevant
    `AGENTS.md` rules it must honor (79 cols, commit format,
    no-migrate, staging rules), and the scoped test commands for
@@ -67,8 +69,13 @@ review.
 ## Phase 4 — fix loop
 
 9. For each PR with `[blocker]`/`[major]` findings, launch a fixer
-   subagent on the same branch (fixers for different PRs run in
-   parallel; two fixers on the SAME PR run sequentially).
+   subagent on the same branch in a FRESH worktree — a branch can
+   live in only one worktree, so remove the implementer's first
+   (`git worktree remove ../django-apps-wt/<slug>-<part>
+   --force`), then the fixer adds one on the existing branch
+   (`git worktree add ../django-apps-wt/fix-<slug>-<part>
+   feat/<slug>-<part>`). Fixers for different PRs run in
+   parallel; two fixers on the SAME PR run sequentially.
 10. After fixes push, run a new review round. Repeat until every
     PR reports `NO ISSUES` (or only `[minor]`/`[nit]`) — max 3
     rounds, then stop and report remaining findings.
@@ -85,9 +92,10 @@ review.
   `partial`/`implemented`) as part of the docs workstream, and
   commit it on a feature branch like everything else.
 - Once a PR's review loop is clean AND its checks are green,
-  remove that worktree immediately (`git worktree remove
-  ../django-apps-wt/<slug> --force` + `git branch -D
-  <type>/<slug>` from the main checkout) — don't wait for
-  merge; fixer/reviewer rounds get fresh worktrees.
+  remove every worktree created for it immediately
+  (`git worktree remove ../django-apps-wt/<slug>-<part>
+  --force` + `git branch -D feat/<slug>-<part>` from the main
+  checkout) — don't wait for merge; fixer/reviewer rounds get
+  fresh worktrees.
 - Final report: per PR — URL, branch, review rounds, unresolved
   findings, check status, worktree removed (yes/no).
