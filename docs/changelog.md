@@ -1,6 +1,12 @@
 # google_api
 
 ## Changelog
+29. Rule drawer cleanup: the description filter now sits at the top
+    of the form, the category picker shows each category's color
+    dot both on the selected value and inside the dropdown list,
+    and the counterparty, description-exclusion and options
+    sections fold away by default — expanding automatically when
+    they hold a value and previewing it on the folded header
 28. Clicking a category on the spending overview now opens its
     transactions directly beneath the breakdown table — above the
     donut chart — where the panel's close button dismisses them

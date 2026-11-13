@@ -21,6 +21,11 @@ interface DropdownProps {
   /** Toggle button content (icon + label). */
   label: ReactNode;
   /**
+   * `id` for the toggle button — lets a form `<label htmlFor>`
+   * associate with it (buttons are labelable elements).
+   */
+  buttonId?: string;
+  /**
    * Full class override for the toggle button — replaces the default
    * navbar-style `btn btn-outline-light btn-sm dropdown-toggle`
    * (note that default also carries the caret). Use e.g.
@@ -43,6 +48,7 @@ interface DropdownProps {
 
 export function Dropdown({
   label,
+  buttonId,
   buttonClassName = '',
   buttonStyle,
   ariaLabel,
@@ -67,6 +73,7 @@ export function Dropdown({
   return (
     <div className="dropdown" ref={rootRef}>
       <button
+        id={buttonId}
         className={
           buttonClassName || 'btn btn-outline-light btn-sm dropdown-toggle'
         }

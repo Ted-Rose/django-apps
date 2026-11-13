@@ -4,11 +4,13 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
   type TextareaHTMLAttributes,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type {
+  CategoryOut,
   RuleOut,
   RulePreviewIn,
   RulePreviewOut,
@@ -16,6 +18,7 @@ import type {
   RulesOut,
 } from '../api';
 import { usePreviewRule, useSaveRule } from '../mutations';
+import Dropdown from '../../shared/components/Dropdown';
 import { errorDetail } from '../../shared/api/errors';
 import './RuleDrawer.css';
 
@@ -37,6 +40,19 @@ import './RuleDrawer.css';
  */
 
 const PREVIEW_DEBOUNCE_MS = 400;
+
+const FALLBACK_COLOR = '#6c757d';
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+/**
+ * The category color is user input — fall back to muted grey on
+ * anything that is not `#rrggbb` (same guard as CategoryBadge).
+ */
+function categoryColor(category: CategoryOut | undefined): string {
+  return category && HEX_COLOR.test(category.color)
+    ? category.color
+    : FALLBACK_COLOR;
+}
 
 /** Form values kept as raw input strings; converted on submit. */
 export interface RuleFields {
@@ -221,6 +237,18 @@ export function RuleDrawer({
       ? fieldsFromRule(rule)
       : { ...defaults(data, maxPriority), ...prefill },
   );
+  // The folded sections start open when they hold a non-default
+  // value (editing a rule, or a new rule prefilled from a
+  // transaction) so applied filters are never hidden away.
+  const [openSections, setOpenSections] = useState(() => ({
+    counterparty:
+      fields.counterparty_pattern !== '' || fields.counterparty_scope !== 'any',
+    exclusion: fields.description_exclusion !== '',
+    options:
+      fields.operator !== 'AND' ||
+      fields.excluded_amount !== '' ||
+      !fields.is_active,
+  }));
   // Slide-in: `.offcanvas` starts translated off-screen; `.show`
   // is applied on the next frame so the CSS transition runs.
   const [shown, setShown] = useState(false);
@@ -255,6 +283,25 @@ export function RuleDrawer({
 
   const set = (key: keyof RuleFields, value: string | boolean) =>
     setFields((current) => ({ ...current, [key]: value }));
+
+  const toggleSection = (key: keyof typeof openSections) =>
+    setOpenSections((current) => ({ ...current, [key]: !current[key] }));
+
+  const selectedCategory = data.categories.find(
+    (category) => String(category.id) === fields.category,
+  );
+
+  // Non-default Options values previewed on the folded header.
+  const optionsSummary = [
+    fields.operator !== 'AND' ? fields.operator : null,
+    fields.excluded_amount.trim() || null,
+    fields.is_active ? null : t('rules.inactiveTitle'),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const categoryToggleClass =
+    'form-select text-start d-flex align-items-center gap-2';
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -291,29 +338,120 @@ export function RuleDrawer({
         </div>
         <div className="offcanvas-body">
           <form onSubmit={submit}>
+            <div className="mb-3">
+              <label className="form-label" htmlFor="rule-description">
+                {t('rules.drawer.descriptionLabel')}
+              </label>
+              <div className="row g-2">
+                <div className="col-12 col-md-4">
+                  <select
+                    id="rule-description-match-type"
+                    className="form-select"
+                    title={t('rules.drawer.matchTypeTitle')}
+                    aria-label={t('rules.drawer.descriptionMatchAria')}
+                    value={fields.description_match_type}
+                    onChange={(event) =>
+                      set('description_match_type', event.target.value)
+                    }
+                  >
+                    {data.match_types.map((matchType) => (
+                      <option key={matchType.value} value={matchType.value}>
+                        {choiceLabel(
+                          t,
+                          'matchTypes',
+                          matchType.value,
+                          matchType.label,
+                        )}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-md-8">
+                  <AutoGrowTextarea
+                    id="rule-description"
+                    maxLength={255}
+                    className="form-control rule-autogrow"
+                    placeholder={t('rules.drawer.descriptionPlaceholder')}
+                    value={fields.description_pattern}
+                    onChange={(event) =>
+                      set('description_pattern', event.target.value)
+                    }
+                  />
+                </div>
+              </div>
+            </div>
             <div className="row g-2 mb-3">
               <div className="col-12 col-md-8">
                 <label className="form-label" htmlFor="rule-category">
                   {t('rules.drawer.categoryLabel')}
                 </label>
-                <select
-                  id="rule-category"
-                  className="form-select"
-                  required
-                  value={fields.category}
-                  onChange={(event) => set('category', event.target.value)}
-                >
-                  {fields.category === '' && (
-                    <option value="" disabled>
-                      {t('rules.drawer.noCategories')}
-                    </option>
-                  )}
-                  {data.categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+                {data.categories.length === 0 ? (
+                  <button
+                    type="button"
+                    id="rule-category"
+                    className="form-select text-start"
+                    disabled
+                  >
+                    {t('rules.drawer.noCategories')}
+                  </button>
+                ) : (
+                  <Dropdown
+                    buttonId="rule-category"
+                    buttonClassName={categoryToggleClass}
+                    menuClassName="w-100"
+                    menuStyle={{ maxHeight: '16rem', overflowY: 'auto' }}
+                    label={
+                      <>
+                        <span
+                          className="rule-cat-dot"
+                          style={{
+                            backgroundColor: categoryColor(selectedCategory),
+                          }}
+                          aria-hidden="true"
+                        />
+                        <span className="rule-cat-name">
+                          {selectedCategory?.name ??
+                            t('rules.drawer.noCategories')}
+                        </span>
+                      </>
+                    }
+                  >
+                    {data.categories.map((category) => {
+                      const isSelected =
+                        String(category.id) === fields.category;
+                      return (
+                        <li key={category.id}>
+                          <button
+                            type="button"
+                            className={
+                              'dropdown-item d-flex ' +
+                              'align-items-center gap-2' +
+                              (isSelected ? ' active' : '')
+                            }
+                            onClick={() => set('category', String(category.id))}
+                          >
+                            <span
+                              className="rule-cat-dot"
+                              style={{
+                                backgroundColor: categoryColor(category),
+                              }}
+                              aria-hidden="true"
+                            />
+                            <span className="rule-cat-name">
+                              {category.name}
+                            </span>
+                            {isSelected && (
+                              <i
+                                className="bi bi-check ms-auto"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </Dropdown>
+                )}
               </div>
               <div className="col-12 col-md-4">
                 <label className="form-label" htmlFor="rule-priority">
@@ -330,11 +468,17 @@ export function RuleDrawer({
                 />
               </div>
             </div>
-            <div className="rule-section-label">
-              {t('rules.drawer.patterns')}
-            </div>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="rule-counterparty-pattern">
+            <DrawerSection
+              id="rule-counterparty-section"
+              label={t('rules.drawer.counterpartyName')}
+              open={openSections.counterparty}
+              onToggle={() => toggleSection('counterparty')}
+              summary={fields.counterparty_pattern}
+            >
+              <label
+                className="visually-hidden"
+                htmlFor="rule-counterparty-pattern"
+              >
                 {t('rules.drawer.counterpartyName')}
               </label>
               <div className="row g-2">
@@ -392,52 +536,16 @@ export function RuleDrawer({
                   />
                 </div>
               </div>
-            </div>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="rule-description">
-                {t('rules.drawer.descriptionLabel')}
-              </label>
-              <div className="row g-2">
-                <div className="col-12 col-md-4">
-                  <select
-                    id="rule-description-match-type"
-                    className="form-select"
-                    title={t('rules.drawer.matchTypeTitle')}
-                    aria-label={t('rules.drawer.descriptionMatchAria')}
-                    value={fields.description_match_type}
-                    onChange={(event) =>
-                      set('description_match_type', event.target.value)
-                    }
-                  >
-                    {data.match_types.map((matchType) => (
-                      <option key={matchType.value} value={matchType.value}>
-                        {choiceLabel(
-                          t,
-                          'matchTypes',
-                          matchType.value,
-                          matchType.label,
-                        )}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-12 col-md-8">
-                  <AutoGrowTextarea
-                    id="rule-description"
-                    maxLength={255}
-                    className="form-control rule-autogrow"
-                    placeholder={t('rules.drawer.descriptionPlaceholder')}
-                    value={fields.description_pattern}
-                    onChange={(event) =>
-                      set('description_pattern', event.target.value)
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="mb-3">
+            </DrawerSection>
+            <DrawerSection
+              id="rule-exclusion-section"
+              label={t('rules.drawer.excludeLabel')}
+              open={openSections.exclusion}
+              onToggle={() => toggleSection('exclusion')}
+              summary={fields.description_exclusion}
+            >
               <label
-                className="form-label"
+                className="visually-hidden"
                 htmlFor="rule-description-exclusion"
               >
                 {t('rules.drawer.excludeLabel')}
@@ -452,71 +560,81 @@ export function RuleDrawer({
                   set('description_exclusion', event.target.value)
                 }
               />
-            </div>
-            <div className="rule-section-label">
-              {t('rules.drawer.options')}
-            </div>
-            <div className="row g-2 mb-4">
-              <div className="col-12 col-md-4">
-                <label className="form-label" htmlFor="rule-operator">
-                  {t('rules.drawer.combine')}
-                </label>
-                <select
-                  id="rule-operator"
-                  className="form-select"
-                  value={fields.operator}
-                  onChange={(event) => set('operator', event.target.value)}
-                >
-                  {data.operators.map((operator) => (
-                    <option key={operator.value} value={operator.value}>
-                      {choiceLabel(
-                        t,
-                        'operators',
-                        operator.value,
-                        operator.label,
-                      )}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-12 col-md-4">
-                <label className="form-label" htmlFor="rule-excluded-amount">
-                  {t('rules.drawer.excludedAmount')}
-                </label>
-                <input
-                  type="number"
-                  id="rule-excluded-amount"
-                  min={0}
-                  step="0.01"
-                  className="form-control"
-                  title={t('rules.drawer.excludedAmountTitle')}
-                  placeholder="0.00"
-                  value={fields.excluded_amount}
-                  onChange={(event) =>
-                    set('excluded_amount', event.target.value)
-                  }
-                />
-              </div>
-              <div className="col-12 col-md-4 d-flex align-items-end">
-                <div className="form-check form-switch mb-2">
-                  <input
-                    type="checkbox"
-                    id="rule-is-active"
-                    className="form-check-input"
-                    role="switch"
-                    checked={fields.is_active}
-                    onChange={(event) => set('is_active', event.target.checked)}
-                  />
-                  <label className="form-check-label" htmlFor="rule-is-active">
-                    {t('rules.drawer.active')}
+            </DrawerSection>
+            <DrawerSection
+              id="rule-options-section"
+              label={t('rules.drawer.options')}
+              open={openSections.options}
+              onToggle={() => toggleSection('options')}
+              summary={optionsSummary}
+            >
+              <div className="row g-2">
+                <div className="col-12 col-md-4">
+                  <label className="form-label" htmlFor="rule-operator">
+                    {t('rules.drawer.combine')}
                   </label>
+                  <select
+                    id="rule-operator"
+                    className="form-select"
+                    value={fields.operator}
+                    onChange={(event) => set('operator', event.target.value)}
+                  >
+                    {data.operators.map((operator) => (
+                      <option key={operator.value} value={operator.value}>
+                        {choiceLabel(
+                          t,
+                          'operators',
+                          operator.value,
+                          operator.label,
+                        )}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-12 col-md-4">
+                  <label className="form-label" htmlFor="rule-excluded-amount">
+                    {t('rules.drawer.excludedAmount')}
+                  </label>
+                  <input
+                    type="number"
+                    id="rule-excluded-amount"
+                    min={0}
+                    step="0.01"
+                    className="form-control"
+                    title={t('rules.drawer.excludedAmountTitle')}
+                    placeholder="0.00"
+                    value={fields.excluded_amount}
+                    onChange={(event) =>
+                      set('excluded_amount', event.target.value)
+                    }
+                  />
+                </div>
+                <div className="col-12 col-md-4 d-flex align-items-end">
+                  <div className="form-check form-switch mb-2">
+                    <input
+                      type="checkbox"
+                      id="rule-is-active"
+                      className="form-check-input"
+                      role="switch"
+                      checked={fields.is_active}
+                      onChange={(event) =>
+                        set('is_active', event.target.checked)
+                      }
+                    />
+                    <label
+                      className="form-check-label"
+                      htmlFor="rule-is-active"
+                    >
+                      {t('rules.drawer.active')}
+                    </label>
+                  </div>
                 </div>
               </div>
-            </div>
+            </DrawerSection>
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={save.isPending}
+              disabled={save.isPending || !fields.category}
             >
               {save.isPending && (
                 <span
@@ -570,6 +688,53 @@ export function RuleDrawer({
       </div>
       <div className="offcanvas-backdrop fade show" onClick={onClose} />
     </>
+  );
+}
+
+/**
+ * Collapsible form section — a chevron toggle styled like the
+ * `.rule-section-label` headers it replaces. While folded,
+ * `summary` previews the current value so set filters stay
+ * visible at a glance. The body uses Bootstrap's `collapse`/
+ * `show` class toggle, same as shared/CollapsibleCard.
+ */
+function DrawerSection({
+  id,
+  label,
+  open,
+  onToggle,
+  summary,
+  children,
+}: {
+  id: string;
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  summary?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        className="rule-section-toggle"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={onToggle}
+      >
+        <i
+          className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-right'}`}
+          aria-hidden="true"
+        />
+        <span>{label}</span>
+        {!open && summary && (
+          <span className="rule-section-summary">{summary}</span>
+        )}
+      </button>
+      <div id={id} className={`collapse${open ? ' show' : ''}`}>
+        {children}
+      </div>
+    </div>
   );
 }
 
