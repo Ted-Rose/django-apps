@@ -89,9 +89,10 @@ class CategoryOverviewShare(models.Model):
     """Read access to (part of) the sharer's category overview.
 
     ``accounts`` empty = the sharer's whole overview (every
-    account ``for_user(sharer)`` covers). Non-empty = only those
-    accounts — which may be owned or merely shared with the
-    sharer.
+    account ``visible_for(sharer)`` covers). Non-empty = only
+    those accounts — which may be owned or merely shared with
+    the sharer. Either way, accounts the viewer themselves
+    excluded are dropped from their scope.
     """
     sharer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
