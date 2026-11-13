@@ -2,7 +2,7 @@
 name: fix-good-first-issue
 description: >
   Pick an open GitHub issue labeled "good first issue", implement
-  the fix on a feature branch, and open a draft PR that closes it.
+  the fix on a feature branch, and open a PR that closes it.
   Use when asked to grab a starter issue, fix a good-first-issue,
   or work the issue backlog in Ted-Rose/django-apps.
 ---
@@ -22,9 +22,13 @@ description: >
 4. Read the issue fully — `gh issue view <N> --comments` — plus
    the owning app's `AGENTS.md`. This is a single repo; decide
    which app owns the fix, not which repo.
-5. Sync and branch:
-   `git checkout main && git pull` then
-   `git checkout -b fix/issue-<N>-<slug>` (short kebab slug).
+5. Sync and branch — in a worktree:
+   `git fetch origin` then `git worktree add
+   ../django-apps-wt/issue-<N>-<slug> -b
+   fix/issue-<N>-<slug> origin/main` and work inside it
+   (short kebab slug). Never branch in the main checkout —
+   AGENTS.md; symlink `venv`, `.env`, `frontend/node_modules`
+   etc. from the main checkout as AGENTS.md describes.
 6. Implement per the root `AGENTS.md`: per-user scoping, ninja
    `{error, detail}` contract, ≤79 chars, `makemigrations` only
    (never `migrate` against a real DB).
@@ -35,9 +39,14 @@ description: >
    `api-types.ts` if any `*/api.py` changed.
 8. Commit `Fix: <message>` — stage only files you changed, by
    path; `git status` first; leave user files alone.
-9. Push the branch and open a DRAFT PR using the `/create-pr`
-   workflow (body via `--body-file`, never inline). The body must
-   contain `Closes #<N>` and the UI verification / QC section.
+9. Push the branch and open a PR (ready for review, never a
+   draft) using the `/create-pr` workflow (body via
+   `--body-file`, never inline). The body must contain
+   `Closes #<N>` and the UI verification / QC section.
 10. `gh pr checks --watch` until green; fix failures on the same
-    branch and push again. Then `gh pr ready`.
+    branch and push again. Then run the reviewer loop: spawn a
+    fresh reviewer subagent on the diff, fix useful findings,
+    push, repeat until a round finds nothing meaningful.
+    Remove the worktree once the loop is clean and checks are
+    green (AGENTS.md).
 11. Report: issue URL, PR URL, and final check status.

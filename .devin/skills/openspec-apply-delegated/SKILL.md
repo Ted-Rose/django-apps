@@ -3,9 +3,9 @@ name: openspec-apply-delegated
 description: >
   Implement an OpenSpec change hands-off via subagents — an
   implementer agent cuts a feature branch, works the task list,
-  and opens a draft PR; once checks are green a fresh reviewer
-  agent reports severity-tagged findings and fixer agents
-  iterate until clean. Use when asked to implement an OpenSpec
+  and opens a PR ready for review; once checks are green a
+  fresh reviewer agent reports severity-tagged findings and
+  fixer agents iterate until clean. Use when asked to implement an OpenSpec
   change end-to-end without driving the task loop interactively.
 ---
 
@@ -37,8 +37,10 @@ stays small and survives `openspec update`.
      through to every openspec command here and inside the
      subagent prompt.
 
-3. Branch: `feat/<change-name>` unless the user says otherwise.
-   Never `main`.
+3. Branch in a worktree, never `main` or the main checkout:
+   `git fetch origin` then `git worktree add
+   ../django-apps-wt/<change-name> -b feat/<change-name>
+   origin/main` — the implementer works inside it.
 
 ## Phase 2 — implementer agent
 
@@ -59,9 +61,10 @@ stays small and survives `openspec update`.
      and `openspec validate --all --strict` must pass before
      pushing
    - PR conventions: push the branch, body via temp file +
-     `gh pr create --body-file`, DRAFT PR, mandatory UI
-     verification section (follow `.devin/skills/create-pr/`
-     when that skill exists in the repo).
+     `gh pr create --body-file`, ready-for-review PR (never a
+     draft), mandatory UI verification section (follow
+     `.devin/skills/create-pr/` when that skill exists in the
+     repo).
    - archive timing: when EVERY tasks.md item is `- [x]`,
      run `openspec archive <name>` on the feature branch
      BEFORE pushing / opening the PR (check
@@ -71,7 +74,7 @@ stays small and survives `openspec update`.
      --all --strict` must pass. The archive lands in the SAME
      commits pushed for the PR — code + synced specs +
      history together. A fully-implemented change must NOT
-     reach `gh pr ready` unarchived; a legitimately
+     reach PR completion unarchived; a legitimately
      unfinished task stays `- [ ]`, the change stays
      unarchived, and the implementer reports that
      explicitly.
@@ -103,20 +106,38 @@ stays small and survives `openspec update`.
    or the exact string `NO ISSUES`.
 8. On `[blocker]` or `[major]` findings, launch a fixer
    subagent (`subagent_general`) on the SAME branch to commit
-   and push fixes. Then start a new round with a NEW reviewer.
+   and push fixes. A branch can live in only one worktree —
+   remove whichever worktree currently holds it (`git worktree
+   list` to find it; `git worktree remove --force
+   ../django-apps-wt/<name>`), then the fixer attaches a fresh
+   one (`git worktree add ../django-apps-wt/fix-<change-name>
+   feat/<change-name>` — no `-b`). Then start a new round
+   with a NEW reviewer.
    Repeat until `NO ISSUES` (or only `[minor]`/`[nit]`) — max
    3 rounds, then stop and report what remains.
-9. Never let the implementer or a fixer review its own work —
-   every review round uses a fresh agent.
+
+## Phase 5 — cleanup
+
+9. Once the loop is clean AND the PR's checks are green,
+   remove every worktree the run created immediately —
+   `git worktree remove --force` on
+   `../django-apps-wt/<change-name>` and any
+   `../django-apps-wt/fix-<change-name>` (`git worktree
+   list` to check), then `git branch -D feat/<change-name>`
+   from the main checkout — don't wait for the merge; the
+   PR lives on the remote branch.
 
 ## Guardrails
 
 - Only one agent writes to the branch at a time: implementer,
-  then sequential fixers.
+  then sequential fixers. Every review round uses a fresh
+  agent — the implementer or a fixer never reviews its own
+  work.
 - Background subagents cannot gain permissions — if one stalls
   on a denied call, resume it in the foreground
   (`run_subagent resume=<agent_id>`).
-- The PR stays DRAFT until a review round returns clean.
+- The PR is never a draft — a review round returning clean
+  means it's done.
 - Tasks that cannot be finished stay unchecked (`- [ ]`) — the
   fixer and reviewer must treat an unchecked task as incomplete
   work, not as a defect to review.

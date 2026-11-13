@@ -266,10 +266,19 @@ Universal rules — follow exactly:
   them from the main checkout instead of reinstalling:
   `venv`, `.env`, `ca.pem`, `google_api/app_secrets.json`,
   `frontend/node_modules`, `db.sqlite3`.
-- **Free the branch when the PR opens.** A branch can only
-  be checked out in one place, so remove the worktree as
-  soon as the PR is pushed/opened — don't wait for checks
-  or the merge — letting the user `git switch <branch>` in
+- **Finishing a task means a green, reviewed PR — never
+  ask whether to open one.** After pushing, open the PR
+  ready for review (NEVER a draft) per
+  `.devin/skills/create-pr/`, then run a review loop from
+  the same worktree — spawn a FRESH reviewer subagent on
+  the diff, fix everything useful it reports, push, and
+  repeat with a new reviewer until a round finds nothing
+  meaningful.
+- **Free the branch once the PR is green.** A branch can
+  only be checked out in one place, so once the review
+  loop is clean and the PR's checks are green, remove the
+  worktree IMMEDIATELY — don't wait for the merge —
+  letting the user `git switch <branch>` in
   the main checkout to test locally (its `venv`/`.env`/
   `node_modules` are already set up). For
   frontend-touching PRs, first copy the built dist into

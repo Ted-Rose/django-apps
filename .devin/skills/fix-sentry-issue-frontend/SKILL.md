@@ -2,7 +2,7 @@
 name: fix-sentry-issue-frontend
 description: Pull unresolved production errors from the Sentry
   django-apps-web project, reproduce and fix them on a branch cut
-  from main, open a draft PR, and mark the Sentry issue resolved
+  from main, open a PR, and mark the Sentry issue resolved
   only after the PR merges. Invoke when the user asks to fix
   Sentry issues / triage the Sentry queue in django-apps.
 ---
@@ -70,10 +70,17 @@ an SPA failure can be a ninja API contract change (the
 scoping). If the root cause is in a Django app, fix it there per
 the app `AGENTS.md` — same repo, same branch, same PR.
 
-## 4. Branch and fix
+## 4. Branch and fix — in a worktree
 
-    git switch main && git pull --ff-only
-    git switch -c fix/sentry-<issue_short_id>
+    git fetch origin
+    git worktree add ../django-apps-wt/sentry-<issue_short_id> \
+      -b fix/sentry-<issue_short_id> origin/main
+    cd ../django-apps-wt/sentry-<issue_short_id>
+
+Never branch in the main checkout (AGENTS.md) — it may hold
+the user's uncommitted work or another agent's session.
+Symlink `venv`, `.env`, `frontend/node_modules` etc. from
+the main checkout as AGENTS.md describes.
 
 - Read `AGENTS.md` plus the owning app's `AGENTS.md`; 79-char
   lines in every file type.
@@ -94,18 +101,22 @@ the app `AGENTS.md` — same repo, same branch, same PR.
 - Update the owning app's `AGENTS.md`/`docs/changelog.md` when
   behavior changed.
 
-## 5. Draft PR
+## 5. Open the PR
 
 - Stage only files you edited, by path (never `git add -A`);
   `git status` first and leave the user's dirty files alone.
 - Commit format `Type: Capitalized message` (usually `Fix:`).
-- `git push -u origin <branch>`, then a DRAFT PR `--base main`
-  per the `/create-pr` skill — body via `--body-file`, never
-  inline `--body`.
+- `git push -u origin <branch>`, then a PR (ready for review,
+  never a draft) `--base main` per the `/create-pr` skill —
+  body via `--body-file`, never inline `--body`.
 - Body must: link the Sentry issue
   (`https://django-apps-ted.sentry.io/issues/<id>/`), quote the
   top stack frame, and include the UI verification / QC section.
-- `gh pr checks <N> --watch`; fix until green; `gh pr ready`.
+- `gh pr checks <N> --watch`; fix until green. Then run the
+  reviewer loop: spawn a fresh reviewer subagent on the diff,
+  fix useful findings, push, repeat until a round finds
+  nothing meaningful. Remove the worktree once the loop is
+  clean and checks are green (per AGENTS.md).
 
 ## 6. Resolve — only after merge
 
@@ -122,8 +133,8 @@ an issue without asking the user.
 
 - If >3 actionable items exist, post the queue list and let the
   user pick before fixing.
-- If the working tree has unrelated dirty files that block
-  `git switch main`, stop and ask.
+- All work happens in a fresh worktree — never branch in the
+  main checkout; follow-up fixes get a fresh worktree too.
 - No standing test account exists (login is Google OAuth, the
   owner's account) — reproduce via read-only prod browsing or
   the seeded E2E user, and ask before creating accounts.

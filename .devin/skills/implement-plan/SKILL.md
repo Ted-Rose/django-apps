@@ -3,7 +3,7 @@ name: implement-plan
 description: >
   Orchestrate execution of a PRE-EXISTING docs/plans/*-plan.md
   with subagents — implementers cut feature branches and open
-  draft PRs, fresh reviewer agents return severity-tagged
+  PRs, fresh reviewer agents return severity-tagged
   findings, fixer agents iterate until clean. Use only when
   asked to implement an existing plan file end-to-end;
   docs/plans/ is frozen, so new planning goes through openspec
@@ -35,15 +35,22 @@ review.
 ## Phase 2 — implement
 
 4. Launch one **background** subagent per workstream
-   (`is_background=true`). Each prompt must state: the branch name
-   `feat/<slug>-<part>` (one branch per workstream) or the shared
-   `feat/<slug>` if the user wants a single PR, the exact file set
+   (`is_background=true`). Each works in its own worktree —
+   instruct it to `git fetch origin` then `git worktree add
+   ../django-apps-wt/<slug>-<part> -b <branch> origin/main`
+   and do all work inside it (symlink `venv`/`.env`/
+   `frontend/node_modules` per AGENTS.md). Each prompt must
+   state: the branch name
+   `feat/<slug>-<part>` (one branch per workstream) — a shared
+   `feat/<slug>` for a single PR is only valid with ONE
+   implementer/worktree (a branch can't be checked out in two
+   worktrees) — the exact file set
    it owns, the shared contract verbatim, the relevant
    `AGENTS.md` rules it must honor (79 cols, commit format,
    no-migrate, staging rules), and the scoped test commands for
    its files.
 5. Each implementer commits `Feat:`/`Fix:` commits on its branch
-   and opens a DRAFT PR via the `/create-pr` workflow (body file,
+   and opens a PR via the `/create-pr` workflow (body file,
    UI verification section). They report branch + PR URL.
 6. If a workstream turns out unimplementable as planned, stop the
    whole run and ask the user — do not let agents improvise a
@@ -62,8 +69,15 @@ review.
 ## Phase 4 — fix loop
 
 9. For each PR with `[blocker]`/`[major]` findings, launch a fixer
-   subagent on the same branch (fixers for different PRs run in
-   parallel; two fixers on the SAME PR run sequentially).
+   subagent on the same branch in a FRESH worktree — a branch can
+   live in only one worktree, so remove whichever worktree
+   currently holds it (`git worktree list` to find it;
+   `git worktree remove --force
+   ../django-apps-wt/<name>`), then the fixer adds one on the
+   existing branch (`git worktree add
+   ../django-apps-wt/fix-<slug>-<part> feat/<slug>-<part>`).
+   Fixers for different PRs run in parallel; two fixers on
+   the SAME PR run sequentially.
 10. After fixes push, run a new review round. Repeat until every
     PR reports `NO ISSUES` (or only `[minor]`/`[nit]`) — max 3
     rounds, then stop and report remaining findings.
@@ -79,5 +93,14 @@ review.
 - Update the plan file's `Status:` header (`in progress` →
   `partial`/`implemented`) as part of the docs workstream, and
   commit it on a feature branch like everything else.
+- Once a PR's review loop is clean AND its checks are green,
+  remove every worktree created for it immediately —
+  `git worktree remove --force` on both
+  `../django-apps-wt/<slug>-<part>` and any
+  `../django-apps-wt/fix-<slug>-<part>`, then `git branch -D
+  feat/<slug>-<part>` (or `feat/<slug>` for a
+  single-implementer run) from the main checkout — don't wait
+  for merge; fixer rounds get fresh worktrees (reviewers
+  only read `gh pr diff` and need none).
 - Final report: per PR — URL, branch, review rounds, unresolved
-  findings, check status.
+  findings, check status, worktree removed (yes/no).
