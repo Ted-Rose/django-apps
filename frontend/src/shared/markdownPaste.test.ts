@@ -1,18 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { getSchema } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
-import Link from '@tiptap/extension-link';
+import { SCHEMA_EXTENSIONS } from './components/RichTextEditor';
 import { markdownTextToDocJSON } from './markdownPaste';
 import type { JSONContent } from '@tiptap/core';
 
 // Same extension set the editor schema is built from — mark and
 // node names must resolve identically in tests.
-const schema = getSchema([
-  StarterKit,
-  Underline,
-  Link.configure({ protocols: ['http', 'https', 'mailto'] }),
-]);
+const schema = getSchema(SCHEMA_EXTENSIONS);
 
 const doc = (text: string): JSONContent[] =>
   markdownTextToDocJSON(schema, text).content ?? [];

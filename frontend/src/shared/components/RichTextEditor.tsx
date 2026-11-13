@@ -34,7 +34,9 @@ interface RichTextEditorProps {
 
 // TipTap v3's StarterKit already bundles Link and Underline —
 // registering them again trips the duplicate-extension warning.
-const SCHEMA_EXTENSIONS = [
+// Exported so tests can build a schema that cannot drift from
+// the editor's (see markdownPaste.test.ts).
+export const SCHEMA_EXTENSIONS = [
   StarterKit.configure({
     link: {
       autolink: false,
