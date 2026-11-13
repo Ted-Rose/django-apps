@@ -2,6 +2,7 @@
    no catalogs (see docs/plans/SINGLE_PAGES_REACT_REWRITE.md). */
 import { useQuery } from '@tanstack/react-query';
 import { errorText, fetchSpoki } from '../api';
+import { ShellLink } from '../../shared/shellNav';
 
 /**
  * Random spoki.lv article via GET /api/single_pages/spoki/. A fresh
@@ -16,7 +17,7 @@ export default function Spoki() {
 
   return (
     <div className="container py-4">
-      <a href="/">← home</a>
+      <ShellLink href="/">← home</ShellLink>
       <div className="d-flex align-items-center justify-content-between mt-3 mb-3">
         <h1 className="mb-0">{data?.title || 'Spoki'}</h1>
         <button

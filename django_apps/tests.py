@@ -57,6 +57,8 @@ class MeApiTests(TestCase):
         self.client.force_login(self.user)
         resp = self.client.get(self.URL)
         self.assertIn('csrftoken', resp.cookies)
+        # The per-user payload must never be edge-/browser-cached.
+        self.assertIn('no-store', resp['Cache-Control'])
 
     def test_get_reads_stored_language(self):
         self.client.force_login(self.user)

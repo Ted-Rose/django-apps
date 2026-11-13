@@ -46,17 +46,22 @@ See proposal.md — Why. Current state that shapes the approach:
 
 ## Decisions
 
-### D1 — Nested `BrowserRouter` per app instead of rewriting links
+### D1 — `AppRouter` basename segments instead of rewriting links
 
 The shell mounts one router with routes like
 `<Route path="/finance/*" element={<FinanceApp/>}>`. Each app
-exports a component that still renders its own
-`<BrowserRouter basename="/finance">` — i.e. today's `main.tsx`
-minus `createRoot`. Nested routers share the same history; the
-inner one resolves all `to="/x"` links against `basename`, so
-all ~32 absolute link sites keep working verbatim. When the URL
-leaves `/finance/*` the outer router unmounts the whole subtree
-(inner router included) — no stale matching.
+exports a component that keeps basename semantics — i.e. today's
+`main.tsx` minus `createRoot`. *As designed* this was a literal
+nested `<BrowserRouter basename="/finance">`; **as shipped** it
+is `shared/components/AppRouter.tsx`, a basename segment that
+publishes the same three contexts `<Router basename>` does
+(NavigationContext with the basename, LocationContext with the
+stripped location, a fresh RouteContext) around the app subtree —
+react-router v7 forbids a real nested `<Router>`, so `AppRouter`
+superseded it while keeping identical semantics. All ~32
+absolute `to="/x"` link sites keep working verbatim. When the
+URL leaves `/finance/*` the outer router unmounts the whole
+subtree — no stale matching.
 
 *Alternative:* make apps' `<Routes>` relative-mountable
 (descendant Routes under a splat) — requires rewriting every

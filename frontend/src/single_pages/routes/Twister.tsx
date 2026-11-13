@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import FieldList from '../components/FieldList';
 import { useTwisterAudio } from '../components/useTwisterAudio';
+import { ShellLink } from '../../shared/shellNav';
 
 // Same default field values as twister.html.
 const DEFAULT_PLAYERS = ['Kārlis'];
@@ -148,9 +149,9 @@ export default function Twister() {
 
   return (
     <div className="twister-page">
-      <a href="/" className="home-link">
+      <ShellLink href="/" className="home-link">
         ← home
-      </a>
+      </ShellLink>
       <h1>Spēlējam Twister!</h1>
       <form onSubmit={(e) => e.preventDefault()}>
         <FieldList label="Spelētāji" values={players} onChange={setPlayers} />

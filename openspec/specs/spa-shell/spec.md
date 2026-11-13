@@ -61,12 +61,14 @@ key degrades to a diagnostic page, not a 500.
 ### Requirement: react_app mount semantics
 
 `react_app(request, title, subpath)` SHALL be the app-level
-mount, bound via `functools.partial` in `urls.py` or via a thin
-wrapper (finance's `finance_app`). Every GET/HEAD path under
-the mount renders the shell and React Router resolves the page
-client-side; `subpath` catch-alls are intentionally unused.
-Non-GET/HEAD requests MUST 404 — mutations live only under
-`/api/`.
+mount, bound via `functools.partial` in `urls.py`. Every
+GET/HEAD path under the mount renders the shell and React
+Router resolves the page client-side; `subpath` catch-alls are
+intentionally unused. Non-GET/HEAD requests MUST 404 —
+mutations live only under `/api/`. Per-visit work a page view
+used to do (e.g. finance's `apply_rules`) MUST run through the
+API instead — the edge-cached shell means page GETs rarely
+reach Django.
 
 #### Scenario: Deep link renders the shell
 

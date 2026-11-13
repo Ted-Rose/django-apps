@@ -76,25 +76,24 @@ describe('SessionGate', () => {
   });
 
   it('lets anonymous visitors onto the public dashboard', async () => {
-    renderGate(Promise.resolve({ status: 'anonymous', loginUrl: null }), '/');
+    renderGate(Promise.resolve({ status: 'anonymous' }), '/');
     await waitFor(() =>
       expect(screen.getByText('user:none')).toBeInTheDocument(),
     );
   });
 
-  it('redirects anonymous deep links to login_url?next=…', async () => {
+  it('redirects anonymous deep links to /login/?next=…', async () => {
     const { assign, restore } = stubLocationAssign();
     try {
-      renderGate(
-        Promise.resolve({
-          status: 'anonymous',
-          loginUrl: '/admin/login/',
-        }),
-        '/finance/',
-      );
+      renderGate(Promise.resolve({ status: 'anonymous' }), '/finance/');
       await waitFor(() => expect(assign).toHaveBeenCalled());
-      const url = new URL(assign.mock.calls[0][0] as string);
-      expect(url.pathname).toBe('/admin/login/');
+      // settings.LOGIN_URL (Google OAuth) — never the 401 body's
+      // /admin/login/, a staff password form OAuth users can't use.
+      const url = new URL(
+        assign.mock.calls[0][0] as string,
+        window.location.origin,
+      );
+      expect(url.pathname).toBe('/login/');
       expect(url.searchParams.get('next')).toBe('/finance/');
     } finally {
       restore();
@@ -105,13 +104,17 @@ describe('SessionGate', () => {
     const { assign, restore } = stubLocationAssign();
     try {
       renderGate(
-        Promise.resolve({ status: 'anonymous', loginUrl: null }),
-        '/tasks/',
+        Promise.resolve({ status: 'anonymous' }),
+        '/tasks/?label=Home',
       );
       await waitFor(() => expect(assign).toHaveBeenCalled());
-      // Falls back to the default login path without login_url.
-      const url = new URL(assign.mock.calls[0][0] as string);
-      expect(url.pathname).toBe('/admin/login/');
+      const url = new URL(
+        assign.mock.calls[0][0] as string,
+        window.location.origin,
+      );
+      expect(url.pathname).toBe('/login/');
+      // The query string rides along inside `next`.
+      expect(url.searchParams.get('next')).toBe('/tasks/?label=Home');
       expect(screen.queryByText('user:none')).not.toBeInTheDocument();
     } finally {
       restore();

@@ -50,16 +50,19 @@ keep working unchanged under the app's existing URL prefix.
 
 At startup the shell SHALL fetch the session bootstrap endpoint
 for user context (`username`, `language`, `is_staff`). On a 401
-`unauthenticated` response carrying `login_url` the shell SHALL
-navigate the browser to that URL with the current page path as
-`next`; while the bootstrap is pending the shell SHALL render a
-loading state rather than app content.
+`unauthenticated` response the shell SHALL navigate the browser
+to `/login/` — `settings.LOGIN_URL`, the Google OAuth entry, not
+the body's `login_url` (the staff-only admin password form) —
+with the current page path as `next`; while the bootstrap is
+pending the shell SHALL render a loading state rather than app
+content.
 
 #### Scenario: Anonymous visitor is redirected to login
 
-- **WHEN** an unauthenticated user opens any shell-served page
-- **THEN** after the bootstrap 401 the browser navigates to the
-  `login_url` with `next=<current path>`
+- **WHEN** an unauthenticated user opens any non-public
+  shell-served page (`/` stays public)
+- **THEN** after the bootstrap 401 the browser navigates to
+  `/login/` with `next=<current path>`
 
 #### Scenario: Authenticated bootstrap seeds user context
 

@@ -1,7 +1,20 @@
-import { lazy, Suspense, useEffect, type ComponentType } from 'react';
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
+import {
+  BrowserRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import { ErrorBoundary } from '../shared/ErrorBoundary';
 import { SessionGate, type SessionResult } from '../shared/session';
+import { ShellNavProvider } from '../shared/shellNav';
 import Home from './Home';
 
 /**
@@ -87,6 +100,17 @@ function prefetchAppChunks(): void {
   next(0);
 }
 
+/**
+ * Feeds the OUTER router's navigate into ShellNavContext so app
+ * subtrees can cross apps client-side — a basename-scoped
+ * `<Link>` inside an app can only ever resolve inside its own
+ * prefix, so cross-app anchors go through this instead.
+ */
+function ShellNavBridge({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  return <ShellNavProvider navigate={navigate}>{children}</ShellNavProvider>;
+}
+
 /** Per-route document.title + the idle prefetch kick. */
 function RouteEffects() {
   const { pathname } = useLocation();
@@ -108,20 +132,25 @@ export default function App({
     <BrowserRouter>
       <ErrorBoundary>
         <RouteEffects />
-        <SessionGate promise={sessionPromise}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/tasks/*" element={<LazyApp app={TasksApp} />} />
-            <Route path="/finance/*" element={<LazyApp app={FinanceApp} />} />
-            <Route path="/gmail/*" element={<LazyApp app={GmailApp} />} />
-            <Route path="/notes/*" element={<LazyApp app={NotesApp} />} />
-            <Route
-              path="/twister/*"
-              element={<LazyApp app={SinglePagesApp} />}
-            />
-            <Route path="/spoki/*" element={<LazyApp app={SinglePagesApp} />} />
-          </Routes>
-        </SessionGate>
+        <ShellNavBridge>
+          <SessionGate promise={sessionPromise}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/tasks/*" element={<LazyApp app={TasksApp} />} />
+              <Route path="/finance/*" element={<LazyApp app={FinanceApp} />} />
+              <Route path="/gmail/*" element={<LazyApp app={GmailApp} />} />
+              <Route path="/notes/*" element={<LazyApp app={NotesApp} />} />
+              <Route
+                path="/twister/*"
+                element={<LazyApp app={SinglePagesApp} />}
+              />
+              <Route
+                path="/spoki/*"
+                element={<LazyApp app={SinglePagesApp} />}
+              />
+            </Routes>
+          </SessionGate>
+        </ShellNavBridge>
       </ErrorBoundary>
     </BrowserRouter>
   );

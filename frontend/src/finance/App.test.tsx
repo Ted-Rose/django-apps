@@ -49,6 +49,9 @@ function mockGet(notifications: object[]) {
 beforeEach(() => {
   mockedApiGet.mockReset();
   mockedApiPost.mockReset();
+  // The mount effect fires POST /rules/apply/ fire-and-forget —
+  // give it a resolved promise so its .then chain can't throw.
+  mockedApiPost.mockResolvedValue({ success: true });
   clearToasts();
 });
 
@@ -63,7 +66,6 @@ describe('App notification drain', () => {
         created_at: '2026-10-01T03:00:00Z',
       },
     ]);
-    mockedApiPost.mockResolvedValue({ success: true });
     renderApp();
     expect(
       await screen.findByText(
@@ -82,11 +84,29 @@ describe('App notification drain', () => {
     mockGet([]);
     renderApp();
     // The page settles (empty accounts state) without any
-    // mark-read POST.
+    // mark-read POST — the mount-time /rules/apply/ call aside.
     expect(await screen.findByText(/No accounts yet/)).toBeInTheDocument();
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenCalledWith('/api/finance/notifications/'),
     );
-    expect(mockedApiPost).not.toHaveBeenCalled();
+    expect(
+      mockedApiPost.mock.calls.some(([url]) =>
+        url.includes('/notifications/read/'),
+      ),
+    ).toBe(false);
+  });
+
+  it('re-runs categorization rules once on mount', async () => {
+    mockGet([]);
+    renderApp();
+    // Client-side replacement for the old per-page-load
+    // apply_rules — the edge-cached shell means page GETs no
+    // longer reach Django.
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/rules/apply/',
+        {},
+      ),
+    );
   });
 });

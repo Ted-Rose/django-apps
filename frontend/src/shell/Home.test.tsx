@@ -50,7 +50,7 @@ describe('Home dashboard', () => {
   });
 
   it('renders for anonymous visitors too', async () => {
-    renderHome({ status: 'anonymous', loginUrl: null });
+    renderHome({ status: 'anonymous' });
     await waitFor(() =>
       expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument(),
     );

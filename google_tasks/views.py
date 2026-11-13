@@ -1142,4 +1142,4 @@ def update_label_view(request, label_id):
 
 # The SPA shell + strangler-redirect views moved to
 # django_apps.views (react_app / app_redirect) in finance Stage 1 —
-# urls.py binds them via functools.partial for entry='tasks'.
+# urls.py binds them via functools.partial with title='Tasks'.

@@ -64,12 +64,14 @@ test.describe('unauthenticated', () => {
   test('/gmail/ serves the shell then bounces to login', async ({ page }) => {
     // The unified shell is public + edge-cached: anonymous deep
     // links get 200 HTML, then the /api/me/ bootstrap 401 navigates
-    // the client to /admin/login/?next=<deep link>.
+    // the client to /login/?next=<deep link>. Wait for the request —
+    // /login/ 302s to an external OAuth provider e2e can't reach.
+    const bounce = page.waitForRequest(/\/login\//);
     const response = await page.goto('/gmail/');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['cache-control']).toContain('s-maxage=');
-    await page.waitForURL(/\/admin\/login\//);
-    expect(page.url()).toContain('next=');
+    const request = await bounce;
+    expect(decodeURIComponent(request.url())).toContain('next=');
   });
 
   test('/gmail-to-audio 301s to /gmail/ preserving the query', async ({

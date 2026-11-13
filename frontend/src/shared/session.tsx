@@ -28,7 +28,7 @@ export interface Session {
 
 export type SessionResult =
   | { status: 'authenticated'; session: Session }
-  | { status: 'anonymous'; loginUrl: string | null }
+  | { status: 'anonymous' }
   | { status: 'error' };
 
 export async function fetchSession(): Promise<SessionResult> {
@@ -38,16 +38,7 @@ export async function fetchSession(): Promise<SessionResult> {
       redirect: 'manual',
       headers: { Accept: 'application/json' },
     });
-    if (resp.status === 401) {
-      let loginUrl: string | null = null;
-      try {
-        const body = (await resp.json()) as { login_url?: string };
-        loginUrl = body.login_url ?? null;
-      } catch {
-        // Keep null — the gate falls back to the plain login URL.
-      }
-      return { status: 'anonymous', loginUrl };
-    }
+    if (resp.status === 401) return { status: 'anonymous' };
     if (!resp.ok) return { status: 'error' };
     const session = (await resp.json()) as Session;
     return { status: 'authenticated', session };
@@ -84,7 +75,11 @@ export function navigateTo(url: string): void {
  * Replicates the old bootstrap language resolution now that the
  * stored pref arrives asynchronously: `?lang=` override → stored
  * per-user pref → `lang_override` localStorage key → the language
- * initI18n already picked (detector/fallback) stays.
+ * initI18n already picked (detector/fallback) stays. Because the
+ * pref lands after first paint, applying it can flip the UI's
+ * boot language — a deliberate trade: the edge-cached shell can
+ * no longer inline the pref into the HTML like the old
+ * json_script bootstrap did.
  */
 function applySessionLanguage(language: string): void {
   const urlLang = new URLSearchParams(window.location.search).get('lang');
@@ -98,7 +93,7 @@ function applySessionLanguage(language: string): void {
  * evaluation, parallel with the route's chunk import). Renders a
  * loading state while pending, provides the SessionContext once
  * resolved, and navigates anonymous users on non-public paths to
- * the 401's `login_url` with `next=<current page>`.
+ * `/login/` with `next=<current page>`.
  */
 export function SessionGate({
   promise,
@@ -125,12 +120,13 @@ export function SessionGate({
   useEffect(() => {
     if (result?.status !== 'anonymous') return;
     if (PUBLIC_PATHS.has(location.pathname)) return;
-    const url = new URL(
-      result.loginUrl ?? '/admin/login/',
-      window.location.origin,
-    );
-    url.searchParams.set('next', location.pathname + location.search);
-    navigateTo(url.toString());
+    // Deliberately NOT the 401 body's login_url — that is
+    // /admin/login/ (the staff password form Google-OAuth users
+    // can't use). /login/ is settings.LOGIN_URL, the Google OAuth
+    // entry the old @login_required page views 302'd to and
+    // GmailReader's credentials bounce still uses.
+    const next = location.pathname + location.search;
+    navigateTo(`/login/?next=${encodeURIComponent(next)}`);
   }, [result, location]);
 
   useEffect(() => {

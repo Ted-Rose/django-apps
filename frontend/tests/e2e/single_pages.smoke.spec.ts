@@ -35,13 +35,15 @@ test.describe('unauthenticated', () => {
   }) => {
     // The unified shell is public + edge-cached: anonymous deep
     // links get 200 HTML, then the /api/me/ bootstrap 401 navigates
-    // the client to /admin/login/?next=<deep link> — the same net
-    // bounce the old @login_required produced.
+    // the client to /login/?next=<deep link> (Google OAuth) — the
+    // same net bounce the old @login_required produced. Wait for
+    // the request: /login/ 302s to an external provider.
     for (const url of ['/twister', '/spoki/']) {
+      const bounce = page.waitForRequest(/\/login\//);
       const response = await page.goto(url);
       expect(response?.status()).toBe(200);
-      await page.waitForURL(/\/admin\/login\//);
-      expect(page.url()).toContain('next=');
+      const request = await bounce;
+      expect(decodeURIComponent(request.url())).toContain('next=');
     }
   });
 

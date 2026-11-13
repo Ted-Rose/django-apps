@@ -31,15 +31,18 @@ async function login(page: Page) {
 test.describe('unauthenticated', () => {
   // The unified shell is public + edge-cached: anonymous deep links
   // get 200 HTML, then the /api/me/ bootstrap 401 navigates the
-  // client to /admin/login/?next=<deep link>. Assert the real
-  // browser flow (server 200 → client-side bounce).
+  // client to /login/?next=<deep link> (Google OAuth — the admin
+  // password form can't log an OAuth user in). Assert the real
+  // browser flow: wait for the /login/ request, not the committed
+  // URL — /login/ 302s to an external provider e2e can't reach.
   for (const path of ['/tasks/', '/tasks/stats']) {
     test(`${path} serves the shell then bounces to login`, async ({ page }) => {
+      const bounce = page.waitForRequest(/\/login\//);
       const response = await page.goto(path);
       expect(response?.status()).toBe(200);
       expect(response?.headers()['cache-control']).toContain('s-maxage=');
-      await page.waitForURL(/\/admin\/login\//);
-      expect(page.url()).toContain('next=');
+      const request = await bounce;
+      expect(decodeURIComponent(request.url())).toContain('next=');
     });
   }
 

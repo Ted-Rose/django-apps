@@ -2,7 +2,7 @@ from functools import partial
 
 from django.urls import path
 
-from django_apps.views import app_redirect
+from django_apps.views import app_redirect, react_app
 from finance import views
 
 app_name = 'finance'
@@ -11,9 +11,11 @@ app_name = 'finance'
 # Every GET/HEAD path renders the shell and React Router resolves
 # the page; non-GET requests to the retired form-POST URLs
 # (rules/save/, transactions/sync/, push/subscribe/, ...) 404 —
-# mutations live under /api/finance/ now. views.finance_app wraps
-# the shared react_app shell and re-applies the caller's
-# categorization rules on every page load.
+# mutations live under /api/finance/ now. The per-visit
+# categorization-rule pass runs client-side instead: the SPA posts
+# /api/finance/rules/apply/ once on mount (the shell HTML is
+# edge-cached, so page loads no longer reach Django).
+react_app_finance = partial(react_app, title='Finance')
 app_redirect_finance = partial(app_redirect, base='/finance/')
 
 urlpatterns = [
@@ -25,14 +27,14 @@ urlpatterns = [
     # (evaluate_spending_limits' finance:limits, the callback's
     # finance:connect/accounts redirects); each serves the SPA
     # shell and React Router resolves the page client-side.
-    path('', views.finance_app, name='index'),
-    path('connect/', views.finance_app, name='connect'),
-    path('accounts/', views.finance_app, name='accounts'),
-    path('transactions/', views.finance_app, name='transactions'),
-    path('balances/', views.finance_app, name='balances'),
-    path('limits/', views.finance_app, name='limits'),
-    path('rules/', views.finance_app, name='rules'),
-    path('categories/', views.finance_app, name='categories'),
+    path('', react_app_finance, name='index'),
+    path('connect/', react_app_finance, name='connect'),
+    path('accounts/', react_app_finance, name='accounts'),
+    path('transactions/', react_app_finance, name='transactions'),
+    path('balances/', react_app_finance, name='balances'),
+    path('limits/', react_app_finance, name='limits'),
+    path('rules/', react_app_finance, name='rules'),
+    path('categories/', react_app_finance, name='categories'),
     # Legacy strangler mount (Stages 1–5): 301 to the real routes so
     # bookmarks/links like /finance/app/rules keep working. The
     # bare 'app' pattern (no trailing slash) keeps /finance/app from
@@ -47,5 +49,5 @@ urlpatterns = [
     # No trailing slash on <path:subpath> — it matches both
     # 'x' and 'x/', so client-side routes don't depend on
     # an APPEND_SLASH redirect hop.
-    path('<path:subpath>', views.finance_app, name='spa_subpath'),
+    path('<path:subpath>', react_app_finance, name='spa_subpath'),
 ]

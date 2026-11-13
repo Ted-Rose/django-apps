@@ -56,10 +56,16 @@ test.describe('unauthenticated', () => {
   test('a deep link serves the shell then bounces to login', async ({
     page,
   }) => {
+    // /login/ 302s straight into Google OAuth — wait for the
+    // REQUEST, not the committed URL (the redirect target is
+    // external and unreachable in e2e).
+    const bounce = page.waitForRequest(/\/login\//);
     const response = await page.goto('/finance/accounts');
     expect(response?.status()).toBe(200);
-    await page.waitForURL(/\/admin\/login\//);
-    expect(decodeURIComponent(page.url())).toContain('next=/finance/accounts');
+    const request = await bounce;
+    expect(decodeURIComponent(request.url())).toContain(
+      'next=/finance/accounts',
+    );
   });
 });
 

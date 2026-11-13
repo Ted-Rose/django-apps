@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
+import { ShellLink } from '../shellNav';
 import './BurgerMenu.css';
 
 /**
@@ -13,9 +14,11 @@ import './BurgerMenu.css';
  * real `onClick` callback here. Items with neither `url`, `to` nor
  * `onClick` are skipped, matching the template.
  *
- * `url` renders a plain <a> (full-page navigation out of the SPA —
- * e.g. Home or /admin/logout/); `to` renders a react-router <Link>
- * for in-SPA navigation (added in finance Stage 1).
+ * `url` renders a ShellLink — still a real <a href>, but same-origin
+ * shell paths (Home, other apps) route through the shell router
+ * client-side instead of reloading the document, while /admin/*,
+ * /login/ and external URLs keep full-page navigation; `to` renders
+ * a react-router <Link> for in-app (basename-scoped) navigation.
  *
  * The language switcher lives inside the items container: on desktop
  * it renders inline with the menu items, on mobile it collapses into
@@ -96,7 +99,7 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
       <div className={`burger-menu-items${open ? ' show' : ''}`}>
         {visibleItems.map((item, index) =>
           item.url ? (
-            <a
+            <ShellLink
               // Labels can repeat (server-built dicts) — keep the key
               // unique with the item's index.
               key={`${item.label}-${index}`}
@@ -106,7 +109,7 @@ export function BurgerMenu({ items }: BurgerMenuProps) {
             >
               <ItemIcon icon={item.icon} />
               {item.label}
-            </a>
+            </ShellLink>
           ) : item.to ? (
             <Link
               key={`${item.label}-${index}`}

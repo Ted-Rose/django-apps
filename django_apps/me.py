@@ -10,6 +10,7 @@ up too, and sets the standard `django_language` cookie — inert
 today (no LocaleMiddleware) but free future-proofing.
 """
 from django.conf import settings
+from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from ninja import Router, Schema
 from ninja.errors import HttpError
@@ -40,9 +41,11 @@ def _me_payload(request, language=None):
 
 @router.get('/', response=MeOut)
 @ensure_csrf_cookie
+@never_cache
 def get_me(request):
-    # A real HttpResponse (not the plain dict) so the decorator can
-    # set the csrftoken cookie on it — ninja passes it through.
+    # A real HttpResponse (not the plain dict) so the decorators can
+    # act on it — ensure_csrf_cookie plants csrftoken, never_cache
+    # marks the per-user payload unambiguously non-cacheable.
     return api.create_response(request, _me_payload(request),
                                status=200)
 

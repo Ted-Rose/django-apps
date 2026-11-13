@@ -13,6 +13,23 @@ import Rules from './routes/Rules';
 import Transactions from './routes/Transactions';
 
 /**
+ * Re-runs the caller's categorization rules once per app mount —
+ * the client-side replacement for the per-page-load `apply_rules`
+ * the old finance_app view ran (the shell HTML is edge-cached
+ * now, so page views no longer reach Django). Fire-and-forget and
+ * idempotent; on success the finance query cache is invalidated
+ * so lists re-render with the fresh categories.
+ */
+function useApplyRulesOnMount() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    apiPost('/api/finance/rules/apply/', {})
+      .then(() => queryClient.invalidateQueries({ queryKey: ['finance'] }))
+      .catch(() => {});
+  }, [queryClient]);
+}
+
+/**
  * Drains unread in-app Notification rows into toasts — the
  * "next login" fallback for balance alerts when the user has no
  * Web Push subscription (and a breach audit trail when they do).
@@ -46,12 +63,13 @@ function useNotificationToasts() {
 
 /**
  * Router host for the finance SPA mounted at /finance/ (see
- * `BrowserRouter basename` in main.tsx). `/` redirects to
+ * `AppRouter basename` in main.tsx). `/` redirects to
  * `/accounts`; unknown paths do the same. Django's named shell
  * routes plus the `<path:subpath>` catch-all serve the shell for
  * every deep link, so React Router resolves the page here.
  */
 export default function App() {
+  useApplyRulesOnMount();
   useNotificationToasts();
   return (
     <Routes>
