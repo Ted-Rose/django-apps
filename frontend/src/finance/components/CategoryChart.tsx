@@ -182,7 +182,7 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
                   // Once a slice is picked the rest dim instead of
                   // resizing — keeps recharts from re-layouting.
                   fillOpacity={
-                    selectedRow && rowKey(row) !== selected ? 0.4 : 1
+                    selectedRow && rowKey(row) !== selected?.key ? 0.4 : 1
                   }
                 />
               ))}
