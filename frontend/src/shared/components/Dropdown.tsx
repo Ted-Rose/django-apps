@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type CSSProperties,
@@ -39,9 +40,11 @@ interface DropdownProps {
   /** Extra classes for the `<ul>` menu (e.g. `dropdown-menu-end`). */
   menuClassName?: string;
   /**
-   * `role` for the `<ul>` + matching `aria-haspopup` on the toggle.
-   * Menus of actions stay `'menu'` (the default); select-like
-   * pickers should pass `'listbox'` and give items `role="option"`.
+   * `role` for the `<ul>` + matching `aria-haspopup` on the
+   * toggle — opt-in: callers passing `'listbox'` (select-like
+   * pickers) or `'menu'` must also give their items the matching
+   * role (`option`/`menuitem`). Unset leaves both off, the
+   * historical markup for action menus.
    */
   menuRole?: 'menu' | 'listbox';
   /**
@@ -59,12 +62,14 @@ export function Dropdown({
   buttonStyle,
   ariaLabel,
   menuClassName = '',
-  menuRole = 'menu',
+  menuRole,
   menuStyle,
   children,
 }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -86,6 +91,9 @@ export function Dropdown({
       if (event.key === 'Escape') {
         event.stopPropagation();
         setOpen(false);
+        // Focus may sit on a menu item that is about to hide —
+        // move it back to the toggle.
+        toggleRef.current?.focus();
       }
     };
     document.addEventListener('click', onDocumentClick);
@@ -100,6 +108,7 @@ export function Dropdown({
     <div className="dropdown" ref={rootRef}>
       <button
         id={buttonId}
+        ref={toggleRef}
         className={
           buttonClassName || 'btn btn-outline-light btn-sm dropdown-toggle'
         }
@@ -107,6 +116,7 @@ export function Dropdown({
         style={buttonStyle}
         aria-expanded={open}
         aria-haspopup={menuRole}
+        aria-controls={menuId}
         aria-label={ariaLabel}
         onClick={(event) => {
           event.stopPropagation();
@@ -116,6 +126,7 @@ export function Dropdown({
         {label}
       </button>
       <ul
+        id={menuId}
         role={menuRole}
         className={(
           `dropdown-menu ${menuClassName}` + (open ? ' show' : '')
@@ -124,6 +135,7 @@ export function Dropdown({
         onClick={(event) => {
           if ((event.target as HTMLElement).closest('.dropdown-item')) {
             setOpen(false);
+            toggleRef.current?.focus();
           }
         }}
       >
