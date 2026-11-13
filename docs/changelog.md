@@ -1,6 +1,10 @@
 # google_api
 
 ## Changelog
+31. The Vercel function timeout is pinned at 300 seconds again
+    (the maximum under Fluid compute — the old 60s override was
+    lost in the caching rework), so slow endpoints like Gmail
+    TTS audio generation and tasks sync keep their headroom
 30. Mobile fix: the transaction row's category dropdown no longer
     spills past the screen's right edge — its menu anchors to the
     badge's right edge and row menus share the same viewport
