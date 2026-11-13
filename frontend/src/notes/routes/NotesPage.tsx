@@ -9,6 +9,7 @@ import ErrorState from '../../shared/components/ErrorState';
 import ListSkeleton from '../../shared/components/ListSkeleton';
 import Toasts from '../../shared/components/Toasts';
 import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
+import { useSession } from '../../shared/session';
 import { fetchNotes, type NotesDashboardOut, type TaskOut } from '../api';
 import NoteCard from '../components/NoteCard';
 import NoteFormModal from '../components/NoteFormModal';
@@ -38,6 +39,7 @@ export function NotesPage() {
   const order = searchParams.get('order') ?? 'created_desc';
 
   const authItem = useAuthMenuItem();
+  const session = useSession();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['notes', { category: categoryId, q, order }],
@@ -93,9 +95,10 @@ export function NotesPage() {
         btn_class: 'btn-light',
         onClick: () => syncMutation.mutate(),
       },
-      authItem,
     );
-  } else {
+  } else if (session) {
+    // Signed in but Google creds are dead — "reconnect" affordance.
+    // Anonymous already gets the identical /login/ link via authItem.
     burgerItems.push({
       label: t('menu.loginGoogle'),
       url: loginUrl,
@@ -103,6 +106,7 @@ export function NotesPage() {
       btn_class: 'btn-warning',
     });
   }
+  burgerItems.push(authItem);
 
   return (
     <>

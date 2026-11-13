@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '../shared/session';
-import BurgerMenu from '../shared/components/BurgerMenu';
+import NavBar from '../shared/components/NavBar';
 import { useAuthMenuItem } from '../shared/components/useAuthMenuItem';
 import './home.css';
 
@@ -75,16 +75,7 @@ export default function Home() {
 
   return (
     <div className="home-page">
-      <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div className="container-fluid">
-          <Link className="navbar-brand" to="/">
-            <i className="bi bi-house-heart" /> {t('common:nav.brand')}
-          </Link>
-          <div className="ms-auto">
-            <BurgerMenu items={[authItem]} />
-          </div>
-        </div>
-      </nav>
+      <NavBar items={[authItem]} />
 
       <div className="hero-section text-center">
         <div className="container">

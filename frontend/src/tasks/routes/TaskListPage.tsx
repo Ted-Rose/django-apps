@@ -23,6 +23,7 @@ import EmptyStateView from '../../shared/components/EmptyState';
 import ErrorStateView from '../../shared/components/ErrorState';
 import ListSkeleton from '../../shared/components/ListSkeleton';
 import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
+import { useSession } from '../../shared/session';
 import { actionHistory } from '../actionHistory';
 import {
   fetchDashboard,
@@ -103,6 +104,7 @@ export function TaskListPage({ view }: { view: ListView }) {
   const secondaryLabel = searchParams.get('secondary_label') ?? '';
 
   const authItem = useAuthMenuItem();
+  const session = useSession();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', { view, list, label, order }],
@@ -376,9 +378,10 @@ export function TaskListPage({ view }: { view: ListView }) {
         btn_class: 'btn-light',
         onClick: () => syncMutation.mutate(),
       },
-      authItem,
     );
-  } else {
+  } else if (session) {
+    // Signed in but Google creds are dead — "reconnect" affordance.
+    // Anonymous already gets the identical /login/ link via authItem.
     burgerItems.push({
       label: t('menu.loginGoogle'),
       url: loginUrl,
@@ -386,6 +389,7 @@ export function TaskListPage({ view }: { view: ListView }) {
       btn_class: 'btn-warning',
     });
   }
+  burgerItems.push(authItem);
 
   return (
     <>
