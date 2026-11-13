@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Python deps from requirements.txt at the repo root (a single
+  # Python deps from requirements*.txt at the repo root (a single
   # "pip" entry on "/" covers every manifest in that directory).
   - package-ecosystem: "pip"
     directory: "/"
@@ -38,6 +38,22 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+
+  # Root Dockerfile base-image pins.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+
+  # GCP infra module/provider pins.
+  - package-ecosystem: "terraform"
+    directory: "/terraform"
     schedule:
       interval: "weekly"
       day: "monday"
