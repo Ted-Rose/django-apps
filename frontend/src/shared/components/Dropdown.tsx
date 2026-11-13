@@ -39,6 +39,12 @@ interface DropdownProps {
   /** Extra classes for the `<ul>` menu (e.g. `dropdown-menu-end`). */
   menuClassName?: string;
   /**
+   * `role` for the `<ul>` + matching `aria-haspopup` on the toggle.
+   * Menus of actions stay `'menu'` (the default); select-like
+   * pickers should pass `'listbox'` and give items `role="option"`.
+   */
+  menuRole?: 'menu' | 'listbox';
+  /**
    * Inline style for the `<ul>` menu — the finance SPA uses
    * `max-height`/`overflow-y` to scroll long option lists.
    */
@@ -53,6 +59,7 @@ export function Dropdown({
   buttonStyle,
   ariaLabel,
   menuClassName = '',
+  menuRole = 'menu',
   menuStyle,
   children,
 }: DropdownProps) {
@@ -63,6 +70,11 @@ export function Dropdown({
     if (!open) return;
     const onDocumentClick = (event: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        // A <label htmlFor={buttonId}> click also fires an
+        // activation click on the toggle — ignoring it here lets
+        // the label mirror the toggle instead of only closing.
+        const label = (event.target as HTMLElement).closest('label');
+        if (buttonId && label?.htmlFor === buttonId) return;
         setOpen(false);
       }
     };
@@ -82,7 +94,7 @@ export function Dropdown({
       document.removeEventListener('click', onDocumentClick);
       document.removeEventListener('keydown', onKeyDown, true);
     };
-  }, [open]);
+  }, [open, buttonId]);
 
   return (
     <div className="dropdown" ref={rootRef}>
@@ -94,7 +106,7 @@ export function Dropdown({
         type="button"
         style={buttonStyle}
         aria-expanded={open}
-        aria-haspopup="menu"
+        aria-haspopup={menuRole}
         aria-label={ariaLabel}
         onClick={(event) => {
           event.stopPropagation();
@@ -104,6 +116,7 @@ export function Dropdown({
         {label}
       </button>
       <ul
+        role={menuRole}
         className={(
           `dropdown-menu ${menuClassName}` + (open ? ' show' : '')
         ).trim()}

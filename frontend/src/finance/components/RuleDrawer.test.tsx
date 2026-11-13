@@ -157,9 +157,9 @@ describe('RuleDrawer', () => {
     fireEvent.click(toggle);
     const menu = document.querySelector('.dropdown-menu.show');
     expect(menu).not.toBeNull();
-    const items = within(menu as HTMLElement).getAllByRole('button');
+    const items = within(menu as HTMLElement).getAllByRole('option');
     expect(items).toHaveLength(2);
-    expect(items[0]).toHaveAttribute('aria-current', 'true');
+    expect(items[0]).toHaveAttribute('aria-selected', 'true');
     expect(items[1].querySelector('.rule-cat-dot')).toHaveStyle({
       backgroundColor: '#0000ff',
     });
@@ -174,13 +174,17 @@ describe('RuleDrawer', () => {
   it('Escape closes the category menu but keeps the drawer open', () => {
     const onClose = vi.fn();
     renderDrawer({ onClose });
+    const drawer = screen.getByTestId('rule-drawer');
     fireEvent.click(categoryToggle());
     expect(document.querySelector('.dropdown-menu.show')).not.toBeNull();
-    fireEvent.keyDown(document, { key: 'Escape' });
+    // Fire on a descendant so document sits in the propagation
+    // path: the menu's capture listener intercepts Escape before
+    // the drawer's bubble-phase close handler sees it.
+    fireEvent.keyDown(drawer, { key: 'Escape' });
     expect(document.querySelector('.dropdown-menu.show')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
     // A second Escape reaches the drawer's own handler.
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(drawer, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

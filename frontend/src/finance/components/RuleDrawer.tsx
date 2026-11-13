@@ -298,10 +298,9 @@ export function RuleDrawer({
   );
 
   // Value previews shown on the folded section headers.
-  const counterpartySummary =
-    fields.counterparty_pattern.trim() ||
-    (fields.counterparty_scope === 'any'
-      ? ''
+  const counterpartySummary = [
+    fields.counterparty_scope === 'any'
+      ? null
       : choiceLabel(
           t,
           'scopes',
@@ -309,7 +308,11 @@ export function RuleDrawer({
           data.counterparty_scopes.find(
             (scope) => scope.value === fields.counterparty_scope,
           )?.label ?? fields.counterparty_scope,
-        ));
+        ),
+    fields.counterparty_pattern.trim() || null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const optionsSummary = [
     fields.operator !== 'AND'
       ? choiceLabel(t, 'operators', fields.operator, fields.operator)
@@ -423,6 +426,7 @@ export function RuleDrawer({
                     buttonClassName={categoryToggleClass}
                     menuClassName="w-100"
                     menuStyle={{ maxHeight: '16rem', overflowY: 'auto' }}
+                    menuRole="listbox"
                     ariaLabel={`${t('rules.drawer.categoryLabel')}: ${
                       selectedCategory?.name ?? t('rules.drawer.selectCategory')
                     }`}
@@ -446,15 +450,16 @@ export function RuleDrawer({
                       const isSelected =
                         String(category.id) === fields.category;
                       return (
-                        <li key={category.id}>
+                        <li key={category.id} role="presentation">
                           <button
                             type="button"
+                            role="option"
                             className={
                               'dropdown-item d-flex ' +
                               'align-items-center gap-2' +
                               (isSelected ? ' active' : '')
                             }
-                            aria-current={isSelected || undefined}
+                            aria-selected={isSelected}
                             onClick={() => set('category', String(category.id))}
                           >
                             <span
@@ -662,9 +667,6 @@ export function RuleDrawer({
               type="submit"
               className="btn btn-primary"
               disabled={save.isPending || !fields.category}
-              title={
-                fields.category ? undefined : t('rules.drawer.noCategories')
-              }
             >
               {save.isPending && (
                 <span
@@ -674,6 +676,13 @@ export function RuleDrawer({
               )}
               {t('rules.drawer.save')}
             </button>
+            {/* Disabled buttons fire no mouse events — the hint
+                stays visible so the reason is always clear. */}
+            {!fields.category && (
+              <span className="form-text ms-2">
+                {t('rules.drawer.noCategories')}
+              </span>
+            )}
           </form>
 
           <div id="preview-panel" className="rule-preview">
@@ -776,10 +785,11 @@ function DrawerSection({
       </button>
       <div id={id} ref={bodyRef} className={`collapse${open ? ' show' : ''}`}>
         {/*
-          Remount children on expand: fields stay mounted while
-          folded (label association, form state) but mounting under
-          display:none leaves AutoGrowTextarea measured at
-          scrollHeight 0 — a fresh mount while visible re-measures.
+          Remount children on every toggle: mounts under
+          display:none leave AutoGrowTextarea measured at
+          scrollHeight 0, so a fresh mount while the section is
+          visible re-measures correctly. Field values live in the
+          parent `fields` state and survive remounts.
         */}
         <div key={open ? 'open' : 'closed'}>{children}</div>
       </div>
