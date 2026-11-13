@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import NavBar from '../../shared/components/NavBar';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 
 /**
  * React port of gmail.html's navbar + burger_menu_items — brand
@@ -11,8 +11,7 @@ import { useSession } from '../../shared/session';
  */
 export function GmailNavBar() {
   const { t } = useTranslation('gmail');
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   const items: BurgerMenuItem[] = [
     {
@@ -27,12 +26,7 @@ export function GmailNavBar() {
       icon: 'check2-square',
       btn_class: 'btn-light',
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   return <NavBar title={t('nav.title')} items={items} />;

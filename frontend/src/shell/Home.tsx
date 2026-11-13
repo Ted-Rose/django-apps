@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '../shared/session';
+import BurgerMenu from '../shared/components/BurgerMenu';
+import { useAuthMenuItem } from '../shared/components/useAuthMenuItem';
 import './home.css';
 
 /**
@@ -23,6 +25,10 @@ interface Card {
 export default function Home() {
   const { t } = useTranslation();
   const session = useSession();
+  // Anonymous visitors get the "Login with Google" item here — `/`
+  // is the only public route, so this is the one place the login
+  // half of the shared auth item is reachable from a menu.
+  const authItem = useAuthMenuItem();
 
   const cards: Card[] = [
     {
@@ -74,6 +80,9 @@ export default function Home() {
           <Link className="navbar-brand" to="/">
             <i className="bi bi-house-heart" /> {t('common:nav.brand')}
           </Link>
+          <div className="ms-auto">
+            <BurgerMenu items={[authItem]} />
+          </div>
         </div>
       </nav>
 

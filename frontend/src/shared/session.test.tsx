@@ -87,8 +87,8 @@ describe('SessionGate', () => {
     try {
       renderGate(Promise.resolve({ status: 'anonymous' }), '/finance/');
       await waitFor(() => expect(assign).toHaveBeenCalled());
-      // settings.LOGIN_URL (Google OAuth) — never the 401 body's
-      // /admin/login/, a staff password form OAuth users can't use.
+      // settings.LOGIN_URL (Google OAuth) — the same target the
+      // 401 body's login_url carries.
       const url = new URL(
         assign.mock.calls[0][0] as string,
         window.location.origin,

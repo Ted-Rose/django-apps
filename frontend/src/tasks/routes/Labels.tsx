@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { fetchLabels, type LabelOut } from '../api';
 import { useUpdateLabel } from '../mutations';
 import Toasts from '../../shared/components/Toasts';
@@ -30,8 +30,7 @@ export default function Labels() {
   const { t } = useTranslation('tasks');
   const navigate = useNavigate();
 
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['labels'],
@@ -85,12 +84,7 @@ export default function Labels() {
       btn_class: 'btn-primary',
       onClick: () => navigate('/'),
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   return (

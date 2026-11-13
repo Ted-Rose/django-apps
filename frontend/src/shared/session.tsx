@@ -120,11 +120,10 @@ export function SessionGate({
   useEffect(() => {
     if (result?.status !== 'anonymous') return;
     if (PUBLIC_PATHS.has(location.pathname)) return;
-    // Deliberately NOT the 401 body's login_url — that is
-    // /admin/login/ (the staff password form Google-OAuth users
-    // can't use). /login/ is settings.LOGIN_URL, the Google OAuth
-    // entry the old @login_required page views 302'd to and
-    // GmailReader's credentials bounce still uses.
+    // /login/ is settings.LOGIN_URL — the Google OAuth entry the
+    // old @login_required page views 302'd to, the same target the
+    // 401 body's login_url carries and GmailReader's credentials
+    // bounce still uses.
     const next = location.pathname + location.search;
     navigateTo(`/login/?next=${encodeURIComponent(next)}`);
   }, [result, location]);

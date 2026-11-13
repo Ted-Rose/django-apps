@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { fetchStats, type StatsBucketOut, type StatsOut } from '../api';
 import Toasts from '../../shared/components/Toasts';
 import { MONTHS, formatShortDate, spaPathFromStoredUrl } from '../utils';
@@ -40,8 +40,7 @@ export default function Stats() {
   const list = searchParams.get('list');
   const navigate = useNavigate();
 
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['stats', { weeks, months, list }],
@@ -103,12 +102,7 @@ export default function Stats() {
       btn_class: 'btn-primary',
       onClick: () => navigate('/'),
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   return (

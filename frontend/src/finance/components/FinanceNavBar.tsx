@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import NavBar from '../../shared/components/NavBar';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 
 /**
  * React port of finance/views.py `_burger_menu_items` — the shared
@@ -19,8 +19,7 @@ import { useSession } from '../../shared/session';
  */
 export function FinanceNavBar() {
   const { t } = useTranslation('finance');
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
   const tabsRef = useRef<HTMLDivElement>(null);
 
   // Every route mounts a fresh nav bar, so the scrollable tab
@@ -81,12 +80,7 @@ export function FinanceNavBar() {
       icon: 'wallet2',
       btn_class: 'btn-light',
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   const tabs = [

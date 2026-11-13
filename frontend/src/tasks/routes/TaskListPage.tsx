@@ -22,7 +22,7 @@ import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import ErrorStateView from '../../shared/components/ErrorState';
 import ListSkeleton from '../../shared/components/ListSkeleton';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { actionHistory } from '../actionHistory';
 import {
   fetchDashboard,
@@ -102,8 +102,7 @@ export function TaskListPage({ view }: { view: ListView }) {
   const order = searchParams.get('order') ?? 'order_asc';
   const secondaryLabel = searchParams.get('secondary_label') ?? '';
 
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', { view, list, label, order }],
@@ -377,12 +376,7 @@ export function TaskListPage({ view }: { view: ListView }) {
         btn_class: 'btn-light',
         onClick: () => syncMutation.mutate(),
       },
-      {
-        label: t('common:common.logout', { user }),
-        url: '/admin/logout/',
-        icon: 'box-arrow-right',
-        btn_class: 'btn-outline-light',
-      },
+      authItem,
     );
   } else {
     burgerItems.push({
