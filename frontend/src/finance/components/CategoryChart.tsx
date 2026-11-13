@@ -8,6 +8,7 @@ import {
   Tooltip,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
+import type { PieSectorDataItem } from 'recharts';
 import type { CategoryRowOut } from '../api';
 
 const FALLBACK_COLOR = '#6c757d';
@@ -97,7 +98,16 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
   const { t } = useTranslation('finance');
   // The key, not the row — a refetch swaps the rows array and a
   // stored object would match nothing, dimming every slice.
-  const [selected, setSelected] = useState<string | null>(null);
+  // Selection also carries the clicked slice's mid-point so the
+  // pop-up can anchor itself — recharts keeps tooltip state
+  // internal and only refreshes it on mouse events, so a second
+  // click on another slice would leave the first pop-up stuck.
+  // Legend clicks carry no sector geometry → key only.
+  const [selected, setSelected] = useState<{
+    key: string;
+    x?: number;
+    y?: number;
+  } | null>(null);
   const slices = rows.filter((row) => row.share > 0);
   if (slices.length === 0) return null;
 
@@ -105,17 +115,36 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
   // resolver; picking the active row again clears the readout.
   const toggle = (entry: unknown) => {
     const row = resolveSlice(slices, entry);
-    if (row) {
-      const key = rowKey(row);
-      setSelected((prev) => (prev === key ? null : key));
-    }
+    if (!row) return;
+    const key = rowKey(row);
+    setSelected((prev) => {
+      if (prev?.key === key) return null;
+      const sector = entry as PieSectorDataItem;
+      if (
+        typeof sector.midAngle === 'number' &&
+        typeof sector.innerRadius === 'number' &&
+        typeof sector.outerRadius === 'number'
+      ) {
+        // Sector mid-point — recharts measures angles clockwise
+        // from 12 o'clock, hence the negated midAngle.
+        const r =
+          sector.innerRadius + (sector.outerRadius - sector.innerRadius) / 2;
+        const rad = (-sector.midAngle * Math.PI) / 180;
+        return {
+          key,
+          x: sector.cx + r * Math.cos(rad),
+          y: sector.cy + r * Math.sin(rad),
+        };
+      }
+      return { key };
+    });
   };
 
   // Re-resolve the live row each render — if a refetch dropped
   // the selected category from the window, nothing dims and the
   // readout hides instead of showing stale figures.
   const selectedRow = selected
-    ? slices.find((row) => rowKey(row) === selected)
+    ? slices.find((row) => rowKey(row) === selected.key)
     : undefined;
   const selectedName = selectedRow
     ? selectedRow.category_key === 'uncategorized'
@@ -158,7 +187,11 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
                 />
               ))}
             </Pie>
+            {/* Hover tooltips only — once a slice is selected the
+                anchored pop-up takes over (recharts can't retarget
+                its tooltip on click alone). */}
             <Tooltip
+              active={selectedRow ? false : undefined}
               formatter={(value, _name, item) => {
                 const row = resolveSlice(slices, item);
                 if (!row) return `${Math.round(Number(value))}%`;
@@ -177,6 +210,18 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
             <Legend iconType="circle" iconSize={8} onClick={toggle} />
           </PieChart>
         </ResponsiveContainer>
+        {/* Click pop-up anchored at the slice's mid-point — driven
+            by selection state, so every slice click updates it. */}
+        {selectedRow && selected?.x !== undefined && (
+          <div
+            className="cat-chart-pop"
+            style={{ left: selected.x, top: selected.y }}
+          >
+            <div>{selectedName}</div>
+            <div>{shareLabel(selectedRow)}</div>
+            {spentLabel(selectedRow) && <div>{spentLabel(selectedRow)}</div>}
+          </div>
+        )}
       </div>
       {selectedRow && (
         <p className="text-muted small text-center mt-2 mb-0">
