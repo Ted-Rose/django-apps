@@ -396,11 +396,12 @@ function SortItem({
 }: {
   label: ReactNode;
   active?: boolean;
-  /** Extra classes on the item — e.g. `d-flex` for marker+label
-      layouts (category color dots/badges). */
+  /** Extra classes on the item's button — e.g. `d-flex` for
+      marker+label layouts (category color dots/badges). */
   className?: string;
   /** Marks the applied option when `active` (the blue highlight)
-      isn't used — e.g. the badge-pill category items. */
+      isn't used — e.g. the badge-pill category items. `active`
+      items always get `aria-current` regardless. */
   ariaCurrent?: boolean;
   onClick: () => void;
 }) {

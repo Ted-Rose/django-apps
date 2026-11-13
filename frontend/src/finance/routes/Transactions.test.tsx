@@ -238,6 +238,13 @@ describe('Transactions', () => {
     renderTransactions();
     await screen.findByRole('button', { name: 'Category' });
     const menu = openHeaderMenu('Category');
+    // Category options show the color dot — the same marker the
+    // rule drawer's picker uses.
+    expect(
+      menu
+        .getByRole('button', { name: 'Housing' })
+        .querySelector('.fin-cat-dot'),
+    ).toHaveStyle({ backgroundColor: '#ff0000' });
     fireEvent.click(menu.getByRole('button', { name: 'Uncategorized' }));
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenLastCalledWith(
@@ -552,11 +559,19 @@ describe('Transactions', () => {
     );
     const menu = document.querySelector('.dropdown-menu.show');
     expect(menu).not.toBeNull();
-    fireEvent.click(
-      within(menu as HTMLElement).getByRole('button', {
-        name: 'Housing',
-      }),
-    );
+    // Options render the same tinted pill as the categories page;
+    // the applied one ("No category" here — the tx has none)
+    // carries aria-current plus the trailing check.
+    const housing = within(menu as HTMLElement).getByRole('button', {
+      name: 'Housing',
+    });
+    expect(housing.querySelector('.fin-cat-badge')).not.toBeNull();
+    const noCategory = within(menu as HTMLElement).getByRole('button', {
+      name: 'No category',
+    });
+    expect(noCategory).toHaveAttribute('aria-current', 'true');
+    expect(noCategory.querySelector('.bi-check')).not.toBeNull();
+    fireEvent.click(housing);
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/transactions/1/category/',
