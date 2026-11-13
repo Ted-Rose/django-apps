@@ -9,7 +9,9 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import ErrorState from '../components/ErrorState';
 import Toasts from '../../shared/components/Toasts';
 import { fetchAccounts, type AccountOut, type PushConfigOut } from '../api';
-import usePushSubscription from '../hooks/usePushSubscription';
+import usePushSubscription, {
+  type PushSubscriptionState,
+} from '../hooks/usePushSubscription';
 import {
   useDeleteBalanceAlert,
   useSaveBalanceAlert,
@@ -35,6 +37,9 @@ export default function Accounts() {
     queryKey: ['finance', 'accounts'],
     queryFn: fetchAccounts,
   });
+  // One shared instance for all rows — a per-row hook would fire
+  // one subscription re-register POST per account on mount.
+  const push = usePushSubscription(data?.push_config ?? EMPTY_PUSH_CONFIG);
 
   return (
     <>
@@ -66,11 +71,7 @@ export default function Accounts() {
           (data.accounts.length > 0 ? (
             <div className="acct-list">
               {data.accounts.map((account) => (
-                <AccountRow
-                  key={account.id}
-                  account={account}
-                  pushConfig={data.push_config}
-                />
+                <AccountRow key={account.id} account={account} push={push} />
               ))}
             </div>
           ) : (
@@ -91,6 +92,15 @@ interface LastBalance {
   balanceAmount?: { amount?: string; currency?: string };
 }
 
+/** Placeholder before the accounts payload (and its push_config)
+ *  arrives — unsupported, so the hook stays inert. */
+const EMPTY_PUSH_CONFIG: PushConfigOut = {
+  vapid_public_key: '',
+  subscription_count: 0,
+  subscribe_url: '',
+  unsubscribe_url: '',
+};
+
 /**
  * One account card: display name + iban/institution/currency, a
  * "Shared by …" badge for non-owned accounts, the balance-check
@@ -101,10 +111,10 @@ interface LastBalance {
  */
 function AccountRow({
   account,
-  pushConfig,
+  push,
 }: {
   account: AccountOut;
-  pushConfig: PushConfigOut;
+  push: PushSubscriptionState;
 }) {
   const { t } = useTranslation('finance');
   const toggle = useToggleBalanceCheck();
@@ -112,7 +122,6 @@ function AccountRow({
   const share = useShareAccount();
   const saveAlert = useSaveBalanceAlert();
   const deleteAlert = useDeleteBalanceAlert();
-  const push = usePushSubscription(pushConfig);
   const [username, setUsername] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
@@ -354,7 +363,7 @@ function AccountRow({
           <button
             type="submit"
             className="btn btn-sm btn-primary"
-            disabled={savingAlert}
+            disabled={savingAlert || push.busy}
           >
             {savingAlert ? (
               <span
