@@ -2,6 +2,7 @@ import React, { createRef } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import type { EditorView } from '@tiptap/pm/view';
+import type { JSONContent } from '@tiptap/core';
 import RichTextEditor from './RichTextEditor';
 import type { RichTextEditorHandle } from './RichTextEditor';
 import { isTiptapDocString } from '../tiptapContent';
@@ -45,7 +46,9 @@ describe('RichTextEditor', () => {
       />,
     );
     await waitFor(() => expect(ref.current?.editor).toBeTruthy());
-    const content = ref.current?.editor?.getJSON().content ?? [];
+    const content =
+      (ref.current?.editor?.getJSON() as JSONContent | undefined)?.content ??
+      [];
     expect(content[0]).toMatchObject({
       type: 'heading',
       attrs: { level: 1 },
@@ -121,12 +124,16 @@ describe('RichTextEditor', () => {
     const zwsp = String.fromCharCode(0x200b);
     ref.current?.editor?.view.pasteText(`#${nbsp}head${zwsp}ing`, pasteEvent);
     // '# heading' normalizes, then parses as markdown → h1.
-    const doc = ref.current?.editor?.getJSON().content ?? [];
+    const doc =
+      (ref.current?.editor?.getJSON() as JSONContent | undefined)?.content ??
+      [];
     expect(doc[0]).toMatchObject({
       type: 'heading',
       attrs: { level: 1 },
     });
-    expect(ref.current?.editor?.getText()).toBe('heading');
+    // v3 getText() appends the trailing block separator — the
+    // user-visible text is what matters.
+    expect(ref.current?.editor?.getText().trimEnd()).toBe('heading');
   });
 
   it('normalizes whitespace pasted as HTML', async () => {
@@ -190,7 +197,8 @@ describe('RichTextEditor', () => {
         '2. second',
       ].join('\n'),
     );
-    const content = editor?.getJSON().content ?? [];
+    const content =
+      (editor?.getJSON() as JSONContent | undefined)?.content ?? [];
     const types = content.map((n) => n.type);
     // The last entry is the paragraph the paste happened in.
     expect(types.slice(0, 6)).toEqual([
@@ -230,7 +238,8 @@ describe('RichTextEditor', () => {
     editor?.view.pasteHTML('<h1>Title</h1><p>body</p>', pasteEvent);
     // Without the edge clamp the open slice boundary merges the
     // h1's text into the cursor paragraph — heading lost.
-    const content = editor?.getJSON().content ?? [];
+    const content =
+      (editor?.getJSON() as JSONContent | undefined)?.content ?? [];
     expect(content[0]).toMatchObject({
       type: 'heading',
       attrs: { level: 1 },
@@ -257,7 +266,7 @@ describe('RichTextEditor', () => {
         '  - @ROM.12.1',
       ].join('\n'),
     );
-    const content = editor.getJSON().content ?? [];
+    const content = (editor.getJSON() as JSONContent).content ?? [];
     // '1.' and '- ' can't share a list — the bullet items must
     // form ONE list (blank lines don't split it), nested under
     // 'Scriptural Connections:'.
@@ -282,7 +291,8 @@ describe('RichTextEditor', () => {
         '<ul><li>two</li><li>three</li></ul>',
       pasteEvent,
     );
-    const content = editor?.getJSON().content ?? [];
+    const content =
+      (editor?.getJSON() as JSONContent | undefined)?.content ?? [];
     const lists = content.filter((n) => n.type === 'bulletList');
     expect(lists).toHaveLength(1);
     expect(lists[0].content).toHaveLength(3);
@@ -303,7 +313,8 @@ describe('RichTextEditor', () => {
         '<div>- two</div>',
       pasteEvent,
     );
-    const content = editor?.getJSON().content ?? [];
+    const content =
+      (editor?.getJSON() as JSONContent | undefined)?.content ?? [];
     expect(
       content.some((n) => n.type === 'heading' && n.attrs?.level === 2),
     ).toBe(true);
@@ -320,7 +331,8 @@ describe('RichTextEditor', () => {
     // A bold '- item' inside a <p> is real rich text — the mark
     // vetoes the markdown reparse so it stays literal text.
     editor?.view.pasteHTML('<p><strong>- not a list</strong></p>', pasteEvent);
-    const content = editor?.getJSON().content ?? [];
+    const content =
+      (editor?.getJSON() as JSONContent | undefined)?.content ?? [];
     expect(content.every((n) => n.type === 'paragraph')).toBe(true);
     expect(editor?.getText()).toContain('- not a list');
   });
@@ -334,9 +346,9 @@ describe('RichTextEditor', () => {
       '<ul><li>one</li><li><br></li>' + '<li>two<p></p></li></ul>',
       pasteEvent,
     );
-    const lists = (editor?.getJSON().content ?? []).filter(
-      (n) => n.type === 'bulletList',
-    );
+    const lists = (
+      (editor?.getJSON() as JSONContent | undefined)?.content ?? []
+    ).filter((n) => n.type === 'bulletList');
     expect(lists).toHaveLength(1);
     const items = lists[0].content ?? [];
     expect(items).toHaveLength(2);
@@ -358,9 +370,9 @@ describe('RichTextEditor', () => {
     if (!editor) return;
     // Word/Outlook put '•' on text/plain instead of '-'.
     firePaste(editor.view, '• one\n• two');
-    const lists = (editor?.getJSON().content ?? []).filter(
-      (n) => n.type === 'bulletList',
-    );
+    const lists = (
+      (editor?.getJSON() as JSONContent | undefined)?.content ?? []
+    ).filter((n) => n.type === 'bulletList');
     expect(lists).toHaveLength(1);
     expect(lists[0].content).toHaveLength(2);
   });
@@ -371,7 +383,8 @@ describe('RichTextEditor', () => {
     await waitFor(() => expect(ref.current?.editor).toBeTruthy());
     const editor = ref.current?.editor;
     editor?.view.pasteText('just #tag and a - dash\nsecond line', pasteEvent);
-    const content = editor?.getJSON().content ?? [];
+    const content =
+      (editor?.getJSON() as JSONContent | undefined)?.content ?? [];
     expect(content.every((n) => n.type === 'paragraph')).toBe(true);
     expect(editor?.getText()).toContain('#tag and a - dash');
   });

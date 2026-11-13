@@ -10,8 +10,21 @@
   z-index: 1030 !important;
 }
 body {
-  padding-top: 60px;
+  padding-top: 44px;
   padding-bottom: 100px;
+}
+/* On mobile browsers one too-wide child expands the layout
+   viewport past the device width, which also stretches the fixed
+   navbar beyond the screen (fixed positioning follows the layout
+   viewport). Clip root horizontal overflow so the viewport can
+   never grow; wide content scrolls inside its own container.
+   `clip`, unlike `hidden`, doesn't create a scroll container, so
+   overflow-y stays `visible` and sticky/window scrolling keep
+   working. */
+html,
+body {
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 .burger-menu .burger-menu-items {
   flex-wrap: wrap;
@@ -244,7 +257,7 @@ body {
     text-decoration: none;
     white-space: nowrap;
   }
-  .tx-table > thead .dropdown-menu {
+  .tx-table .dropdown-menu {
     max-width: min(20rem, 92vw);
   }
 

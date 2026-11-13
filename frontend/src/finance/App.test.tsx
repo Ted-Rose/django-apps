@@ -22,12 +22,12 @@ const PUSH_CONFIG = {
   unsubscribe_url: '/api/finance/push/unsubscribe/',
 };
 
-function renderApp() {
+function renderApp(initialEntry = '/accounts') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <MemoryRouter initialEntries={['/accounts']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>
@@ -35,13 +35,28 @@ function renderApp() {
   );
 }
 
-/** URL-aware apiGet: notifications payload, empty accounts page. */
+/** URL-aware apiGet: notifications payload, empty accounts page
+    and an empty-but-well-formed categories overview. */
 function mockGet(notifications: object[]) {
   mockedApiGet.mockImplementation((url: string) =>
     Promise.resolve(
       url === '/api/finance/notifications/'
         ? { notifications }
-        : { accounts: [], push_config: PUSH_CONFIG },
+        : url.startsWith('/api/finance/categories/overview/')
+          ? {
+              rows: [],
+              totals: {},
+              periods: [],
+              monthly: { months: [], rows: [], totals: {} },
+              date_from: '',
+              date_to: '',
+              accounts: [],
+              categories: [],
+              view_owner: null,
+              shared_with_me: [],
+              my_shares: [],
+            }
+          : { accounts: [], push_config: PUSH_CONFIG },
     ),
   );
 }
@@ -50,6 +65,18 @@ beforeEach(() => {
   mockedApiGet.mockReset();
   mockedApiPost.mockReset();
   clearToasts();
+});
+
+describe('Finance landing route', () => {
+  it('redirects / to the categories overview', async () => {
+    mockGet([]);
+    renderApp('/');
+    await waitFor(() =>
+      expect(mockedApiGet).toHaveBeenCalledWith(
+        '/api/finance/categories/overview/',
+      ),
+    );
+  });
 });
 
 describe('App notification drain', () => {
@@ -78,7 +105,7 @@ describe('App notification drain', () => {
     );
   });
 
-  it('fetches nothing to read out when there are no notifications', async () => {
+  it('fetches nothing with no unread notifications', async () => {
     mockGet([]);
     renderApp();
     // The page settles (empty accounts state) without any

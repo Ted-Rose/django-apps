@@ -133,22 +133,6 @@
   padding: 0.15rem 0.4rem;
 }
 
-/* Secondary page navbar (shared/components/PageNavBar.tsx) —
-   replaces the copy-pasted inline styles: `padding: 0.1rem 0` +
-   `minHeight: auto` on the nav, `padding: 0 0.5rem` on the
-   container, small navbar-brand padding/font-size. */
-.app-navbar {
-  padding: 0.1rem 0;
-  min-height: auto;
-}
-.app-navbar > .container-fluid {
-  padding: 0 0.5rem;
-}
-.app-navbar .navbar-brand {
-  font-size: 1rem;
-  padding: 0.25rem 0.5rem;
-}
-
 /* --- Scoped Bootstrap polish (applies only inside .app-ui) ------- */
 
 /* Modal enter animation — shared/components/Modal.tsx mounts with

@@ -16,6 +16,19 @@
             background-color: #f8f9fa;
             min-height: 100vh;
         }
+        /* Slim navbar — mirrors .app-navbar in
+           frontend/src/shared/components/BurgerMenu.css. */
+        .app-navbar {
+            padding: 0.1rem 0;
+            min-height: auto;
+        }
+        .app-navbar > .container-fluid {
+            padding: 0 0.5rem;
+        }
+        .app-navbar .navbar-brand {
+            font-size: 1rem;
+            padding: 0.25rem 0.5rem;
+        }
         .hero-section {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -58,7 +71,7 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="app-navbar navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">
                 <i class="bi bi-house-heart"></i> Tedis's Tools

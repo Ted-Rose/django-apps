@@ -338,7 +338,7 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
     '.vercel.app',
-    'tedisrozenfelds.vercel.app',
+    'tedis.vercel.app',
     '.run.app',
 ]
 
@@ -478,9 +478,12 @@ WHITENOISE_IMMUTABLE_FILE_TEST = r'\.[0-9A-Za-z_-]{8}\.'
 # React frontend (frontend/, built by Vite into frontend_dist/).
 # VITE_DEV=1 + `npm run dev --prefix frontend` enables the dev
 # server + HMR; otherwise entries resolve via manifest.json.
+# dev_mode is NOT gated on DEBUG: local runs with DEBUG=false
+# (production Postgres) still get vite dev + HMR, while deployed
+# environments simply never set VITE_DEV.
 DJANGO_VITE = {
     'default': {
-        'dev_mode': DEBUG and os.environ.get('VITE_DEV') == '1',
+        'dev_mode': os.environ.get('VITE_DEV') == '1',
         # Non-default port so another project's vite on :5173 can't
         # shadow these dev-asset URLs — must match server.port in
         # frontend/vite.config.ts (both honor VITE_PORT).

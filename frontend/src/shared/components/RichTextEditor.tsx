@@ -4,8 +4,6 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { getSchema } from '@tiptap/core';
 import type { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
-import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import {
   transformPastedSlice,
@@ -34,14 +32,18 @@ interface RichTextEditorProps {
   disabled?: boolean;
 }
 
-const SCHEMA_EXTENSIONS = [
-  StarterKit,
-  Underline,
-  Link.configure({
-    autolink: false,
-    linkOnPaste: false,
-    openOnClick: false,
-    protocols: ['http', 'https', 'mailto'],
+// TipTap v3's StarterKit already bundles Link and Underline —
+// registering them again trips the duplicate-extension warning.
+// Exported so tests can build a schema that cannot drift from
+// the editor's (see markdownPaste.test.ts).
+export const SCHEMA_EXTENSIONS = [
+  StarterKit.configure({
+    link: {
+      autolink: false,
+      linkOnPaste: false,
+      openOnClick: false,
+      protocols: ['http', 'https', 'mailto'],
+    },
   }),
 ];
 
@@ -230,7 +232,12 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(
       if (!editor) return;
       if (value === lastEmitted.current) return;
       if (value === JSON.stringify(editor.getJSON())) return;
-      editor.commands.setContent(valueToContent(value));
+      // emitUpdate:false keeps v2 semantics — an external value
+      // reset must not echo back through onChange (it would turn a
+      // legacy plain-text value into a notes_doc payload).
+      editor.commands.setContent(valueToContent(value), {
+        emitUpdate: false,
+      });
       lastEmitted.current = value;
     }, [value, editor]);
 
