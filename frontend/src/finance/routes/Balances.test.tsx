@@ -35,6 +35,7 @@ function makeAccount(overrides: Partial<AccountOut> = {}): AccountOut {
     is_owner: true,
     owner_username: 'tedis',
     included_in_balance_check: true,
+    excluded: false,
     last_balance: {
       balanceAmount: { amount: '123.45', currency: 'EUR' },
       balanceType: 'interimAvailable',

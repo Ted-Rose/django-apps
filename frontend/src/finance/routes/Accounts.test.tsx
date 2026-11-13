@@ -29,6 +29,7 @@ function makeAccount(overrides: Partial<AccountOut> = {}): AccountOut {
     is_owner: true,
     owner_username: 'tedis',
     included_in_balance_check: false,
+    excluded: false,
     last_balance: null,
     balance_updated_at: null,
     ...overrides,
@@ -174,6 +175,30 @@ describe('Accounts', () => {
     );
     expect(
       await screen.findByText('Account included in the balance check.'),
+    ).toBeInTheDocument();
+  });
+
+  it('toggles excluded and toasts the API message', async () => {
+    mockedApiGet.mockResolvedValue(makeAccounts([makeAccount()]));
+    mockedApiPost.mockResolvedValue({
+      success: true,
+      message: 'Account excluded — it now shows only on the Accounts page.',
+      excluded: true,
+    });
+    renderAccounts();
+    const toggle = await screen.findByRole('switch', {
+      name: /Excluded/,
+    });
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(mockedApiPost).toHaveBeenCalledWith(
+        '/api/finance/accounts/5/toggle-excluded/',
+      ),
+    );
+    expect(
+      await screen.findByText(
+        'Account excluded — it now shows only on the Accounts page.',
+      ),
     ).toBeInTheDocument();
   });
 

@@ -47,8 +47,15 @@ export function LimitForm({
   const { t } = useTranslation('finance');
   const saveLimit = useSaveLimit();
   const push = usePushSubscription(pushConfig);
+  // Excluded accounts stay in `editing.accounts` (config fidelity)
+  // but aren't selectable options — seed only the visible ones;
+  // the backend re-attaches the hidden ones on save.
   const [selectedAccounts, setSelectedAccounts] = useState<number[]>(
-    editing ? editing.accounts.map((a) => a.id) : [],
+    editing
+      ? editing.accounts
+          .map((a) => a.id)
+          .filter((id) => accounts.some((o) => o.id === id))
+      : [],
   );
   const [category, setCategory] = useState(
     editing?.category ? String(editing.category.id) : '',

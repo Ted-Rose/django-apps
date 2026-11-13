@@ -44,6 +44,7 @@ import type {
   SyncIn,
   SyncOut,
   ToggleBalanceCheckOut,
+  ToggleExcludedOut,
 } from './api';
 
 const FINANCE_KEY = ['finance'] as const;
@@ -222,6 +223,35 @@ export function useToggleBalanceCheck() {
     onError: (error) =>
       pushToast(
         t('mutations.balanceCheckFailed', { detail: errorDetail(error) }),
+        'warning',
+      ),
+    onSettled: () => invalidateFinance(queryClient),
+  });
+}
+
+/**
+ * POST /api/finance/accounts/{id}/toggle-excluded/ — flips the
+ * caller's per-account excluded flag; an excluded account and its
+ * transactions vanish from every page except Accounts until it is
+ * included again.
+ */
+export function useToggleExcluded() {
+  const { t } = useTranslation('finance');
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (accountId: number) =>
+      apiPost<ToggleExcludedOut>(
+        `/api/finance/accounts/${accountId}/toggle-excluded/`,
+      ),
+    onSuccess: (data) => {
+      const message = resultMessage(data);
+      if (message) {
+        pushToast(message, data.success ? 'success' : 'warning');
+      }
+    },
+    onError: (error) =>
+      pushToast(
+        t('mutations.excludeFailed', { detail: errorDetail(error) }),
         'warning',
       ),
     onSettled: () => invalidateFinance(queryClient),

@@ -208,6 +208,405 @@ class AccountsApiTests(ApiTestCase):
         self.assertFalse(pref.included_in_balance_check)
 
 
+class ExcludedAccountApiTests(ApiTestCase):
+    """The per-account `excluded` pref hides an account — and its
+    transactions — from every page except /accounts/; toggling it
+    back restores the account everywhere."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='alice', password='pw'
+        )
+        self.req = make_requisition(self.user)
+        self.account = make_account(self.user, self.req)
+        self.client.force_login(self.user)
+
+    def exclude(self):
+        return UserAccountPreference.objects.create(
+            user=self.user, account=self.account, excluded=True
+        )
+
+    def test_toggle_flips_pref_and_returns_flag(self):
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/toggle-excluded/'
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body['success'])
+        self.assertTrue(body['excluded'])
+        self.assertEqual(body['code'], 'accountExcludedFromViews')
+        self.assertTrue(
+            UserAccountPreference.objects.get(
+                user=self.user, account=self.account
+            ).excluded
+        )
+        resp = self.post_json(
+            f'/accounts/{self.account.pk}/toggle-excluded/'
+        )
+        self.assertFalse(resp.json()['excluded'])
+        self.assertEqual(
+            resp.json()['code'], 'accountIncludedInViews'
+        )
+
+    def test_toggle_404_for_foreign_account(self):
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign = make_account(
+            other, make_requisition(other, 'req-b'), 'acc-b'
+        )
+        resp = self.post_json(
+            f'/accounts/{foreign.pk}/toggle-excluded/'
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accounts_lists_excluded_with_flag(self):
+        self.exclude()
+        resp = self.client.get(f'{self.API}/accounts/')
+        self.assertTrue(resp.json()['accounts'][0]['excluded'])
+
+    def test_transactions_hide_excluded_account(self):
+        make_transaction(
+            self.account, 't-1', '-10.00', creditor_name='Rimi'
+        )
+        self.exclude()
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 0)
+        self.assertEqual(body['accounts'], [])
+        self.assertEqual(body['counterparties'], [])
+
+    def test_reinclude_restores_transactions(self):
+        make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        self.post_json(
+            f'/accounts/{self.account.pk}/toggle-excluded/'
+        )
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 1)
+
+    def test_overview_hides_excluded_account(self):
+        make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        body = self.client.get(
+            f'{self.API}/categories/overview/?from=2000-01-01'
+        ).json()
+        self.assertEqual(body['rows'], [])
+        self.assertEqual(body['accounts'], [])
+
+    def test_balances_hide_excluded_account(self):
+        UserAccountPreference.objects.create(
+            user=self.user,
+            account=self.account,
+            included_in_balance_check=True,
+            excluded=True,
+        )
+        body = self.client.get(f'{self.API}/balances/').json()
+        self.assertEqual(body['accounts'], [])
+
+    def test_limit_stats_and_options_skip_excluded_account(self):
+        make_transaction(self.account, 't-1', '-10.00')
+        make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        self.exclude()
+        body = self.client.get(f'{self.API}/limits/').json()
+        stat = body['limits'][0]['window_stats'][0]
+        self.assertEqual(Decimal(stat['spent']), Decimal('0'))
+        self.assertEqual(body['accounts'], [])
+
+    def test_assign_404_on_excluded_transaction(self):
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/category/', {'category': None}
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_sharers_exclusion_hides_shared_overview(self):
+        """Excluding an account hides it from the overview the
+        owner shared — the viewer never sees it."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        self.client.force_login(viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertEqual(body['rows'], [])
+        self.assertEqual(body['accounts'], [])
+
+    def test_sharer_excludes_only_own_view(self):
+        """A sharer's exclusion is per-user — the owner keeps
+        seeing the account everywhere."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        UserAccountPreference.objects.create(
+            user=viewer, account=self.account, excluded=True
+        )
+        self.client.force_login(viewer)
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 0)
+        self.client.force_login(self.user)
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 1)
+
+    def test_sync_skips_excluded_accounts(self):
+        self.exclude()
+        client = MagicMock()
+        client.fetch_transactions.return_value = {'booked': []}
+        with patch(
+            'finance.api.GoCardlessClient', return_value=client
+        ):
+            resp = self.post_json('/transactions/sync/')
+        body = resp.json()
+        self.assertEqual(body['code'], 'noLinkedAccounts')
+        self.assertEqual(body['accounts'], [])
+        client.fetch_transactions.assert_not_called()
+
+    def test_clear_category_404_on_excluded_transaction(self):
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/category/clear/'
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_set_exclusion_404_on_excluded_transaction(self):
+        tx = make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        resp = self.post_json(
+            f'/transactions/{tx.pk}/exclusion/',
+            {'excluded_amount': '5.00'},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_viewer_exclusion_hides_shared_overview(self):
+        """A viewer who excluded the shared account sees nothing
+        through the owner's shared overview either."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        UserAccountPreference.objects.create(
+            user=viewer, account=self.account, excluded=True
+        )
+        self.client.force_login(viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertEqual(body['rows'], [])
+        self.assertEqual(body['accounts'], [])
+
+    def test_stale_pref_ignored_after_unshare(self):
+        """A pref left behind by a revoked AccountShare must not
+        hide the account from a later overview share — the toggle
+        404s once the account leaves for_user, so the viewer has
+        no other way to un-exclude it."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        link = AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        UserAccountPreference.objects.create(
+            user=viewer, account=self.account, excluded=True
+        )
+        link.delete()
+        CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        self.client.force_login(viewer)
+        body = self.client.get(
+            f'{self.API}/categories/overview/?owner=alice'
+        ).json()
+        self.assertEqual(len(body['rows']), 1)
+
+    def test_my_shares_hides_excluded_account_names(self):
+        """The sharer's own share block on the Categories page
+        doesn't name accounts they excluded."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        share = CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        share.accounts.set([self.account])
+        self.exclude()
+        body = self.client.get(
+            f'{self.API}/categories/overview/'
+        ).json()
+        self.assertEqual(body['my_shares'][0]['accounts'], [])
+
+    def test_save_limit_preserves_excluded_account(self):
+        """The limit form only offers visible accounts, so
+        editing must not strip excluded ones from the config."""
+        other = make_account(self.user, self.req, 'acc-2')
+        limit = TransactionLimit.objects.create(
+            user=self.user, limit_monthly=Decimal('100.00')
+        )
+        limit.accounts.set([self.account, other])
+        self.exclude()
+        resp = self.post_json(
+            '/limits/save/',
+            {
+                'limit_id': limit.pk,
+                'accounts': [other.pk],
+                'limit_monthly': '100.00',
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            set(limit.accounts.values_list('pk', flat=True)),
+            {self.account.pk, other.pk},
+        )
+
+    def test_save_limit_rejects_excluded_account(self):
+        self.exclude()
+        resp = self.post_json(
+            '/limits/save/',
+            {
+                'accounts': [self.account.pk],
+                'limit_monthly': '100.00',
+            },
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_save_limit_drops_unshared_account(self):
+        """A stale excluded pref must not resurrect an account
+        that is no longer shared with the user at all."""
+        other = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        foreign = make_account(
+            other, make_requisition(other, 'req-b'), 'acc-b'
+        )
+        share = AccountShare.objects.create(
+            account=foreign, shared_with=self.user
+        )
+        limit = make_limit(
+            account=foreign,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        UserAccountPreference.objects.create(
+            user=self.user, account=foreign, excluded=True
+        )
+        share.delete()
+        resp = self.post_json(
+            '/limits/save/',
+            {
+                'limit_id': limit.pk,
+                'accounts': [self.account.pk],
+                'limit_monthly': '100.00',
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            set(limit.accounts.values_list('pk', flat=True)),
+            {self.account.pk},
+        )
+
+    def test_save_limit_overlap_includes_excluded_account(self):
+        """Preserved excluded accounts still count toward the
+        same-category disjoint-accounts check."""
+        cat_a = make_category(self.user, 'Food')
+        cat_b = make_category(self.user, 'Travel')
+        visible = make_account(self.user, self.req, 'acc-2')
+        first = TransactionLimit.objects.create(
+            user=self.user,
+            category=cat_a,
+            limit_monthly=Decimal('100.00'),
+        )
+        first.accounts.set([self.account])
+        second = TransactionLimit.objects.create(
+            user=self.user,
+            category=cat_b,
+            limit_monthly=Decimal('50.00'),
+        )
+        second.accounts.set([self.account])
+        self.exclude()
+        resp = self.post_json(
+            '/limits/save/',
+            {
+                'limit_id': first.pk,
+                'accounts': [visible.pk],
+                'category': cat_b.pk,
+                'limit_monthly': '100.00',
+            },
+        )
+        self.assertEqual(resp.status_code, 409)
+
+    def test_share_overview_preserves_excluded_account(self):
+        """Re-saving an account-scoped share keeps excluded
+        accounts in its stored set — but an explicit empty set
+        still means share-everything."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        other = make_account(self.user, self.req, 'acc-2')
+        share = CategoryOverviewShare.objects.create(
+            sharer=self.user, shared_with=viewer
+        )
+        share.accounts.set([self.account, other])
+        self.exclude()
+        resp = self.post_json(
+            '/categories/overview/share/',
+            {'username': 'bob', 'accounts': [other.pk]},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            set(share.accounts.values_list('pk', flat=True)),
+            {self.account.pk, other.pk},
+        )
+        resp = self.post_json(
+            '/categories/overview/share/',
+            {'username': 'bob', 'accounts': []},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(share.accounts.count(), 0)
+
+    def test_rules_apply_and_preview_skip_excluded(self):
+        category = make_category(self.user, 'Food')
+        make_transaction(
+            self.account,
+            't-1',
+            '-10.00',
+            remittance_information='Rimi shop',
+        )
+        self.exclude()
+        resp = self.post_json('/rules/apply/')
+        self.assertEqual(resp.json()['changed'], 0)
+        resp = self.post_json(
+            '/rules/preview/',
+            {
+                'category_id': category.pk,
+                'description_pattern': 'Rimi',
+                'is_active': True,
+            },
+        )
+        self.assertEqual(resp.json()['match_count'], 0)
+
+
 class BalanceAlertApiTests(ApiTestCase):
     """Per-user low-balance alerts: any viewer (owner or sharer)
     keeps their own threshold on an account they can see."""

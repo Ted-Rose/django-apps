@@ -2,6 +2,7 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 from django.core.management.base import BaseCommand
+from django.db.models import F
 from django.urls import reverse
 from django.utils import timezone, translation
 from django.utils.translation import gettext
@@ -44,6 +45,13 @@ class Command(BaseCommand):
             BalanceAlert.objects.filter(
                 is_active=True,
                 account__requisition__status='LN',
+            )
+            # An excluded account's alerts stay dormant — it is
+            # invisible everywhere but the Accounts page, so a
+            # breach notification would point at a hidden account.
+            .exclude(
+                account__user_preferences__user=F('user'),
+                account__user_preferences__excluded=True,
             )
             .select_related('account', 'account__requisition', 'user')
         )

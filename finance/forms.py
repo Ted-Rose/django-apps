@@ -70,7 +70,7 @@ class TransactionLimitForm(forms.ModelForm):
         self.fields['category'].empty_label = 'All categories'
         if user is not None:
             self.fields['accounts'].queryset = (
-                Account.objects.for_user(user)
+                Account.objects.visible_for(user)
             )
             self.fields['category'].queryset = Category.objects.filter(
                 user=user, is_excluded=False

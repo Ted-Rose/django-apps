@@ -2575,6 +2575,20 @@ class CheckBalanceAlertsTests(TestCase):
         )
         self.assertIsNotNone(self.account.balance_updated_at)
 
+    def test_excluded_account_alerts_stay_dormant(self):
+        UserAccountPreference.objects.create(
+            user=self.user, account=self.account, excluded=True
+        )
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        mock_send, client = self.run_command()
+        mock_send.assert_not_called()
+        client.fetch_balances_parallel.assert_not_called()
+        self.assertFalse(Notification.objects.exists())
+
     def test_above_threshold_stays_silent(self):
         alert = BalanceAlert.objects.create(
             user=self.user,

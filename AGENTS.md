@@ -423,6 +423,12 @@ level.
   `manage.py export_openapi_schema` output (ninja ships the
   command) and `src/*/api-types.ts` must match `npm run
   gen:types`. Regenerate both when you touch any `*/api.py`.
+  IMPORTANT: the schema output depends on installed versions —
+  the shared local `venv/` may lag `requirements.txt` (e.g.
+  django-ninja/pydantic drift silently adds/removes `pattern`
+  constraints and fails CI). When exporting, use a venv
+  installed fresh from `requirements.txt` on the Python
+  version CI uses (`.github/workflows/frontend.yml`).
 - E2E: `npm run test:e2e` (Playwright, `frontend/tests/e2e/`) is
   opt-in — NOT in `npm test` or CI. Needs `npm run build`,
   `runserver` on :8000, and a seeded staff user

@@ -114,8 +114,12 @@ def _flatten_errors(form):
 
 
 def _balance_check_accounts(user):
-    """Accounts the user opted into the balance check."""
-    return Account.objects.for_user(user).filter(
+    """Accounts the user opted into the balance check.
+
+    ``visible_for`` keeps excluded accounts off the Balances page
+    too — they only exist on the Accounts page.
+    """
+    return Account.objects.visible_for(user).filter(
         user_preferences__user=user,
         user_preferences__included_in_balance_check=True,
     )
@@ -173,6 +177,7 @@ def _account_payload(request, account, pref, alert=None):
         'included_in_balance_check': (
             pref.included_in_balance_check if pref else False
         ),
+        'excluded': pref.excluded if pref else False,
         'balance_alert': alert.threshold if alert else None,
         'last_balance': account.last_balance,
         'balance_updated_at': account.balance_updated_at,
@@ -201,7 +206,9 @@ def _push_config(user):
 
 
 def _account_options(user):
-    return _account_labels(Account.objects.for_user(user))
+    # Limit-form options — excluded accounts contribute no spend,
+    # so a limit on one would permanently read 0.
+    return _account_labels(Account.objects.visible_for(user))
 
 
 def _account_labels(accounts):
@@ -214,17 +221,21 @@ def _account_labels(accounts):
 def _resolve_overview_user(request, owner_username):
     """(view_user, accounts) for the overview being viewed.
 
-    Empty/own username → (request.user, for_user(request.user)).
+    Empty/own username → (request.user, visible_for(request.user)).
     Otherwise requires CategoryOverviewShare(sharer=owner,
     shared_with=request.user) and returns the share's effective
     account set. 404s on unknown usernames and missing shares so
     the endpoint doesn't reveal which usernames exist.
+
+    Excluded accounts stay out of the scope: the sharer's own
+    exclusions hide them from the shared view, and the viewer's
+    exclusions hide shared-in accounts they excluded themselves.
     """
     owner_username = (owner_username or '').strip()
     if not owner_username or owner_username == request.user.username:
         return (
             request.user,
-            Account.objects.for_user(request.user),
+            Account.objects.visible_for(request.user),
         )
     owner = get_user_model().objects.filter(
         username=owner_username
@@ -239,10 +250,20 @@ def _resolve_overview_user(request, owner_username):
     # Re-intersect on every read: if the sharer loses access to an
     # account (AccountShare revoked), the viewer's scope shrinks
     # without any cleanup of the share row.
-    visible = Account.objects.for_user(owner)
+    visible = Account.objects.visible_for(owner)
     if share.accounts.exists():
-        return owner, share.accounts.filter(pk__in=visible)
-    return owner, visible
+        visible = share.accounts.filter(pk__in=visible)
+    # The viewer's own exclusions hide shared accounts too — but
+    # only while the viewer still holds the account (a pref left
+    # behind by a revoked AccountShare must not hide it forever;
+    # the toggle 404s once it leaves for_user).
+    viewer_excluded = Account.objects.for_user(
+        request.user
+    ).filter(
+        user_preferences__user=request.user,
+        user_preferences__excluded=True,
+    )
+    return owner, visible.exclude(pk__in=viewer_excluded)
 
 
 def _choices(pairs):
@@ -271,6 +292,9 @@ class AccountOut(Schema):
     is_owner: bool
     owner_username: str
     included_in_balance_check: bool
+    # The caller's per-account hide flag — excluded accounts only
+    # exist on the Accounts page; everywhere else filters them out.
+    excluded: bool = False
     # The caller's low-balance alert threshold, null when unset.
     balance_alert: Optional[Decimal] = None
     last_balance: Optional[dict] = None
@@ -609,6 +633,14 @@ class ToggleBalanceCheckOut(Schema):
     code: Optional[str] = None
     params: Optional[Dict[str, Any]] = None
     included_in_balance_check: bool
+
+
+class ToggleExcludedOut(Schema):
+    success: bool
+    message: str
+    code: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
+    excluded: bool
 
 
 class SyncOut(MessageOut):
@@ -1147,6 +1179,14 @@ def category_overview(request,
         for label, key, start, end in presets
     ]
 
+    # my_shares only names accounts the sharer hasn't excluded —
+    # hidden accounts stay invisible even in their own share
+    # config block.
+    my_visible_pks = set(
+        Account.objects.visible_for(request.user).values_list(
+            'pk', flat=True
+        )
+    )
     return {
         'rows': rows,
         'totals': totals,
@@ -1174,7 +1214,9 @@ def category_overview(request,
             {
                 'username': share.shared_with.username,
                 'accounts': [
-                    str(shared) for shared in share.accounts.all()
+                    str(shared)
+                    for shared in share.accounts.all()
+                    if shared.pk in my_visible_pks
                 ],
             }
             for share in CategoryOverviewShare.objects.filter(
@@ -1215,7 +1257,7 @@ def limits(request, month: str = ''):
         limit.window_stats = limit_window_stats(limit, as_of=as_of)
 
     month_rows = (
-        Transaction.objects.for_user(user)
+        Transaction.objects.visible_for(user)
         .with_occurrence_date()
         .annotate(period=TruncMonth('occurrence_date'))
         .values_list('period', flat=True)
@@ -1374,6 +1416,39 @@ def toggle_balance_check(request, account_id: int):
     }
 
 
+@router.post(
+    '/accounts/{account_id}/toggle-excluded/',
+    response=ToggleExcludedOut,
+)
+def toggle_excluded(request, account_id: int):
+    """Flip the caller's per-account excluded flag — an excluded
+    account and its transactions vanish from every page except
+    Accounts until it is included again."""
+    account = get_object_or_404(
+        Account.objects.for_user(request.user), pk=account_id
+    )
+    pref, _ = UserAccountPreference.objects.get_or_create(
+        user=request.user, account=account
+    )
+    pref.excluded = not pref.excluded
+    pref.save(update_fields=['excluded'])
+    return {
+        'success': True,
+        'message': (
+            'Account excluded — it now shows only on the '
+            'Accounts page.'
+            if pref.excluded
+            else 'Account included again — it shows on all pages.'
+        ),
+        'code': (
+            'accountExcludedFromViews'
+            if pref.excluded
+            else 'accountIncludedInViews'
+        ),
+        'excluded': pref.excluded,
+    }
+
+
 @router.post('/accounts/{account_id}/share/', response=MessageOut)
 def share_account(request, account_id: int, payload: ShareIn):
     """Owner-only: share an owned account with another user."""
@@ -1440,6 +1515,18 @@ def share_overview(request, payload: ShareOverviewIn):
     share, created = CategoryOverviewShare.objects.get_or_create(
         sharer=request.user, shared_with=target
     )
+    # The checkbox list only offers visible accounts — keep
+    # excluded ones already in the share so re-including restores
+    # them for the viewer. An explicit empty set stays "share
+    # everything", so nothing is preserved in that case.
+    if not created and pks:
+        accounts += list(
+            share.accounts.filter(
+                pk__in=Account.objects.for_user(request.user),
+                user_preferences__user=request.user,
+                user_preferences__excluded=True,
+            )
+        )
     share.accounts.set(accounts)
     if created:
         Notification.objects.create(
@@ -1537,8 +1624,11 @@ def mark_notifications_read(request, payload: NotificationsReadIn):
 @router.post('/transactions/sync/', response=SyncOut)
 def sync_transactions(request, payload: Optional[SyncIn] = None):
     """Fetch latest transactions for the user's linked accounts."""
+    # Excluded accounts are paused: no fetch and no report entries
+    # (their names would leak into the toast). Re-including picks
+    # the sync cursor back up — the scheduled job covers them too.
     visible = list(
-        Account.objects.for_user(request.user)
+        Account.objects.visible_for(request.user)
         .select_related('requisition')
     )
     accounts = [
@@ -1633,7 +1723,7 @@ def assign_category(request, tx_id: int, payload: AssignCategoryIn):
     """Manually assign (or lock off) the caller's category for one
     transaction — writes an ``is_manual`` row rules never touch."""
     tx = get_object_or_404(
-        Transaction.objects.for_user(request.user), pk=tx_id
+        Transaction.objects.visible_for(request.user), pk=tx_id
     )
     category = None
     if payload.category is not None:
@@ -1668,7 +1758,7 @@ def clear_category(request, tx_id: int):
     produce (``categorize_transaction`` keeps the row when a rule
     still matches, deletes it when none does)."""
     tx = get_object_or_404(
-        Transaction.objects.for_user(request.user), pk=tx_id
+        Transaction.objects.visible_for(request.user), pk=tx_id
     )
     assignment = UserTransactionCategory.objects.filter(
         user=request.user, transaction=tx
@@ -1696,7 +1786,7 @@ def set_exclusion(request, tx_id: int, payload: ExclusionIn):
     the current category is preserved. ``0`` clears the exclusion.
     """
     tx = get_object_or_404(
-        Transaction.objects.for_user(request.user), pk=tx_id
+        Transaction.objects.visible_for(request.user), pk=tx_id
     )
     excluded = payload.excluded_amount
     if excluded < 0 or excluded > abs(tx.amount):
@@ -1848,15 +1938,36 @@ def save_limit(request, payload: LimitSaveIn):
             code='couldNotSaveLimit',
             params={'errors': _flatten_errors(form)},
         )
+    # The form only offers accounts visible to this user, so
+    # save_m2m() would silently strip excluded ones — they are
+    # re-attached below to keep the limit's configured account
+    # set intact (only accounts still in for_user; an unshared
+    # account's stale pref must not resurrect it).
+    hidden_pks = []
+    if editing is not None:
+        hidden_pks = list(
+            editing.accounts.filter(
+                pk__in=Account.objects.for_user(request.user),
+                user_preferences__user=request.user,
+                user_preferences__excluded=True,
+            ).values_list('pk', flat=True)
+        )
     # Limits of the same user+category must cover disjoint account
     # sets — the M2M replacement for the old (account, user,
     # category) unique constraint, which can't span a M2M field.
+    # Preserved excluded accounts count toward the overlap too.
     overlap = (
         TransactionLimit.objects
         .filter(
             user=request.user,
             category=form.cleaned_data['category'],
-            accounts__in=form.cleaned_data['accounts'],
+            accounts__in=(
+                list(
+                    form.cleaned_data['accounts'].values_list(
+                        'pk', flat=True
+                    )
+                ) + hidden_pks
+            ),
         )
         .exclude(pk=editing.pk if editing else None)
     )
@@ -1871,6 +1982,8 @@ def save_limit(request, payload: LimitSaveIn):
     limit.user = request.user
     limit.save()
     form.save_m2m()
+    if hidden_pks:
+        limit.accounts.add(*hidden_pks)
     if editing is not None:
         return {
             'success': True,

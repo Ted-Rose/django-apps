@@ -23,9 +23,11 @@ def monthly_period_start(today):
 def _spend_queryset(limit):
     """Outgoing transactions counting toward ``limit``.
 
-    Transactions in the limit user's ``is_excluded`` categories are
-    dropped entirely; ``counted_amount`` then applies each row's
-    per-user partial exclusion (never flips sign, so the amount<0
+    Accounts the limit user excluded contribute nothing (the limit
+    keeps listing them — it just reads 0 from them). Transactions
+    in the limit user's ``is_excluded`` categories are dropped
+    entirely; ``counted_amount`` then applies each row's per-user
+    partial exclusion (never flips sign, so the amount<0
     pre-filter still selects exactly the outgoing set).
     """
     transactions = (
@@ -33,6 +35,10 @@ def _spend_queryset(limit):
         .filter(
             account__in=limit.accounts.all(),
             amount__lt=0,
+        )
+        .exclude(
+            account__user_preferences__user=limit.user,
+            account__user_preferences__excluded=True,
         )
         .exclude(
             category_assignments__user=limit.user,

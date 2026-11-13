@@ -1,6 +1,14 @@
 # google_api
 
 ## Changelog
+38. Finance accounts can now be excluded: a new "Excluded" switch
+    on each Accounts-page card hides the account and its
+    transactions everywhere else — transactions, category
+    spending, balances, limits and sync — until you switch it
+    back on and everything reappears. Excluded accounts stay
+    listed (dimmed) on the Accounts page only; sharers can
+    exclude a shared account from their own view without
+    affecting the owner
 37. Reliability fixes for the monthly-limits switch: limits that
     only had 7/30-day thresholds are now shown as paused instead
     of silently doing nothing, the notification permission step
