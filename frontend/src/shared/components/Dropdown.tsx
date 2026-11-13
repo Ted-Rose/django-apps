@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type CSSProperties,
@@ -21,6 +22,11 @@ interface DropdownProps {
   /** Toggle button content (icon + label). */
   label: ReactNode;
   /**
+   * `id` for the toggle button — lets a form `<label htmlFor>`
+   * associate with it (buttons are labelable elements).
+   */
+  buttonId?: string;
+  /**
    * Full class override for the toggle button — replaces the default
    * navbar-style `btn btn-outline-light btn-sm dropdown-toggle`
    * (note that default also carries the caret). Use e.g.
@@ -34,6 +40,14 @@ interface DropdownProps {
   /** Extra classes for the `<ul>` menu (e.g. `dropdown-menu-end`). */
   menuClassName?: string;
   /**
+   * `role` for the `<ul>` + matching `aria-haspopup` on the
+   * toggle — opt-in: callers passing `'listbox'` (select-like
+   * pickers) or `'menu'` must also give their items the matching
+   * role (`option`/`menuitem`). Unset leaves both off, the
+   * historical markup for action menus.
+   */
+  menuRole?: 'menu' | 'listbox';
+  /**
    * Inline style for the `<ul>` menu — the finance SPA uses
    * `max-height`/`overflow-y` to scroll long option lists.
    */
@@ -43,36 +57,68 @@ interface DropdownProps {
 
 export function Dropdown({
   label,
+  buttonId,
   buttonClassName = '',
   buttonStyle,
   ariaLabel,
   menuClassName = '',
+  menuRole,
   menuStyle,
   children,
 }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
 
   useEffect(() => {
     if (!open) return;
     const onDocumentClick = (event: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        // A <label htmlFor={buttonId}> click also fires an
+        // activation click on the toggle — ignoring it here lets
+        // the label mirror the toggle instead of only closing.
+        const label = (event.target as HTMLElement).closest('label');
+        if (buttonId && label?.htmlFor === buttonId) return;
         setOpen(false);
       }
     };
+    // Escape closes the menu only. The capture-phase listener +
+    // stopPropagation keeps it from also reaching Escape handlers
+    // bound on document by the surrounding UI (e.g. the rule
+    // drawer's close-on-Escape).
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setOpen(false);
+        // Focus sitting on a menu item is about to hide — move it
+        // back to the toggle (leave it alone if it's elsewhere).
+        if (rootRef.current?.contains(document.activeElement)) {
+          toggleRef.current?.focus();
+        }
+      }
+    };
     document.addEventListener('click', onDocumentClick);
-    return () => document.removeEventListener('click', onDocumentClick);
-  }, [open]);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('click', onDocumentClick);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [open, buttonId]);
 
   return (
     <div className="dropdown" ref={rootRef}>
       <button
+        id={buttonId}
+        ref={toggleRef}
         className={
           buttonClassName || 'btn btn-outline-light btn-sm dropdown-toggle'
         }
         type="button"
         style={buttonStyle}
         aria-expanded={open}
+        aria-haspopup={menuRole}
+        aria-controls={menuId}
         aria-label={ariaLabel}
         onClick={(event) => {
           event.stopPropagation();
@@ -82,11 +128,16 @@ export function Dropdown({
         {label}
       </button>
       <ul
-        className={`dropdown-menu ${menuClassName}${open ? ' show' : ''}`.trim()}
+        id={menuId}
+        role={menuRole}
+        className={(
+          `dropdown-menu ${menuClassName}` + (open ? ' show' : '')
+        ).trim()}
         style={menuStyle}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest('.dropdown-item')) {
             setOpen(false);
+            toggleRef.current?.focus();
           }
         }}
       >

@@ -27,3 +27,63 @@
   overflow-y: hidden;
   resize: none;
 }
+
+/* Collapsible sections (RuleDrawer's DrawerSection) — the header
+   row is the toggle, styled like .rule-section-label. */
+.rule-section-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--bs-secondary-color);
+  background: none;
+  border: 0;
+}
+.rule-section-toggle:hover,
+.rule-section-toggle:focus-visible {
+  color: var(--bs-body-color);
+}
+
+/* While folded, the current filter value previews right-aligned. */
+.rule-section-summary {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--bs-body-color);
+}
+
+/* Category picker — a Dropdown styled as .form-select; the solid
+   dot shows the category color in the toggle and in every item
+   (native <option> can't render markup). The inset ring keeps
+   light colors visible on white. */
+.rule-cat-dot {
+  flex: none;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+}
+.rule-cat-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* On the highlighted (active) row the ring flips to a light halo
+   so dark category colors still read against the blue. */
+.dropdown-item.active .rule-cat-dot {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%);
+}

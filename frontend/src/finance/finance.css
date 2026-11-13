@@ -23,6 +23,7 @@ body {
    working. */
 html,
 body {
+  overflow-x: hidden;
   overflow-x: clip;
 }
 .burger-menu .burger-menu-items {
@@ -256,7 +257,7 @@ body {
     text-decoration: none;
     white-space: nowrap;
   }
-  .tx-table > thead .dropdown-menu {
+  .tx-table .dropdown-menu {
     max-width: min(20rem, 92vw);
   }
 
