@@ -91,9 +91,11 @@ export function Dropdown({
       if (event.key === 'Escape') {
         event.stopPropagation();
         setOpen(false);
-        // Focus may sit on a menu item that is about to hide —
-        // move it back to the toggle.
-        toggleRef.current?.focus();
+        // Focus sitting on a menu item is about to hide — move it
+        // back to the toggle (leave it alone if it's elsewhere).
+        if (rootRef.current?.contains(document.activeElement)) {
+          toggleRef.current?.focus();
+        }
       }
     };
     document.addEventListener('click', onDocumentClick);
