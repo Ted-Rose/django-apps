@@ -66,8 +66,22 @@ export function Dropdown({
         setOpen(false);
       }
     };
+    // Escape closes the menu only. The capture-phase listener +
+    // stopPropagation keeps it from also reaching Escape handlers
+    // bound on document by the surrounding UI (e.g. the rule
+    // drawer's close-on-Escape).
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setOpen(false);
+      }
+    };
     document.addEventListener('click', onDocumentClick);
-    return () => document.removeEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('click', onDocumentClick);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
   }, [open]);
 
   return (
@@ -80,6 +94,7 @@ export function Dropdown({
         type="button"
         style={buttonStyle}
         aria-expanded={open}
+        aria-haspopup="menu"
         aria-label={ariaLabel}
         onClick={(event) => {
           event.stopPropagation();
@@ -89,7 +104,9 @@ export function Dropdown({
         {label}
       </button>
       <ul
-        className={`dropdown-menu ${menuClassName}${open ? ' show' : ''}`.trim()}
+        className={(
+          `dropdown-menu ${menuClassName}` + (open ? ' show' : '')
+        ).trim()}
         style={menuStyle}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest('.dropdown-item')) {

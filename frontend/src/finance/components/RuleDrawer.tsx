@@ -242,7 +242,9 @@ export function RuleDrawer({
   // transaction) so applied filters are never hidden away.
   const [openSections, setOpenSections] = useState(() => ({
     counterparty:
-      fields.counterparty_pattern !== '' || fields.counterparty_scope !== 'any',
+      fields.counterparty_pattern !== '' ||
+      fields.counterparty_scope !== 'any' ||
+      fields.counterparty_match_type !== 'contains',
     exclusion: fields.description_exclusion !== '',
     options:
       fields.operator !== 'AND' ||
@@ -281,8 +283,12 @@ export function RuleDrawer({
     return () => clearTimeout(timer);
   }, [fields, ruleId, previewMutate]);
 
+  // Skip no-op writes — a new `fields` object would refire the
+  // debounced preview request with an identical payload.
   const set = (key: keyof RuleFields, value: string | boolean) =>
-    setFields((current) => ({ ...current, [key]: value }));
+    setFields((current) =>
+      current[key] === value ? current : { ...current, [key]: value },
+    );
 
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((current) => ({ ...current, [key]: !current[key] }));
@@ -291,9 +297,23 @@ export function RuleDrawer({
     (category) => String(category.id) === fields.category,
   );
 
-  // Non-default Options values previewed on the folded header.
+  // Value previews shown on the folded section headers.
+  const counterpartySummary =
+    fields.counterparty_pattern.trim() ||
+    (fields.counterparty_scope === 'any'
+      ? ''
+      : choiceLabel(
+          t,
+          'scopes',
+          fields.counterparty_scope,
+          data.counterparty_scopes.find(
+            (scope) => scope.value === fields.counterparty_scope,
+          )?.label ?? fields.counterparty_scope,
+        ));
   const optionsSummary = [
-    fields.operator !== 'AND' ? fields.operator : null,
+    fields.operator !== 'AND'
+      ? choiceLabel(t, 'operators', fields.operator, fields.operator)
+      : null,
     fields.excluded_amount.trim() || null,
     fields.is_active ? null : t('rules.inactiveTitle'),
   ]
@@ -305,6 +325,9 @@ export function RuleDrawer({
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // The disabled Save button already blocks this; guard anyway —
+    // requestSubmit() bypasses the button's disabled state.
+    if (!fields.category) return;
     save.mutate(savePayload(fields, ruleId), {
       onSuccess: (result) => {
         if (result?.success) onClose();
@@ -400,6 +423,9 @@ export function RuleDrawer({
                     buttonClassName={categoryToggleClass}
                     menuClassName="w-100"
                     menuStyle={{ maxHeight: '16rem', overflowY: 'auto' }}
+                    ariaLabel={`${t('rules.drawer.categoryLabel')}: ${
+                      selectedCategory?.name ?? t('rules.drawer.selectCategory')
+                    }`}
                     label={
                       <>
                         <span
@@ -411,7 +437,7 @@ export function RuleDrawer({
                         />
                         <span className="rule-cat-name">
                           {selectedCategory?.name ??
-                            t('rules.drawer.noCategories')}
+                            t('rules.drawer.selectCategory')}
                         </span>
                       </>
                     }
@@ -428,6 +454,7 @@ export function RuleDrawer({
                               'align-items-center gap-2' +
                               (isSelected ? ' active' : '')
                             }
+                            aria-current={isSelected || undefined}
                             onClick={() => set('category', String(category.id))}
                           >
                             <span
@@ -473,7 +500,7 @@ export function RuleDrawer({
               label={t('rules.drawer.counterpartyName')}
               open={openSections.counterparty}
               onToggle={() => toggleSection('counterparty')}
-              summary={fields.counterparty_pattern}
+              summary={counterpartySummary}
             >
               <label
                 className="visually-hidden"
@@ -542,7 +569,7 @@ export function RuleDrawer({
               label={t('rules.drawer.excludeLabel')}
               open={openSections.exclusion}
               onToggle={() => toggleSection('exclusion')}
-              summary={fields.description_exclusion}
+              summary={fields.description_exclusion.trim()}
             >
               <label
                 className="visually-hidden"
@@ -635,6 +662,9 @@ export function RuleDrawer({
               type="submit"
               className="btn btn-primary"
               disabled={save.isPending || !fields.category}
+              title={
+                fields.category ? undefined : t('rules.drawer.noCategories')
+              }
             >
               {save.isPending && (
                 <span
@@ -713,14 +743,27 @@ function DrawerSection({
   summary?: string;
   children: ReactNode;
 }) {
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  const handleToggle = () => {
+    // When folding a section whose field has focus, move focus to
+    // the toggle — otherwise it drops to <body>.
+    if (open && bodyRef.current?.contains(document.activeElement)) {
+      toggleRef.current?.focus();
+    }
+    onToggle();
+  };
+
   return (
     <div className="mb-3">
       <button
         type="button"
+        ref={toggleRef}
         className="rule-section-toggle"
         aria-expanded={open}
         aria-controls={id}
-        onClick={onToggle}
+        onClick={handleToggle}
       >
         <i
           className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-right'}`}
@@ -731,8 +774,14 @@ function DrawerSection({
           <span className="rule-section-summary">{summary}</span>
         )}
       </button>
-      <div id={id} className={`collapse${open ? ' show' : ''}`}>
-        {children}
+      <div id={id} ref={bodyRef} className={`collapse${open ? ' show' : ''}`}>
+        {/*
+          Remount children on expand: fields stay mounted while
+          folded (label association, form state) but mounting under
+          display:none leaves AutoGrowTextarea measured at
+          scrollHeight 0 — a fresh mount while visible re-measures.
+        */}
+        <div key={open ? 'open' : 'closed'}>{children}</div>
       </div>
     </div>
   );
