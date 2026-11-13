@@ -22,6 +22,7 @@ import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import ErrorStateView from '../../shared/components/ErrorState';
 import ListSkeleton from '../../shared/components/ListSkeleton';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { useSession } from '../../shared/session';
 import { actionHistory } from '../actionHistory';
 import {
@@ -102,8 +103,8 @@ export function TaskListPage({ view }: { view: ListView }) {
   const order = searchParams.get('order') ?? 'order_asc';
   const secondaryLabel = searchParams.get('secondary_label') ?? '';
 
+  const authItem = useAuthMenuItem();
   const session = useSession();
-  const user = session?.username ?? 'unknown';
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', { view, list, label, order }],
@@ -377,14 +378,11 @@ export function TaskListPage({ view }: { view: ListView }) {
         btn_class: 'btn-light',
         onClick: () => syncMutation.mutate(),
       },
-      {
-        label: t('common:common.logout', { user }),
-        url: '/admin/logout/',
-        icon: 'box-arrow-right',
-        btn_class: 'btn-outline-light',
-      },
     );
-  } else {
+  } else if (session && data) {
+    // Signed in but Google creds are dead — "reconnect" affordance
+    // (data gate avoids flashing it while the query is pending).
+    // Anonymous already gets the identical /login/ link via authItem.
     burgerItems.push({
       label: t('menu.loginGoogle'),
       url: loginUrl,
@@ -392,6 +390,7 @@ export function TaskListPage({ view }: { view: ListView }) {
       btn_class: 'btn-warning',
     });
   }
+  burgerItems.push(authItem);
 
   return (
     <>

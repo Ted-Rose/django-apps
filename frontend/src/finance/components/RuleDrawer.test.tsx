@@ -151,7 +151,7 @@ describe('RuleDrawer', () => {
   it('shows the color dot and marks selection in the category menu', () => {
     renderDrawer();
     const toggle = categoryToggle();
-    expect(toggle.querySelector('.rule-cat-dot')).toHaveStyle({
+    expect(toggle.querySelector('.fin-cat-dot')).toHaveStyle({
       backgroundColor: '#00aa00',
     });
     fireEvent.click(toggle);
@@ -160,12 +160,12 @@ describe('RuleDrawer', () => {
     const items = within(menu as HTMLElement).getAllByRole('option');
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveAttribute('aria-selected', 'true');
-    expect(items[1].querySelector('.rule-cat-dot')).toHaveStyle({
+    expect(items[1].querySelector('.fin-cat-dot')).toHaveStyle({
       backgroundColor: '#0000ff',
     });
     fireEvent.click(items[1]);
     const retoggled = categoryToggle();
-    expect(retoggled.querySelector('.rule-cat-dot')).toHaveStyle({
+    expect(retoggled.querySelector('.fin-cat-dot')).toHaveStyle({
       backgroundColor: '#0000ff',
     });
     expect(retoggled).toHaveTextContent('Housing');

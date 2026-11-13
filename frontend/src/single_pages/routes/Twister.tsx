@@ -1,9 +1,12 @@
 /* eslint-disable i18next/no-literal-string -- Latvian-only toy page,
    no catalogs (see docs/plans/SINGLE_PAGES_REACT_REWRITE.md). */
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import FieldList from '../components/FieldList';
 import { useTwisterAudio } from '../components/useTwisterAudio';
-import { ShellLink } from '../../shared/shellNav';
+import NavBar from '../../shared/components/NavBar';
+import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 
 // Same default field values as twister.html.
 const DEFAULT_PLAYERS = ['Kārlis'];
@@ -47,6 +50,17 @@ const pick = (items: string[]) =>
  * (the template's exact semantics); Spēlēt! restarts.
  */
 export default function Twister() {
+  const { t } = useTranslation();
+  const authItem = useAuthMenuItem();
+  const burgerItems: BurgerMenuItem[] = [
+    {
+      label: t('common:common.home'),
+      url: '/',
+      icon: 'house',
+      btn_class: 'btn-light',
+    },
+    authItem,
+  ];
   const [players, setPlayers] = useState(DEFAULT_PLAYERS);
   const [parts, setParts] = useState(DEFAULT_PARTS);
   const [animals, setAnimals] = useState(DEFAULT_ANIMALS);
@@ -148,44 +162,49 @@ export default function Twister() {
   );
 
   return (
-    <div className="twister-page">
-      <ShellLink href="/" className="home-link">
-        ← home
-      </ShellLink>
-      <h1>Spēlējam Twister!</h1>
-      <form onSubmit={(e) => e.preventDefault()}>
-        <FieldList label="Spelētāji" values={players} onChange={setPlayers} />
-        <FieldList label="Ķermeņa daļas" values={parts} onChange={setParts} />
-        <FieldList
-          label="Dzīvnieku lauki (ja nav - atstāt tukšu)"
-          values={animals}
-          onChange={setAnimals}
-        />
-        <FieldList label="Krāsu lauki" values={colors} onChange={setColors} />
-        <div className="timeout-container">
-          <div className="field-list-label">
-            <label htmlFor="timeout-value">Starplaiks (s):</label>
-          </div>
-          <input
-            type="number"
-            id="timeout-value"
-            ref={intervalRef}
-            defaultValue="5"
-            min="0"
+    <>
+      <NavBar title="Twister" items={burgerItems} />
+      <div className="twister-page">
+        <h1>Spēlējam Twister!</h1>
+        <form onSubmit={(e) => e.preventDefault()}>
+          <FieldList label="Spelētāji" values={players} onChange={setPlayers} />
+          <FieldList label="Ķermeņa daļas" values={parts} onChange={setParts} />
+          <FieldList
+            label="Dzīvnieku lauki (ja nav - atstāt tukšu)"
+            values={animals}
+            onChange={setAnimals}
           />
+          <FieldList label="Krāsu lauki" values={colors} onChange={setColors} />
+          <div className="timeout-container">
+            <div className="field-list-label">
+              <label htmlFor="timeout-value">Starplaiks (s):</label>
+            </div>
+            <input
+              type="number"
+              id="timeout-value"
+              ref={intervalRef}
+              defaultValue="5"
+              min="0"
+            />
+          </div>
+          <button type="button" onClick={() => void start()} disabled={loading}>
+            {loading ? 'Ielādē audio…' : 'Spēlēt!'}
+          </button>
+          {error && <div className="form-error">{error}</div>}
+        </form>
+        <div className="pause-row">
+          <input
+            className="checkbox"
+            type="checkbox"
+            id="Pause"
+            ref={pauseRef}
+          />
+          <label htmlFor="Pause">Pauze</label>
         </div>
-        <button type="button" onClick={() => void start()} disabled={loading}>
-          {loading ? 'Ielādē audio…' : 'Spēlēt!'}
-        </button>
-        {error && <div className="form-error">{error}</div>}
-      </form>
-      <div className="pause-row">
-        <input className="checkbox" type="checkbox" id="Pause" ref={pauseRef} />
-        <label htmlFor="Pause">Pauze</label>
+        {playing && move && move.length > 0 && (
+          <p className="current-move">{move.join(' · ')}</p>
+        )}
       </div>
-      {playing && move && move.length > 0 && (
-        <p className="current-move">{move.join(' · ')}</p>
-      )}
-    </div>
+    </>
   );
 }

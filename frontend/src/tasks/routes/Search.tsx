@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { actionHistory } from '../actionHistory';
 import { fetchSearchTasks, type TaskOut } from '../api';
 import Toasts from '../../shared/components/Toasts';
@@ -37,8 +37,7 @@ export default function Search() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
 
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
   const syncMutation = useSync();
 
   // Keep the input in step with URL changes (back/forward, Clear).
@@ -118,12 +117,7 @@ export default function Search() {
       btn_class: 'btn-light',
       onClick: () => syncMutation.mutate(),
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   return (

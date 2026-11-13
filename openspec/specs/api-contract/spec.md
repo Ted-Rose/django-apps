@@ -88,7 +88,7 @@ raw `/api/` JSON URL.
 
 - **WHEN** a request arrives without a valid session
 - **THEN** the API responds 401 with `{error: 'unauthenticated',
-  login_url: '/admin/login/?next=<spa page>'}`
+  login_url: '/login/?next=<spa page>'}`
 
 #### Scenario: Dead Google credentials yield google_reauth 401
 
@@ -138,7 +138,7 @@ non-2xx responses SHALL throw a typed `ApiError`.
   (status 0 — session expiry on non-ninja endpoints, middleware
   redirects)
 - **THEN** the client navigates to
-  `/admin/login/?next=<current path>`
+  `/login/?next=<current path>`
 
 #### Scenario: Unsafe request carries the CSRF header
 
@@ -171,4 +171,4 @@ startup; its 401 carries the standard `unauthenticated` +
 
 - **WHEN** an unauthenticated user requests `GET /api/me/`
 - **THEN** the response is 401 `{error: 'unauthenticated',
-  login_url: '/admin/login/?next=<spa page>'}`
+  login_url: '/login/?next=<spa page>'}`

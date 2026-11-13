@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { fetchTrash, type TaskOut } from '../api';
 import ConfirmModal from '../../shared/components/ConfirmModal';
 import SecondaryLabelDropdown from '../components/SecondaryLabelDropdown';
@@ -37,8 +37,7 @@ export default function Trash() {
   const secondaryLabel = searchParams.get('secondary_label') ?? '';
   const navigate = useNavigate();
 
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', { view: 'trash', label, order }],
@@ -95,12 +94,7 @@ export default function Trash() {
       btn_class: 'btn-light',
       onClick: () => navigate('/stats'),
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   return (

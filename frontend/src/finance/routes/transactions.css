@@ -1,5 +1,6 @@
-/* Transactions route — page-scoped polish on top of finance.css.
-   Imported by Transactions.tsx only. */
+/* Transactions-table polish on top of finance.css — imported by
+   every route that renders TransactionTable (Transactions,
+   CategoryOverview, Limits). */
 
 /* The table + pagination sit on a white card on desktop. Below lg
    finance.css turns each row into its own card, so the panel drops
@@ -83,6 +84,15 @@
   font-size: 0.6rem;
   color: var(--bs-secondary-color);
   margin-left: 0.25rem;
+}
+
+/* Category pills inside the assign-category menu — let a long
+   name wrap inside the badge instead of stretching the menu past
+   its max-width (.dropdown-item is nowrap). */
+.tx-table .dropdown-item .fin-cat-badge {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Bootstrap only honors `dropdown-menu-end` when Popper sets

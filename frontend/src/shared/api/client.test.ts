@@ -68,7 +68,7 @@ describe('apiFetch', () => {
   });
 
   it.each([
-    { login_url: '/admin/login/?next=/tasks/' },
+    { login_url: '/login/?next=/tasks/' },
     { authorization_url: 'https://accounts.google.com/o/oauth2/auth' },
   ])('navigates on 401 with %o', async (body) => {
     const { assign, restore } = stubLocationAssign();
@@ -157,7 +157,7 @@ describe('apiFetch', () => {
       void apiFetch('/api/tasks/dashboard/');
       await vi.waitFor(() => {
         expect(assign).toHaveBeenCalledWith(
-          `/admin/login/?next=${encodeURIComponent(
+          `/login/?next=${encodeURIComponent(
             window.location.pathname + window.location.search,
           )}`,
         );

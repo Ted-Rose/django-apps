@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { BurgerMenuItem } from '../../shared/components/BurgerMenu';
 import EmptyStateView from '../../shared/components/EmptyState';
 import PageNavBar from '../../shared/components/PageNavBar';
-import { useSession } from '../../shared/session';
+import { useAuthMenuItem } from '../../shared/components/useAuthMenuItem';
 import { actionHistory } from '../actionHistory';
 import { fetchArchived, type TaskOut } from '../api';
 import SecondaryLabelDropdown from '../components/SecondaryLabelDropdown';
@@ -39,8 +39,7 @@ export default function Archived() {
   const secondaryLabel = searchParams.get('secondary_label') ?? '';
   const navigate = useNavigate();
 
-  const session = useSession();
-  const user = session?.username ?? 'unknown';
+  const authItem = useAuthMenuItem();
 
   // ['dashboard', …] root key so unarchive/star mutations invalidate
   // and optimistic-patch this page like every other list view.
@@ -108,12 +107,7 @@ export default function Archived() {
       btn_class: 'btn-light',
       onClick: () => navigate('/stats'),
     },
-    {
-      label: t('common:common.logout', { user }),
-      url: '/admin/logout/',
-      icon: 'box-arrow-right',
-      btn_class: 'btn-outline-light',
-    },
+    authItem,
   ];
 
   return (
