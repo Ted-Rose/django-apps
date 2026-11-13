@@ -21,7 +21,7 @@ beautifulsoup4==4.12.3
 psycopg2-binary==2.9.9
 google-cloud-secret-manager
 dj-database-url
-requests>=2.31,<3
+requests>=2.34.2,<3
 django-vite==3.2.0
 django-ninja==1.7.1
 pydantic==2.13.5
