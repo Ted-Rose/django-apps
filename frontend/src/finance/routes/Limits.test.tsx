@@ -46,7 +46,8 @@ const PUSH_CONFIG = {
 
 function makeWindowStat(overrides: Partial<WindowStatOut> = {}): WindowStatOut {
   return {
-    label: '7 days',
+    label: 'This month',
+    key: 'thisMonth',
     spent: '12.00',
     threshold: '100.00',
     pct: '12.0',
@@ -72,8 +73,6 @@ function makeLimit(overrides: Partial<LimitOut> = {}): LimitOut {
       is_excluded: false,
     },
     is_active: true,
-    limit_7_days: '100.00',
-    limit_30_days: null,
     limit_monthly: '400.00',
     window_stats: [makeWindowStat()],
     ...overrides,
@@ -192,6 +191,7 @@ function mockPushApis(subscription: PushSubscription | null = null) {
   });
   Object.defineProperty(window, 'Notification', {
     value: {
+      permission: 'granted',
       requestPermission: vi.fn().mockResolvedValue('granted'),
     },
     configurable: true,
@@ -222,7 +222,6 @@ describe('Limits', () => {
         limits: [
           makeLimit({
             window_stats: [
-              makeWindowStat(),
               makeWindowStat({
                 label: 'This month',
                 spent: '410.00',
@@ -257,13 +256,9 @@ describe('Limits', () => {
     expect(within(item).getByText('Everyday account')).toBeInTheDocument();
     expect(mockedApiGet).toHaveBeenCalledWith('/api/finance/limits/');
 
-    // Window progress bars: label, spent / threshold, bar class +
-    // width, remaining/over lines — all precomputed strings.
-    expect(screen.getByText('7 days')).toBeInTheDocument();
-    expect(screen.getByText(/12\.00 \/ 100\.00 EUR/)).toBeInTheDocument();
-    expect(screen.getByText('88.00 EUR left')).toBeInTheDocument();
-    const okBar = document.querySelector('.progress-bar.bg-success');
-    expect(okBar).toHaveStyle({ width: '12%' });
+    // The monthly window progress bar: label, spent / threshold,
+    // bar class + width, remaining/over line — all precomputed.
+    expect(screen.getByText(/410\.00 \/ 400\.00 EUR/)).toBeInTheDocument();
     const dangerBar = document.querySelector('.progress-bar.bg-danger');
     expect(dangerBar).toHaveStyle({ width: '100%' });
     expect(screen.getByText('10.00 EUR over')).toBeInTheDocument();
@@ -329,10 +324,8 @@ describe('Limits', () => {
       expect(mockedApiPost).toHaveBeenCalledWith('/api/finance/limits/save/', {
         accounts: [5, 6],
         category: 3,
-        limit_7_days: null,
-        limit_30_days: null,
         limit_monthly: '400',
-        is_active: true,
+        is_active: false,
       }),
     );
     expect(
@@ -353,11 +346,10 @@ describe('Limits', () => {
     expect(screen.getByLabelText('Everyday account')).toBeChecked();
     expect(screen.getByLabelText('Savings')).not.toBeChecked();
     expect(screen.getByLabelText('Category')).toHaveValue('3');
-    expect(screen.getByLabelText('Limit per 7 days')).toHaveValue(100);
     expect(screen.getByLabelText('Limit per calendar month')).toHaveValue(400);
-    expect(screen.getByLabelText('Is active')).toBeChecked();
+    expect(screen.getByLabelText(/Alerts/)).toBeChecked();
 
-    fireEvent.change(screen.getByLabelText('Limit per 7 days'), {
+    fireEvent.change(screen.getByLabelText('Limit per calendar month'), {
       target: { value: '80' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Update' }));
@@ -368,8 +360,7 @@ describe('Limits', () => {
           limit_id: 7,
           accounts: [5],
           category: 3,
-          limit_7_days: '80',
-          limit_monthly: '400.00',
+          limit_monthly: '80',
           is_active: true,
         }),
       ),
@@ -479,7 +470,7 @@ describe('Limits', () => {
           ],
           window_stats: [
             makeWindowStat({
-              key: 'days7',
+              key: 'thisMonth',
               date_from: '2025-01-09',
               date_to: '2025-01-15',
             }),
@@ -496,7 +487,7 @@ describe('Limits', () => {
     );
     renderLimits();
 
-    const stat = await screen.findByRole('button', { name: /7 days/ });
+    const stat = await screen.findByRole('button', { name: /This month/ });
     fireEvent.click(stat);
 
     // Category + every limit account + the stat's exact date range.
@@ -506,7 +497,7 @@ describe('Limits', () => {
       ),
     );
     expect(
-      await screen.findByText('Transactions — Groceries · 7 days'),
+      await screen.findByText('Transactions — Groceries · This month'),
     ).toBeInTheDocument();
     expect(await screen.findByText('Coffee')).toBeInTheDocument();
 
@@ -522,7 +513,7 @@ describe('Limits', () => {
     fireEvent.click(stat);
     await waitFor(() =>
       expect(
-        screen.queryByText('Transactions — Groceries · 7 days'),
+        screen.queryByText('Transactions — Groceries · This month'),
       ).not.toBeInTheDocument(),
     );
   });
@@ -589,7 +580,7 @@ describe('Limits', () => {
         limits: [
           makeLimit({
             category: null,
-            window_stats: [makeWindowStat({ key: 'days7' })],
+            window_stats: [makeWindowStat({ key: 'thisMonth' })],
           }),
         ],
       }),
@@ -597,19 +588,24 @@ describe('Limits', () => {
     renderLimits();
     await screen.findByTestId('limit-7');
     expect(
-      screen.queryByRole('button', { name: /7 days/ }),
+      screen.queryByRole('button', { name: /This month/ }),
     ).not.toBeInTheDocument();
     expect(mockedApiGet).toHaveBeenCalledTimes(1);
   });
 
-  it('hides the push card when no VAPID key is configured', async () => {
-    mockedApiGet.mockResolvedValue(makeLimits());
+  it('never renders a Spending alerts section', async () => {
+    mockPushApis(null);
+    mockedApiGet.mockResolvedValue(
+      makeLimits({
+        push_config: { ...PUSH_CONFIG, vapid_public_key: 'dGVzdA' },
+      }),
+    );
     renderLimits();
     await screen.findByText('No limits set yet.');
     expect(screen.queryByText('Spending alerts')).not.toBeInTheDocument();
   });
 
-  it('subscribes this browser and POSTs to subscribe_url', async () => {
+  it('enabling alerts subscribes this browser and keeps the switch on', async () => {
     const pushManager = mockPushApis(null);
     mockedApiGet.mockResolvedValue(
       makeLimits({
@@ -618,13 +614,9 @@ describe('Limits', () => {
     );
     mockedApiPost.mockResolvedValue({ success: true });
     renderLimits();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Spending alerts' }),
-    );
-    const enable = await screen.findByRole('button', {
-      name: 'Enable spending alerts',
-    });
-    fireEvent.click(enable);
+    const alerts = await screen.findByRole('switch', { name: /Alerts/ });
+    expect(alerts).not.toBeChecked();
+    fireEvent.click(alerts);
     await waitFor(() =>
       expect(pushManager.subscribe).toHaveBeenCalledWith({
         userVisibleOnly: true,
@@ -640,17 +632,11 @@ describe('Limits', () => {
         },
       ),
     );
-    expect(
-      await screen.findByRole('button', { name: 'Disable on this browser' }),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId('push-status')).toHaveTextContent(
-      'this browser is subscribed',
-    );
+    await waitFor(() => expect(alerts).toBeChecked());
   });
 
-  it('unsubscribes via POST unsubscribe_url then browser unsubscribe', async () => {
-    const subscription = makeSubscription();
-    mockPushApis(subscription);
+  it('reuses a live subscription without re-prompting', async () => {
+    const pushManager = mockPushApis(makeSubscription());
     mockedApiGet.mockResolvedValue(
       makeLimits({
         push_config: { ...PUSH_CONFIG, vapid_public_key: 'dGVzdA' },
@@ -658,49 +644,53 @@ describe('Limits', () => {
     );
     mockedApiPost.mockResolvedValue({ success: true });
     renderLimits();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Spending alerts' }),
-    );
-    const disable = await screen.findByRole('button', {
-      name: 'Disable on this browser',
-    });
-    // The effect re-registered the live subscription best-effort.
+    const alerts = await screen.findByRole('switch', { name: /Alerts/ });
+    fireEvent.click(alerts);
     await waitFor(() =>
       expect(mockedApiPost).toHaveBeenCalledWith(
         '/api/finance/push/subscribe/',
-        expect.objectContaining({ endpoint: 'https://push.example/sub-1' }),
+        expect.objectContaining({
+          endpoint: 'https://push.example/sub-1',
+        }),
       ),
     );
-    fireEvent.click(disable);
-    await waitFor(() =>
-      expect(mockedApiPost).toHaveBeenCalledWith(
-        '/api/finance/push/unsubscribe/',
-        { endpoint: 'https://push.example/sub-1' },
-      ),
-    );
-    await waitFor(() => expect(subscription.unsubscribe).toHaveBeenCalled());
-    expect(
-      await screen.findByRole('button', { name: 'Enable spending alerts' }),
-    ).toBeInTheDocument();
+    expect(pushManager.subscribe).not.toHaveBeenCalled();
+    await waitFor(() => expect(alerts).toBeChecked());
   });
 
-  it('disables the push button when the browser lacks push support', async () => {
+  it('denied notification permission leaves the resource disabled', async () => {
+    const pushManager = mockPushApis(null);
+    // 'default' makes the hook ask; the mock user then denies.
+    (Notification as { permission: string }).permission = 'default';
+    vi.mocked(Notification.requestPermission).mockResolvedValue('denied');
     mockedApiGet.mockResolvedValue(
       makeLimits({
         push_config: { ...PUSH_CONFIG, vapid_public_key: 'dGVzdA' },
       }),
     );
     renderLimits();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Spending alerts' }),
-    );
-    const enable = await screen.findByRole('button', {
-      name: 'Enable spending alerts',
-    });
-    expect(enable).toBeDisabled();
-    expect(screen.getByTestId('push-status')).toHaveTextContent(
-      'push notifications are not supported',
-    );
+    const alerts = await screen.findByRole('switch', { name: /Alerts/ });
+    fireEvent.click(alerts);
+    expect(
+      await screen.findByText('Notification permission was not granted.'),
+    ).toBeInTheDocument();
+    expect(pushManager.subscribe).not.toHaveBeenCalled();
+    expect(alerts).not.toBeChecked();
+  });
+
+  it('unconfigured or unsupported push leaves the switch off', async () => {
+    // No Push APIs at all (jsdom default) + empty VAPID key.
+    mockedApiGet.mockResolvedValue(makeLimits());
+    renderLimits();
+    const alerts = await screen.findByRole('switch', { name: /Alerts/ });
+    fireEvent.click(alerts);
+    expect(
+      await screen.findByText(
+        'Push notifications are not supported in this browser.',
+      ),
+    ).toBeInTheDocument();
+    expect(alerts).not.toBeChecked();
+    expect(mockedApiPost).not.toHaveBeenCalled();
   });
 
   it('shows an error alert with a working retry', async () => {

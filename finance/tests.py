@@ -274,10 +274,10 @@ class EvaluateSpendingLimitsTests(TestCase):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-60.00', days_ago=1)
-        make_transaction(self.account, 't-2', '-50.00', days_ago=2)
+        make_transaction(self.account, 't-1', '-60.00', days_ago=0)
+        make_transaction(self.account, 't-2', '-50.00', days_ago=0)
 
         mock_logger = self.run_command()
         mock_logger.warning.assert_called_once()
@@ -290,9 +290,9 @@ class EvaluateSpendingLimitsTests(TestCase):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-60.00', days_ago=1)
+        make_transaction(self.account, 't-1', '-60.00', days_ago=0)
 
         mock_logger = self.run_command()
         mock_logger.warning.assert_not_called()
@@ -301,21 +301,10 @@ class EvaluateSpendingLimitsTests(TestCase):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('10.00'),
+            limit_monthly=Decimal('10.00'),
             is_active=False,
         )
-        make_transaction(self.account, 't-1', '-60.00', days_ago=1)
-
-        mock_logger = self.run_command()
-        mock_logger.warning.assert_not_called()
-
-    def test_30_day_window_excludes_older_transactions(self):
-        make_limit(
-            account=self.account,
-            user=self.user,
-            limit_30_days=Decimal('100.00'),
-        )
-        make_transaction(self.account, 't-1', '-90.00', days_ago=31)
+        make_transaction(self.account, 't-1', '-60.00', days_ago=0)
 
         mock_logger = self.run_command()
         mock_logger.warning.assert_not_called()
@@ -324,9 +313,9 @@ class EvaluateSpendingLimitsTests(TestCase):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('10.00'),
+            limit_monthly=Decimal('10.00'),
         )
-        make_transaction(self.account, 't-1', '500.00', days_ago=1)
+        make_transaction(self.account, 't-1', '500.00', days_ago=0)
 
         mock_logger = self.run_command()
         mock_logger.warning.assert_not_called()
@@ -337,18 +326,18 @@ class EvaluateSpendingLimitsTests(TestCase):
             account=self.account,
             user=self.user,
             category=groceries,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         make_assignment(
             self.user,
             make_transaction(self.account, 't-1', '-60.00',
-                             days_ago=1),
+                             days_ago=0),
             groceries,
         )
         make_assignment(
             self.user,
             make_transaction(self.account, 't-2', '-50.00',
-                             days_ago=2),
+                             days_ago=0),
             groceries,
         )
 
@@ -365,15 +354,15 @@ class EvaluateSpendingLimitsTests(TestCase):
             account=self.account,
             user=self.user,
             category=groceries,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         make_assignment(
             self.user,
             make_transaction(self.account, 't-1', '-150.00',
-                             days_ago=1),
+                             days_ago=0),
             dining,
         )
-        make_transaction(self.account, 't-2', '-150.00', days_ago=1)
+        make_transaction(self.account, 't-2', '-150.00', days_ago=0)
 
         mock_logger = self.run_command()
         mock_logger.warning.assert_not_called()
@@ -392,10 +381,10 @@ class EvaluateSpendingLimitsTests(TestCase):
             account=self.account,
             user=sharer,
             category=sharer_cat,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         tx = make_transaction(self.account, 't-1', '-150.00',
-                              days_ago=1)
+                              days_ago=0)
         # The owner's assignment must not feed the sharer's limit.
         make_assignment(self.user, tx, owner_cat)
         make_assignment(sharer, tx, sharer_cat)
@@ -416,12 +405,12 @@ class EvaluateSpendingLimitsTests(TestCase):
             account=self.account,
             user=sharer,
             category=sharer_cat,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         make_assignment(
             self.user,
             make_transaction(self.account, 't-1', '-150.00',
-                             days_ago=1),
+                             days_ago=0),
             owner_cat,
         )
 
@@ -563,7 +552,6 @@ class EvaluateSpendingLimitsTests(TestCase):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
         )
 
         self.run_command()
@@ -598,9 +586,9 @@ class LimitWindowStatsTests(TestCase):
         limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
 
         stats = limit_window_stats(limit)
 
@@ -614,9 +602,9 @@ class LimitWindowStatsTests(TestCase):
         limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-30.00', days_ago=1)
+        make_transaction(self.account, 't-1', '-30.00', days_ago=0)
 
         stats = limit_window_stats(limit)
 
@@ -628,15 +616,23 @@ class LimitWindowStatsTests(TestCase):
         limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-90.00', days_ago=1)
+        make_transaction(self.account, 't-1', '-90.00', days_ago=0)
 
         stats = limit_window_stats(limit)
 
         self.assertEqual(stats[0]['bar_class'], 'bg-warning')
 
-    def test_stats_omit_windows_without_threshold(self):
+    def test_stats_empty_without_threshold(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+        )
+
+        self.assertEqual(limit_window_stats(limit), [])
+
+    def test_stats_single_monthly_window(self):
         limit = make_limit(
             account=self.account,
             user=self.user,
@@ -792,29 +788,6 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(stats[0]['spent'], Decimal('120.00'))
         self.assertEqual(stats[0]['over'], Decimal('20.00'))
 
-    def test_rolling_windows_evaluated_as_of_past_date(self):
-        limit = make_limit(
-            account=self.account,
-            user=self.user,
-            limit_7_days=Decimal('100.00'),
-        )
-        this_month = timezone.now().date().replace(day=1)
-        as_of = this_month - timezone.timedelta(days=1)
-        make_transaction(
-            self.account, 't-1', '-40.00',
-            booking_date=as_of - timezone.timedelta(days=3),
-        )
-        make_transaction(
-            self.account, 't-2', '-200.00',
-            booking_date=as_of - timezone.timedelta(days=20),
-        )
-        make_transaction(self.account, 't-3', '-60.00', days_ago=0)
-
-        stats = limit_window_stats(limit, as_of=as_of)
-
-        self.assertEqual(stats[0]['spent'], Decimal('40.00'))
-        self.assertEqual(stats[0]['remaining'], Decimal('60.00'))
-
     def test_monthly_history_empty_without_past_data(self):
         limit = make_limit(
             account=self.account,
@@ -843,7 +816,6 @@ class LimitsViewTests(TestCase):
         self.limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
             limit_monthly=Decimal('500.00'),
         )
         self.client.force_login(self.user)
@@ -867,13 +839,12 @@ class LimitsViewTests(TestCase):
         self.assertEqual(len(limits), 1)
         self.assertEqual(
             [s['label'] for s in limits[0]['window_stats']],
-            ['7 days', 'This month'],
+            ['This month'],
         )
 
     def test_limit_row_returned_for_edit(self):
         limits = self.get_limits()['limits']
         self.assertEqual(limits[0]['id'], self.limit.pk)
-        self.assertEqual(limits[0]['limit_7_days'], '100.00')
         self.assertEqual(limits[0]['limit_monthly'], '500.00')
 
     def test_other_users_limits_not_listed(self):
@@ -883,7 +854,7 @@ class LimitsViewTests(TestCase):
         make_limit(
             account=self.account,
             user=other,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         limits = self.get_limits()['limits']
         self.assertEqual(
@@ -935,7 +906,7 @@ class LimitsViewTests(TestCase):
         foreign = make_limit(
             account=self.account,
             user=other,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         response = self.post_json(
             f'/limits/{foreign.pk}/delete/'
@@ -2402,9 +2373,9 @@ class LimitPushAlertCommandTests(TestCase):
         limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
 
         mock_send = self.run_command()
 
@@ -2413,15 +2384,15 @@ class LimitPushAlertCommandTests(TestCase):
             mock_send.call_args[0][0].pk, self.user.pk
         )
         limit.refresh_from_db()
-        self.assertIsNotNone(limit.alerted_7d_at)
+        self.assertIsNotNone(limit.alerted_monthly_at)
 
     def test_second_run_within_cooldown_sends_nothing(self):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
 
         self.run_command()
         mock_send = self.run_command()
@@ -2432,15 +2403,15 @@ class LimitPushAlertCommandTests(TestCase):
         limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
         self.run_command()
 
         # Pretend the last alert went out over the repeat cooldown
         # ago — a still-breached window must notify again.
         TransactionLimit.objects.filter(pk=limit.pk).update(
-            alerted_7d_at=(
+            alerted_monthly_at=(
                 timezone.now() - timezone.timedelta(hours=21)
             )
         )
@@ -2449,7 +2420,7 @@ class LimitPushAlertCommandTests(TestCase):
         mock_send.assert_called_once()
         limit.refresh_from_db()
         self.assertGreater(
-            limit.alerted_7d_at,
+            limit.alerted_monthly_at,
             timezone.now() - timezone.timedelta(hours=1),
         )
 
@@ -2457,62 +2428,22 @@ class LimitPushAlertCommandTests(TestCase):
         limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         tx = make_transaction(self.account, 't-1', '-150.00',
-                              days_ago=1)
+                              days_ago=0)
         self.run_command()
 
         tx.amount = Decimal('-50.00')
         tx.save()
         self.run_command()
         limit.refresh_from_db()
-        self.assertIsNone(limit.alerted_7d_at)
+        self.assertIsNone(limit.alerted_monthly_at)
 
         tx.amount = Decimal('-150.00')
         tx.save()
         mock_send = self.run_command()
         mock_send.assert_called_once()
-
-    def test_both_windows_breach_sends_single_push(self):
-        make_limit(
-            account=self.account,
-            user=self.user,
-            limit_7_days=Decimal('100.00'),
-            limit_30_days=Decimal('100.00'),
-        )
-        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
-
-        mock_send = self.run_command()
-
-        mock_send.assert_called_once()
-        body = mock_send.call_args[0][2]
-        self.assertIn('7 days', body)
-        self.assertIn('30 days', body)
-        limit = TransactionLimit.objects.get(
-            user=self.user, accounts=self.account
-        )
-        self.assertIsNotNone(limit.alerted_7d_at)
-        self.assertIsNotNone(limit.alerted_30d_at)
-
-    def test_flag_cleared_when_threshold_removed(self):
-        limit = make_limit(
-            account=self.account,
-            user=self.user,
-            limit_7_days=Decimal('100.00'),
-        )
-        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
-        self.run_command()
-        limit.refresh_from_db()
-        self.assertIsNotNone(limit.alerted_7d_at)
-
-        limit.limit_7_days = None
-        limit.save()
-        mock_send = self.run_command()
-
-        mock_send.assert_not_called()
-        limit.refresh_from_db()
-        self.assertIsNone(limit.alerted_7d_at)
 
     def test_monthly_breach_sends_push_and_sets_flag(self):
         start = timezone.now().date().replace(day=1)
@@ -2538,16 +2469,16 @@ class LimitPushAlertCommandTests(TestCase):
         make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
-        make_transaction(self.account, 't-1', '-150.00', days_ago=1)
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
 
         mock_send = self.run_command()
 
         mock_send.assert_called_once()
         title, body = mock_send.call_args[0][1:3]
         self.assertEqual(title, 'Pārsniegts tēriņu limits')
-        self.assertIn('pēdējās 7 dienās', body)
+        self.assertIn('šajā mēnesī', body)
 
     def test_monthly_flag_cleared_when_threshold_removed(self):
         start = timezone.now().date().replace(day=1)
@@ -3476,7 +3407,7 @@ class RequisitionCallbackRelinkTests(TestCase):
         limit = make_limit(
             user=self.user,
             account=self.old_account,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         alert = BalanceAlert.objects.create(
             user=self.user,
@@ -3680,7 +3611,7 @@ class RequisitionCallbackSameIdRelinkTests(TestCase):
         limit = make_limit(
             user=self.user,
             account=self.account,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         alert = BalanceAlert.objects.create(
             user=self.user,
@@ -4230,16 +4161,16 @@ class ExcludedSpendTests(TestCase):
         limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         make_assignment(
             self.user,
             make_transaction(
-                self.account, 't-1', '-150.00', days_ago=1
+                self.account, 't-1', '-150.00', days_ago=0
             ),
             self.excluded,
         )
-        make_transaction(self.account, 't-2', '-60.00', days_ago=1)
+        make_transaction(self.account, 't-2', '-60.00', days_ago=0)
         start = timezone.now().date() - timezone.timedelta(days=7)
         self.assertEqual(
             spent_in_window(limit, start), Decimal('60.00')
@@ -4249,12 +4180,12 @@ class ExcludedSpendTests(TestCase):
         limit = make_limit(
             account=self.account,
             user=self.user,
-            limit_7_days=Decimal('100.00'),
+            limit_monthly=Decimal('100.00'),
         )
         make_assignment(
             self.user,
             make_transaction(
-                self.account, 't-1', '-100.00', days_ago=1
+                self.account, 't-1', '-100.00', days_ago=0
             ),
             None,
             excluded_amount=Decimal('60.00'),

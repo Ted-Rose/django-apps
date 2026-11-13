@@ -5,8 +5,10 @@ import type {
   CategoryOut,
   LimitOut,
   LimitSaveIn,
+  PushConfigOut,
 } from '../api';
 import { useSaveLimit } from '../mutations';
+import usePushSubscription from '../hooks/usePushSubscription';
 
 /**
  * The create/edit limit form ported from limits.html — driven by
@@ -16,22 +18,27 @@ import { useSaveLimit } from '../mutations';
  *
  * Field order and labels mirror TransactionLimitForm: accounts
  * (checkboxes — one limit covers one or more accounts), category
- * ("All categories" empty option), the three window
- * amounts — any combination may stay blank to disable that
- * window — and the is_active checkbox. Validation stays
- * server-side (the API runs the same Django form), so errors come
- * back as toasts, including the 409 account+category conflict.
+ * ("All categories" empty option), the monthly amount and the
+ * alerts switch. The switch doubles as the notification opt-in —
+ * off by default on the create form, so turning it on always runs
+ * `ensureSubscribed`, which asks the browser for notification
+ * permission when needed: a denied or unsupported result leaves
+ * the limit disabled. Validation stays server-side
+ * (the API runs the same Django form), so errors come back as
+ * toasts, including the 409 account+category conflict.
  */
 export function LimitForm({
   accounts,
   categories,
   editing,
+  pushConfig,
   onSaved,
   onCancelEdit,
 }: {
   accounts: AccountOptionOut[];
   categories: CategoryOut[];
   editing: LimitOut | null;
+  pushConfig: PushConfigOut;
   /** Called after a successful save — the route clears `?edit=`. */
   onSaved: () => void;
   /** The template's "Cancel" link back to the plain limits URL. */
@@ -39,18 +46,17 @@ export function LimitForm({
 }) {
   const { t } = useTranslation('finance');
   const saveLimit = useSaveLimit();
+  const push = usePushSubscription(pushConfig);
   const [selectedAccounts, setSelectedAccounts] = useState<number[]>(
     editing ? editing.accounts.map((a) => a.id) : [],
   );
   const [category, setCategory] = useState(
     editing?.category ? String(editing.category.id) : '',
   );
-  const [limit7Days, setLimit7Days] = useState(editing?.limit_7_days ?? '');
-  const [limit30Days, setLimit30Days] = useState(editing?.limit_30_days ?? '');
   const [limitMonthly, setLimitMonthly] = useState(
     editing?.limit_monthly ?? '',
   );
-  const [isActive, setIsActive] = useState(editing?.is_active ?? true);
+  const [isActive, setIsActive] = useState(editing?.is_active ?? false);
 
   const toggleAccount = (id: number) =>
     setSelectedAccounts((selected) =>
@@ -59,13 +65,19 @@ export function LimitForm({
         : [...selected, id],
     );
 
+  const toggleAlerts = async (checked: boolean) => {
+    if (!checked) {
+      setIsActive(false);
+      return;
+    }
+    setIsActive(await push.ensureSubscribed());
+  };
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const payload: LimitSaveIn = {
       accounts: selectedAccounts,
       category: category ? Number(category) : null,
-      limit_7_days: limit7Days || null,
-      limit_30_days: limit30Days || null,
       limit_monthly: limitMonthly || null,
       is_active: isActive,
     };
@@ -132,55 +144,19 @@ export function LimitForm({
             ))}
           </select>
         </div>
-        <div className="limit-windows mb-3">
-          <p className="fw-semibold mb-1">{t('limits.form.timeWindows')}</p>
-          <p className="text-muted small mb-3">
-            {t('limits.form.timeWindowsHint')}
-          </p>
-          <div className="row g-3">
-            <div className="col-md-4">
-              <label className="form-label" htmlFor="limit-7-days">
-                {t('limits.form.per7Days')}
-              </label>
-              <input
-                type="number"
-                id="limit-7-days"
-                className="form-control"
-                step="0.01"
-                min="0"
-                value={limit7Days}
-                onChange={(event) => setLimit7Days(event.target.value)}
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label" htmlFor="limit-30-days">
-                {t('limits.form.per30Days')}
-              </label>
-              <input
-                type="number"
-                id="limit-30-days"
-                className="form-control"
-                step="0.01"
-                min="0"
-                value={limit30Days}
-                onChange={(event) => setLimit30Days(event.target.value)}
-              />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label" htmlFor="limit-monthly">
-                {t('limits.form.perMonth')}
-              </label>
-              <input
-                type="number"
-                id="limit-monthly"
-                className="form-control"
-                step="0.01"
-                min="0"
-                value={limitMonthly}
-                onChange={(event) => setLimitMonthly(event.target.value)}
-              />
-            </div>
-          </div>
+        <div className="mb-3">
+          <label className="form-label" htmlFor="limit-monthly">
+            {t('limits.form.perMonth')}
+          </label>
+          <input
+            type="number"
+            id="limit-monthly"
+            className="form-control"
+            step="0.01"
+            min="0"
+            value={limitMonthly}
+            onChange={(event) => setLimitMonthly(event.target.value)}
+          />
         </div>
         <div className="mb-3 form-check form-switch">
           <input
@@ -189,10 +165,11 @@ export function LimitForm({
             className="form-check-input"
             role="switch"
             checked={isActive}
-            onChange={(event) => setIsActive(event.target.checked)}
+            disabled={push.busy}
+            onChange={(event) => void toggleAlerts(event.target.checked)}
           />
           <label className="form-check-label" htmlFor="limit-is-active">
-            {t('limits.form.isActive')}
+            {t('limits.form.alerts')}
           </label>
         </div>
         <button

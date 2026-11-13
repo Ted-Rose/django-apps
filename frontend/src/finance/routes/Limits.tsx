@@ -14,7 +14,6 @@ import LimitItem, {
 } from '../components/LimitItem';
 import TransactionDrilldown from '../components/TransactionDrilldown';
 import type { ParamUpdates } from '../components/TransactionTable';
-import PushCard from '../components/PushCard';
 import CollapsibleCard from '../../shared/components/CollapsibleCard';
 import Toasts from '../../shared/components/Toasts';
 import { fmtDateLong, fmtMonth } from '../../shared/format';
@@ -31,8 +30,9 @@ import './transactions.css';
  * month's last day server-side) and a compact list of limit cards
  * with window progress bars and past-month history; "Set a limit"
  * holds the create/edit form (driven by the `?edit=<id>` param,
- * auto-opens while editing); "Spending alerts" holds the push
- * card and is hidden when no VAPID key is configured.
+ * auto-opens while editing). Notifications are opted into per
+ * resource — the form's alerts switch requests the browser
+ * permission on enable.
  *
  * All money figures arrive precomputed as Decimal strings inside
  * `window_stats` — rendered verbatim, never parsed into floats.
@@ -69,7 +69,6 @@ export default function Limits() {
 
   const [overviewOpen, setOverviewOpen] = useState(true);
   const [formOpen, setFormOpen] = useState(Boolean(editParam));
-  const [alertsOpen, setAlertsOpen] = useState(false);
 
   // Opening a limit for edit (deep link or the row's pencil)
   // expands the form section, like the template swapping the
@@ -343,23 +342,12 @@ export default function Limits() {
                   accounts={data.accounts}
                   categories={data.categories}
                   editing={editing}
+                  pushConfig={data.push_config}
                   onSaved={finishEditing}
                   onCancelEdit={finishEditing}
                 />
               </CollapsibleCard>
             </div>
-
-            {data.push_config.vapid_public_key && (
-              <div className="limits-section">
-                <CollapsibleCard
-                  title={t('limits.alertsTitle')}
-                  open={alertsOpen}
-                  onToggle={() => setAlertsOpen((open) => !open)}
-                >
-                  <PushCard config={data.push_config} />
-                </CollapsibleCard>
-              </div>
-            )}
           </>
         )}
       </PageShell>
