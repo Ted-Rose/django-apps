@@ -5,8 +5,7 @@ description: >
   implementer agent cuts a feature branch, works the task list,
   and opens a PR ready for review; once checks are green a
   fresh reviewer agent reports severity-tagged findings and
-  fixer agents
-  iterate until clean. Use when asked to implement an OpenSpec
+  fixer agents iterate until clean. Use when asked to implement an OpenSpec
   change end-to-end without driving the task loop interactively.
 ---
 
@@ -38,8 +37,10 @@ stays small and survives `openspec update`.
      through to every openspec command here and inside the
      subagent prompt.
 
-3. Branch: `feat/<change-name>` unless the user says otherwise.
-   Never `main`.
+3. Branch in a worktree, never `main` or the main checkout:
+   `git fetch origin` then `git worktree add
+   ../django-apps-wt/<change-name> -b feat/<change-name>
+   origin/main` — the implementer works inside it.
 
 ## Phase 2 — implementer agent
 
@@ -108,6 +109,14 @@ stays small and survives `openspec update`.
    and push fixes. Then start a new round with a NEW reviewer.
    Repeat until `NO ISSUES` (or only `[minor]`/`[nit]`) — max
    3 rounds, then stop and report what remains.
+
+## Phase 5 — cleanup
+
+9. Once the loop is clean AND the PR's checks are green,
+   remove the worktree immediately (`git worktree remove
+   ../django-apps-wt/<change-name> --force` + `git branch -D
+   feat/<change-name>` from the main checkout) — don't wait
+   for the merge; the PR lives on the remote branch.
 9. Never let the implementer or a fixer review its own work —
    every review round uses a fresh agent.
 

@@ -70,10 +70,17 @@ an SPA failure can be a ninja API contract change (the
 scoping). If the root cause is in a Django app, fix it there per
 the app `AGENTS.md` — same repo, same branch, same PR.
 
-## 4. Branch and fix
+## 4. Branch and fix — in a worktree
 
-    git switch main && git pull --ff-only
-    git switch -c fix/sentry-<issue_short_id>
+    git fetch origin
+    git worktree add ../django-apps-wt/sentry-<issue_short_id> \
+      -b fix/sentry-<issue_short_id> origin/main
+    cd ../django-apps-wt/sentry-<issue_short_id>
+
+Never branch in the main checkout (AGENTS.md) — it may hold
+the user's uncommitted work or another agent's session.
+Symlink `venv`, `.env`, `frontend/node_modules` etc. from
+the main checkout as AGENTS.md describes.
 
 - Read `AGENTS.md` plus the owning app's `AGENTS.md`; 79-char
   lines in every file type.
@@ -126,8 +133,8 @@ an issue without asking the user.
 
 - If >3 actionable items exist, post the queue list and let the
   user pick before fixing.
-- If the working tree has unrelated dirty files that block
-  `git switch main`, stop and ask.
+- All work happens in a fresh worktree — never branch in the
+  main checkout; follow-up fixes get a fresh worktree too.
 - No standing test account exists (login is Google OAuth, the
   owner's account) — reproduce via read-only prod browsing or
   the seeded E2E user, and ask before creating accounts.

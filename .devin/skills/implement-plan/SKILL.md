@@ -35,7 +35,12 @@ review.
 ## Phase 2 — implement
 
 4. Launch one **background** subagent per workstream
-   (`is_background=true`). Each prompt must state: the branch name
+   (`is_background=true`). Each works in its own worktree —
+   instruct it to `git fetch origin` then `git worktree add
+   ../django-apps-wt/<slug>-<part> -b <branch> origin/main`
+   and do all work inside it (symlink `venv`/`.env`/
+   `frontend/node_modules` per AGENTS.md). Each prompt must
+   state: the branch name
    `feat/<slug>-<part>` (one branch per workstream) or the shared
    `feat/<slug>` if the user wants a single PR, the exact file set
    it owns, the shared contract verbatim, the relevant
@@ -79,5 +84,10 @@ review.
 - Update the plan file's `Status:` header (`in progress` →
   `partial`/`implemented`) as part of the docs workstream, and
   commit it on a feature branch like everything else.
+- Once a PR's review loop is clean AND its checks are green,
+  remove that worktree immediately (`git worktree remove
+  ../django-apps-wt/<slug> --force` + `git branch -D
+  <type>/<slug>` from the main checkout) — don't wait for
+  merge; fixer/reviewer rounds get fresh worktrees.
 - Final report: per PR — URL, branch, review rounds, unresolved
-  findings, check status.
+  findings, check status, worktree removed (yes/no).

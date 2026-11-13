@@ -22,9 +22,13 @@ description: >
 4. Read the issue fully — `gh issue view <N> --comments` — plus
    the owning app's `AGENTS.md`. This is a single repo; decide
    which app owns the fix, not which repo.
-5. Sync and branch:
-   `git checkout main && git pull` then
-   `git checkout -b fix/issue-<N>-<slug>` (short kebab slug).
+5. Sync and branch — in a worktree:
+   `git fetch origin` then `git worktree add
+   ../django-apps-wt/issue-<N>-<slug> -b
+   fix/issue-<N>-<slug> origin/main` and work inside it
+   (short kebab slug). Never branch in the main checkout —
+   AGENTS.md; symlink `venv`, `.env`, `frontend/node_modules`
+   etc. from the main checkout as AGENTS.md describes.
 6. Implement per the root `AGENTS.md`: per-user scoping, ninja
    `{error, detail}` contract, ≤79 chars, `makemigrations` only
    (never `migrate` against a real DB).
