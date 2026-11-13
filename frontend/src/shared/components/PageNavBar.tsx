@@ -5,7 +5,7 @@ import { BurgerMenu, type BurgerMenuItem } from './BurgerMenu';
  * Secondary-page navbar — deduplicates the copy-pasted `<nav>` block
  * from the non-dashboard routes (tasks Archived/Trash/Search/Stats/
  * Labels, notes NoteDetail/Categories). Markup is pixel-equivalent:
- * the inline styles moved to `.app-navbar` in shared/ui.css, and the
+ * the inline styles moved to `.app-navbar` in BurgerMenu.css, and the
  * left group keeps `d-flex align-items-center gap-1 flex-wrap
  * flex-grow-1` so callers drop in their back button, brand link and
  * dropdowns unchanged. `variant` maps to the `bg-*` color — tasks

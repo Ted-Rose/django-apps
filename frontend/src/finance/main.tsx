@@ -12,7 +12,7 @@ import queryClient from '../shared/queryClient';
 import en from './locales/en.json';
 import lv from './locales/lv.json';
 // Ported from finance/static/finance/css/finance.css — provides the
-// fixed navbar offset (`body { padding-top: 60px }`).
+// fixed navbar offset (`body { padding-top: 44px }`).
 import './finance.css';
 
 // Before everything else, so even a failing i18n/module init is

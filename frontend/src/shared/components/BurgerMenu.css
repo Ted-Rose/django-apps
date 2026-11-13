@@ -1,5 +1,24 @@
 /* Mirrors django_apps/templates/components/burger_menu.html styles. */
 
+/* Compact navbar chrome — replaces the copy-pasted inline styles:
+   `padding: 0.1rem 0` + `minHeight: auto` on the nav, `padding:
+   0 0.5rem` on the container, small navbar-brand padding/font-size.
+   Lives here (not shared/ui.css) because every navbar variant —
+   NavBar, PageNavBar, TaskNavBar, NotesNavBar — renders BurgerMenu,
+   so this file is bundled wherever a navbar appears, including apps
+   that don't import ui.css (finance, gmail). */
+.app-navbar {
+  padding: 0.1rem 0;
+  min-height: auto;
+}
+.app-navbar > .container-fluid {
+  padding: 0 0.5rem;
+}
+.app-navbar .navbar-brand {
+  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+}
+
 .burger-menu {
   position: relative;
 }
