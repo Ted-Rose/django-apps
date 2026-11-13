@@ -180,7 +180,9 @@ export function CategoryChart({ rows }: { rows: CategoryRowOut[] }) {
       </div>
       {selectedRow && (
         <p className="text-muted small text-center mt-2 mb-0">
-          {selectedName} — {shareLabel(selectedRow)}
+          {selectedName}
+          <br />
+          {shareLabel(selectedRow)}
           {spentLabel(selectedRow) && (
             <>
               <br />
