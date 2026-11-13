@@ -236,7 +236,7 @@
     "subtitle": "Noteikumi izpildās no augšas uz leju — pirmais atbilstošais noteikums piešķir savu kategoriju. Saglabājot noteikumu, vēsture tiek pārkategorizēta (manuāli iestatītās kategorijas netiek pārrakstītas).",
     "loading": "Ielādē noteikumus",
     "loadLabel": "noteikumus",
-    "rulesTitle": "Noteikumi",
+    "moreRules": "Vairāk noteikumu",
     "newRule": "Jauns noteikums",
     "reapply": "Pielietot noteikumus vēlreiz",
     "colPriority": "Nr.",

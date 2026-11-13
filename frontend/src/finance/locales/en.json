@@ -236,7 +236,7 @@
     "subtitle": "Rules run top to bottom — the first matching rule assigns its category. Saving a rule re-categorizes your history (manual categories are never overwritten).",
     "loading": "Loading rules",
     "loadLabel": "rules",
-    "rulesTitle": "Rules",
+    "moreRules": "More rules",
     "newRule": "New rule",
     "reapply": "Re-apply rules",
     "colPriority": "#",

@@ -160,22 +160,22 @@ describe('Rules', () => {
     ).toBeDisabled();
   });
 
-  it('collapses and expands the rules card', async () => {
+  it('keeps the rules card folded until expanded', async () => {
     mockedApiGet.mockResolvedValue(makeRules());
     renderRules();
     await screen.findByText(/debtor or creditor contains "rimi"/);
 
     const section = document.getElementById('rulesCollapse')!;
-    expect(section).toHaveClass('collapse', 'show');
-
-    const toggle = screen.getByRole('button', { name: /Rules/ });
-    fireEvent.click(toggle);
     expect(section).toHaveClass('collapse');
     expect(section).not.toHaveClass('show');
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    const toggle = screen.getByRole('button', { name: /more rules/i });
+    fireEvent.click(toggle);
+    expect(section).toHaveClass('collapse', 'show');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
     fireEvent.click(toggle);
-    expect(section).toHaveClass('show');
+    expect(section).not.toHaveClass('show');
   });
 
   it('shows the empty state when there are no rules', async () => {

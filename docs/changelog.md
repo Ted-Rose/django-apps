@@ -1,6 +1,10 @@
 # google_api
 
 ## Changelog
+33. The finance rules list now opens folded: the card is renamed
+    "More rules" and stays collapsed until you click its header —
+    the New rule and Re-apply rules buttons stay reachable in the
+    header either way
 32. Apps no longer reload when you switch between them: the
     dashboard, Tasks, Finance, Gmail and Notes now run inside one
     shared page, so moving between sections is instant and lists
