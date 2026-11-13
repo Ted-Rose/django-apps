@@ -47,7 +47,7 @@ function useNotificationToasts() {
 /**
  * Router host for the finance SPA mounted at /finance/ (see
  * `BrowserRouter basename` in main.tsx). `/` redirects to
- * `/accounts`; unknown paths do the same. Django's named shell
+ * `/categories`; unknown paths do the same. Django's named shell
  * routes plus the `<path:subpath>` catch-all serve the shell for
  * every deep link, so React Router resolves the page here.
  */
