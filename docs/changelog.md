@@ -1,6 +1,9 @@
 # google_api
 
 ## Changelog
+27. Categories is now the finance app's landing page — `/finance/`
+    opens the spending overview and the Categories tab and burger
+    entry moved first in the navigation
 26. Category spending now opens on the current month; the Last
     year and All time shortcuts moved out of the chip row into
     the calendar filter form (All time covers everything from
