@@ -1,6 +1,9 @@
 # google_api
 
 ## Changelog
+28. Clicking a category on the spending overview now opens its
+    transactions directly beneath the breakdown table — above the
+    donut chart — where the panel's close button dismisses them
 27. Categories is now the finance app's landing page — `/finance/`
     opens the spending overview and the Categories tab and burger
     entry moved first in the navigation

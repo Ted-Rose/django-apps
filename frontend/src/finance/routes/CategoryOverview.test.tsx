@@ -480,9 +480,15 @@ describe('CategoryOverview', () => {
         '/api/finance/transactions/?category=1&from=2025-01-09&to=2025-01-15',
       ),
     );
+    const panel = (await screen.findByText('Transactions — Groceries')).closest(
+      '.tx-panel',
+    )!;
+    // The drill-down sits right beneath the breakdown table,
+    // before the chart card.
+    const table = row.closest('table')!;
     expect(
-      await screen.findByText('Transactions — Groceries'),
-    ).toBeInTheDocument();
+      table.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     // The embedded table renders the fetched transaction rows.
     expect(await screen.findByText('Coffee')).toBeInTheDocument();
     // The selected row is highlighted.

@@ -461,6 +461,24 @@ export default function CategoryOverview() {
                     </table>
                   </div>
                 </div>
+                {/* Clicked-category transactions open right beneath
+                    the table — the panel scrolls itself into view
+                    and its close button clears ?category=. */}
+                {params.category && (
+                  <div className="col-12">
+                    <TransactionDrilldown
+                      // Remount per category so the panel scrolls
+                      // into view on every selection change.
+                      key={params.category}
+                      label={selectedLabel}
+                      params={params}
+                      owner={params.owner}
+                      readOnly={isSharedView}
+                      onUpdate={updateParams}
+                      onClose={() => updateParams({ category: null })}
+                    />
+                  </div>
+                )}
                 {/* The donut sits under the breakdown — it reads
                     as a summary of the table, not its peer. */}
                 <div className="col-12 col-lg-6">
@@ -531,19 +549,6 @@ export default function CategoryOverview() {
               </div>
             )}
           </>
-        )}
-        {params.category && (
-          <TransactionDrilldown
-            // Remount per category so the panel scrolls into view
-            // on every selection change.
-            key={params.category}
-            label={selectedLabel}
-            params={params}
-            owner={params.owner}
-            readOnly={isSharedView}
-            onUpdate={updateParams}
-            onClose={() => updateParams({ category: null })}
-          />
         )}
       </PageShell>
       <Toasts />

@@ -60,8 +60,9 @@ footer inside the table.
 #### Scenario: Row opens the transaction drill-down
 
 - **WHEN** the user clicks a category row
-- **THEN** the transaction drill-down for that category opens and
-  the selection is reflected in the URL
+- **THEN** the transaction drill-down for that category opens
+  beneath the breakdown table, the selection is reflected in the
+  URL, and the panel's close button clears it
 
 ### Requirement: Window totals below the table
 
