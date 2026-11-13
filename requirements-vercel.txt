@@ -9,7 +9,7 @@
 #                         routes; the middleware is skipped under
 #                         IS_VERCEL_ENVIRONMENT in settings.py
 # Keep in sync with requirements.txt when adding runtime deps.
-Django==4.2.30
+Django==5.2.17
 gtts==2.5.1
 google-api-python-client==2.136.0
 google-auth==2.31.0
