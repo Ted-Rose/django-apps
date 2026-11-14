@@ -1,6 +1,12 @@
 # google_api
 
 ## Changelog
+41. Fixed an account-exclusion sharing leak: a shared account
+    its owner excluded no longer disappears from the other
+    user's transactions, categories, balances and limits —
+    exclusion only ever hides the account from the person who
+    switched it on (same for a co-viewer's excluded spending
+    category inside your own limits)
 40. Category drill-downs now stick to the period you're viewing:
     clicking a category on the Categories page lists only that
     window's transactions — previously the default "this month"

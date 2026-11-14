@@ -31,29 +31,33 @@ def _spend_queryset(limit, respect_exclusion=True):
     ``AccountShare`` leaves its M2M row behind until the next
     edit) never count — like ``check_balance_alerts``, only
     accessible accounts contribute. Transactions in the limit
-    user's ``is_excluded`` categories
-    are dropped entirely; ``counted_amount`` then applies each
-    row's per-user partial exclusion (never flips sign, so the
-    amount<0 pre-filter still selects exactly the outgoing set).
+    user's ``is_excluded`` categories are dropped entirely —
+    only THEIR assignments: ``exclude(rel__a=x, rel__b=y)`` on
+    multi-valued ``category_assignments`` splits into one EXISTS
+    per condition, so a co-viewer's excluded-category row would
+    hide the transaction here too. ``counted_amount`` then
+    applies each row's per-user partial exclusion (never flips
+    sign, so the amount<0 pre-filter still selects exactly the
+    outgoing set).
     """
+    accessible = (
+        Account.objects.visible_for(limit.user)
+        if respect_exclusion
+        else Account.objects.for_user(limit.user)
+    )
     transactions = (
         Transaction.objects.with_occurrence_date()
         .filter(
-            account__in=limit.accounts.filter(
-                pk__in=Account.objects.for_user(limit.user)
-            ),
+            account__in=limit.accounts.filter(pk__in=accessible),
             amount__lt=0,
         )
         .exclude(
-            category_assignments__user=limit.user,
-            category_assignments__category__is_excluded=True,
+            pk__in=Transaction.objects.filter(
+                category_assignments__user=limit.user,
+                category_assignments__category__is_excluded=True,
+            )
         )
     )
-    if respect_exclusion:
-        transactions = transactions.exclude(
-            account__user_preferences__user=limit.user,
-            account__user_preferences__excluded=True,
-        )
     if limit.category_id:
         transactions = transactions.filter(
             category_assignments__user=limit.user,

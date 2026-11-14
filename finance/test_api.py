@@ -369,6 +369,33 @@ class ExcludedAccountApiTests(ApiTestCase):
         body = self.client.get(f'{self.API}/transactions/').json()
         self.assertEqual(body['count'], 1)
 
+    def test_owners_exclusion_keeps_sharers_views(self):
+        """The owner's exclusion is per-user — a sharer still
+        sees the shared account and its resources everywhere."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        # The share endpoint auto-creates this pref row.
+        UserAccountPreference.objects.create(
+            user=viewer, account=self.account
+        )
+        make_transaction(self.account, 't-1', '-10.00')
+        self.exclude()
+        self.client.force_login(viewer)
+        body = self.client.get(f'{self.API}/transactions/').json()
+        self.assertEqual(body['count'], 1)
+        body = self.client.get(
+            f'{self.API}/categories/overview/'
+        ).json()
+        self.assertEqual(len(body['rows']), 1)
+        body = self.client.get(f'{self.API}/balances/').json()
+        self.assertEqual(len(body['accounts']), 1)
+        body = self.client.get(f'{self.API}/accounts/').json()
+        self.assertFalse(body['accounts'][0]['excluded'])
+
     def test_sync_skips_excluded_accounts(self):
         self.exclude()
         client = MagicMock()

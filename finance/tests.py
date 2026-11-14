@@ -695,6 +695,61 @@ class LimitWindowStatsTests(TestCase):
         self.assertEqual(len(stats), 1)
         self.assertEqual(stats[0]['label'], 'This month')
 
+    def test_sharers_limit_counts_owner_excluded_account(self):
+        """The owner's exclusion is per-user — a sharer's limit
+        on the shared-in account still counts its spend."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        # The share endpoint auto-creates this pref row — it is
+        # what made the split-EXISTS exclude match cross-user.
+        UserAccountPreference.objects.create(
+            user=viewer, account=self.account
+        )
+        limit = make_limit(
+            account=self.account,
+            user=viewer,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-40.00', days_ago=0)
+        UserAccountPreference.objects.create(
+            user=self.user, account=self.account, excluded=True
+        )
+
+        stats = limit_window_stats(limit)
+
+        self.assertEqual(stats[0]['spent'], Decimal('40.00'))
+
+    def test_limit_counts_tx_in_coviewers_excluded_category(self):
+        """A co-viewer's is_excluded category assignment must
+        not hide the transaction from the limit user's spend."""
+        viewer = get_user_model().objects.create_user(
+            username='bob', password='pw'
+        )
+        AccountShare.objects.create(
+            account=self.account, shared_with=viewer
+        )
+        limit = make_limit(
+            account=self.account,
+            user=viewer,
+            limit_monthly=Decimal('100.00'),
+        )
+        tx = make_transaction(
+            self.account, 't-1', '-40.00', days_ago=0
+        )
+        owner_cat = make_category(self.user, 'OwnerHidden')
+        owner_cat.is_excluded = True
+        owner_cat.save(update_fields=['is_excluded'])
+        make_assignment(self.user, tx, owner_cat)
+        make_assignment(viewer, tx, make_category(viewer, 'Food'))
+
+        stats = limit_window_stats(limit)
+
+        self.assertEqual(stats[0]['spent'], Decimal('40.00'))
+
     def test_monthly_history_covers_past_months(self):
         limit = make_limit(
             account=self.account,
