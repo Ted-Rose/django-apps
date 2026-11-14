@@ -88,7 +88,9 @@ just-dead requisition are skipped without another API call.
   account (and its transactions) is visible ONLY on the Accounts
   page — `Account.objects.visible_for(user)` /
   `Transaction.objects.visible_for(user)` (`managers.py`) are the
-  `for_user` sets minus the caller's excluded accounts, and every
+  `for_user` sets minus the caller's excluded accounts —
+  strictly per-user, a co-viewer's flag can never hide a shared
+  account — and every
   read path except `GET /accounts/` uses them: transactions,
   category overview (the viewer's own exclusions hide accounts
   from shared `?owner=` views; the sharer's do NOT — a share

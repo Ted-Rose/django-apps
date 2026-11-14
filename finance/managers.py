@@ -13,11 +13,18 @@ class AccountQuerySet(models.QuerySet):
 
         The set every page except Accounts reads — an excluded
         account surfaces only on the Accounts page until the user
-        includes it again.
+        includes it again. The ``pk__in`` subquery matters:
+        ``exclude(rel__a=x, rel__b=y)`` splits multi-valued
+        relations into one EXISTS per condition, so another
+        user's excluded pref would hide the account from this
+        user too — exclusion must stay per-user.
         """
-        return self.for_user(user).exclude(
-            user_preferences__user=user,
-            user_preferences__excluded=True,
+        accessible = self.for_user(user)
+        return accessible.exclude(
+            pk__in=accessible.filter(
+                user_preferences__user=user,
+                user_preferences__excluded=True,
+            )
         )
 
 
