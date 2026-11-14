@@ -107,6 +107,9 @@ function makeOverview(
       },
     ],
     monthly: { months: [], rows: [], totals: {} },
+    // The echoed effective window — deliberately offset from the
+    // thisMonth preset bounds above so drill-down tests prove the
+    // echo (not the preset or the URL) drives the fetch.
     date_from: '2025-01-09',
     date_to: '2025-01-15',
     accounts: [{ id: 5, label: 'Everyday account' }],
