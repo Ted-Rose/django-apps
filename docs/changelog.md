@@ -1,6 +1,10 @@
 # google_api
 
 ## Changelog
+40. Category drill-downs now stick to the period you're viewing:
+    clicking a category on the Categories page lists only that
+    window's transactions — previously the default "this month"
+    view showed every transaction ever recorded for it
 39. Excluded finance accounts no longer go quiet: balance alerts
     and spending-limit notifications you set up keep firing even
     while the account is hidden (exclusion only hides it from

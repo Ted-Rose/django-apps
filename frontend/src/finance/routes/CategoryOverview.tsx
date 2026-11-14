@@ -471,7 +471,16 @@ export default function CategoryOverview() {
                       // into view on every selection change.
                       key={params.category}
                       label={selectedLabel}
-                      params={params}
+                      params={{
+                        ...params,
+                        // A bare URL leaves from/to empty even
+                        // though the overview defaulted to the
+                        // current month server-side — forward the
+                        // echoed effective window so the
+                        // drill-down lists the same period's rows.
+                        from: data.date_from,
+                        to: data.date_to,
+                      }}
                       owner={params.owner}
                       readOnly={isSharedView}
                       onUpdate={updateParams}
