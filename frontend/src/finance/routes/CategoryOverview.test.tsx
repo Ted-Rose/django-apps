@@ -514,9 +514,13 @@ describe('CategoryOverview', () => {
     renderOverview();
 
     fireEvent.click((await screen.findByText('Uncategorized')).closest('tr')!);
+    // No from/to in the URL — the drill-down still scopes to the
+    // effective window the server echoed (the current-month
+    // default), not all time.
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenCalledWith(
-        '/api/finance/transactions/?category=none',
+        '/api/finance/transactions/' +
+          '?category=none&from=2025-01-09&to=2025-01-15',
       ),
     );
   });
@@ -813,7 +817,8 @@ describe('CategoryOverview', () => {
     fireEvent.click((await screen.findByText('Groceries')).closest('tr')!);
     await waitFor(() =>
       expect(mockedApiGet).toHaveBeenCalledWith(
-        '/api/finance/transactions/?category=1&owner=alice',
+        '/api/finance/transactions/' +
+          '?category=1&from=2025-01-09&to=2025-01-15&owner=alice',
       ),
     );
     expect(
