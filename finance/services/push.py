@@ -27,14 +27,21 @@ ALERT_REPEAT_AFTER = timedelta(hours=20)
 
 
 def send_limit_alert(user, title, body, url):
-    """Push a notification to every subscribed browser of ``user``."""
+    """Push a notification to every subscribed browser of ``user``.
+
+    Returns ``False`` only when subscriptions existed but every
+    push failed — a once-per-period caller can then leave the
+    breach unstamped so a later run retries. ``True`` means the
+    alert is handled: delivered to at least one browser, or
+    undeliverable by design (push disabled, no subscriptions).
+    """
     private_key = getattr(settings, 'VAPID_PRIVATE_KEY', '')
     if not private_key:
         logger.debug(
             'VAPID_PRIVATE_KEY not set - skipping push alert '
             'for user=%s', user.username,
         )
-        return
+        return True
 
     subscriptions = list(user.push_subscriptions.all())
     if not subscriptions:
@@ -42,7 +49,7 @@ def send_limit_alert(user, title, body, url):
             'Push alert skipped for user=%s: no push '
             'subscriptions', user.username,
         )
-        return
+        return True
 
     payload = json.dumps({'title': title, 'body': body, 'url': url})
     sent = 0
@@ -98,3 +105,4 @@ def send_limit_alert(user, title, body, url):
         'Pushed alert to %s/%s subscriptions for user=%s',
         sent, len(subscriptions), user.username,
     )
+    return sent > 0

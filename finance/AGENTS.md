@@ -170,9 +170,11 @@ just-dead requisition are skipped without another API call.
   set the first time a breach notification is sent in a calendar
   month — the limit then stays silent for the rest of that month
   even if spend dips back under the threshold, and alerts again on
-  the next month's first breached run. Reset only when the
-  threshold is removed, so a re-added threshold can alert that same
-  month. Month math
+  the next month's first breached run. The stamp is written only
+  after a handled send (`send_limit_alert` returns False when
+  every push fails), so a bad push day can't eat the month's only
+  alert. Reset only when the threshold is removed, so a re-added
+  threshold can alert that same month. Month math
   (`monthly_period_start`), spend sums (`spent_in_window`), display
   stats (`limit_window_stats`) and the per-past-month breakdown
   (`monthly_history`) live in `services/limits.py`, shared by the

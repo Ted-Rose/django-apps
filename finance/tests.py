@@ -2530,6 +2530,43 @@ class LimitPushAlertCommandTests(TestCase):
             timezone.now() - timezone.timedelta(hours=1),
         )
 
+    def test_stamp_unset_when_every_push_fails(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
+
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert',
+            return_value=False,
+        ) as mock_send:
+            call_command('evaluate_spending_limits')
+
+        mock_send.assert_called_once()
+        limit.refresh_from_db()
+        self.assertIsNone(limit.alerted_monthly_at)
+
+    def test_stamp_unset_when_send_raises(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
+
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert',
+            side_effect=RuntimeError('boom'),
+        ), self.assertRaises(RuntimeError):
+            call_command('evaluate_spending_limits')
+
+        limit.refresh_from_db()
+        self.assertIsNone(limit.alerted_monthly_at)
+
     def test_rebreach_same_month_stays_silent(self):
         limit = make_limit(
             account=self.account,
