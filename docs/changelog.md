@@ -1,6 +1,11 @@
 # google_api
 
 ## Changelog
+43. Fixed the thin white line under the blue header on the home
+    page (and stray extra space at the top/bottom of the other
+    apps): finance's navbar styles were leaking onto every page —
+    they're now scoped to the finance app only, which also means
+    the home header no longer floats when scrolling
 42. A breached monthly spending limit now pushes one notification
     per calendar month instead of repeating daily — the alert goes
     quiet until the month rolls over, even if spending dips back

@@ -33,11 +33,6 @@
   overflow-x: hidden;
   overflow-x: clip;
 }
-.burger-menu .burger-menu-items {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  row-gap: 0.25rem;
-}
 
 /* --- Design tokens ------------------------------------------------------
    Light-fintech layer on top of stock Bootstrap 5: soft gray canvas,
