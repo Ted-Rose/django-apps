@@ -2382,10 +2382,11 @@ class SendLimitAlertTests(TestCase):
         with override_settings(
             VAPID_PRIVATE_KEY='priv', VAPID_SUBJECT='mailto:t@t.dev'
         ), patch('finance.services.push.webpush') as mock_push:
-            send_limit_alert(
+            delivered = send_limit_alert(
                 self.user, 'Title', 'Body', '/finance/limits/'
             )
 
+        self.assertTrue(delivered)
         self.assertEqual(mock_push.call_count, 2)
         endpoints = {
             call.kwargs['subscription_info']['endpoint']
@@ -2417,8 +2418,9 @@ class SendLimitAlertTests(TestCase):
             'finance.services.push.webpush',
             side_effect=WebPushException('gone', response=response),
         ):
-            send_limit_alert(self.user, 't', 'b', '/u')
+            delivered = send_limit_alert(self.user, 't', 'b', '/u')
 
+        self.assertFalse(delivered)
         self.assertFalse(PushSubscription.objects.exists())
 
     def test_server_error_keeps_row_and_warns(self):
@@ -2441,8 +2443,9 @@ class SendLimitAlertTests(TestCase):
         with override_settings(VAPID_PRIVATE_KEY=''), patch(
             'finance.services.push.webpush'
         ) as mock_push:
-            send_limit_alert(self.user, 't', 'b', '/u')
+            delivered = send_limit_alert(self.user, 't', 'b', '/u')
 
+        self.assertTrue(delivered)
         mock_push.assert_not_called()
 
     def test_unexpected_error_keeps_row_and_logs(self):
@@ -2492,7 +2495,7 @@ class LimitPushAlertCommandTests(TestCase):
         limit.refresh_from_db()
         self.assertIsNotNone(limit.alerted_monthly_at)
 
-    def test_second_run_within_cooldown_sends_nothing(self):
+    def test_second_run_same_month_sends_nothing(self):
         make_limit(
             account=self.account,
             user=self.user,
@@ -2505,7 +2508,7 @@ class LimitPushAlertCommandTests(TestCase):
 
         mock_send.assert_not_called()
 
-    def test_renotifies_once_cooldown_expires(self):
+    def test_renotifies_after_month_rolls_over(self):
         limit = make_limit(
             account=self.account,
             user=self.user,
@@ -2514,11 +2517,11 @@ class LimitPushAlertCommandTests(TestCase):
         make_transaction(self.account, 't-1', '-150.00', days_ago=0)
         self.run_command()
 
-        # Pretend the last alert went out over the repeat cooldown
-        # ago — a still-breached window must notify again.
+        # Pretend the last alert went out last month — a
+        # still-breached window must notify again.
         TransactionLimit.objects.filter(pk=limit.pk).update(
             alerted_monthly_at=(
-                timezone.now() - timezone.timedelta(hours=21)
+                timezone.now() - timezone.timedelta(days=40)
             )
         )
         mock_send = self.run_command()
@@ -2530,7 +2533,44 @@ class LimitPushAlertCommandTests(TestCase):
             timezone.now() - timezone.timedelta(hours=1),
         )
 
-    def test_flag_cleared_when_back_under_then_realerts(self):
+    def test_stamp_unset_when_every_push_fails(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
+
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert',
+            return_value=False,
+        ) as mock_send:
+            call_command('evaluate_spending_limits')
+
+        mock_send.assert_called_once()
+        limit.refresh_from_db()
+        self.assertIsNone(limit.alerted_monthly_at)
+
+    def test_stamp_unset_when_send_raises(self):
+        limit = make_limit(
+            account=self.account,
+            user=self.user,
+            limit_monthly=Decimal('100.00'),
+        )
+        make_transaction(self.account, 't-1', '-150.00', days_ago=0)
+
+        with patch(
+            'finance.management.commands'
+            '.evaluate_spending_limits.send_limit_alert',
+            side_effect=RuntimeError('boom'),
+        ), self.assertRaises(RuntimeError):
+            call_command('evaluate_spending_limits')
+
+        limit.refresh_from_db()
+        self.assertIsNone(limit.alerted_monthly_at)
+
+    def test_rebreach_same_month_stays_silent(self):
         limit = make_limit(
             account=self.account,
             user=self.user,
@@ -2542,14 +2582,15 @@ class LimitPushAlertCommandTests(TestCase):
 
         tx.amount = Decimal('-50.00')
         tx.save()
-        self.run_command()
+        mock_send = self.run_command()
+        mock_send.assert_not_called()
         limit.refresh_from_db()
-        self.assertIsNone(limit.alerted_monthly_at)
+        self.assertIsNotNone(limit.alerted_monthly_at)
 
         tx.amount = Decimal('-150.00')
         tx.save()
         mock_send = self.run_command()
-        mock_send.assert_called_once()
+        mock_send.assert_not_called()
 
     def test_monthly_breach_sends_push_and_sets_flag(self):
         start = timezone.now().date().replace(day=1)
@@ -2607,6 +2648,13 @@ class LimitPushAlertCommandTests(TestCase):
         mock_send.assert_not_called()
         limit.refresh_from_db()
         self.assertIsNone(limit.alerted_monthly_at)
+
+        # A re-added threshold starts fresh: the still-breached
+        # month alerts again.
+        limit.limit_monthly = Decimal('100.00')
+        limit.save()
+        mock_send = self.run_command()
+        mock_send.assert_called_once()
 
 
 class CheckBalanceAlertsTests(TestCase):

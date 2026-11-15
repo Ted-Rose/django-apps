@@ -167,11 +167,14 @@ just-dead requisition are skipped without another API call.
   (`limit_monthly`). `category` is optional —
   when set, only the limit user's own category assignments count.
   `alerted_monthly_at` is the last-notified stamp for push alerts:
-  set each time a breach notification is sent, and the alert repeats
-  once the stamp is older than `ALERT_REPEAT_AFTER` (~daily,
-  `services/push.py`) while the month stays breached. Cleared once
-  spending falls back under the threshold (or the threshold is
-  removed) so the next breach alerts again. Month math
+  set the first time a breach notification is sent in a calendar
+  month — the limit then stays silent for the rest of that month
+  even if spend dips back under the threshold, and alerts again on
+  the next month's first breached run. The stamp is written only
+  after a handled send (`send_limit_alert` returns False when
+  every push fails), so a bad push day can't eat the month's only
+  alert. Reset only when the threshold is removed, so a re-added
+  threshold can alert that same month. Month math
   (`monthly_period_start`), spend sums (`spent_in_window`), display
   stats (`limit_window_stats`) and the per-past-month breakdown
   (`monthly_history`) live in `services/limits.py`, shared by the
@@ -275,11 +278,10 @@ flagged `excluded`.
   (filtered to the limit's category when set; excluded accounts
   DO count — exclusion only hides page reads, not configured
   alerts); logs
-  `SPENDING_LIMIT_EXCEEDED ...` warnings and sends one Web Push
-  notification per limit on each breach and then every
-  `ALERT_REPEAT_AFTER` (~daily) while still breached to the user's
-  `PushSubscription`s, and upserts that month's `LimitEvaluation`
-  row each run.
+  `SPENDING_LIMIT_EXCEEDED ...` warnings and pushes at most one
+  Web Push notification per limit per calendar month while
+  breached to the user's `PushSubscription`s, and upserts that
+  month's `LimitEvaluation` row each run.
 - `check_balance_alerts` (`--dry-run`): fetches each alerted
   account's balance once (`fetch_balances_parallel`, deduped across
   users of shared accounts) — only `LN`-requisition accounts are
