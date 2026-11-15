@@ -261,6 +261,8 @@ export function RuleDrawer({
   useLayoutEffect(() => {
     const root = document.documentElement;
     const previous = root.style.overflowX;
+    // 'hidden' first — the fallback for engines that don't
+    // parse 'clip' (a rejected second assignment is a no-op).
     root.style.overflowX = 'hidden';
     root.style.overflowX = 'clip';
     return () => {
