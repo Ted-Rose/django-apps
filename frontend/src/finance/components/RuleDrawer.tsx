@@ -251,6 +251,21 @@ export function RuleDrawer({
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  // The drawer protrudes 640px past the viewport edge while it
+  // slides in (`translateX(100%)`), which would flash a horizontal
+  // scrollbar — finance.css's `overflow-x: clip` used to cover this
+  // globally but is scoped to .fin-nav/.fin-app now. Clip the root
+  // only for as long as the drawer is mounted.
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.overflowX;
+    root.style.overflowX = 'hidden';
+    root.style.overflowX = 'clip';
+    return () => {
+      root.style.overflowX = previous;
+    };
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
