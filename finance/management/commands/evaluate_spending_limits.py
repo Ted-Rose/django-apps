@@ -17,7 +17,7 @@ from finance.services.limits import (
     spent_in_window,
 )
 from finance.services.money import fmt_money
-from finance.services.push import ALERT_REPEAT_AFTER, send_limit_alert
+from finance.services.push import send_limit_alert
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +26,8 @@ class Command(BaseCommand):
     help = (
         'Evaluate active monthly spending limits; log and '
         'push-notify when the limit is exceeded. An exceeded '
-        'limit re-notifies every ALERT_REPEAT_AFTER (~daily) '
-        'until back under the threshold. Each run also records '
+        'limit notifies at most once per calendar month. '
+        'Each run also records '
         'one LimitEvaluation row per limit per month.'
     )
 
@@ -81,25 +81,24 @@ class Command(BaseCommand):
                     limit.limit_monthly,
                     accounts[0].currency if accounts else '',
                 )
-                if (
-                    limit.alerted_monthly_at is None
-                    or now - limit.alerted_monthly_at
-                    >= ALERT_REPEAT_AFTER
-                ):
-                    # Fresh breach, or still exceeded past the
-                    # repeat cooldown — (re-)notify.
+                # Same UTC-date frame as `period` above —
+                # mixing in local dates could skip a month's
+                # alert near the day boundary.
+                alerted_on = (
+                    limit.alerted_monthly_at.date()
+                    if limit.alerted_monthly_at is not None
+                    else None
+                )
+                if alerted_on is None or alerted_on < period:
+                    # First breach this calendar month — notify
+                    # once, then stay silent until the month
+                    # rolls over (the stamp also survives dips
+                    # back under the threshold).
                     limit.alerted_monthly_at = now
                     limit.save(update_fields=[
                         'alerted_monthly_at', 'updated_at',
                     ])
                     self._send_alert(limit, spent)
-            elif limit.alerted_monthly_at is not None:
-                # Back under the threshold: clear the flag so the
-                # next breach notifies again.
-                limit.alerted_monthly_at = None
-                limit.save(update_fields=[
-                    'alerted_monthly_at', 'updated_at',
-                ])
 
         self.stdout.write(
             f'Evaluated {limits.count()} limits: {alerts} exceeded'

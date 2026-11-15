@@ -2492,7 +2492,7 @@ class LimitPushAlertCommandTests(TestCase):
         limit.refresh_from_db()
         self.assertIsNotNone(limit.alerted_monthly_at)
 
-    def test_second_run_within_cooldown_sends_nothing(self):
+    def test_second_run_same_month_sends_nothing(self):
         make_limit(
             account=self.account,
             user=self.user,
@@ -2505,7 +2505,7 @@ class LimitPushAlertCommandTests(TestCase):
 
         mock_send.assert_not_called()
 
-    def test_renotifies_once_cooldown_expires(self):
+    def test_renotifies_after_month_rolls_over(self):
         limit = make_limit(
             account=self.account,
             user=self.user,
@@ -2514,11 +2514,11 @@ class LimitPushAlertCommandTests(TestCase):
         make_transaction(self.account, 't-1', '-150.00', days_ago=0)
         self.run_command()
 
-        # Pretend the last alert went out over the repeat cooldown
-        # ago — a still-breached window must notify again.
+        # Pretend the last alert went out last month — a
+        # still-breached window must notify again.
         TransactionLimit.objects.filter(pk=limit.pk).update(
             alerted_monthly_at=(
-                timezone.now() - timezone.timedelta(hours=21)
+                timezone.now() - timezone.timedelta(days=40)
             )
         )
         mock_send = self.run_command()
@@ -2530,7 +2530,7 @@ class LimitPushAlertCommandTests(TestCase):
             timezone.now() - timezone.timedelta(hours=1),
         )
 
-    def test_flag_cleared_when_back_under_then_realerts(self):
+    def test_rebreach_same_month_stays_silent(self):
         limit = make_limit(
             account=self.account,
             user=self.user,
@@ -2542,14 +2542,15 @@ class LimitPushAlertCommandTests(TestCase):
 
         tx.amount = Decimal('-50.00')
         tx.save()
-        self.run_command()
+        mock_send = self.run_command()
+        mock_send.assert_not_called()
         limit.refresh_from_db()
-        self.assertIsNone(limit.alerted_monthly_at)
+        self.assertIsNotNone(limit.alerted_monthly_at)
 
         tx.amount = Decimal('-150.00')
         tx.save()
         mock_send = self.run_command()
-        mock_send.assert_called_once()
+        mock_send.assert_not_called()
 
     def test_monthly_breach_sends_push_and_sets_flag(self):
         start = timezone.now().date().replace(day=1)

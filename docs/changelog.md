@@ -1,6 +1,11 @@
 # google_api
 
 ## Changelog
+42. A breached monthly spending limit now pushes one notification
+    per calendar month instead of repeating daily — the alert goes
+    quiet until the month rolls over, even if spending dips back
+    under the limit in between (balance alerts still re-notify
+    daily while the balance stays low)
 41. Fixed an account-exclusion sharing leak: a shared account
     its owner excluded no longer disappears from the other
     user's transactions, categories, balances and limits —
