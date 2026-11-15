@@ -2382,10 +2382,11 @@ class SendLimitAlertTests(TestCase):
         with override_settings(
             VAPID_PRIVATE_KEY='priv', VAPID_SUBJECT='mailto:t@t.dev'
         ), patch('finance.services.push.webpush') as mock_push:
-            send_limit_alert(
+            delivered = send_limit_alert(
                 self.user, 'Title', 'Body', '/finance/limits/'
             )
 
+        self.assertTrue(delivered)
         self.assertEqual(mock_push.call_count, 2)
         endpoints = {
             call.kwargs['subscription_info']['endpoint']
@@ -2417,8 +2418,9 @@ class SendLimitAlertTests(TestCase):
             'finance.services.push.webpush',
             side_effect=WebPushException('gone', response=response),
         ):
-            send_limit_alert(self.user, 't', 'b', '/u')
+            delivered = send_limit_alert(self.user, 't', 'b', '/u')
 
+        self.assertFalse(delivered)
         self.assertFalse(PushSubscription.objects.exists())
 
     def test_server_error_keeps_row_and_warns(self):
@@ -2441,8 +2443,9 @@ class SendLimitAlertTests(TestCase):
         with override_settings(VAPID_PRIVATE_KEY=''), patch(
             'finance.services.push.webpush'
         ) as mock_push:
-            send_limit_alert(self.user, 't', 'b', '/u')
+            delivered = send_limit_alert(self.user, 't', 'b', '/u')
 
+        self.assertTrue(delivered)
         mock_push.assert_not_called()
 
     def test_unexpected_error_keeps_row_and_logs(self):
