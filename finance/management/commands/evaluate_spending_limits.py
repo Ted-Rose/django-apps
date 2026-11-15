@@ -93,12 +93,14 @@ class Command(BaseCommand):
                     # First breach this calendar month — notify
                     # once, then stay silent until the month
                     # rolls over (the stamp also survives dips
-                    # back under the threshold).
+                    # back under the threshold). Send before
+                    # stamping: a crash mid-send must not
+                    # consume the month's only alert.
+                    self._send_alert(limit, spent)
                     limit.alerted_monthly_at = now
                     limit.save(update_fields=[
                         'alerted_monthly_at', 'updated_at',
                     ])
-                    self._send_alert(limit, spent)
 
         self.stdout.write(
             f'Evaluated {limits.count()} limits: {alerts} exceeded'

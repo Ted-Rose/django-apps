@@ -2609,6 +2609,13 @@ class LimitPushAlertCommandTests(TestCase):
         limit.refresh_from_db()
         self.assertIsNone(limit.alerted_monthly_at)
 
+        # A re-added threshold starts fresh: the still-breached
+        # month alerts again.
+        limit.limit_monthly = Decimal('100.00')
+        limit.save()
+        mock_send = self.run_command()
+        mock_send.assert_called_once()
+
 
 class CheckBalanceAlertsTests(TestCase):
     def setUp(self):
