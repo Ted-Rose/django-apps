@@ -1,28 +1,35 @@
 /* Ported from finance/static/finance/css/finance.css (which is
    deleted with the rest of the template UI at the Stage 6 cutover).
-   Fixed navbar + body offset, matching the tasks dashboard.css. */
-.navbar {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  width: 100% !important;
-  z-index: 1030 !important;
-}
-body {
+   Fixed navbar + content offset, matching the tasks dashboard.css —
+   but scoped: this file loads on every shell page (finance is the
+   startup-priority chunk), so bare `.navbar`/`body` rules would fix
+   and pad the home dashboard and every other app too. `.fin-nav`
+   wraps FinanceNavBar (navbar + tabs), `.fin-app` wraps PageShell
+   content; the old `body` padding becomes offsets on those roots. */
+.fin-nav {
   padding-top: 44px;
-  padding-bottom: 100px;
+}
+.fin-nav .navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1030;
+}
+.fin-app {
+  margin-bottom: 100px;
 }
 /* On mobile browsers one too-wide child expands the layout
    viewport past the device width, which also stretches the fixed
    navbar beyond the screen (fixed positioning follows the layout
-   viewport). Clip root horizontal overflow so the viewport can
-   never grow; wide content scrolls inside its own container.
-   `clip`, unlike `hidden`, doesn't create a scroll container, so
-   overflow-y stays `visible` and sticky/window scrolling keep
-   working. */
-html,
-body {
+   viewport). Clip horizontal overflow at the finance roots so the
+   viewport can never grow; wide content scrolls inside its own
+   container. `clip`, unlike `hidden`, doesn't create a scroll
+   container, so overflow-y stays `visible` and sticky/window
+   scrolling keep working. */
+.fin-nav,
+.fin-app {
   overflow-x: hidden;
   overflow-x: clip;
 }
