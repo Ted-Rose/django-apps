@@ -84,7 +84,12 @@ jobs:
               "incomplete release"
             exit 1
           fi
-          jq 'sort_by(.mergedAt)
+          # Exclude `main`/`staging` heads — a sync PR
+          # (main→staging) would promote `main` itself and
+          # wedge every subsequent run on the same entry.
+          jq 'map(select(.headRefName != "main"
+                  and .headRefName != "staging"))
+              | sort_by(.mergedAt)
               | group_by(.headRefName) | map(.[-1])
               | sort_by(.mergedAt)' /tmp/staged-raw.json \
             > /tmp/staged.json
@@ -159,12 +164,14 @@ jobs:
             # skip would never fire on reruns. Instead:
             # a clean squash promotion leaves a merged main
             # PR whose head IS this SHA on this branch…
+            # `gh pr list` has no `--arg` (gh 2.103 errors
+            # "unknown arguments"); pipe --json to plain jq
+            # instead — guaranteed on runners.
             in_main=$(gh pr list --repo "$REPO" \
               --state merged --base main --head "$branch" \
-              --limit 100 \
-              --json headRefOid --jq --arg sha "$sha" \
-              'map(select(.headRefOid == $sha)) | length' \
-              </dev/null) || {
+              --limit 100 --json headRefOid </dev/null \
+              | jq --arg sha "$sha" \
+              'map(select(.headRefOid == $sha)) | length') || {
               echo "  !! promoted-PR lookup failed"
               failed=$((failed+1)); continue; }
             if [ "$in_main" -eq 0 ]; then
@@ -193,9 +200,10 @@ jobs:
             fi
 
             # Recreate the head branch via the refs API: no
-            # push event fires, so no CI re-run — the SHA's
-            # existing green `test` run satisfies the required
-            # check instantly.
+            # push event fires, so no push-triggered CI
+            # re-runs — the `staging-first` required check
+            # re-runs on `opened` and passes by construction
+            # on a staged SHA.
             # If the branch still exists at a DIFFERENT tip,
             # someone pushed past the staging merge — those
             # commits were never staged, so bail rather than
@@ -260,8 +268,11 @@ jobs:
               continue
             fi
 
-            # mergeable settles async; staging-first re-runs on
-            # PR open and passes by construction.
+            # mergeable settles async; staging-first re-runs
+            # on `opened` and passes by construction on a
+            # staged SHA — but it takes seconds to spin up,
+            # so don't race merge_pr against a pending
+            # required check.
             mergeable=""
             for _ in $(seq 1 24); do
               mergeable=$(gh pr view "$mpr" --json mergeable \
@@ -271,6 +282,17 @@ jobs:
               sleep 5
             done
             echo "  mergeable=$mergeable"
+            gate=""
+            for _ in $(seq 1 24); do
+              gate=$(gh pr view "$mpr" \
+                --json statusCheckRollup </dev/null \
+                2>/dev/null | jq -r '[.statusCheckRollup[]
+                  | select(.name == "staging-first")
+                  | .conclusion // ""] | .[0] // ""')
+              [ -n "$gate" ] && break
+              sleep 5
+            done
+            echo "  staging-first=$gate"
             if [ "$mergeable" = "MERGEABLE" ] && \
                merge_pr "$mpr" "$sha"; then
               promoted=$((promoted+1))
