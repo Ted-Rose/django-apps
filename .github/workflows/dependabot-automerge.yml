@@ -6,7 +6,10 @@ name: Dependabot auto-merge
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
+    # Dependabot targets staging (see dependabot.yml
+    # target-branch); its PRs promote to main later like any
+    # other branch.
+    branches: [staging]
 
 permissions:
   contents: write
@@ -131,7 +134,8 @@ jobs:
             # Dependabot disown the PR ("edited by someone
             # else"). Leave the branch alone: Dependabot rebases
             # conflicting PRs itself, which re-runs this job.
-            echo "Branch behind main; awaiting Dependabot rebase."
+            echo "Branch behind staging;" \
+              "awaiting Dependabot rebase."
             exit 0
           fi
           exit 1

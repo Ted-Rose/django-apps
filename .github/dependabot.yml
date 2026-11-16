@@ -4,6 +4,7 @@ updates:
   # "pip" entry on "/" covers every manifest in that directory).
   - package-ecosystem: "pip"
     directory: "/"
+    target-branch: "staging"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -18,6 +19,7 @@ updates:
   # React/Vite SPA workspace (frontend/package.json).
   - package-ecosystem: "npm"
     directory: "/frontend"
+    target-branch: "staging"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -38,6 +40,7 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "staging"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -46,6 +49,7 @@ updates:
   # Root Dockerfile base-image pins.
   - package-ecosystem: "docker"
     directory: "/"
+    target-branch: "staging"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -54,6 +58,7 @@ updates:
   # GCP infra module/provider pins.
   - package-ecosystem: "terraform"
     directory: "/terraform"
+    target-branch: "staging"
     schedule:
       interval: "weekly"
       day: "monday"

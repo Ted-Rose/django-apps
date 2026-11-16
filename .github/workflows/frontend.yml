@@ -1,12 +1,14 @@
 name: Frontend
 
-# Runs on every PR and every push to main (every push deploys to
-# Cloud Run via deploy.yml), so type/lint/test breakage can't reach
-# production unchecked — even when a change doesn't touch frontend/.
+# Runs on every PR and every push to main or staging (every main
+# push deploys to Cloud Run via deploy.yml, every staging push to
+# django-apps-staging via deploy-pr-preview.yml), so type/lint/test
+# breakage can't reach a deploy unchecked — even when a change
+# doesn't touch frontend/.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   frontend:
@@ -47,14 +49,25 @@ jobs:
           # catch that drift. Settings import needs a
           # config.yaml; reuse the Dockerfile's build-time
           # dummy (no secrets, in-memory sqlite).
-          python -c "import yaml; yaml.safe_dump({'SECRET_KEY': 'build-time-dummy', 'DEBUG': False, 'BASE_URL': '', 'DATABASES': {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}}, open('config.yaml', 'w'))"
-          python manage.py export_openapi_schema --output frontend/openapi.json
+          python - <<'PY'
+          import yaml
+          yaml.safe_dump(
+              {'SECRET_KEY': 'build-time-dummy', 'DEBUG': False,
+               'BASE_URL': '',
+               'DATABASES': {'default': {
+                   'ENGINE': 'django.db.backends.sqlite3',
+                   'NAME': ':memory:'}}},
+              open('config.yaml', 'w'))
+          PY
+          python manage.py export_openapi_schema \
+            --output frontend/openapi.json
           rm config.yaml
           # --porcelain catches deleted/untracked files too, which
           # `git diff --exit-code` would silently miss.
           if [ -n "$(git status --porcelain -- frontend/openapi.json)" ]; then
             echo "frontend/openapi.json is stale — run:"
-            echo "  python manage.py export_openapi_schema --output frontend/openapi.json"
+            echo "  python manage.py export_openapi_schema" \
+              "--output frontend/openapi.json"
             git diff -- frontend/openapi.json
             exit 1
           fi
