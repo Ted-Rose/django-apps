@@ -1,0 +1,62 @@
+# Repository settings for django-apps, in Probot Settings format
+# (https://probot.github.io/apps/settings/). Applied ONLY if the
+# Settings app is installed on the repo — otherwise this file is
+# inert documentation of the protection applied via `gh api`;
+# keep it in sync with any manual/protection changes.
+#
+# `staging` protection IS live (applied via `gh api`); `main`
+# protection is the documented target state applied during the
+# staging-first bootstrap — see AGENTS.md
+# "Git workflow — staging-first".
+
+repository:
+  name: django-apps
+  # Squash-only merge buttons: the staging-first flow always
+  # squash-merges (staging PRs and promotion PRs alike).
+  allow_merge_commit: false
+  allow_squash_merge: true
+  allow_rebase_merge: false
+  # Head branches are disposable — staging PR merges and
+  # promotion PR merges both auto-delete them.
+  delete_branch_on_merge: true
+  enable_automated_security_fixes: true
+  enable_vulnerability_alerts: true
+
+# Branch protection rules
+branches:
+  - name: main
+    protection:
+      required_pull_request_reviews: null
+      required_status_checks:
+        strict: false
+        # `staging-first` is the staging-first gate — see
+        # workflows/require-staging.yml and AGENTS.md.
+        contexts:
+          - staging-first
+          - frontend
+          - openspec-validate
+      enforce_admins: false
+      required_linear_history: false
+      allow_force_pushes: false
+      allow_deletions: false
+
+  # Integration branch for the staging-first workflow —
+  # see AGENTS.md "Git workflow — staging-first". PRs
+  # squash-merge here on green; the post-release reset
+  # force-pushes it back to `main`.
+  - name: staging
+    protection:
+      required_pull_request_reviews: null
+      required_status_checks:
+        strict: false
+        contexts:
+          - frontend
+          - openspec-validate
+      enforce_admins: false
+      required_linear_history: false
+      # Allow force pushes for the post-release `staging`
+      # reset (`git push --force-with-lease origin
+      # origin/main:refs/heads/staging`, or the Promote-to-main
+      # workflow's refs-API PATCH).
+      allow_force_pushes: true
+      allow_deletions: false
