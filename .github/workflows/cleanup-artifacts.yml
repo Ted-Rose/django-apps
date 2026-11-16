@@ -19,7 +19,9 @@ permissions:
 env:
   GCP_PROJECT_ID: django-apps-7345
   GCP_REGION: europe-west3
-  WIF_PROVIDER: projects/356166814755/locations/global/workloadIdentityPools/github-actions/providers/github
+  WIF_PROVIDER: >-
+    projects/356166814755/locations/global/
+    workloadIdentityPools/github-actions/providers/github
   DEPLOY_SA: github-deployer@django-apps-7345.iam.gserviceaccount.com
   ARTIFACT_REGISTRY: europe-west3-docker.pkg.dev/django-apps-7345/gae-standard
   SERVICE_NAME: django-apps
@@ -80,21 +82,57 @@ jobs:
             fi
           done
 
+          # Cloud Run *services* pin their image digest at
+          # deploy: keep it so a cold start of a
+          # min-instances=0 service never hits a deleted blob.
+          for SVC in django-apps django-apps-staging; do
+            SVC_IMAGE=$(gcloud run services describe "$SVC" \
+              --region=${{ env.GCP_REGION }} \
+              --project=${{ env.GCP_PROJECT_ID }} \
+              --format=yaml 2>/dev/null \
+              | awk '/^[[:space:]]*image: /{print $2; exit}' \
+              || true)
+            if [ -n "$SVC_IMAGE" ]; then
+              case "$SVC_IMAGE" in
+                *@*)
+                  DIGEST="${SVC_IMAGE##*@}"
+                  ;;
+                *)
+                  DIGEST=$(gcloud artifacts docker images describe \
+                    "$SVC_IMAGE" \
+                    --project=${{ env.GCP_PROJECT_ID }} \
+                    --format='value(image_summary.digest)' \
+                    2>/dev/null || true)
+                  ;;
+              esac
+              if [ -n "$DIGEST" ]; then
+                PROTECTED_DIGESTS="$PROTECTED_DIGESTS $DIGEST"
+                echo "Protected digest (service $SVC): $DIGEST"
+              fi
+            fi
+          done
+
           # Get all tags sorted by creation time (newest first)
+          # — repeated per repo: prod, staging, PR previews.
+          FAILED=0
+          clean_repo() {
+          IMG="$1"
+          echo ""
+          echo "== cleaning ${IMG}"
           TAGS=$(gcloud artifacts docker tags list \
-            ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
+            ${{ env.ARTIFACT_REGISTRY }}/${IMG} \
             --format="value(tag,version)" \
             --sort-by=~UPDATE_TIME \
             --project=${{ env.GCP_PROJECT_ID }})
 
           if [ -z "$TAGS" ]; then
-            echo "No tagged images found in registry"
-            exit 0
+            echo "No tagged images found in $IMG"
+            return 0
           fi
 
           # Count total tags
           TOTAL_COUNT=$(echo "$TAGS" | wc -l | tr -d ' ')
-          echo "Found $TOTAL_COUNT tagged image(s) in registry"
+          echo "Found $TOTAL_COUNT tagged image(s) in $IMG"
 
           # Keep the most recent tag and 'latest' (terraform and the
           # Cloud Run resources resolve through it)
@@ -102,21 +140,19 @@ jobs:
             | awk -F'\t' '$1 != "latest"')
 
           if [ -z "$TAGS_TO_DELETE" ]; then
-            echo "Nothing to delete."
-            exit 0
+            echo "Nothing to delete in $IMG."
+            return 0
           fi
 
           DELETE_COUNT=$(echo "$TAGS_TO_DELETE" | wc -l | tr -d ' ')
           echo "Deleting $DELETE_COUNT old tagged image(s)..."
 
-          # Track failures
-          FAILED=0
-          DELETED_DIGESTS=()
+          local -a DELETED_DIGESTS=()
 
           # First, delete all old tags
           while IFS=$'\t' read -r tag version; do
             if [ -n "$tag" ]; then
-              TAG_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${tag}"
+              TAG_PATH="${{ env.ARTIFACT_REGISTRY }}/${IMG}:${tag}"
               echo "Deleting tag: $TAG_PATH"
 
               if ! gcloud artifacts docker tags delete "$TAG_PATH" \
@@ -138,7 +174,7 @@ jobs:
           # its digest with 'latest', and deleting that digest would
           # wipe the just-deployed image.
           REMAINING_DIGESTS=$(gcloud artifacts docker tags list \
-            ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
+            ${{ env.ARTIFACT_REGISTRY }}/${IMG} \
             --format="value(version)" \
             --project=${{ env.GCP_PROJECT_ID }} | sort -u)
 
@@ -157,41 +193,47 @@ jobs:
 
             if echo "$PROTECTED_DIGESTS" | tr ' ' '\n' \
                 | grep -qxF "$digest"; then
-              echo "Skipping $digest (in use by a Cloud Run job)"
+              echo "Skipping $digest (in use by Cloud Run)"
               continue
             fi
 
-            IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}@${digest}"
+            IMAGE_PATH="${{ env.ARTIFACT_REGISTRY }}/${IMG}@${digest}"
             echo "Deleting untagged image: $IMAGE_PATH"
 
             if ! gcloud artifacts docker images delete "$IMAGE_PATH" \
               --quiet \
               --project=${{ env.GCP_PROJECT_ID }} 2>&1; then
-              echo "WARNING: Failed to delete untagged image $IMAGE_PATH (may have been auto-cleaned)"
+              echo "WARNING: delete failed for $IMAGE_PATH"
+              echo "(may have been auto-cleaned already)"
               # Don't count as failure - GCP may have auto-cleaned it
             else
               echo "Successfully deleted untagged image"
             fi
           done
-          
+
+          echo ""
+          echo "Remaining tagged images in $IMG:"
+          gcloud artifacts docker tags list \
+            ${{ env.ARTIFACT_REGISTRY }}/${IMG} \
+            --format="table(tag,version.slice(7:26),UPDATE_TIME)" \
+            --sort-by=~UPDATE_TIME \
+            --project=${{ env.GCP_PROJECT_ID }}
+          }
+
+          for IMG in django-apps django-apps-staging \
+              django-apps-preview; do
+            clean_repo "$IMG"
+          done
+
           # Fail the job if any tag deletions failed
           if [ $FAILED -gt 0 ]; then
             echo ""
             echo "ERROR: $FAILED tag(s) failed to delete"
             exit 1
           fi
-          
+
           echo ""
-          echo "Cleanup complete! All old images deleted successfully."
-          
-          # Show remaining images
-          echo ""
-          echo "Remaining tagged images:"
-          gcloud artifacts docker tags list \
-            ${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }} \
-            --format="table(tag,version.slice(7:26),UPDATE_TIME)" \
-            --sort-by=~UPDATE_TIME \
-            --project=${{ env.GCP_PROJECT_ID }}
+          echo "Cleanup complete! All old images deleted."
 
       - name: Report storage usage
         run: |

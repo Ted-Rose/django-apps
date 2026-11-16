@@ -52,7 +52,10 @@ The staging environment uses a **separate Aiven database**,
 Cloud Run service and PR previews) or `VERCEL_ENV=preview`
 (every Vercel preview), falling back to `DATABASE_URL` when
 unset. `STAGING_DATABASE_URL` lives in the shared `env-file`
-secret and the local `.env`.
+secret and the local `.env` — Vercel serverless reads
+neither, so it must also be added under the Vercel
+project's Preview-scope env vars or previews keep
+using prod (loud warning, never silent).
 
 - **Features/fixes**: branch off `origin/main` — never
   `staging`. Open the PR with `--base staging`, then
@@ -64,7 +67,7 @@ secret and the local `.env`.
   fine; restore with `git push origin
   <sha>:refs/heads/<branch>` where `<sha>` is the merged
   staging PR's `headRefOid`), then merge into `staging` via
-  the still-open staging PR or a new one.
+  a new staging PR.
 - **Promotion to `main`** — only when the user asks to
   release or merge to main. The `Promote to main` workflow
   (`.github/workflows/promote-to-main.yml`) automates it:
@@ -521,7 +524,7 @@ level.
   Never create another secret — append new credentials as
   KEY=VALUE lines (each extra secret adds cost).
 - `deploy-pr-preview.yml` deploys a `django-apps-pr-<n>` Cloud Run
-  service per PR to main (min 0 / max 1) sharing `env-file`;
+  service per PR or dispatch (min 0 / max 1) sharing `env-file`;
   previews run `APP_ENV=staging`, so they read the staging DB
   once `STAGING_DATABASE_URL` is in `env-file` (prod fallback
   until then).

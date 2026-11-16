@@ -138,10 +138,14 @@ IS_STAGING_ENVIRONMENT = (
 
 
 def _database_env_key():
-    if IS_STAGING_ENVIRONMENT and os.environ.get(
-        'STAGING_DATABASE_URL'
-    ):
-        return 'STAGING_DATABASE_URL'
+    if IS_STAGING_ENVIRONMENT:
+        if os.environ.get('STAGING_DATABASE_URL'):
+            return 'STAGING_DATABASE_URL'
+        logging.getLogger('django_apps').warning(
+            'staging environment selected but '
+            'STAGING_DATABASE_URL is unset — falling back to '
+            'DATABASE_URL (production) until the var lands'
+        )
     return 'DATABASE_URL'
 
 

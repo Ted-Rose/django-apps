@@ -24,8 +24,9 @@ permissions:
   contents: read
   id-token: write
 
-# Serialize with deploy.yml/terraform.yml: they all mutate
-# Cloud Run resources in the same project.
+# Only serialize staging deploys with each other — the
+# gcp-main group (deploy.yml/terraform.yml) is disjoint:
+# staging never touches the prod service or Terraform.
 concurrency: gcp-staging
 
 env:
@@ -79,11 +80,19 @@ jobs:
 
       # Staging migrations run against STAGING_DATABASE_URL —
       # APP_ENV=staging makes settings.py pick it over
-      # DATABASE_URL (same env-file secret payload).
+      # DATABASE_URL (same env-file secret payload). Fail
+      # CLOSED when the var is absent: the settings fallback
+      # exists for preview resilience, but migrations must
+      # never silently apply staging schema to the prod DB.
       - name: Run staging database migrations
         run: |
           export DOTENV="$(gcloud secrets versions access latest \
             --secret=env-file --project=${{ env.GCP_PROJECT_ID }})"
+          grep -q '^STAGING_DATABASE_URL=' <<<"$DOTENV" || {
+            echo "::error::STAGING_DATABASE_URL missing from"
+            echo "::error::env-file — refusing to run staging"
+            echo "::error::migrations against the prod DB."
+            exit 1; }
           APP_ENV=staging USE_GCP_SECRETS=true \
             python manage.py migrate --noinput
 
