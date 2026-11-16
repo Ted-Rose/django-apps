@@ -13,8 +13,10 @@ name: Deploy PR preview to Cloud Run
 # Browse a preview or staging via:
 #   gcloud run services proxy <service> \
 #     --region=europe-west3 --project=django-apps-7345
-# (requires roles/run.invoker). Manual workflow_dispatch previews are
-# not auto-deleted — remove them with `gcloud run services delete`.
+# (requires roles/run.invoker). Manual workflow_dispatch runs
+# redeploy the standing django-apps-staging service — do NOT
+# delete it (a staging push recreates it anyway); only
+# per-PR services are disposable.
 
 on:
   # PR previews disabled to avoid Artifact Registry image buildup.
