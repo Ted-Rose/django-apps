@@ -28,9 +28,11 @@ description: >
    `awk 'length > 79 {print FILENAME":"NR}' <changed files>`.
 4. `git push -u origin <branch>`.
 5. Write the PR body to a temp file (`/tmp/pr-body-<branch>.md`),
-   then `gh pr create --title "Feat: …" --body-file <tmp>`.
-   NEVER pass the body inline via `--body`. Delete the temp file
-   afterwards.
+   then `gh pr create --base staging --title "Feat: …"
+   --body-file <tmp>`. PRs target `staging` — never `main`;
+   `main` only receives promotion PRs per AGENTS.md "Git
+   workflow — staging-first". NEVER pass the body inline via
+   `--body`. Delete the temp file afterwards.
 6. Body template:
 
    ```markdown

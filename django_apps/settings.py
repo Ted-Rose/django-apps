@@ -125,6 +125,26 @@ IS_CLOUD_ENVIRONMENT = IS_GCP_ENVIRONMENT or IS_VERCEL_ENVIRONMENT
 # real environment variables always win.
 DOTENV_LOADED = _load_dotenv()
 
+# Staging deploys — the ad-hoc `django-apps-staging` Cloud Run
+# service (APP_ENV=staging) and every Vercel preview — read the
+# dedicated `django_apps_staging` database via
+# STAGING_DATABASE_URL; production keeps DATABASE_URL. When the
+# staging URL is absent the app falls back to DATABASE_URL so
+# previews keep working until the secret/env var is added.
+IS_STAGING_ENVIRONMENT = (
+    os.environ.get('APP_ENV') == 'staging'
+    or os.environ.get('VERCEL_ENV') == 'preview'
+)
+
+
+def _database_env_key():
+    if IS_STAGING_ENVIRONMENT and os.environ.get(
+        'STAGING_DATABASE_URL'
+    ):
+        return 'STAGING_DATABASE_URL'
+    return 'DATABASE_URL'
+
+
 if IS_CLOUD_ENVIRONMENT:
     import dj_database_url
 
@@ -141,7 +161,9 @@ if IS_CLOUD_ENVIRONMENT:
     DEBUG = False
     BASE_URL = get_env_str('APP_BASE_URL')
 
-    db_config = dj_database_url.parse(get_env_str('DATABASE_URL'))
+    db_config = dj_database_url.parse(
+        get_env_str(_database_env_key())
+    )
     db_config.setdefault('OPTIONS', {})
     # sslmode/sslrootcert can be set via DATABASE_URL query params;
     # 'require' is only the default (Vercel needs e.g. verify-full
@@ -201,7 +223,7 @@ elif DOTENV_LOADED or not os.path.isfile(CONFIG_YAML_PATH):
         'true', '1', 'yes'
     )
     BASE_URL = os.environ.get('APP_BASE_URL', 'http://127.0.0.1:8000')
-    db_url = os.environ.get('DATABASE_URL')
+    db_url = os.environ.get(_database_env_key())
     if db_url:
         DATABASES = {'default': dj_database_url.parse(db_url)}
     else:
@@ -278,6 +300,7 @@ SENTRY_WEB_DSN = os.environ.get('SENTRY_WEB_DSN')
 SENTRY_ENVIRONMENT = (
     os.environ.get('SENTRY_ENVIRONMENT')
     or os.environ.get('VERCEL_ENV')
+    or os.environ.get('APP_ENV')
     or ('production' if IS_GCP_ENVIRONMENT else 'development')
 )
 # Cloud Run sets K_REVISION per deploy, Vercel exposes the commit

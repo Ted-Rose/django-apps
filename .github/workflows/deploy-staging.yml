@@ -1,0 +1,158 @@
+name: Deploy staging to Cloud Run
+
+# Staging-first workflow: pushes to `staging` deploy the
+# `django-apps-staging` Cloud Run service — the persistent
+# staging environment (ad-hoc, not Terraform-managed, mirroring
+# the PR-preview pattern in deploy-pr-preview.yml).
+#   - APP_ENV=staging makes settings.py read
+#     STAGING_DATABASE_URL (the `django_apps_staging` Aiven
+#     database, owned by the `django_apps_staging` role) —
+#     appended to the shared env-file secret, so prod and
+#     staging share one secret payload.
+#   - Private (--no-allow-unauthenticated): 403 at Google's
+#     edge, browse via `gcloud run services proxy` — same
+#     posture as PR previews. The Vercel preview of the
+#     `staging` branch is the public staging URL; it also
+#     uses the staging DB via VERCEL_ENV=preview.
+#   - --min-instances=0: idles at zero.
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# Serialize with deploy.yml/terraform.yml: they all mutate
+# Cloud Run resources in the same project.
+concurrency: gcp-staging
+
+env:
+  GCP_PROJECT_ID: django-apps-7345
+  GCP_REGION: europe-west3
+  WIF_PROVIDER: >-
+    projects/356166814755/locations/global/
+    workloadIdentityPools/github-actions/providers/github
+  DEPLOY_SA: github-deployer@django-apps-7345.iam.gserviceaccount.com
+  SERVICE_NAME: django-apps-staging
+  ARTIFACT_REGISTRY: europe-west3-docker.pkg.dev/django-apps-7345/gae-standard
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build Docker image
+        run: |
+          IMAGE=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}
+          docker build -t "$IMAGE:${{ github.sha }}" \
+                       -t "$IMAGE:staging-latest" .
+
+      - name: Push Docker image
+        run: |
+          IMAGE=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:staging-latest"
+
+      - name: Set up Python for migrations
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Staging migrations run against STAGING_DATABASE_URL —
+      # APP_ENV=staging makes settings.py pick it over
+      # DATABASE_URL (same env-file secret payload).
+      - name: Run staging database migrations
+        run: |
+          export DOTENV="$(gcloud secrets versions access latest \
+            --secret=env-file --project=${{ env.GCP_PROJECT_ID }})"
+          APP_ENV=staging USE_GCP_SECRETS=true \
+            python manage.py migrate --noinput
+
+      - name: Deploy staging service (private)
+        run: |
+          GCP_PID=${{ env.GCP_PROJECT_ID }}
+          RUNTIME_SA=cloudrun-sa@$GCP_PID.iam.gserviceaccount.com
+          ENVS="APP_ENV=staging"
+          ENVS+=",GOOGLE_CLOUD_PROJECT=$GCP_PID"
+          ENVS+=",GCS_AUDIO_BUCKET=$GCP_PID-audio-recordings"
+          ENVS+=",SENTRY_ENVIRONMENT=staging"
+          IMAGE=${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image="$IMAGE:staging-latest" \
+            --region=${{ env.GCP_REGION }} \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --service-account="$RUNTIME_SA" \
+            --min-instances=0 \
+            --max-instances=1 \
+            --memory=512Mi \
+            --cpu=1 \
+            --timeout=300 \
+            --set-secrets=DOTENV=env-file:latest \
+            --set-env-vars="$ENVS" \
+            --project=$GCP_PID
+
+      # WIF credentials cannot mint Cloud Run identity tokens, so
+      # the smoke check verifies the two properties that matter:
+      # the revision reports Ready (container built, started,
+      # healthy) and unauthenticated traffic is rejected at the
+      # edge with 403 (no container start, no spend).
+      - name: Smoke check (private)
+        run: |
+          set -euo pipefail
+          READY=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --format=json | \
+            jq -r '.status.conditions[] | select(.type=="Ready") \
+              | .status')
+          echo "Ready condition: $READY"
+          test "$READY" = "True"
+
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(status.url)')
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$URL/admin/login/")
+          echo "GET /admin/login/ (unauthenticated) -> $CODE"
+          test "$CODE" = "403"
+
+      - name: Show staging access
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(status.url)')
+          {
+            echo "## Staging deployment"
+            echo ""
+            echo "✅ **Service**: ${{ env.SERVICE_NAME }} (private)"
+            echo "🌐 **URL**: $URL"
+            echo "🗄 **DB**: \`django_apps_staging\` via"
+            echo "  \`STAGING_DATABASE_URL\`"
+            echo ""
+            echo "Browse via:"
+            echo "\`gcloud run services proxy ${{ env.SERVICE_NAME }} \\"
+            echo "  --region=${{ env.GCP_REGION }} \\"
+            echo "  --project=${{ env.GCP_PROJECT_ID }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
