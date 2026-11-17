@@ -23,7 +23,9 @@ export default tseslint.config(
       'react-hooks': reactHooks,
     },
     settings: {
-      react: { version: 'detect' },
+      // Pinned explicitly: 'detect' makes eslint-plugin-react call
+      // context.getFilename(), which ESLint 10 removed.
+      react: { version: '19.3' },
     },
     languageOptions: {
       globals: { ...globals.browser },
