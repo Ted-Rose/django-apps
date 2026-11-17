@@ -220,8 +220,10 @@ jobs:
             --project=${{ env.GCP_PROJECT_ID }}
           }
 
-          for IMG in django-apps django-apps-staging \
-              django-apps-preview; do
+          # django-apps-staging is a TAG inside the
+          # django-apps-preview package, not a package — its
+          # digest is protected by the service loop above.
+          for IMG in django-apps django-apps-preview; do
             clean_repo "$IMG"
           done
 
