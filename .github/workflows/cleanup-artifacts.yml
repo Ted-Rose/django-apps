@@ -85,6 +85,10 @@ jobs:
           # Cloud Run *services* pin their image digest at
           # deploy: keep it so a cold start of a
           # min-instances=0 service never hits a deleted blob.
+          # The `image:` field resolves the tag to its CURRENT
+          # digest — a tag moved since the deploy could leave an
+          # older pinned digest unprotected (rare: each deploy
+          # re-tags). Accepted residual risk.
           for SVC in django-apps django-apps-staging; do
             SVC_IMAGE=$(gcloud run services describe "$SVC" \
               --region=${{ env.GCP_REGION }} \
