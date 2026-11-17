@@ -4,6 +4,8 @@ updates:
   # "pip" entry on "/" covers every manifest in that directory).
   - package-ecosystem: "pip"
     directory: "/"
+    # Staging-first: updates soak on `staging`, then
+    # promote to `main` like any other change.
     target-branch: "staging"
     schedule:
       interval: "weekly"
@@ -19,6 +21,8 @@ updates:
   # React/Vite SPA workspace (frontend/package.json).
   - package-ecosystem: "npm"
     directory: "/frontend"
+    # Staging-first: updates soak on `staging`, then
+    # promote to `main` like any other change.
     target-branch: "staging"
     schedule:
       interval: "weekly"
@@ -40,6 +44,8 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    # Staging-first: updates soak on `staging`, then
+    # promote to `main` like any other change.
     target-branch: "staging"
     schedule:
       interval: "weekly"
@@ -49,6 +55,8 @@ updates:
   # Root Dockerfile base-image pins.
   - package-ecosystem: "docker"
     directory: "/"
+    # Staging-first: updates soak on `staging`, then
+    # promote to `main` like any other change.
     target-branch: "staging"
     schedule:
       interval: "weekly"
@@ -58,6 +66,8 @@ updates:
   # GCP infra module/provider pins.
   - package-ecosystem: "terraform"
     directory: "/terraform"
+    # Staging-first: updates soak on `staging`, then
+    # promote to `main` like any other change.
     target-branch: "staging"
     schedule:
       interval: "weekly"

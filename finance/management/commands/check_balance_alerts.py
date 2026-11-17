@@ -8,6 +8,7 @@ from django.utils import timezone, translation
 from django.utils.translation import gettext
 
 from django_apps.models import user_language
+from django_apps.sentry import capture_provider_exception
 from finance.models import BalanceAlert, Notification
 from finance.services.gocardless import GoCardlessClient
 from finance.services.money import fmt_money
@@ -84,6 +85,20 @@ class Command(BaseCommand):
                 dead_status = result.get('dead_status')
                 if dead_status and not dry_run:
                     mark_requisition_dead(account, dead_status)
+                if (
+                    not dead_status
+                    and not result.get('rate_limited')
+                    and result.get('exc') is not None
+                ):
+                    # A dead consent is a handled lifecycle
+                    # outcome and the free-tier daily quota is
+                    # routine — the balances API skips both the
+                    # same way; any other fetch failure is an
+                    # upstream problem worth trending.
+                    capture_provider_exception(
+                        result['exc'],
+                        tags={'job': 'check_balance_alerts'},
+                    )
                 logger.warning(
                     'Balance fetch failed for account %s — '
                     'skipping its alerts: %s',

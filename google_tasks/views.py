@@ -18,9 +18,10 @@ import uuid
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
+from django_apps.sentry import capture_internal_exception
 from google_tasks.models import GoogleTask, GoogleTaskList, TaskLabel
 from google_tasks.services import (
     sync_all,
@@ -31,7 +32,8 @@ from google_tasks.services import (
     delete_task_google,
     match_task_list,
     remove_starred_hashtags,
-    get_tasks_service
+    get_tasks_service,
+    capture_sync_exception,
 )
 from google_api.utils import get_user_credentials
 from google_tasks.tiptap_doc import doc_to_markdown, is_tiptap_doc
@@ -255,6 +257,9 @@ def toggle_star(request, task_id):
                             f'Failed to update notes in Google Tasks '
                             f'API: {type(e).__name__}: {str(e)}'
                         )
+                        capture_sync_exception(
+                            e, 'toggle_star_notes_patch'
+                        )
                         # Continue anyway - local update is more
                         # important; needs_push stays True for retry
 
@@ -300,10 +305,11 @@ def sync_view(request):
     if result:
         try:
             process_task_labels(request.user, creds)
-        except Exception:
+        except Exception as e:
             logger.exception(
                 'Unexpected error during post-sync label processing'
             )
+            capture_sync_exception(e, 'process_task_labels')
 
     return JsonResponse({'success': result})
 
@@ -587,6 +593,16 @@ def create_divider(request):
         })
     except Exception as e:
         logger.error(f'Error creating divider: {e}')
+        # Http404 (foreign task_list_id) and ValueError (bad JSON
+        # body) are user errors the 400 already covers — only real
+        # bugs are worth a Sentry event.
+        if not isinstance(e, (Http404, ValueError)):
+            capture_internal_exception(
+                e, tags={
+                    'app': 'google_tasks',
+                    'operation': 'create_divider',
+                }
+            )
         return JsonResponse({
             'success': False,
             'error': str(e),
@@ -650,6 +666,13 @@ def update_divider(request, task_id):
         return JsonResponse({'success': True})
     except Exception as e:
         logger.error(f'Error updating divider: {e}')
+        if not isinstance(e, (Http404, ValueError)):
+            capture_internal_exception(
+                e, tags={
+                    'app': 'google_tasks',
+                    'operation': 'update_divider',
+                }
+            )
         return JsonResponse({
             'success': False,
             'error': str(e),
@@ -965,6 +988,13 @@ def create_task_view(request):
         })
     except Exception as e:
         logger.error(f'Error creating task: {e}')
+        if not isinstance(e, (Http404, ValueError)):
+            capture_internal_exception(
+                e, tags={
+                    'app': 'google_tasks',
+                    'operation': 'create_task_view',
+                }
+            )
         return JsonResponse({
             'success': False,
             'error': str(e),
@@ -1090,6 +1120,13 @@ def update_task_view(request, task_id):
         })
     except Exception as e:
         logger.error(f'Error updating task: {e}')
+        if not isinstance(e, (Http404, ValueError)):
+            capture_internal_exception(
+                e, tags={
+                    'app': 'google_tasks',
+                    'operation': 'update_task_view',
+                }
+            )
         return JsonResponse({
             'success': False,
             'error': str(e),

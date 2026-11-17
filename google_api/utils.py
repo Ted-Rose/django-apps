@@ -35,6 +35,12 @@ import google.auth
 import google.auth.transport.requests
 from typing import Optional
 from google.cloud import storage
+from google.cloud.exceptions import GoogleCloudError
+
+from django_apps.sentry import (
+    capture_internal_exception,
+    capture_provider_exception,
+)
 
 logger = logging.getLogger('django')
 
@@ -113,6 +119,16 @@ def _enforce_audio_file_limit(bucket) -> None:
             logger.info(f'Deleted audio over limit: {blob.name}')
     except Exception as e:
         logger.warning(f'Audio file limit enforcement failed: {e}')
+        tags = {'app': 'google_api', 'operation': 'audio_limit'}
+        # Best-effort by contract. A GCS listing/deletion or
+        # transport failure is still a real upstream outage signal
+        # — report it at warning level; anything else is a bug.
+        if isinstance(
+            e, (GoogleCloudError, http_requests.RequestException)
+        ):
+            capture_provider_exception(e, tags=tags)
+        else:
+            capture_internal_exception(e, tags=tags)
 
 
 def _sanitize_text_for_audio(text: str) -> str:
@@ -693,8 +709,18 @@ def callback(request, scopes=None):
                 f'User {user.username} logged in '
                 f'({"created" if created else "existing"})'
             )
-    except Exception:
+    except Exception as e:
         logger.exception('Failed to fetch Google userinfo in callback')
+        tags = {'app': 'google_api', 'operation': 'oauth_userinfo'}
+        # The userinfo fetch fails upstream almost every time —
+        # network errors, or a Google error page whose body .json()
+        # can't parse (requests.JSONDecodeError is itself a
+        # RequestException). Trend those at warning level; real
+        # bugs (get_or_create, auth_login) go to error.
+        if isinstance(e, http_requests.RequestException):
+            capture_provider_exception(e, tags=tags)
+        else:
+            capture_internal_exception(e, tags=tags)
 
     # Save credentials to database for authenticated user
     if user:

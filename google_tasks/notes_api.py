@@ -36,6 +36,7 @@ from google_tasks.api import (
 from google_tasks.models import GoogleTask, NoteCategory
 from google_tasks.tiptap_doc import doc_to_markdown, is_tiptap_doc
 from google_tasks.services import (
+    capture_sync_exception,
     find_note_marker,
     note_display_name,
     note_marker_for,
@@ -182,10 +183,11 @@ def _process_one_note(request, task_id):
             )
     except GoogleReauthRequired:
         raise
-    except Exception:
+    except Exception as e:
         logger.exception(
             f'Post-write note processing failed for {task_id}'
         )
+        capture_sync_exception(e, 'note_label_processing')
 
 
 # --- Read endpoints ---

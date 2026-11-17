@@ -32,3 +32,4 @@ frontend/test-results/
 frontend/playwright-report/
 # i18next-parser scratch output — see frontend/i18next-parser.config.js
 frontend/locales-extracted/
+pr-body.md
