@@ -175,11 +175,22 @@ if IS_CLOUD_ENVIRONMENT:
     db_config['OPTIONS'].setdefault('sslmode', 'require')
     # verify-full needs the CA as a file, but a relative
     # 'sslrootcert=ca.pem' only resolves if the build bundled ca.pem
-    # into /var/task. Materialize the PEM carried in the env
-    # (DB_SSL_CERT in the shared dotenv; 'capem' is the legacy build
-    # var) to an absolute path instead.
+    # into /var/task. When the URL asks for cert verification,
+    # materialize the PEM carried in the env (DB_SSL_CERT in the
+    # shared dotenv; 'capem' is the legacy build var) to an
+    # absolute path instead. Plain sslmode=require is left alone:
+    # adding a rootcert upgrades it to verify-ca, so a stale
+    # DB_SSL_CERT would break connections that work today.
     ca_pem = get_env_str('DB_SSL_CERT') or get_env_str('capem')
-    if ca_pem:
+    wants_ca = (
+        'sslrootcert' in db_config['OPTIONS']
+        or db_config['OPTIONS'].get('sslmode')
+        in ('verify-ca', 'verify-full')
+    )
+    if (
+        ca_pem and wants_ca
+        and '-----BEGIN CERTIFICATE-----' in ca_pem
+    ):
         ca_pem_path = '/tmp/ca.pem'
         if not os.path.exists(ca_pem_path):
             with open(ca_pem_path, 'w') as f:
