@@ -2990,6 +2990,60 @@ class CheckBalanceAlertsTests(TestCase):
         mock_send.assert_not_called()
         self.assertFalse(Notification.objects.exists())
 
+    def test_failed_fetch_reports_provider_exception(self):
+        """A non-terminal fetch failure is a swallowed upstream
+        outage — reported at warning level, never as an internal
+        error. A dead consent stays silent."""
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        error = GoCardlessError(500, 'boom')
+        with patch(
+            'finance.management.commands'
+            '.check_balance_alerts.capture_provider_exception'
+        ) as capture:
+            mock_send, _ = self.run_command(results={
+                'acc-1': {
+                    'ok': False,
+                    'rate_limited': False,
+                    'balance': None,
+                    'error': 'GoCardless API error 500: boom',
+                    'dead_status': None,
+                    'exc': error,
+                },
+            })
+        capture.assert_called_once_with(
+            error, tags={'job': 'check_balance_alerts'}
+        )
+        mock_send.assert_not_called()
+
+    def test_dead_status_result_is_not_reported(self):
+        """Terminal consent errors are handled lifecycle outcomes —
+        the requisition is stamped but nothing reaches Sentry."""
+        BalanceAlert.objects.create(
+            user=self.user,
+            account=self.account,
+            threshold=Decimal('50.00'),
+        )
+        error = GoCardlessError(409, 'suspended')
+        with patch(
+            'finance.management.commands'
+            '.check_balance_alerts.capture_provider_exception'
+        ) as capture:
+            self.run_command(results={
+                'acc-1': {
+                    'ok': False,
+                    'rate_limited': False,
+                    'balance': None,
+                    'error': 'GoCardless API error 409: suspended',
+                    'dead_status': 'SU',
+                    'exc': error,
+                },
+            })
+        capture.assert_not_called()
+
 
 class PushSubscriptionEndpointTests(TestCase):
     """Push subscribe/unsubscribe API — /api/finance/push/*."""
@@ -3256,6 +3310,35 @@ class FetchBalancesParallelTests(TestCase):
             results = client.fetch_balances_parallel(['acc-1'])
         self.assertFalse(results['acc-1']['ok'])
         self.assertFalse(results['acc-1']['rate_limited'])
+
+    def test_failures_carry_the_exception_object(self):
+        """``exc`` lets callers report the failure to Sentry —
+        the exception object itself, never a formatted string
+        (``str(exc)`` can embed credential-bearing URLs)."""
+        client = self.make_client()
+        error = GoCardlessError(500, 'boom')
+        with patch.object(
+            client,
+            'fetch_account_balance',
+            side_effect=error,
+        ):
+            results = client.fetch_balances_parallel(['acc-1'])
+        self.assertIs(results['acc-1']['exc'], error)
+        http_error = requests.HTTPError('boom')
+        with patch.object(
+            client,
+            'fetch_account_balance',
+            side_effect=http_error,
+        ):
+            results = client.fetch_balances_parallel(['acc-1'])
+        self.assertIs(results['acc-1']['exc'], http_error)
+        with patch.object(
+            client,
+            'fetch_account_balance',
+            return_value={'balanceType': 'interimAvailable'},
+        ):
+            results = client.fetch_balances_parallel(['acc-1'])
+        self.assertIsNone(results['acc-1']['exc'])
 
 
 class LiveBalancesViewTests(TestCase):

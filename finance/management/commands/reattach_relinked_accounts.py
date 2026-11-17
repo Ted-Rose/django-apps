@@ -2,6 +2,7 @@ import logging
 
 from django.core.management.base import BaseCommand
 
+from django_apps.sentry import capture_provider_exception
 from finance.models import Account, Requisition
 from finance.services.gocardless import (
     GoCardlessClient,
@@ -56,6 +57,11 @@ class Command(BaseCommand):
                 dead = exc.dead_requisition_status
                 if dead is not None:
                     self._stamp_status(requisition, dead, dry_run)
+                else:
+                    capture_provider_exception(
+                        exc,
+                        tags={'job': 'reattach_relinked_accounts'},
+                    )
                 continue
             status = data.get('status', requisition.status)
             if status != 'LN':

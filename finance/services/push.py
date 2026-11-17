@@ -14,10 +14,18 @@ import json
 import logging
 from datetime import timedelta
 
+import requests
 from django.conf import settings
 from pywebpush import WebPushException, webpush
 
+from django_apps.sentry import (
+    capture_internal_exception,
+    capture_provider_exception,
+)
+
 logger = logging.getLogger('django')
+
+_PUSH_TAGS = {'app': 'finance', 'operation': 'send_limit_alert'}
 
 # How long a balance breach stays quiet after notifying — used by
 # check_balance_alerts so its daily scheduled run re-notifies once
@@ -94,13 +102,19 @@ def send_limit_alert(user, title, body, url):
                     'Push to subscription %s failed for user=%s: %s',
                     subscription.pk, user.username, exc,
                 )
-        except Exception:
+                # Push-service failure — upstream outage, trend it.
+                capture_provider_exception(exc, tags=_PUSH_TAGS)
+        except Exception as exc:
             # e.g. network errors or a malformed VAPID key — log and
             # keep going so one bad subscription can't abort the run.
             logger.exception(
                 'Push to subscription %s failed for user=%s',
                 subscription.pk, user.username,
             )
+            if isinstance(exc, requests.exceptions.RequestException):
+                capture_provider_exception(exc, tags=_PUSH_TAGS)
+            else:
+                capture_internal_exception(exc, tags=_PUSH_TAGS)
     logger.info(
         'Pushed alert to %s/%s subscriptions for user=%s',
         sent, len(subscriptions), user.username,
