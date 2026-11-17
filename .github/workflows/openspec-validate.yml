@@ -1,14 +1,14 @@
 name: OpenSpec validate
 
-# Runs on every PR and every push to main (same triggers as
-# frontend.yml), so a spec or change delta that fails
-# `openspec validate --all --strict` can't reach main — strict
-# mode catches >500-char requirement bodies and spec/delta drift.
-# Runs from the repo root where openspec/ lives.
+# Runs on every PR and every push to main or staging (same
+# triggers as frontend.yml), so a spec or change delta that fails
+# `openspec validate --all --strict` can't reach main or staging —
+# strict mode catches >500-char requirement bodies and spec/delta
+# drift. Runs from the repo root where openspec/ lives.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, staging]
 
 # Least-privilege token: the job only reads the checkout, and
 # --ignore-scripts below keeps third-party npm code from running

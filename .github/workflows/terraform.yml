@@ -7,7 +7,7 @@ on:
       - 'terraform/**'
       - '.github/workflows/terraform.yml'
   pull_request:
-    branches: [main]
+    branches: [main, staging]
     paths:
       - 'terraform/**'
       - '.github/workflows/terraform.yml'
@@ -25,8 +25,10 @@ concurrency: gcp-main
 env:
   GCP_PROJECT_ID: django-apps-7345
   TF_VAR_region: europe-west3
-  WIF_PROVIDER: projects/356166814755/locations/global/workloadIdentityPools/github-actions/providers/github
-  DEPLOY_SA: github-deployer@django-apps-7345.iam.gserviceaccount.com
+  WIF_PROVIDER: "projects/356166814755/locations/global/\
+    workloadIdentityPools/github-actions/providers/github"
+  DEPLOY_SA: >-
+    github-deployer@django-apps-7345.iam.gserviceaccount.com
 
 jobs:
   terraform:
@@ -77,7 +79,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+            const fmtHead = '#### Terraform Format and Style 🖌';
+            const output = `${fmtHead}\`${{ steps.fmt.outcome }}\`
             #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
             #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
             <details><summary>Validation Output</summary>
@@ -98,7 +101,9 @@ jobs:
 
             </details>
 
-            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+            *Pusher: @${{ github.actor }}, ` +
+              `Action: \`${{ github.event_name }}\`, Workflow: ` +
+              `\`${{ github.workflow }}\`*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
