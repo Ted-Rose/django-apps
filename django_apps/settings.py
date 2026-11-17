@@ -125,6 +125,30 @@ IS_CLOUD_ENVIRONMENT = IS_GCP_ENVIRONMENT or IS_VERCEL_ENVIRONMENT
 # real environment variables always win.
 DOTENV_LOADED = _load_dotenv()
 
+# Staging deploys — the ad-hoc `django-apps-staging` Cloud Run
+# service (APP_ENV=staging) and every Vercel preview — read the
+# dedicated `django_apps_staging` database via
+# STAGING_DATABASE_URL; production keeps DATABASE_URL. When the
+# staging URL is absent the app falls back to DATABASE_URL so
+# previews keep working until the secret/env var is added.
+IS_STAGING_ENVIRONMENT = (
+    os.environ.get('APP_ENV') == 'staging'
+    or os.environ.get('VERCEL_ENV') == 'preview'
+)
+
+
+def _database_env_key():
+    if IS_STAGING_ENVIRONMENT:
+        if os.environ.get('STAGING_DATABASE_URL'):
+            return 'STAGING_DATABASE_URL'
+        logging.getLogger('django_apps').warning(
+            'staging environment selected but '
+            'STAGING_DATABASE_URL is unset — falling back to '
+            'DATABASE_URL (production) until the var lands'
+        )
+    return 'DATABASE_URL'
+
+
 if IS_CLOUD_ENVIRONMENT:
     import dj_database_url
 
@@ -141,12 +165,50 @@ if IS_CLOUD_ENVIRONMENT:
     DEBUG = False
     BASE_URL = get_env_str('APP_BASE_URL')
 
-    db_config = dj_database_url.parse(get_env_str('DATABASE_URL'))
+    db_config = dj_database_url.parse(
+        get_env_str(_database_env_key())
+    )
     db_config.setdefault('OPTIONS', {})
     # sslmode/sslrootcert can be set via DATABASE_URL query params;
     # 'require' is only the default (Vercel needs e.g. verify-full
     # with the build-generated ca.pem).
     db_config['OPTIONS'].setdefault('sslmode', 'require')
+    # verify-full needs the CA as a file, but a relative
+    # 'sslrootcert=ca.pem' only resolves if the build bundled ca.pem
+    # into /var/task. When the URL asks for cert verification,
+    # materialize the PEM carried in the env (DB_SSL_CERT in the
+    # shared dotenv; 'capem' is the legacy build var) to an
+    # absolute path instead. Plain sslmode=require is left alone:
+    # adding a rootcert upgrades it to verify-ca, so a stale
+    # DB_SSL_CERT would break connections that work today.
+    ca_pem = ''
+    for key in ('DB_SSL_CERT', 'capem'):
+        candidate = get_env_str(key)
+        if (
+            '-----BEGIN CERTIFICATE-----' in candidate
+            and '-----END CERTIFICATE-----' in candidate
+        ):
+            ca_pem = candidate
+            break
+    wants_ca = (
+        'sslrootcert' in db_config['OPTIONS']
+        or db_config['OPTIONS'].get('sslmode')
+        in ('verify-ca', 'verify-full')
+    )
+    if ca_pem and wants_ca:
+        ca_pem_path = '/tmp/ca.pem'
+        with open(ca_pem_path, 'w') as f:
+            # Literal '\n' survives when the PEM is pasted as an
+            # individual env var instead of inside a double-quoted
+            # dotenv value.
+            f.write(ca_pem.replace('\\n', '\n'))
+        db_config['OPTIONS']['sslrootcert'] = ca_pem_path
+    elif wants_ca:
+        logging.getLogger('django').warning(
+            'DATABASE_URL requests cert verification but no PEM '
+            'found in DB_SSL_CERT/capem - falling back to any '
+            'bundled ca.pem'
+        )
     # Never hold persistent DB connections: Cloud Run (2 gunicorn
     # workers x 4 threads) kept up to 8 idle connections open per
     # instance for 10 min, which together with Vercel lambdas and the
@@ -201,7 +263,7 @@ elif DOTENV_LOADED or not os.path.isfile(CONFIG_YAML_PATH):
         'true', '1', 'yes'
     )
     BASE_URL = os.environ.get('APP_BASE_URL', 'http://127.0.0.1:8000')
-    db_url = os.environ.get('DATABASE_URL')
+    db_url = os.environ.get(_database_env_key())
     if db_url:
         DATABASES = {'default': dj_database_url.parse(db_url)}
     else:
@@ -278,6 +340,7 @@ SENTRY_WEB_DSN = os.environ.get('SENTRY_WEB_DSN')
 SENTRY_ENVIRONMENT = (
     os.environ.get('SENTRY_ENVIRONMENT')
     or os.environ.get('VERCEL_ENV')
+    or os.environ.get('APP_ENV')
     or ('production' if IS_GCP_ENVIRONMENT else 'development')
 )
 # Cloud Run sets K_REVISION per deploy, Vercel exposes the commit
