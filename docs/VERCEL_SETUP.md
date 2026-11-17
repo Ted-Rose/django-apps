@@ -35,7 +35,8 @@ also works and real env vars always win over `DOTENV` entries.
   `postgres://user:pass@host:port/db?sslmode=verify-full&
   sslrootcert=ca.pem`. Same DB as Cloud Run. `sslmode` defaults to
   `require` if unset; `verify-full` needs the CA cert — provide it
-  via `DB_SSL_CERT` (below) and `settings.py` writes it to
+  via `DB_SSL_CERT` (below; legacy `capem` works too) and
+  `settings.py` writes it to
   `/tmp/ca.pem` at runtime and points `sslrootcert` there, so a
   relative `sslrootcert=ca.pem` in the URL no longer depends on
   the build bundling the file into `/var/task`.

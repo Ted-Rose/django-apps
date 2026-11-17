@@ -181,20 +181,24 @@ if IS_CLOUD_ENVIRONMENT:
     # absolute path instead. Plain sslmode=require is left alone:
     # adding a rootcert upgrades it to verify-ca, so a stale
     # DB_SSL_CERT would break connections that work today.
-    ca_pem = get_env_str('DB_SSL_CERT') or get_env_str('capem')
+    ca_pem = ''
+    for key in ('DB_SSL_CERT', 'capem'):
+        candidate = get_env_str(key)
+        if (
+            '-----BEGIN CERTIFICATE-----' in candidate
+            and '-----END CERTIFICATE-----' in candidate
+        ):
+            ca_pem = candidate
+            break
     wants_ca = (
         'sslrootcert' in db_config['OPTIONS']
         or db_config['OPTIONS'].get('sslmode')
         in ('verify-ca', 'verify-full')
     )
-    if (
-        ca_pem and wants_ca
-        and '-----BEGIN CERTIFICATE-----' in ca_pem
-    ):
+    if ca_pem and wants_ca:
         ca_pem_path = '/tmp/ca.pem'
-        if not os.path.exists(ca_pem_path):
-            with open(ca_pem_path, 'w') as f:
-                f.write(ca_pem)
+        with open(ca_pem_path, 'w') as f:
+            f.write(ca_pem)
         db_config['OPTIONS']['sslrootcert'] = ca_pem_path
     # Never hold persistent DB connections: Cloud Run (2 gunicorn
     # workers x 4 threads) kept up to 8 idle connections open per
