@@ -597,7 +597,12 @@ def create_divider(request):
         # body) are user errors the 400 already covers — only real
         # bugs are worth a Sentry event.
         if not isinstance(e, (Http404, ValueError)):
-            capture_internal_exception(e)
+            capture_internal_exception(
+                e, tags={
+                    'app': 'google_tasks',
+                    'operation': 'create_divider',
+                }
+            )
         return JsonResponse({
             'success': False,
             'error': str(e),
@@ -662,7 +667,12 @@ def update_divider(request, task_id):
     except Exception as e:
         logger.error(f'Error updating divider: {e}')
         if not isinstance(e, (Http404, ValueError)):
-            capture_internal_exception(e)
+            capture_internal_exception(
+                e, tags={
+                    'app': 'google_tasks',
+                    'operation': 'update_divider',
+                }
+            )
         return JsonResponse({
             'success': False,
             'error': str(e),
@@ -979,7 +989,12 @@ def create_task_view(request):
     except Exception as e:
         logger.error(f'Error creating task: {e}')
         if not isinstance(e, (Http404, ValueError)):
-            capture_internal_exception(e)
+            capture_internal_exception(
+                e, tags={
+                    'app': 'google_tasks',
+                    'operation': 'create_task_view',
+                }
+            )
         return JsonResponse({
             'success': False,
             'error': str(e),
@@ -1106,7 +1121,12 @@ def update_task_view(request, task_id):
     except Exception as e:
         logger.error(f'Error updating task: {e}')
         if not isinstance(e, (Http404, ValueError)):
-            capture_internal_exception(e)
+            capture_internal_exception(
+                e, tags={
+                    'app': 'google_tasks',
+                    'operation': 'update_task_view',
+                }
+            )
         return JsonResponse({
             'success': False,
             'error': str(e),

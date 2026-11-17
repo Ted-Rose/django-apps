@@ -1,5 +1,6 @@
 import logging
 
+import requests
 from django.core.management.base import BaseCommand
 
 from django_apps.sentry import (
@@ -101,9 +102,16 @@ class Command(BaseCommand):
                     'Transaction sync failed for account %s: %s',
                     account.account_id, exc,
                 )
-                capture_internal_exception(
-                    exc, tags={'job': 'sync_bank_transactions'}
-                )
+                # Transport failures are upstream outages — same
+                # routing as push.py's split; anything else is a bug.
+                if isinstance(exc, requests.RequestException):
+                    capture_provider_exception(
+                        exc, tags={'job': 'sync_bank_transactions'}
+                    )
+                else:
+                    capture_internal_exception(
+                        exc, tags={'job': 'sync_bank_transactions'}
+                    )
                 self.stderr.write(
                     f'Account {account.account_id}: {exc}'
                 )

@@ -148,8 +148,11 @@ def audio(request, text: str = Query('', max_length=6000),
     # AudioGenerationError and any other pipeline failure map to the
     # API's upstream-error taxonomy (the legacy view returned 500).
     except Exception as e:
-        # Pipeline failures are upstream (gTTS/GCS) — warning-level
-        # provider trends; anything else here is a bug.
+        # text_to_audio wraps every non-ValueError pipeline failure
+        # in AudioGenerationError — nearly always upstream
+        # (gTTS/GCS), so it trends at warning even when the root
+        # cause was a wrapped bug. A non-AudioGenerationError
+        # escaping this op is a bug in the op itself.
         if isinstance(e, AudioGenerationError):
             capture_provider_exception(e, tags={'app': 'gmail'})
         else:

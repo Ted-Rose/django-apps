@@ -85,9 +85,15 @@ class Command(BaseCommand):
                 dead_status = result.get('dead_status')
                 if dead_status and not dry_run:
                     mark_requisition_dead(account, dead_status)
-                if not dead_status and result.get('exc') is not None:
+                if (
+                    not dead_status
+                    and not result.get('rate_limited')
+                    and result.get('exc') is not None
+                ):
                     # A dead consent is a handled lifecycle
-                    # outcome; any other fetch failure is an
+                    # outcome and the free-tier daily quota is
+                    # routine — the balances API skips both the
+                    # same way; any other fetch failure is an
                     # upstream problem worth trending.
                     capture_provider_exception(
                         result['exc'],

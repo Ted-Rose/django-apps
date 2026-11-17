@@ -17,8 +17,8 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from gmail.models import EmailParsingRule
 from django_apps.sentry import capture_provider_exception
+from gmail.models import EmailParsingRule
 from google_api.utils import authorized_http, google_auth
 
 logger = logging.getLogger('django')

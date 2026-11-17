@@ -205,7 +205,10 @@ class GoCardlessClient:
                     'dead_status': None,
                     'exc': None,
                 }
-            except requests.HTTPError as exc:
+            except requests.RequestException as exc:
+                # Transport blips (ConnectionError/Timeout) and
+                # HTTP errors land per-account — one bad fetch must
+                # never escape executor.map and 500 the whole run.
                 return account_id, {
                     'ok': False,
                     'rate_limited': False,

@@ -12,6 +12,7 @@ from django_apps.sentry import (
     capture_internal_exception,
     capture_provider_exception,
 )
+from google.auth.exceptions import RefreshError, TransportError
 from google_api.utils import authorized_http, google_auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -21,24 +22,53 @@ from google_tasks.models import (
     NoteCategory,
     TaskLabel,
 )
+import httplib2
 
 logger = logging.getLogger('django')
 
 TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks'
 
 
+def _needs_reauth(error):
+    """Whether an HttpError means the stored Google grant is dead:
+    401/403 (revoked token or missing scopes such as
+    insufficientPermissions) — the OAuth reauth flow owns that
+    outcome. Same check as gmail.services._needs_reauth; feature
+    apps never import each other, so it is duplicated."""
+    return getattr(error.resp, 'status', None) in (401, 403)
+
+
+# Failure types ``.execute()`` and the auth layer can raise that
+# mean the problem is upstream, not in this code: API error
+# statuses (HttpError), transport failures (OSError covers
+# socket.timeout and ConnectionError), httplib2 transport errors,
+# and credential refresh/transport errors from google-auth.
+_UPSTREAM_EXCEPTIONS = (
+    HttpError,
+    OSError,
+    httplib2.HttpLib2Error,
+    RefreshError,
+    TransportError,
+)
+
+
 def capture_sync_exception(exc, operation):
     """Report a swallowed sync failure to Sentry, when enabled.
 
-    Google API failures (``HttpError``, socket timeouts) are
-    upstream outages — warning-level ``provider_error`` trends
-    via ``capture_provider_exception``. Anything else caught in
-    these blanket handlers is a real bug — error-level
+    Google-side failures (``_UPSTREAM_EXCEPTIONS``) are upstream
+    outages — warning-level ``provider_error`` trends via
+    ``capture_provider_exception``. A dead grant (401/403
+    ``HttpError``) is a routine lifecycle outcome the OAuth flow
+    handles, so it is not reported at all — same filter as
+    gmail's ``_needs_reauth`` sites. Anything else caught in these
+    blanket handlers is a real bug — error-level
     ``internal_error``. The ``operation`` tag names the calling
     service function. No-op without a configured DSN.
     """
+    if isinstance(exc, HttpError) and _needs_reauth(exc):
+        return
     tags = {'app': 'google_tasks', 'operation': operation}
-    if isinstance(exc, (HttpError, socket.timeout)):
+    if isinstance(exc, _UPSTREAM_EXCEPTIONS):
         capture_provider_exception(exc, tags=tags)
     else:
         capture_internal_exception(exc, tags=tags)
@@ -246,6 +276,13 @@ def push_local_changes(user, creds):
             f'Found {tasks_to_push.count()} tasks with local changes'
         )
 
+        # One Sentry event per run: a burst of dirty tasks failing
+        # the same way (sync_view runs on every page load) must not
+        # fan out into N identical events. Failures still log and
+        # count per task; a dead grant stops the loop — every
+        # remaining push would fail identically, and the untouched
+        # rows stay needs_push=True for the post-reauth sync.
+        failure_reported = False
         for task in tasks_to_push:
             try:
                 # Handle deleted tasks
@@ -353,8 +390,12 @@ def push_local_changes(user, creds):
                     f'Error pushing task {task.task_id}: '
                     f'{type(e).__name__}: {str(e)}'
                 )
-                capture_sync_exception(e, 'push_local_changes')
                 stats['errors'] += 1
+                if isinstance(e, HttpError) and _needs_reauth(e):
+                    break
+                if not failure_reported:
+                    capture_sync_exception(e, 'push_local_changes')
+                    failure_reported = True
                 continue
 
         logger.info(

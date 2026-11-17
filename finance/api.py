@@ -31,6 +31,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Query, Router, Schema
 from pydantic import Field
+import requests
 
 from django_apps.api import ApiHttpError
 from django_apps.sentry import (
@@ -1697,7 +1698,12 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
             results.append(_sync_failed_entry(account, exc))
         except Exception as exc:
             failed += 1
-            capture_internal_exception(exc, tags={'app': 'finance'})
+            # Transport failures (connection errors, timeouts) are
+            # upstream outages — same routing as push.py's split.
+            if isinstance(exc, requests.RequestException):
+                capture_provider_exception(exc, tags={'app': 'finance'})
+            else:
+                capture_internal_exception(exc, tags={'app': 'finance'})
             results.append(_sync_failed_entry(account, exc))
 
     if failed:
