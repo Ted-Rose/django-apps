@@ -83,8 +83,6 @@ export function initI18n(): typeof i18n {
       // Detector handles ONLY the navigator.language fallback step —
       // the stored pref and overrides are resolved explicitly.
       detection: { order: ['navigator'], caches: [] },
-      // lv needs its three plural categories (zero/one/other).
-      compatibilityJSON: 'v4',
       interpolation: { escapeValue: false },
     });
   document.documentElement.lang = i18n.language || 'en';
