@@ -23,7 +23,11 @@ export default tseslint.config(
       'react-hooks': reactHooks,
     },
     settings: {
-      react: { version: 'detect' },
+      // Pinned explicitly: 'detect' crashes under eslint 10 —
+      // eslint-plugin-react 7.x still calls the removed
+      // context.getFilename() in its version detector. Keep in
+      // sync with the react version in package.json.
+      react: { version: '19.3.1' },
     },
     languageOptions: {
       globals: { ...globals.browser },
