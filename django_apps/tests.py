@@ -324,6 +324,18 @@ class RunAllJobsCommandTests(SimpleTestCase):
         # The second entry still ran after the first failed.
         self.assertEqual(sub.call_count, 2)
 
+    def test_failure_is_captured_with_the_job_tag(self):
+        with patch(
+            f'{self.MOD}.JOBS', [('bad_job', [], 'daily')]
+        ), patch(f'{self.MOD}.call_command') as sub, patch(
+            f'{self.MOD}.capture_internal_exception'
+        ) as capture:
+            boom = Exception('boom')
+            sub.side_effect = boom
+            with self.assertRaises(CommandError):
+                self.run_command()
+        capture.assert_called_once_with(boom, tags={'job': 'bad_job'})
+
     def test_bad_schedule_fails_only_that_entry(self):
         with patch(
             f'{self.MOD}.JOBS',

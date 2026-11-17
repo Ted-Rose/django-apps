@@ -1,7 +1,8 @@
 """Tests for the Sentry wiring: ``sentry_before_send`` scrubbing,
-the DSN-gated ``capture_internal_exception``, and the ninja
-``Exception`` catch-all that reports swallowed API bugs (uniform
-500 body + Sentry capture + a traceback-carrying log line)."""
+the DSN-gated ``capture_internal_exception`` /
+``capture_provider_exception``, and the ninja ``Exception``
+catch-all that reports swallowed API bugs (uniform 500 body +
+Sentry capture + a traceback-carrying log line)."""
 import json
 import sys
 from unittest.mock import MagicMock, patch
@@ -11,6 +12,7 @@ from django.test import RequestFactory, SimpleTestCase
 from django_apps.api import _on_server_error
 from django_apps.sentry import (
     capture_internal_exception,
+    capture_provider_exception,
     sentry_before_send,
 )
 
@@ -108,6 +110,109 @@ class CaptureInternalExceptionTests(SimpleTestCase):
         args, kwargs = sdk.capture_exception.call_args
         self.assertIsInstance(args[0], RuntimeError)
         self.assertEqual(kwargs.get('level'), 'error')
+
+    def test_extra_tags_are_set_on_the_scope(self):
+        sdk = MagicMock()
+        scope = sdk.new_scope.return_value.__enter__.return_value
+        with patch.dict(sys.modules, {'sentry_sdk': sdk}):
+            capture_internal_exception(
+                RuntimeError('boom'), tags={'job': 'all_jobs'}
+            )
+
+        scope.set_tag.assert_any_call('error_code', 'internal_error')
+        scope.set_tag.assert_any_call('job', 'all_jobs')
+
+
+class _FakeHttpError(Exception):
+    """googleapiclient.HttpError stand-in — status on ``resp``."""
+
+    def __init__(self, status):
+        super().__init__('http error')
+        self.resp = MagicMock(status=status)
+
+
+class _FakeResponseError(Exception):
+    """requests/pywebpush stand-in — status on ``response``."""
+
+    def __init__(self, status):
+        super().__init__('request error')
+        self.response = MagicMock(status_code=status)
+
+
+class CaptureProviderExceptionTests(SimpleTestCase):
+    """Caught upstream failures trend at ``warning`` under an
+    ``error_code`` allowlist — routine handled outcomes never
+    reach Sentry at all."""
+
+    def _capture(self, exc, **kwargs):
+        sdk = MagicMock()
+        scope = sdk.new_scope.return_value.__enter__.return_value
+        with patch.dict(sys.modules, {'sentry_sdk': sdk}):
+            capture_provider_exception(exc, **kwargs)
+        return sdk, scope
+
+    def test_noops_when_sentry_sdk_is_missing(self):
+        with patch.dict(sys.modules, {'sentry_sdk': None}):
+            capture_provider_exception(RuntimeError('boom'))
+
+    def test_captures_at_warning_with_provider_error_tag(self):
+        sdk, scope = self._capture(RuntimeError('boom'))
+
+        scope.set_tag.assert_called_once_with(
+            'error_code', 'provider_error'
+        )
+        args, kwargs = sdk.capture_exception.call_args
+        self.assertIsInstance(args[0], RuntimeError)
+        self.assertEqual(kwargs.get('level'), 'warning')
+
+    def test_429_maps_to_rate_limited(self):
+        _, scope = self._capture(_FakeHttpError(429))
+
+        scope.set_tag.assert_called_once_with(
+            'error_code', 'rate_limited'
+        )
+
+    def test_resp_status_shape_is_read(self):
+        # googleapiclient.HttpError carries ``resp.status``.
+        _, scope = self._capture(_FakeHttpError(500))
+
+        scope.set_tag.assert_called_once_with(
+            'error_code', 'provider_error'
+        )
+
+    def test_response_status_code_shape_is_read(self):
+        # requests/pywebpush exceptions carry ``response.status_code``.
+        _, scope = self._capture(_FakeResponseError(429))
+
+        scope.set_tag.assert_called_once_with(
+            'error_code', 'rate_limited'
+        )
+
+    def test_status_code_attr_shape_is_read(self):
+        # GoCardlessError carries a plain ``status_code``.
+        class E(Exception):
+            status_code = 429
+
+        _, scope = self._capture(E('api error'))
+
+        scope.set_tag.assert_called_once_with(
+            'error_code', 'rate_limited'
+        )
+
+    def test_disallowed_error_code_is_never_sent(self):
+        sdk, _ = self._capture(
+            RuntimeError('boom'), error_code='not_found'
+        )
+
+        sdk.capture_exception.assert_not_called()
+
+    def test_extra_tags_are_set_on_the_scope(self):
+        _, scope = self._capture(
+            RuntimeError('boom'), tags={'app': 'finance'}
+        )
+
+        scope.set_tag.assert_any_call('error_code', 'provider_error')
+        scope.set_tag.assert_any_call('app', 'finance')
 
 
 class ServerErrorHandlerTests(SimpleTestCase):
