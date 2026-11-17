@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from django_apps.sentry import capture_provider_exception
 from gmail.models import EmailParsingRule
 from google_api.utils import authorized_http, google_auth
 
@@ -326,6 +327,11 @@ def get_messages(query, creds, rules=None):
             return google_auth(
                 None, scopes=[GMAIL_READONLY_SCOPE]
             )
+        # Non-auth upstream failure — degrade to whatever was
+        # fetched; trend it (warning) without a Sentry error.
+        capture_provider_exception(
+            error, tags={'app': 'gmail', 'operation': 'get_messages'}
+        )
     return message_details
 
 
@@ -362,4 +368,8 @@ def mark_messages_as_read(creds, message_ids):
         logger.error(f'Gmail API error marking messages read: {error}')
         if _needs_reauth(error):
             return google_auth(None, scopes=[GMAIL_MODIFY_SCOPE])
+        capture_provider_exception(
+            error,
+            tags={'app': 'gmail', 'operation': 'mark_messages_as_read'},
+        )
         return False

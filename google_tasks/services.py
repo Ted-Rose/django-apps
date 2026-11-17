@@ -8,6 +8,11 @@ from difflib import SequenceMatcher
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
+from django_apps.sentry import (
+    capture_internal_exception,
+    capture_provider_exception,
+)
+from google.auth.exceptions import RefreshError, TransportError
 from google_api.utils import authorized_http, google_auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -17,10 +22,56 @@ from google_tasks.models import (
     NoteCategory,
     TaskLabel,
 )
+import httplib2
 
 logger = logging.getLogger('django')
 
 TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks'
+
+
+def _needs_reauth(error):
+    """Whether an HttpError means the stored Google grant is dead:
+    401/403 (revoked token or missing scopes such as
+    insufficientPermissions) — the OAuth reauth flow owns that
+    outcome. Same check as gmail.services._needs_reauth; feature
+    apps never import each other, so it is duplicated."""
+    return getattr(error.resp, 'status', None) in (401, 403)
+
+
+# Failure types ``.execute()`` and the auth layer can raise that
+# mean the problem is upstream, not in this code: API error
+# statuses (HttpError), transport failures (OSError covers
+# socket.timeout and ConnectionError), httplib2 transport errors,
+# and credential refresh/transport errors from google-auth.
+_UPSTREAM_EXCEPTIONS = (
+    HttpError,
+    OSError,
+    httplib2.HttpLib2Error,
+    RefreshError,
+    TransportError,
+)
+
+
+def capture_sync_exception(exc, operation):
+    """Report a swallowed sync failure to Sentry, when enabled.
+
+    Google-side failures (``_UPSTREAM_EXCEPTIONS``) are upstream
+    outages — warning-level ``provider_error`` trends via
+    ``capture_provider_exception``. A dead grant (401/403
+    ``HttpError``) is a routine lifecycle outcome the OAuth flow
+    handles, so it is not reported at all — same filter as
+    gmail's ``_needs_reauth`` sites. Anything else caught in these
+    blanket handlers is a real bug — error-level
+    ``internal_error``. The ``operation`` tag names the calling
+    service function. No-op without a configured DSN.
+    """
+    if isinstance(exc, HttpError) and _needs_reauth(exc):
+        return
+    tags = {'app': 'google_tasks', 'operation': operation}
+    if isinstance(exc, _UPSTREAM_EXCEPTIONS):
+        capture_provider_exception(exc, tags=tags)
+    else:
+        capture_internal_exception(exc, tags=tags)
 
 # Label matching configuration
 LABEL_SIMILARITY_THRESHOLD = 0.80  # 80% similarity required
@@ -157,16 +208,18 @@ def sync_task_lists(user, creds):
         )
         return True
 
-    except socket.timeout:
+    except socket.timeout as e:
         logger.error(
             f'Timeout syncing task lists for user {user.username}'
         )
+        capture_sync_exception(e, 'sync_task_lists')
         return False
     except HttpError as error:
         logger.error(
             f'HttpError syncing task lists: '
             f'Status={error.resp.status}, Content={error.content}'
         )
+        capture_sync_exception(error, 'sync_task_lists')
         return False
     except Exception as e:
         logger.error(
@@ -174,6 +227,7 @@ def sync_task_lists(user, creds):
             f'{type(e).__name__}: {str(e)}',
             exc_info=True
         )
+        capture_sync_exception(e, 'sync_task_lists')
         return False
 
 
@@ -222,6 +276,13 @@ def push_local_changes(user, creds):
             f'Found {tasks_to_push.count()} tasks with local changes'
         )
 
+        # One Sentry event per run: a burst of dirty tasks failing
+        # the same way (sync_view runs on every page load) must not
+        # fan out into N identical events. Failures still log and
+        # count per task; a dead grant stops the loop — every
+        # remaining push would fail identically, and the untouched
+        # rows stay needs_push=True for the post-reauth sync.
+        failure_reported = False
         for task in tasks_to_push:
             try:
                 # Handle deleted tasks
@@ -330,6 +391,11 @@ def push_local_changes(user, creds):
                     f'{type(e).__name__}: {str(e)}'
                 )
                 stats['errors'] += 1
+                if isinstance(e, HttpError) and _needs_reauth(e):
+                    break
+                if not failure_reported:
+                    capture_sync_exception(e, 'push_local_changes')
+                    failure_reported = True
                 continue
 
         logger.info(
@@ -341,16 +407,18 @@ def push_local_changes(user, creds):
         )
         return stats
 
-    except socket.timeout:
+    except socket.timeout as e:
         logger.error(
             f'Timeout pushing local changes for user {user.username}'
         )
+        capture_sync_exception(e, 'push_local_changes')
         return {'error': 'timeout'}
     except HttpError as error:
         logger.error(
             f'HttpError pushing local changes: '
             f'Status={error.resp.status}, Content={error.content}'
         )
+        capture_sync_exception(error, 'push_local_changes')
         return {'error': 'http_error'}
     except Exception as e:
         logger.error(
@@ -358,6 +426,7 @@ def push_local_changes(user, creds):
             f'{type(e).__name__}: {str(e)}',
             exc_info=True
         )
+        capture_sync_exception(e, 'push_local_changes')
         return {'error': 'unexpected'}
 
 
@@ -893,16 +962,18 @@ def sync_tasks(user, creds, task_list_id=None):
         )
         return True
 
-    except socket.timeout:
+    except socket.timeout as e:
         logger.error(
             f'Timeout syncing tasks for user {user.username}'
         )
+        capture_sync_exception(e, 'sync_tasks')
         return False
     except HttpError as error:
         logger.error(
             f'HttpError syncing tasks: '
             f'Status={error.resp.status}, Content={error.content}'
         )
+        capture_sync_exception(error, 'sync_tasks')
         return False
     except GoogleTaskList.DoesNotExist:
         logger.error(
@@ -915,6 +986,7 @@ def sync_tasks(user, creds, task_list_id=None):
             f'{type(e).__name__}: {str(e)}',
             exc_info=True
         )
+        capture_sync_exception(e, 'sync_tasks')
         return False
 
 
@@ -1001,10 +1073,11 @@ def create_task(user, creds, title, notes=None, task_list_id=None):
         )
         return response
 
-    except socket.timeout:
+    except socket.timeout as e:
         logger.error(
             f'Timeout creating task "{title}" for user {user.username}'
         )
+        capture_sync_exception(e, 'create_task')
         return None
     except HttpError as error:
         logger.error(
@@ -1013,6 +1086,7 @@ def create_task(user, creds, title, notes=None, task_list_id=None):
             f'Reason={error.resp.reason}, '
             f'Content={error.content}'
         )
+        capture_sync_exception(error, 'create_task')
         return None
     except Exception as e:
         logger.error(
@@ -1020,6 +1094,7 @@ def create_task(user, creds, title, notes=None, task_list_id=None):
             f'{type(e).__name__}: {str(e)}',
             exc_info=True
         )
+        capture_sync_exception(e, 'create_task')
         return None
 
 
@@ -1086,10 +1161,11 @@ def complete_task(user, creds, task_id):
         )
         return True
 
-    except socket.timeout:
+    except socket.timeout as e:
         logger.error(
             f'Timeout completing task {task_id} for user {user.username}'
         )
+        capture_sync_exception(e, 'complete_task')
         return False
     except HttpError as error:
         logger.error(
@@ -1098,6 +1174,7 @@ def complete_task(user, creds, task_id):
             f'Reason={error.resp.reason}, '
             f'Content={error.content}'
         )
+        capture_sync_exception(error, 'complete_task')
         return False
     except GoogleTask.DoesNotExist:
         logger.error(
@@ -1110,6 +1187,7 @@ def complete_task(user, creds, task_id):
             f'{type(e).__name__}: {str(e)}',
             exc_info=True
         )
+        capture_sync_exception(e, 'complete_task')
         return False
 
 
@@ -1178,11 +1256,12 @@ def uncomplete_task(user, creds, task_id):
         )
         return True
 
-    except socket.timeout:
+    except socket.timeout as e:
         logger.error(
             f'Timeout uncompleting task {task_id} '
             f'for user {user.username}'
         )
+        capture_sync_exception(e, 'uncomplete_task')
         return False
     except HttpError as error:
         logger.error(
@@ -1191,6 +1270,7 @@ def uncomplete_task(user, creds, task_id):
             f'Reason={error.resp.reason}, '
             f'Content={error.content}'
         )
+        capture_sync_exception(error, 'uncomplete_task')
         return False
     except GoogleTask.DoesNotExist:
         logger.error(
@@ -1203,6 +1283,7 @@ def uncomplete_task(user, creds, task_id):
             f'{type(e).__name__}: {str(e)}',
             exc_info=True
         )
+        capture_sync_exception(e, 'uncomplete_task')
         return False
 
 
@@ -1822,11 +1903,12 @@ def move_task_to_list(user, creds, task, target_list):
         )
         return True
 
-    except socket.timeout:
+    except socket.timeout as e:
         logger.error(
             f'Timeout moving task {task.task_id} from '
             f'{task.task_list.title} to {target_list.title}'
         )
+        capture_sync_exception(e, 'move_task_to_list')
         return False
     except HttpError as error:
         logger.error(
@@ -1835,6 +1917,7 @@ def move_task_to_list(user, creds, task, target_list):
             f'Reason={error.resp.reason}, '
             f'Content={error.content}'
         )
+        capture_sync_exception(error, 'move_task_to_list')
         return False
     except Exception as e:
         logger.error(
@@ -1842,6 +1925,7 @@ def move_task_to_list(user, creds, task, target_list):
             f'{type(e).__name__}: {str(e)}',
             exc_info=True
         )
+        capture_sync_exception(e, 'move_task_to_list')
         return False
 
 
@@ -1944,10 +2028,11 @@ def delete_task_google(user, creds, task):
                 return True
             raise
 
-    except socket.timeout:
+    except socket.timeout as e:
         logger.error(
             f'Timeout deleting task {task.task_id} from Google Tasks'
         )
+        capture_sync_exception(e, 'delete_task_google')
         return False
     except HttpError as error:
         logger.error(
@@ -1956,6 +2041,7 @@ def delete_task_google(user, creds, task):
             f'Reason={error.resp.reason}, '
             f'Content={error.content}'
         )
+        capture_sync_exception(error, 'delete_task_google')
         return False
     except Exception as e:
         logger.error(
@@ -1963,6 +2049,7 @@ def delete_task_google(user, creds, task):
             f'{type(e).__name__}: {str(e)}',
             exc_info=True
         )
+        capture_sync_exception(e, 'delete_task_google')
         return False
 
 
