@@ -9,7 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 def create_ca_pem():
     print("Starting to create 'ca.pem'...")
-    capem_content = os.environ.get('capem')
+    capem_content = (
+        os.environ.get('capem') or os.environ.get('DB_SSL_CERT')
+    )
     if capem_content:
         print("capem_content found")
         blocks = re.findall(

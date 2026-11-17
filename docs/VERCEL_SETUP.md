@@ -10,6 +10,15 @@ Django's `<path:subpath>` catch-all already serves the shell on every
 
 ## Environment variables
 
+### One variable covers everything: `DOTENV`
+
+The recommended setup is a **single `DOTENV` env var** holding the
+full contents of the repo-root `.env` file (same KEY=VALUE format
+the GCP `env-file` secret uses — `.env.example` documents every
+key). `settings.py` parses `DOTENV` at import, so the per-key list
+below is what that blob must contain; setting them individually
+also works and real env vars always win over `DOTENV` entries.
+
 ### Runtime (used by the serverless function)
 
 - `DJANGO_SECRET_KEY` — same as Cloud Run's `django-secret-key`;
@@ -23,13 +32,19 @@ Django's `<path:subpath>` catch-all already serves the shell on every
   Run, the callback lands there and the session cookie is gone →
   "No pending bank connection found."
 - `DATABASE_URL` — Aiven Postgres URL, e.g.
-  `postgres://user:pass@host:port/db?sslmode=verify-full`. Same DB
-  as Cloud Run. `sslmode` defaults to `require` if unset;
-  `verify-full` also needs `sslrootcert=<path-to-ca.pem>` pointing
-  at the `ca.pem` generated at build time from `capem` (written to
-  the repo root, i.e. `/var/task/ca.pem` in the lambda).
+  `postgres://user:pass@host:port/db?sslmode=verify-full&
+  sslrootcert=ca.pem`. Same DB as Cloud Run. `sslmode` defaults to
+  `require` if unset; `verify-full` needs the CA cert — provide it
+  via `DB_SSL_CERT` (below) and `settings.py` writes it to
+  `/tmp/ca.pem` at runtime and points `sslrootcert` there, so a
+  relative `sslrootcert=ca.pem` in the URL no longer depends on
+  the build bundling the file into `/var/task`.
   `CONN_MAX_AGE=0` is automatic on Vercel — keep it that way to
   protect Aiven's `max_connections`.
+- `DB_SSL_CERT` — full PEM text of the Aiven project CA
+  certificate (same value as the local `ca.pem` file, `\n`-escaped
+  inside double quotes in dotenv format). Required when
+  `DATABASE_URL` uses `sslmode=verify-full`.
 - `GOOGLE_OAUTH_CLIENT_JSON` — full contents of
   `google_api/app_secrets.json`; written to
   `/tmp/app_secrets.json` at settings import.
@@ -56,9 +71,8 @@ Django's `<path:subpath>` catch-all already serves the shell on every
   import). Without it the endpoints 502.
 - `SENTRY_DSN` / `SENTRY_WEB_DSN` — error monitoring for the
   backend (`django-apps-api` project) and SPA (`django-apps-web`)
-  in org `django-apps-ted` on de.sentry.io. **Currently unset on
-  Vercel** — only Cloud Run reports (its DSNs live in the
-  `env-file` secret). Empty/absent is a safe no-op; set both to
+  in org `django-apps-ted` on de.sentry.io. Copy both from the GCP
+  `env-file` secret. Empty/absent is a safe no-op; set both to
   get Vercel-side coverage.
 
 `VERCEL=1` is injected by Vercel automatically (build + runtime) — do
@@ -66,9 +80,11 @@ not set it manually; it's what puts `settings.py` into cloud mode.
 
 ### Build time (consumed by `build_files.sh`)
 
-- `capem` — full PEM text of the Aiven project CA certificate;
-  parsed and written to `ca.pem` during build (needed only if
-  `DATABASE_URL` uses `sslmode=verify-full`).
+- `capem` / `DB_SSL_CERT` — PEM text of the Aiven project CA
+  certificate; parsed and written to `ca.pem` during build.
+  Legacy: runtime now materializes `DB_SSL_CERT` to `/tmp/ca.pem`
+  itself, so this is only belt-and-braces for `sslrootcert=ca.pem`
+  relative-path lookups.
 - `config_yaml` — YAML text of `config.yaml`, written to
   `config.yaml` during build. Effectively redundant while
   `VERCEL=1` is set (cloud env vars take precedence), but the
@@ -90,12 +106,12 @@ database.
 
 ## Post-deploy dashboard checklist
 
-1. Settings → Environment Variables: confirm/add every runtime var
-   above, scoped to **Production** (and Preview if you want preview
-   deploys — see "Scope settings").
-2. Set `SENTRY_DSN` + `SENTRY_WEB_DSN` — unset means no error
-   reporting from the Vercel deploy (Cloud Run already reports via
-   the `env-file` secret).
+1. Settings → Environment Variables: add `DOTENV` = the repo-root
+   `.env` contents (covers every runtime var above), scoped to
+   **Production** (and Preview if you want preview deploys — see
+   "Scope settings").
+2. Set `SENTRY_DSN` + `SENTRY_WEB_DSN` inside that blob — unset
+   means no error reporting from the Vercel deploy.
 3. Settings → Functions: enable **Fluid compute** and confirm the
    region shows `fra1` (pinned by `vercel.json`'s `regions`).
 4. `APP_BASE_URL` = the Vercel domain (with `https://`, no trailing

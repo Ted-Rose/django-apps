@@ -173,6 +173,18 @@ if IS_CLOUD_ENVIRONMENT:
     # 'require' is only the default (Vercel needs e.g. verify-full
     # with the build-generated ca.pem).
     db_config['OPTIONS'].setdefault('sslmode', 'require')
+    # verify-full needs the CA as a file, but a relative
+    # 'sslrootcert=ca.pem' only resolves if the build bundled ca.pem
+    # into /var/task. Materialize the PEM carried in the env
+    # (DB_SSL_CERT in the shared dotenv; 'capem' is the legacy build
+    # var) to an absolute path instead.
+    ca_pem = get_env_str('DB_SSL_CERT') or get_env_str('capem')
+    if ca_pem:
+        ca_pem_path = '/tmp/ca.pem'
+        if not os.path.exists(ca_pem_path):
+            with open(ca_pem_path, 'w') as f:
+                f.write(ca_pem)
+        db_config['OPTIONS']['sslrootcert'] = ca_pem_path
     # Never hold persistent DB connections: Cloud Run (2 gunicorn
     # workers x 4 threads) kept up to 8 idle connections open per
     # instance for 10 min, which together with Vercel lambdas and the
