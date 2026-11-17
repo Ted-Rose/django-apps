@@ -147,8 +147,9 @@ class Command(BaseCommand):
                 # crash is invisible to DjangoIntegration, which
                 # only sees uncaught exceptions. The all-jobs Cloud
                 # Run job is the highest-value internal_error
-                # source; no-op when Sentry is uninitialized.
-                capture_internal_exception(exc)
+                # source; no-op when Sentry is uninitialized. The
+                # `job` tag names which JOBS entry crashed.
+                capture_internal_exception(exc, tags={'job': label})
                 self.stderr.write(f'{label} failed — continuing')
             else:
                 ran += 1

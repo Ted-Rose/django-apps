@@ -16,7 +16,11 @@ import requests
 from ninja import Query, Router, Schema
 
 from django_apps.api import ApiHttpError
-from google_api.utils import text_to_audio
+from django_apps.sentry import (
+    capture_internal_exception,
+    capture_provider_exception,
+)
+from google_api.utils import AudioGenerationError, text_to_audio
 from single_pages import services
 
 router = Router()
@@ -51,6 +55,12 @@ def tts(request, text: str = Query('', max_length=6000),
     except ValueError as e:
         raise ApiHttpError(400, str(e)) from e
     except Exception as e:
+        # Pipeline failures are upstream (gTTS/GCS) — warning-level
+        # provider trends; anything else here is a bug.
+        if isinstance(e, AudioGenerationError):
+            capture_provider_exception(e, tags={'app': 'single_pages'})
+        else:
+            capture_internal_exception(e, tags={'app': 'single_pages'})
         raise ApiHttpError(
             502, f'Failed to generate audio: {e}'
         ) from e
@@ -63,6 +73,7 @@ def spoki(request):
     try:
         article = services.fetch_spoki_article()
     except requests.exceptions.RequestException as e:
+        capture_provider_exception(e, tags={'app': 'single_pages'})
         raise ApiHttpError(
             502, f'Failed to fetch article: {e}'
         ) from e

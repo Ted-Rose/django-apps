@@ -2,6 +2,10 @@ import logging
 
 from django.core.management.base import BaseCommand
 
+from django_apps.sentry import (
+    capture_internal_exception,
+    capture_provider_exception,
+)
 from finance.models import Account
 from finance.services.gocardless import (
     GoCardlessClient,
@@ -84,6 +88,9 @@ class Command(BaseCommand):
                     'Transaction sync failed for account %s: %s',
                     account.account_id, exc,
                 )
+                capture_provider_exception(
+                    exc, tags={'job': 'sync_bank_transactions'}
+                )
                 self.stderr.write(
                     f'Account {account.account_id}: {exc}'
                 )
@@ -93,6 +100,9 @@ class Command(BaseCommand):
                 logger.exception(
                     'Transaction sync failed for account %s: %s',
                     account.account_id, exc,
+                )
+                capture_internal_exception(
+                    exc, tags={'job': 'sync_bank_transactions'}
                 )
                 self.stderr.write(
                     f'Account {account.account_id}: {exc}'

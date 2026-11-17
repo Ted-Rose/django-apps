@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect
 
+from django_apps.sentry import capture_provider_exception
 from finance.models import Account, Requisition, UserAccountPreference
 from finance.services.gocardless import GoCardlessClient, GoCardlessError
 
@@ -37,6 +38,10 @@ def requisition_callback(request):
     try:
         data = client.get_requisition_data(requisition_id)
     except GoCardlessError as exc:
+        # A dead consent is an expected user-facing outcome —
+        # anything else is a GoCardless outage worth trending.
+        if not exc.dead_requisition_status:
+            capture_provider_exception(exc, tags={'app': 'finance'})
         messages.error(request, f'Could not verify bank link: {exc}')
         return redirect('finance:connect')
 
@@ -57,8 +62,12 @@ def requisition_callback(request):
         if account is None:
             try:
                 details = client.get_account_details(account_id)
-            except GoCardlessError:
+            except GoCardlessError as exc:
                 details = {}
+                if not exc.dead_requisition_status:
+                    capture_provider_exception(
+                        exc, tags={'app': 'finance'}
+                    )
             account = _link_account(
                 request.user, requisition, account_id, details
             )
@@ -102,8 +111,12 @@ def _reattach_account(client, user, requisition, account):
             details = client.get_account_details(
                 account.account_id
             )
-        except GoCardlessError:
+        except GoCardlessError as exc:
             details = {}
+            if not exc.dead_requisition_status:
+                capture_provider_exception(
+                    exc, tags={'app': 'finance'}
+                )
         logger.info(
             'Reattaching account pk %s to requisition %s — '
             'relink returned the same account_id %s',

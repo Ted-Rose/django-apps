@@ -203,6 +203,7 @@ class GoCardlessClient:
                     'balance': self.fetch_account_balance(account_id),
                     'error': None,
                     'dead_status': None,
+                    'exc': None,
                 }
             except requests.HTTPError as exc:
                 return account_id, {
@@ -211,6 +212,7 @@ class GoCardlessClient:
                     'balance': None,
                     'error': str(exc),
                     'dead_status': None,
+                    'exc': exc,
                 }
             except GoCardlessError as exc:
                 return account_id, {
@@ -219,6 +221,7 @@ class GoCardlessClient:
                     'balance': None,
                     'error': str(exc),
                     'dead_status': exc.dead_requisition_status,
+                    'exc': exc,
                 }
 
         with ThreadPoolExecutor(

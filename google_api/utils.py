@@ -36,6 +36,11 @@ import google.auth.transport.requests
 from typing import Optional
 from google.cloud import storage
 
+from django_apps.sentry import (
+    capture_internal_exception,
+    capture_provider_exception,
+)
+
 logger = logging.getLogger('django')
 
 # We request tokens with include_granted_scopes='true' (incremental
@@ -113,6 +118,12 @@ def _enforce_audio_file_limit(bucket) -> None:
             logger.info(f'Deleted audio over limit: {blob.name}')
     except Exception as e:
         logger.warning(f'Audio file limit enforcement failed: {e}')
+        # Best-effort by contract, but a GCS listing/deletion
+        # failure is still a real upstream outage signal —
+        # report it at warning level.
+        capture_provider_exception(
+            e, tags={'app': 'google_api', 'operation': 'audio_limit'}
+        )
 
 
 def _sanitize_text_for_audio(text: str) -> str:
@@ -693,8 +704,13 @@ def callback(request, scopes=None):
                 f'User {user.username} logged in '
                 f'({"created" if created else "existing"})'
             )
-    except Exception:
+    except Exception as e:
         logger.exception('Failed to fetch Google userinfo in callback')
+        # A swallowed userinfo failure means login silently
+        # completes without a user — always worth an error event.
+        capture_internal_exception(
+            e, tags={'app': 'google_api', 'operation': 'oauth_userinfo'}
+        )
 
     # Save credentials to database for authenticated user
     if user:
