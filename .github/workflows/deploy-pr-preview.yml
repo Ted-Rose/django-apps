@@ -84,6 +84,49 @@ jobs:
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
+      # Staging migrations run against STAGING_DATABASE_URL —
+      # APP_ENV=staging makes settings.py pick it over
+      # DATABASE_URL (same env-file secret payload). Fail
+      # CLOSED when the var is absent: the settings fallback
+      # exists for preview resilience, but migrations must
+      # never silently apply staging schema to the prod DB.
+      - name: Set up Python
+        if: github.event_name == 'push' &&
+          github.ref == 'refs/heads/staging'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        if: github.event_name == 'push' &&
+          github.ref == 'refs/heads/staging'
+        run: pip install -r requirements.txt
+
+      # Push-only by design: a manual workflow_dispatch redeploy
+      # of staging intentionally skips migrations.
+      - name: Run staging database migrations
+        if: github.event_name == 'push' &&
+          github.ref == 'refs/heads/staging'
+        run: |
+          export DOTENV="$(gcloud secrets versions access latest \
+            --secret=env-file \
+            --project=${{ env.GCP_PROJECT_ID }})"
+          STG_DSN=$(grep -oE \
+            '^(export[[:space:]]+)?STAGING_DATABASE_URL=[^[:space:]]*' \
+            <<<"$DOTENV" | head -1 | cut -d= -f2- \
+            | tr -d "\"'")
+          [ -n "$STG_DSN" ] || {
+            echo "::error::STAGING_DATABASE_URL missing or"
+            echo "::error::empty in env-file — refusing to"
+            echo "::error::run migrations against the prod DB."
+            exit 1; }
+          # Export the VALIDATED value — settings.py's own
+          # dotenv parser (setdefault) then can't fall back
+          # to DATABASE_URL on parse differences.
+          export STAGING_DATABASE_URL="$STG_DSN"
+          APP_ENV=staging USE_GCP_SECRETS=true \
+            python manage.py migrate --noinput
+
       # Previews share the single env-file secret — settings.py parses
       # DOTENV exactly like a local .env file. Note APP_BASE_URL inside
       # env-file still points at production, so OAuth login redirects
@@ -91,9 +134,14 @@ jobs:
       - name: Deploy preview service (private)
         run: |
           GCP_PID=${{ env.GCP_PROJECT_ID }}
-          ENVS="GOOGLE_CLOUD_PROJECT=$GCP_PID"
+          ENVS="APP_ENV=staging"
+          ENVS+=",GOOGLE_CLOUD_PROJECT=$GCP_PID"
           ENVS+=",GCS_AUDIO_BUCKET=$GCP_PID-audio-recordings"
-          ENVS+=",SENTRY_ENVIRONMENT=preview"
+          SENTRY_ENV=staging
+          if [ "$SERVICE_NAME" != "django-apps-staging" ]; then
+            SENTRY_ENV=preview
+          fi
+          ENVS+=",SENTRY_ENVIRONMENT=$SENTRY_ENV"
           SA="cloudrun-sa@$GCP_PID.iam.gserviceaccount.com"
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image="$IMAGE" \

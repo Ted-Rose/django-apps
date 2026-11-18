@@ -508,6 +508,7 @@ class TasksApiTests(TestCase):
             ),
             'state': 'state-123',
             'scopes': ['https://www.googleapis.com/auth/tasks'],
+            'code_verifier': 'verifier-123',
         }
         with patch('google_tasks.views.get_creds_dict',
                    return_value={'token': 't'}), \
@@ -525,6 +526,9 @@ class TasksApiTests(TestCase):
         self.assertEqual(session['state'], 'state-123')
         self.assertEqual(
             session['oauth_scopes'], auth['scopes']
+        )
+        self.assertEqual(
+            session['oauth_code_verifier'], 'verifier-123'
         )
 
     def test_dead_credentials_return_401_google_reauth(self):
