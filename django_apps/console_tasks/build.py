@@ -9,7 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 def create_ca_pem():
     print("Starting to create 'ca.pem'...")
-    capem_content = os.environ.get('capem')
+    capem_content = (
+        os.environ.get('DB_SSL_CERT') or os.environ.get('capem')
+    )
     if capem_content:
         print("capem_content found")
         blocks = re.findall(
@@ -18,7 +20,10 @@ def create_ca_pem():
             re.DOTALL,
         )
         if not blocks:
-            print("No certificates found in 'capem'.")
+            print(
+                "No certificates found in "
+                "'DB_SSL_CERT'/'capem'."
+            )
             return
 
         pem_parts = []
@@ -39,7 +44,9 @@ def create_ca_pem():
             file.write(pem_content)
         print(f"'ca.pem' has been created at {file_path}.")
     else:
-        print("Environment variable 'capem' is not set.")
+        print(
+            "Neither 'DB_SSL_CERT' nor 'capem' is set."
+        )
 
 
 def create_config_yaml():

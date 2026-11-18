@@ -587,7 +587,11 @@ def google_auth(creds=None, scopes=None, user=None):
             return {
                 "authorization_url": authorization_url,
                 "state": state,
-                "scopes": scopes
+                "scopes": scopes,
+                # PKCE: the URL carries code_challenge; the token
+                # exchange must present this verifier (the caller
+                # stores it in the session for callback()).
+                "code_verifier": flow.code_verifier,
             }
 
     return creds
@@ -647,10 +651,15 @@ def callback(request, scopes=None):
     )
 
     redirect_uri = f"{settings.BASE_URL}/google/callback"
+    # PKCE verifier generated when the authorization URL was built —
+    # stored in the session by the view that produced that URL. The
+    # exchange fails with invalid_grant when it is missing.
+    code_verifier = request.session.pop('oauth_code_verifier', None)
     flow = InstalledAppFlow.from_client_secrets_file(
         client_secrets_path,
         scopes,
-        redirect_uri=redirect_uri
+        redirect_uri=redirect_uri,
+        code_verifier=code_verifier
     )
     try:
         flow.fetch_token(

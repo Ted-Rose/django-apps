@@ -173,6 +173,42 @@ if IS_CLOUD_ENVIRONMENT:
     # 'require' is only the default (Vercel needs e.g. verify-full
     # with the build-generated ca.pem).
     db_config['OPTIONS'].setdefault('sslmode', 'require')
+    # verify-full needs the CA as a file, but a relative
+    # 'sslrootcert=ca.pem' only resolves if the build bundled ca.pem
+    # into /var/task. When the URL asks for cert verification,
+    # materialize the PEM carried in the env (DB_SSL_CERT in the
+    # shared dotenv; 'capem' is the legacy build var) to an
+    # absolute path instead. Plain sslmode=require is left alone:
+    # adding a rootcert upgrades it to verify-ca, so a stale
+    # DB_SSL_CERT would break connections that work today.
+    ca_pem = ''
+    for key in ('DB_SSL_CERT', 'capem'):
+        candidate = get_env_str(key)
+        if (
+            '-----BEGIN CERTIFICATE-----' in candidate
+            and '-----END CERTIFICATE-----' in candidate
+        ):
+            ca_pem = candidate
+            break
+    wants_ca = (
+        'sslrootcert' in db_config['OPTIONS']
+        or db_config['OPTIONS'].get('sslmode')
+        in ('verify-ca', 'verify-full')
+    )
+    if ca_pem and wants_ca:
+        ca_pem_path = '/tmp/ca.pem'
+        with open(ca_pem_path, 'w') as f:
+            # Literal '\n' survives when the PEM is pasted as an
+            # individual env var instead of inside a double-quoted
+            # dotenv value.
+            f.write(ca_pem.replace('\\n', '\n'))
+        db_config['OPTIONS']['sslrootcert'] = ca_pem_path
+    elif wants_ca:
+        logging.getLogger('django').warning(
+            'DATABASE_URL requests cert verification but no PEM '
+            'found in DB_SSL_CERT/capem - falling back to any '
+            'bundled ca.pem'
+        )
     # Never hold persistent DB connections: Cloud Run (2 gunicorn
     # workers x 4 threads) kept up to 8 idle connections open per
     # instance for 10 min, which together with Vercel lambdas and the

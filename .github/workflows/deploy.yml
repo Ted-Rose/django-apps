@@ -59,7 +59,9 @@ jobs:
         run: pip install -r requirements.txt
 
       # Runs directly on the runner: Aiven Postgres is publicly
-      # reachable and sslmode=require needs no CA cert. All settings
+      # reachable and sslmode=require needs no CA cert (settings.py
+      # only materializes DB_SSL_CERT when the URL asks for cert
+      # verification). All settings
       # travel in the single env-file secret (same format as a local
       # .env), pulled at run time via WIF so it lives only in GCP.
       - name: Run database migrations
