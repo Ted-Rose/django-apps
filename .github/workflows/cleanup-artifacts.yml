@@ -19,9 +19,8 @@ permissions:
 env:
   GCP_PROJECT_ID: django-apps-7345
   GCP_REGION: europe-west3
-  WIF_PROVIDER: >-
-    projects/356166814755/locations/global/
-    workloadIdentityPools/github-actions/providers/github
+  WIF_PROVIDER: "projects/356166814755/locations/global/\
+    workloadIdentityPools/github-actions/providers/github"
   DEPLOY_SA: github-deployer@django-apps-7345.iam.gserviceaccount.com
   ARTIFACT_REGISTRY: europe-west3-docker.pkg.dev/django-apps-7345/gae-standard
   SERVICE_NAME: django-apps
