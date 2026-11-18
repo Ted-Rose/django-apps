@@ -1,6 +1,11 @@
 # google_api
 
 ## Changelog
+45. Fixed the thin white line under the blue header on the home
+    page (and stray extra space at the top/bottom of the other
+    apps): finance's navbar styles were leaking onto every page —
+    they're now scoped to the finance app only, which also means
+    the home header no longer floats when scrolling
 44. Fixed Google sign-in looping forever: Google now requires the
     PKCE code_verifier at token exchange, but it was discarded
     between the login redirect and the callback — every exchange

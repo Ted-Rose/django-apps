@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
@@ -249,6 +250,24 @@ export function RuleDrawer({
   useEffect(() => {
     const frame = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // The drawer protrudes 640px past the viewport edge while it
+  // slides in (`translateX(100%)`), which would flash a horizontal
+  // scrollbar — finance.css's `overflow-x: clip` used to cover this
+  // globally but is scoped to .fin-nav/.fin-app now. Clip the root
+  // only for as long as the drawer is mounted; useLayoutEffect so
+  // the clip lands before the first paint.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.overflowX;
+    // 'hidden' first — the fallback for engines that don't
+    // parse 'clip' (a rejected second assignment is a no-op).
+    root.style.overflowX = 'hidden';
+    root.style.overflowX = 'clip';
+    return () => {
+      root.style.overflowX = previous;
+    };
   }, []);
 
   useEffect(() => {

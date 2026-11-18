@@ -94,7 +94,9 @@ export function FinanceNavBar() {
   ];
 
   return (
-    <>
+    // `.fin-nav` scopes finance.css's fixed-navbar rule + top offset —
+    // the navbar stays fixed without leaking onto other shell pages.
+    <div className="fin-nav">
       <NavBar title={t('nav.title')} items={items} />
       <div className="fin-tabs">
         <div className="container fin-tabs-inner" ref={tabsRef}>
@@ -109,7 +111,7 @@ export function FinanceNavBar() {
           ))}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

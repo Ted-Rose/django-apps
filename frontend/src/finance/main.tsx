@@ -4,8 +4,8 @@ import { AppRouter } from '../shared/components/AppRouter';
 import { ErrorBoundary } from '../shared/ErrorBoundary';
 import en from './locales/en.json';
 import lv from './locales/lv.json';
-// Ported from finance/static/finance/css/finance.css — provides the
-// fixed navbar offset (`body { padding-top: 44px }`).
+// Ported from finance/static/finance/css/finance.css — the finance
+// design layer plus the scoped fixed-navbar offset (`.fin-nav`).
 import './finance.css';
 
 // Registers this app's catalogs on the shell's shared i18next —
