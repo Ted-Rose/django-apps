@@ -12,6 +12,7 @@ def _gmail_reauth_response(request, auth):
     """Store OAuth state and return a reauth JSON response."""
     request.session['state'] = auth['state']
     request.session['oauth_scopes'] = auth.get('scopes', [])
+    request.session['oauth_code_verifier'] = auth.get('code_verifier')
     request.session['oauth_redirect_url'] = (
         request.META.get('HTTP_REFERER') or '/gmail/'
     )

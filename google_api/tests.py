@@ -79,6 +79,25 @@ class OAuthCallbackTests(TestCase):
             resp = self.client.get(CALLBACK_URL)
         self.assert_login_redirect(resp)
 
+    def test_session_code_verifier_reaches_flow(self):
+        # PKCE: the authorization URL carries code_challenge; Google
+        # rejects the exchange with invalid_grant unless the matching
+        # code_verifier is sent. It lives only on the flow that built
+        # the URL, so it must be session-carried into the fresh flow
+        # the callback constructs.
+        session = self.client.session
+        session['oauth_code_verifier'] = 'test-verifier'
+        session.save()
+        with patch('google_api.utils.InstalledAppFlow') as flow_cls:
+            flow = flow_cls.from_client_secrets_file.return_value
+            flow.fetch_token.side_effect = InvalidGrantError()
+            self.client.get(f'{CALLBACK_URL}?code=abc&state=s')
+        kwargs = flow_cls.from_client_secrets_file.call_args.kwargs
+        self.assertEqual(kwargs['code_verifier'], 'test-verifier')
+        self.assertNotIn(
+            'oauth_code_verifier', self.client.session
+        )
+
 
 class LoginViewTests(TestCase):
     """GET /login/?next= is the shell's standard anonymous bounce
@@ -142,6 +161,23 @@ class LoginViewTests(TestCase):
         self.assertEqual(
             self.client.session['oauth_redirect_url'],
             'google_tasks:dashboard',
+        )
+
+    def test_oauth_flow_stores_code_verifier(self):
+        # The PKCE verifier from the flow that built the
+        # authorization URL must reach the session or the callback's
+        # token exchange dies with invalid_grant (login loop).
+        auth = {
+            'authorization_url': 'https://accounts.google.com/o',
+            'state': 'st',
+            'scopes': [],
+            'code_verifier': 'v123',
+        }
+        with patch('google_api.views.google_auth',
+                   return_value=auth):
+            self.client.get(self.LOGIN_URL)
+        self.assertEqual(
+            self.client.session['oauth_code_verifier'], 'v123'
         )
 
 
