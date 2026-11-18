@@ -31,6 +31,9 @@ def login_view(request):
     if isinstance(auth, dict) and 'authorization_url' in auth:
         request.session['state'] = auth['state']
         request.session['oauth_scopes'] = auth['scopes']
+        request.session['oauth_code_verifier'] = auth.get(
+            'code_verifier'
+        )
         return redirect(auth['authorization_url'])
 
     # Already authenticated, redirect to next URL

@@ -35,6 +35,7 @@ def make_auth_dict(url='https://accounts.google.com/o/oauth2/auth?x=1',
         'authorization_url': url,
         'state': 'state-123',
         'scopes': scopes or [GMAIL_READONLY_SCOPE],
+        'code_verifier': 'verifier-123',
     }
 
 
@@ -289,6 +290,9 @@ class GmailApiTests(TestCase):
         session = self.client.session
         self.assertEqual(session['state'], 'state-123')
         self.assertEqual(session['oauth_scopes'], auth['scopes'])
+        self.assertEqual(
+            session['oauth_code_verifier'], auth['code_verifier']
+        )
         # The OAuth callback returns to the SPA page (query intact),
         # not to an /api/ JSON URL.
         self.assertEqual(

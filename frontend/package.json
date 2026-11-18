@@ -30,11 +30,11 @@
     "@tiptap/pm": "^3.34.0",
     "@tiptap/react": "^3.34.0",
     "@tiptap/starter-kit": "^3.34.0",
-    "i18next": "^26.4.2",
+    "i18next": "^27.1.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-i18next": "^17.0.15",
+    "react-i18next": "^18.0.1",
     "react-router-dom": "7.18.5",
     "recharts": "^3.10.1"
   },
