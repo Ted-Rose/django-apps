@@ -130,11 +130,15 @@ jobs:
           # stale/foreign CA in env-file is diagnosable here —
           # a wrong CA cost a deploy with only libpq's bare
           # "certificate verify failed" to go on (env-file v4).
+          # sslrootcert in the DSN also trips settings.py's
+          # wants_ca — log the CA in both cases.
           case "$STG_DSN" in
-            *sslmode=verify-ca*|*sslmode=verify-full*)
+            *sslmode=verify-ca*|*sslmode=verify-full*|*sslrootcert=*)
+              # `|| PEM=` — a grep miss exits 1 and pipefail
+              # would abort the step before the warning below.
               PEM=$(grep -E '^(export[[:space:]]+)?DB_SSL_CERT=' \
                 <<<"$DOTENV" | head -1 | cut -d= -f2- \
-                | tr -d "\"'")
+                | tr -d "\"'") || PEM=''
               if [ -n "$PEM" ]; then
                 printf '%b\n' "$PEM" | openssl x509 -noout \
                   -subject -fingerprint -sha256 2>/dev/null \
