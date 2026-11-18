@@ -124,6 +124,28 @@ jobs:
           # dotenv parser (setdefault) then can't fall back
           # to DATABASE_URL on parse differences.
           export STAGING_DATABASE_URL="$STG_DSN"
+          # Verify-* DSNs make settings.py materialize the CA
+          # PEM carried in DB_SSL_CERT. Log its subject +
+          # fingerprint (public CA data, never the PEM) so a
+          # stale/foreign CA in env-file is diagnosable here —
+          # a wrong CA cost a deploy with only libpq's bare
+          # "certificate verify failed" to go on (env-file v4).
+          case "$STG_DSN" in
+            *sslmode=verify-ca*|*sslmode=verify-full*)
+              PEM=$(grep -E '^(export[[:space:]]+)?DB_SSL_CERT=' \
+                <<<"$DOTENV" | head -1 | cut -d= -f2- \
+                | tr -d "\"'")
+              if [ -n "$PEM" ]; then
+                printf '%b\n' "$PEM" | openssl x509 -noout \
+                  -subject -fingerprint -sha256 2>/dev/null \
+                  || echo "::warning::DB_SSL_CERT not a PEM"
+              else
+                echo "::warning::DSN requests cert"
+                echo "::warning::verification but DB_SSL_CERT"
+                echo "::warning::is unset in env-file"
+              fi
+              ;;
+          esac
           APP_ENV=staging USE_GCP_SECRETS=true \
             python manage.py migrate --noinput
 
