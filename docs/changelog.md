@@ -5,7 +5,7 @@
     PKCE code_verifier at token exchange, but it was discarded
     between the login redirect and the callback — every exchange
     failed with invalid_grant and bounced back to login. The
-    verifier is now carried through the session
+    verifier is now carried through the session.
 42. A breached monthly spending limit now pushes one notification
     per calendar month instead of repeating daily — the alert goes
     quiet until the month rolls over, even if spending dips back

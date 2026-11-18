@@ -736,6 +736,12 @@ def delete_task_view(request, task_id):
 
     # Check if reauth is needed
     if isinstance(result, dict) and 'authorization_url' in result:
+        request.session['state'] = result['state']
+        request.session['oauth_scopes'] = result.get('scopes', [])
+        request.session['oauth_code_verifier'] = result.get(
+            'code_verifier'
+        )
+        request.session['oauth_redirect_url'] = 'google_tasks:dashboard'
         return JsonResponse({
             'success': False,
             'reauth_required': True,
