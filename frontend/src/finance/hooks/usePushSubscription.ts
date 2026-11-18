@@ -16,6 +16,7 @@
  * the resource must stay disabled. Failures surface as toasts.
  */
 import { useCallback, useEffect, useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { apiPost } from '../../shared/api/client';
@@ -189,6 +190,12 @@ export function usePushSubscription(
       queryClient.invalidateQueries({ queryKey: ['finance'] });
       return true;
     } catch (error) {
+      // The toast tells the user; the capture tells us — a broken
+      // subscribe path (SW timeout, VAPID mismatch, POST failure)
+      // would otherwise stay invisible. No-op without a web DSN.
+      Sentry.captureException(error, {
+        tags: { context: 'push-subscribe' },
+      });
       const fallback = t('push.subscribeFailed');
       pushToast(
         error instanceof SWReadyTimeoutError

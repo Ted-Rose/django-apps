@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, connection
 from django.http import Http404
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import (
+    RequestFactory,
+    SimpleTestCase,
+    TestCase,
+    override_settings,
+)
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -24,6 +29,7 @@ from google_tasks.models import (
 )
 from google_tasks.services import (
     NOTE_TAG_RE,
+    capture_sync_exception,
     find_note_marker,
     note_marker_segments,
     note_marker_for,
@@ -251,19 +257,23 @@ class ReorderViewTests(TestCase):
         self.assertEqual(body['error'], 'conflict')
         self.assertEqual(body['detail'], 'position_conflict')
 
-    def test_unrelated_integrity_error_propagates(self):
+    def test_unrelated_integrity_error_becomes_500(self):
         self.make_task('a', 1.0)
+        error = IntegrityError('some other failure')
         with patch.object(
-            GoogleTask.objects,
-            'bulk_update',
-            side_effect=IntegrityError('some other failure'),
-        ):
-            # Not a position-conflict name — ninja re-raises
-            # unhandled exceptions rather than masking them as 4xx.
-            with self.assertRaises(IntegrityError):
-                self.post({'updates': [
-                    {'task_id': 'a', 'position': 2.0},
-                ]})
+            GoogleTask.objects, 'bulk_update', side_effect=error
+        ), patch(
+            'django_apps.api.capture_internal_exception'
+        ) as capture:
+            # Not a position-conflict name — the view re-raises and
+            # ninja's _on_server_error returns the generic 500 while
+            # reporting the bug to Sentry.
+            resp = self.post({'updates': [
+                {'task_id': 'a', 'position': 2.0},
+            ]})
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.json()['error'], 'server_error')
+        capture.assert_called_once_with(error)
 
     # --- starred scope ---
 
@@ -498,6 +508,7 @@ class TasksApiTests(TestCase):
             ),
             'state': 'state-123',
             'scopes': ['https://www.googleapis.com/auth/tasks'],
+            'code_verifier': 'verifier-123',
         }
         with patch('google_tasks.views.get_creds_dict',
                    return_value={'token': 't'}), \
@@ -515,6 +526,9 @@ class TasksApiTests(TestCase):
         self.assertEqual(session['state'], 'state-123')
         self.assertEqual(
             session['oauth_scopes'], auth['scopes']
+        )
+        self.assertEqual(
+            session['oauth_code_verifier'], 'verifier-123'
         )
 
     def test_dead_credentials_return_401_google_reauth(self):
@@ -1975,3 +1989,53 @@ class ProcessTaskLabelsNoteTests(TestCase):
         self.assertEqual(
             NoteCategory.objects.filter(slug='shared').count(), 2
         )
+
+
+class SyncExceptionCaptureTests(SimpleTestCase):
+    """``capture_sync_exception`` routes swallowed sync failures:
+    Google API outages (HttpError, socket timeouts) trend at
+    warning level as provider errors; anything else in the
+    blanket catches is a real bug at error level."""
+
+    MOD = 'google_tasks.services'
+    TAGS = {'app': 'google_tasks', 'operation': 'sync_tasks'}
+
+    def test_http_error_routes_to_provider_warning(self):
+        from googleapiclient.errors import HttpError
+
+        error = HttpError(MagicMock(status=500), b'boom')
+        with patch(
+            f'{self.MOD}.capture_provider_exception'
+        ) as provider, patch(
+            f'{self.MOD}.capture_internal_exception'
+        ) as internal:
+            capture_sync_exception(error, 'sync_tasks')
+
+        provider.assert_called_once_with(error, tags=self.TAGS)
+        internal.assert_not_called()
+
+    def test_socket_timeout_routes_to_provider_warning(self):
+        import socket
+
+        error = socket.timeout('timed out')
+        with patch(
+            f'{self.MOD}.capture_provider_exception'
+        ) as provider, patch(
+            f'{self.MOD}.capture_internal_exception'
+        ) as internal:
+            capture_sync_exception(error, 'sync_tasks')
+
+        provider.assert_called_once_with(error, tags=self.TAGS)
+        internal.assert_not_called()
+
+    def test_unexpected_error_routes_to_internal_error(self):
+        error = RuntimeError('boom')
+        with patch(
+            f'{self.MOD}.capture_provider_exception'
+        ) as provider, patch(
+            f'{self.MOD}.capture_internal_exception'
+        ) as internal:
+            capture_sync_exception(error, 'sync_tasks')
+
+        internal.assert_called_once_with(error, tags=self.TAGS)
+        provider.assert_not_called()

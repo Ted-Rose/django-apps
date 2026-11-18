@@ -31,7 +31,7 @@ export default function App() {
   // plain-/ resolution means nothing to restore.
   const [restoreTo] = useState(() => {
     if (location.pathname !== '/' || location.search) return null;
-    let stored: string | null = null;
+    let stored: string | null;
     try {
       stored = localStorage.getItem('lastTasksView');
     } catch {

@@ -62,7 +62,6 @@ i18n.use(initReactI18next).init({
   fallbackLng: 'en',
   ns: ['common', 'finance', 'gmail', 'notes', 'tasks', 'server'],
   defaultNS: 'common',
-  compatibilityJSON: 'v4',
   interpolation: { escapeValue: false },
 });
 

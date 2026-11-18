@@ -21,8 +21,16 @@ from django_apps.api import (
     _reauth_url,
     spa_url_for,
 )
+from django_apps.sentry import (
+    capture_internal_exception,
+    capture_provider_exception,
+)
 from google_api.models import GoogleOAuthCredentials
-from google_api.utils import get_user_credentials, text_to_audio
+from google_api.utils import (
+    AudioGenerationError,
+    get_user_credentials,
+    text_to_audio,
+)
 from gmail import services, views
 from gmail.services import GMAIL_READONLY_SCOPE
 
@@ -118,6 +126,9 @@ def messages(request, query: str = Query('', max_length=500)):
             and 'state' in result):
         request.session['state'] = result['state']
         request.session['oauth_scopes'] = result.get('scopes', [])
+        request.session['oauth_code_verifier'] = result.get(
+            'code_verifier'
+        )
         request.session['oauth_redirect_url'] = spa_url_for(request)
         raise GoogleReauthRequired(result['authorization_url'])
 
@@ -140,6 +151,15 @@ def audio(request, text: str = Query('', max_length=6000),
     # AudioGenerationError and any other pipeline failure map to the
     # API's upstream-error taxonomy (the legacy view returned 500).
     except Exception as e:
+        # text_to_audio wraps every non-ValueError pipeline failure
+        # in AudioGenerationError — nearly always upstream
+        # (gTTS/GCS), so it trends at warning even when the root
+        # cause was a wrapped bug. A non-AudioGenerationError
+        # escaping this op is a bug in the op itself.
+        if isinstance(e, AudioGenerationError):
+            capture_provider_exception(e, tags={'app': 'gmail'})
+        else:
+            capture_internal_exception(e, tags={'app': 'gmail'})
         raise ApiHttpError(
             502, f'Failed to generate audio: {e}'
         ) from e

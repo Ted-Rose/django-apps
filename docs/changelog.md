@@ -1,11 +1,20 @@
 # google_api
 
 ## Changelog
-43. Fixed the thin white line under the blue header on the home
+45. Fixed the thin white line under the blue header on the home
     page (and stray extra space at the top/bottom of the other
     apps): finance's navbar styles were leaking onto every page —
     they're now scoped to the finance app only, which also means
     the home header no longer floats when scrolling
+44. Fixed Google sign-in looping forever: Google now requires the
+    PKCE code_verifier at token exchange, but it was discarded
+    between the login redirect and the callback — every exchange
+    failed with invalid_grant and bounced back to login. The
+    verifier is now carried through the session.
+43. Fixed the Vercel deploy's database connection: the Postgres CA
+    cert now travels inside the environment config and is written
+    to the function's filesystem at startup, so the site no longer
+    500s on every page that touches the database
 42. A breached monthly spending limit now pushes one notification
     per calendar month instead of repeating daily — the alert goes
     quiet until the month rolls over, even if spending dips back

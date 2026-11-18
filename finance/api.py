@@ -31,8 +31,13 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Query, Router, Schema
 from pydantic import Field
+import requests
 
 from django_apps.api import ApiHttpError
+from django_apps.sentry import (
+    capture_internal_exception,
+    capture_provider_exception,
+)
 
 from finance.forms import (
     CategoryRuleForm,
@@ -822,6 +827,7 @@ def institutions(request, country: str = ''):
     try:
         data = client.list_institutions(country)
     except GoCardlessError as exc:
+        capture_provider_exception(exc, tags={'app': 'finance'})
         raise ApiHttpError(
             502,
             f'Could not load institutions: {exc}',
@@ -1371,6 +1377,7 @@ def connect(request, payload: ConnectIn):
             reference=reference,
         )
     except GoCardlessError as exc:
+        capture_provider_exception(exc, tags={'app': 'finance'})
         raise ApiHttpError(
             502,
             f'Could not start bank link: {exc}',
@@ -1687,9 +1694,16 @@ def sync_transactions(request, payload: Optional[SyncIn] = None):
                 )
                 continue
             failed += 1
+            capture_provider_exception(exc, tags={'app': 'finance'})
             results.append(_sync_failed_entry(account, exc))
         except Exception as exc:
             failed += 1
+            # Transport failures (connection errors, timeouts) are
+            # upstream outages — same routing as push.py's split.
+            if isinstance(exc, requests.RequestException):
+                capture_provider_exception(exc, tags={'app': 'finance'})
+            else:
+                capture_internal_exception(exc, tags={'app': 'finance'})
             results.append(_sync_failed_entry(account, exc))
 
     if failed:
@@ -1890,6 +1904,10 @@ def refresh_balances(request):
             dead_status = result.get('dead_status')
             if dead_status:
                 mark_requisition_dead(account, dead_status)
+            elif result.get('exc') is not None:
+                capture_provider_exception(
+                    result['exc'], tags={'app': 'finance'}
+                )
             logger.warning(
                 'Balance fetch failed for account %s: %s',
                 account.account_id, result.get('error'),

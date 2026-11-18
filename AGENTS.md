@@ -33,6 +33,104 @@ Two live deploy targets share the same database:
 - Vercel — `vercel.json` + `build_files.sh`; absorbs front-end
   traffic to keep Cloud Run inside the free tier.
 
+## Git workflow — staging-first
+
+`main` is production (Cloud Run `django-apps` + the Vercel
+serverless deploy); `staging` is the integration branch — every
+push auto-deploys the private `django-apps-staging` Cloud Run
+service via `deploy-pr-preview.yml` (browse with
+`gcloud run services proxy django-apps-staging
+--region=europe-west3 --project=django-apps-7345`) and a Vercel
+preview (`django-apps-git-staging-<team>.vercel.app` — preview
+env vars are Production-scoped, see "Known gaps"). The
+invariant is **`main` ⊆ `staging`**: production only receives
+code that has already soaked on staging. The `staging-first`
+required check (`.github/workflows/require-staging.yml`) fails
+`main` PRs whose head SHA was never merged into `staging`, and
+`main` PRs squash-merge to keep prod history clean.
+  The staging service uses a **separate Aiven database**,
+`django_apps_staging`, owned by the read/write role
+`django_apps_staging`: `settings.py` resolves
+`STAGING_DATABASE_URL` whenever `APP_ENV=staging` (set by the
+staging deploy) or `VERCEL_ENV=preview`, falling back to
+`DATABASE_URL` with a warning when the staging var is unset.
+`STAGING_DATABASE_URL` lives in the shared `env-file` secret.
+
+- **Staging deploys are app-only** — Cloud Run jobs
+  (`all-jobs`), Cloud Scheduler and Terraform stay
+  prod-only; staging never runs scheduled jobs.
+
+- **Features/fixes**: branch off `origin/main` — never
+  `staging`; the branch must carry no unverified staging
+  noise. Open the PR with `--base staging`, then
+  squash-merge once checks are green and the reviewer loop
+  is clean — agents merge into `staging` without asking.
+  GitHub auto-deletes the head branch on merge; expected.
+- **Staging fixes**: commit them on the ORIGINAL feature
+  branch (push it again if auto-deleted — same SHAs are
+  fine; after auto-delete, restore it with
+  `git push origin <sha>:refs/heads/<branch>` where `<sha>`
+  is the merged staging PR's `headRefOid`), then merge
+  into `staging` via the still-open staging PR or a new
+  one.
+- **Promotion to `main`** — only when the user asks to
+  release or merge to main. The `Promote to main` workflow
+  (`.github/workflows/promote-to-main.yml`) automates it:
+  `gh workflow run "Promote to main"` (or the Actions tab;
+  `-f dry_run=true` lists pending promotions). It opens a
+  `main` PR per staged branch — oldest staging-merge
+  first, original title + body + a promotion footer —
+  squash-merges each, then resets `staging` to `main`
+  (skipped entirely if any promotion fails — staging then
+  still holds unreleased work). Conflicting promotions are
+  resolved from the staging squash commit's tree — the
+  validated integration state, never guessed; a replay is
+  only attempted while all earlier promotions succeeded,
+  since a squash tree also carries their code. A branch
+  whose remote tip moved past its staging merge is skipped
+  — those commits were never staged. The scan covers the
+  200 most recent merged staging PRs. Manual
+  equivalent, per branch: re-push it if auto-deleted
+  (`git push origin <headRefOid>:refs/heads/<branch>`),
+  open a PR with `--base main` (same title + body — keep
+  `Closes #<N>` links so issues auto-close), then
+  `gh pr merge <N> --squash --admin`; then reset staging
+  (`git fetch origin && git push --force-with-lease origin
+  origin/main:refs/heads/staging` — the only sanctioned
+  force-push; the workflow does it via the refs API
+  instead). NEVER open `staging`→`main` PRs — that drags
+  integration noise into prod history. The reset discards
+  anything still on `staging` that was not promoted —
+  reset only once staging matches the release, and
+  re-merge leftovers to `staging` afterwards (re-pushing
+  the same SHAs still satisfies the check). The workflow
+  uses `AUTOMERGE_TOKEN` when set, else `GITHUB_TOKEN`
+  (optional here — no review requirement — but configure
+  the PAT anyway so merges survive future protection
+  tightening; it is the same secret the dependabot
+  automerge uses).
+- **"Merge straight to main" requests**: merge the branch
+  into `staging` first anyway, then the `main` PR — the
+  check blocks anything else, keeping `main` ⊆ `staging`
+  even for urgent merges. If the `main` PR's check already
+  ran red before the staging merge, re-run the failed job
+  after it (`gh run rerun <run-id> --failed` or a push).
+- **Dependabot** targets `staging` and auto-merges there;
+  its branches promote to `main` like any feature branch.
+
+Deployment notes:
+
+- `vercel.json`'s `git.deploymentEnabled` whitelist builds
+  only `main` and `staging` pushes — other branches no
+  longer trigger (failing, env-scoped) preview builds. The
+  whitelist applies to git-triggered deploys only; CLI
+  deploys stay forbidden regardless.
+- `django-apps-staging` is a PRIVATE Cloud Run service
+  (`--no-allow-unauthenticated`) sharing the prod
+  `env-file` secret — same DB and OAuth caveats as the PR
+  previews, so treat it as a render check, not a logged-in
+  session.
+
 ## Layout
 
 - `django_apps/` — project `settings.py`, root `urls.py`,
@@ -248,7 +346,9 @@ Universal rules — follow exactly:
 
 - **Dangerous commands — never run**: `python manage.py
   migrate` or anything applying migrations to a real DB (CI
-  runs it on deploy; the throwaway test DB and local
+  runs it on deploy — `deploy.yml` migrates prod,
+  `deploy-pr-preview.yml` migrates staging with
+  `APP_ENV=staging`; the throwaway test DB and local
   `db.sqlite3` are the only exceptions); `terraform
   apply`/`destroy`; `gcloud run deploy`, `gcloud scheduler`
   mutations; `vercel` CLI deploys; `git push` to `main`
@@ -398,9 +498,11 @@ level.
 - google_tasks `models.py` has per-user ordering constraints
   **commented out** pending a follow-up migration — keep the
   two-phase `bulk_update` reorder pattern regardless.
-- Vercel **preview** deploys fail on every branch (env vars are
+- Vercel **preview** deploys fail (env vars are
   Production-scoped) — only production deploys are a usable
-  signal.
+  signal. `git.deploymentEnabled` in `vercel.json` now limits
+  builds to `main` + `staging`, so `staging` is the only
+  branch that still attempts (and can fail) a preview.
 - `CONN_MAX_AGE` is forced to 0 on cloud deploys — deliberate;
   Aiven's low `max_connections` is shared between Cloud Run and
   Vercel lambdas ("remaining connection slots are reserved…"
@@ -455,8 +557,16 @@ level.
   var; the deploy workflow's migrate step exports it the same way.
   Never create another secret — append new credentials as
   KEY=VALUE lines (each extra secret adds cost).
-- `deploy-pr-preview.yml` deploys a `django-apps-pr-<n>` Cloud Run
-  service per PR to main (min 0 / max 1) sharing `env-file`.
+- `deploy-pr-preview.yml` deploys private Cloud Run services (min
+  0 / max 1) sharing `env-file`: `django-apps-staging` on every
+  `staging` push and on manual dispatch, `django-apps-pr-<n>`
+  per PR only if the commented-out `pull_request` trigger is
+  re-enabled (see "Git workflow — staging-first"). Staging
+  pushes also run `manage.py migrate` with `APP_ENV=staging`
+  before the deploy, and every service gets
+  `APP_ENV=staging` — they read the `django_apps_staging` DB
+  once `STAGING_DATABASE_URL` is in `env-file` (loud prod
+  fallback until then).
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
   Artifact Registry → `manage.py migrate` on the Actions runner
   (secrets via WIF) → `gcloud run deploy django-apps`. Dockerfile

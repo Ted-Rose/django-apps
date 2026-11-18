@@ -1,5 +1,12 @@
 {
   "version": 2,
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "staging": true,
+      "**": false
+    }
+  },
   "regions": ["fra1"],
   "builds": [
     {
