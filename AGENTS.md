@@ -48,6 +48,17 @@ code that has already soaked on staging. The `staging-first`
 required check (`.github/workflows/require-staging.yml`) fails
 `main` PRs whose head SHA was never merged into `staging`, and
 `main` PRs squash-merge to keep prod history clean.
+  The staging service uses a **separate Aiven database**,
+`django_apps_staging`, owned by the read/write role
+`django_apps_staging`: `settings.py` resolves
+`STAGING_DATABASE_URL` whenever `APP_ENV=staging` (set by the
+staging deploy) or `VERCEL_ENV=preview`, falling back to
+`DATABASE_URL` with a warning when the staging var is unset.
+`STAGING_DATABASE_URL` lives in the shared `env-file` secret.
+
+- **Staging deploys are app-only** — Cloud Run jobs
+  (`all-jobs`), Cloud Scheduler and Terraform stay
+  prod-only; staging never runs scheduled jobs.
 
 - **Features/fixes**: branch off `origin/main` — never
   `staging`; the branch must carry no unverified staging
@@ -335,7 +346,9 @@ Universal rules — follow exactly:
 
 - **Dangerous commands — never run**: `python manage.py
   migrate` or anything applying migrations to a real DB (CI
-  runs it on deploy; the throwaway test DB and local
+  runs it on deploy — `deploy.yml` migrates prod,
+  `deploy-pr-preview.yml` migrates staging with
+  `APP_ENV=staging`; the throwaway test DB and local
   `db.sqlite3` are the only exceptions); `terraform
   apply`/`destroy`; `gcloud run deploy`, `gcloud scheduler`
   mutations; `vercel` CLI deploys; `git push` to `main`
@@ -548,7 +561,12 @@ level.
   0 / max 1) sharing `env-file`: `django-apps-staging` on every
   `staging` push and on manual dispatch, `django-apps-pr-<n>`
   per PR only if the commented-out `pull_request` trigger is
-  re-enabled (see "Git workflow — staging-first").
+  re-enabled (see "Git workflow — staging-first"). Staging
+  pushes also run `manage.py migrate` with `APP_ENV=staging`
+  before the deploy, and every service gets
+  `APP_ENV=staging` — they read the `django_apps_staging` DB
+  once `STAGING_DATABASE_URL` is in `env-file` (loud prod
+  fallback until then).
 - Push to `main` → `.github/workflows/deploy.yml`: docker build →
   Artifact Registry → `manage.py migrate` on the Actions runner
   (secrets via WIF) → `gcloud run deploy django-apps`. Dockerfile
