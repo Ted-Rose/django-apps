@@ -70,15 +70,10 @@ jobs:
           # so each squash commit's tree only ever holds
           # already-promoted features plus its own. 200 is
           # headroom (same idea as the gate's 100-per-page).
-          # `\<newline>` drops the newline but NOT the next
-          # line's indent — splitting the --json value across
-          # lines leaves `mergedAt,mergeCommit` a stray
-          # positional arg ("unknown argument"). Build it in
-          # a variable instead.
-          json=number,title,body,headRefName,headRefOid
-          json="$json,mergedAt,mergeCommit"
           gh pr list --repo "$REPO" --state merged \
-            --base staging --limit 200 --json "$json" \
+            --base staging --limit 200 \
+            --json number,title,body,headRefName,headRefOid,\
+            mergedAt,mergeCommit \
             > /tmp/staged-raw.json
           # The ceiling guards the RAW list: checking the
           # deduped count would miss truncation whenever the
