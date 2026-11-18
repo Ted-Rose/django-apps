@@ -10,7 +10,40 @@ Django's `<path:subpath>` catch-all already serves the shell on every
 
 ## Environment variables
 
+### Single-variable setup (recommended): `DOTENV`
+
+`settings.py` reads one `DOTENV` env var holding the entire
+KEY=VALUE blob — the exact format of Cloud Run's `env-file`
+secret (and local `.env`). Set it once instead of the individual
+vars below:
+
+```bash
+gcloud secrets versions access latest \
+  --secret=env-file --project=django-apps-7345
+```
+
+Paste the output verbatim as `DOTENV` (Production scope; add
+Preview too if previews should work). `_load_dotenv()` uses
+`os.environ.setdefault`, so **individually-set env vars always
+win over DOTENV contents** — keep these two as separate vars:
+
+- `APP_BASE_URL` — must stay `https://<your-vercel-domain>`; the
+  shared blob's value points at Cloud Run and would send
+  OAuth/bank callbacks to the wrong host.
+- `DATABASE_URL` — only if you want `sslmode=verify-full`
+  (`&sslrootcert=ca.pem`) on Vercel; the blob's `require` works.
+
+Once `DOTENV` is set, every individual var that also exists in
+the blob can be deleted. The Vercel-only ones stay individual:
+`GCP_SERVICE_ACCOUNT_JSON`, `capem`, `config_yaml` (and
+`APP_BASE_URL`/`DATABASE_URL` per the overrides above). DOTENV
+is also visible at build time, so `collectstatic` inside
+`build_files.sh` picks up the same config.
+
 ### Runtime (used by the serverless function)
+
+*When not using the single `DOTENV` var above, set each of these
+individually:*
 
 - `DJANGO_SECRET_KEY` — same as Cloud Run's `django-secret-key`;
   copy from GCP Secret Manager or local `config.yaml` →
@@ -90,9 +123,11 @@ database.
 
 ## Post-deploy dashboard checklist
 
-1. Settings → Environment Variables: confirm/add every runtime var
-   above, scoped to **Production** (and Preview if you want preview
-   deploys — see "Scope settings").
+1. Settings → Environment Variables: set `DOTENV` to the env-file
+   blob + the per-deploy overrides (preferred — see above), or
+   confirm/add every runtime var individually, scoped to
+   **Production** (and Preview if you want preview deploys — see
+   "Scope settings").
 2. Set `SENTRY_DSN` + `SENTRY_WEB_DSN` — unset means no error
    reporting from the Vercel deploy (Cloud Run already reports via
    the `env-file` secret).
