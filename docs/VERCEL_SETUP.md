@@ -19,18 +19,6 @@ key). `settings.py` parses `DOTENV` at import, so the per-key list
 below is what that blob must contain; setting them individually
 also works and real env vars always win over `DOTENV` entries.
 
-To seed it from GCP's `env-file` secret verbatim:
-
-```bash
-gcloud secrets versions access latest \
-  --secret=env-file --project=django-apps-7345
-```
-
-Paste the output as `DOTENV` (Production scope). The blob's
-`APP_BASE_URL` points at Cloud Run, so keep `APP_BASE_URL` as a
-separate var set to the Vercel domain — individually-set vars
-win over `DOTENV` contents.
-
 ### Runtime (used by the serverless function)
 
 - `DJANGO_SECRET_KEY` — same as Cloud Run's `django-secret-key`;
