@@ -556,7 +556,15 @@ level.
   `.env`. Cloud Run service + jobs mount it as the `DOTENV` env
   var; the deploy workflow's migrate step exports it the same way.
   Never create another secret — append new credentials as
-  KEY=VALUE lines (each extra secret adds cost).
+  KEY=VALUE lines (each extra secret adds cost). `env-file`'s
+  `DB_SSL_CERT` must be the CA of the Aiven project the DSNs
+  point at (currently "Project CA GEN 2"): with
+  `sslmode=verify-*` a stale/foreign CA produces only libpq's
+  `SSL error: certificate verify failed` — the code correctly
+  materializes whatever PEM it found, so check the migrate
+  step's CA-subject log line first (env-file v4, pre
+  2026-11-18, held the old project's CA and broke the staging
+  migrate exactly this way).
 - `deploy-pr-preview.yml` deploys private Cloud Run services (min
   0 / max 1) sharing `env-file`: `django-apps-staging` on every
   `staging` push and on manual dispatch, `django-apps-pr-<n>`
