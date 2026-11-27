@@ -1,14 +1,13 @@
 name: Frontend
 
-# Runs on every PR and every push to main or staging (every main
-# push deploys to Cloud Run via deploy.yml, every staging push to
-# django-apps-staging via deploy-pr-preview.yml), so type/lint/test
+# Runs on every PR and every push to main (every main
+# push deploys to Cloud Run via deploy.yml), so type/lint/test
 # breakage can't reach a deploy unchecked — even when a change
 # doesn't touch frontend/.
 on:
   pull_request:
   push:
-    branches: [main, staging]
+    branches: [main]
 
 jobs:
   frontend:

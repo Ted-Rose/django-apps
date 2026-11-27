@@ -47,7 +47,7 @@ review.
    worktrees) — the exact file set
    it owns, the shared contract verbatim, the relevant
    `AGENTS.md` rules it must honor (79 cols, commit format,
-   no-migrate, staging rules), and the scoped test commands for
+   no-migrate), and the scoped test commands for
    its files.
 5. Each implementer commits `Feat:`/`Fix:` commits on its branch
    and opens a PR via the `/create-pr` workflow (body file,
